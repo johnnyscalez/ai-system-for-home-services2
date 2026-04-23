@@ -10,8 +10,10 @@ import {
 interface Integration {
   type: string
   is_active: boolean
+  setup_complete?: boolean | null
   fb_page_name?: string | null
   fb_page_id?: string | null
+  fb_selected_form_ids?: string[] | null
   lead_count: number
   last_lead_at?: string | null
   created_at: string
@@ -99,7 +101,9 @@ function StatusBadge({ connected }: { connected: boolean }) {
 // ─── Facebook card ────────────────────────────────────────────────────────────
 
 function FacebookCard({ integration }: { integration: Integration | undefined }) {
-  const connected = !!integration?.is_active
+  const connected = !!integration?.is_active && !!integration?.setup_complete
+  const needsSetup = !!integration && !integration.setup_complete
+
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
@@ -116,7 +120,6 @@ function FacebookCard({ integration }: { integration: Integration | undefined })
             className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
             style={{ background: "linear-gradient(135deg, #1877F2, #0C5AC4)" }}
           >
-            {/* Facebook F */}
             <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white">
               <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
             </svg>
@@ -131,12 +134,31 @@ function FacebookCard({ integration }: { integration: Integration | undefined })
             <p className="text-sm text-[#78716C] mt-0.5">
               {connected
                 ? `Connected to: ${integration?.fb_page_name}`
+                : needsSetup
+                ? "Account connected — choose your page and lead form to activate"
                 : "Connect your Facebook Business page to receive leads automatically"}
             </p>
           </div>
         </div>
-        <StatusBadge connected={connected} />
+        {needsSetup ? (
+          <div className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-full bg-amber-50 text-amber-700 border border-amber-100 shrink-0">
+            <AlertCircle className="w-3 h-3" />
+            Setup required
+          </div>
+        ) : (
+          <StatusBadge connected={connected} />
+        )}
       </div>
+
+      {/* Setup required banner */}
+      {needsSetup && (
+        <div className="mx-6 mb-4 bg-amber-50 rounded-xl p-4 border border-amber-100">
+          <p className="text-sm font-semibold text-amber-800 mb-1">One more step</p>
+          <p className="text-sm text-amber-700">
+            Your Facebook account is connected. Now choose which page and lead form to track so we can start texting your leads.
+          </p>
+        </div>
+      )}
 
       {/* Stats row (when connected) */}
       {connected && (
@@ -159,14 +181,23 @@ function FacebookCard({ integration }: { integration: Integration | undefined })
         </div>
       )}
 
-      {/* How it works / instructions */}
-      {!connected && (
+      {/* Selected forms (when connected) */}
+      {connected && integration?.fb_selected_form_ids && integration.fb_selected_form_ids.length > 0 && (
+        <div className="mx-6 mb-4 bg-[#FAFAF8] rounded-xl p-3 border border-[#E7E5E4]">
+          <p className="text-xs text-[#78716C]">
+            Tracking {integration.fb_selected_form_ids.length} lead form{integration.fb_selected_form_ids.length !== 1 ? "s" : ""}
+          </p>
+        </div>
+      )}
+
+      {/* How it works (when not connected and not in setup) */}
+      {!connected && !needsSetup && (
         <div className="mx-6 mb-4 bg-[#FAFAF8] rounded-xl p-4 border border-[#E7E5E4]">
           <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wider mb-2">How it works</p>
           <ol className="space-y-1.5">
             {[
               "Click Connect below and authorize with your Facebook account",
-              "We automatically subscribe to your page's lead form events",
+              "Choose which page and lead form to track",
               "Every new Facebook Lead Ad lead gets an AI SMS within 60 seconds",
             ].map((step, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-[#78716C]">
@@ -185,16 +216,28 @@ function FacebookCard({ integration }: { integration: Integration | undefined })
         {connected ? (
           <>
             <a
-              href="/api/auth/facebook"
+              href="/integrations/facebook-setup"
               className="flex items-center gap-2 text-sm font-medium text-[#78716C] px-4 py-2 rounded-xl border border-[#E7E5E4] hover:bg-[#F5F4F2] transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              Reconnect
+              Change page / forms
             </a>
             <p className="text-xs text-[#78716C]">
-              Connected {new Date(integration!.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
+              Since {new Date(integration!.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
             </p>
           </>
+        ) : needsSetup ? (
+          <a
+            href="/integrations/facebook-setup"
+            className="flex items-center gap-2 text-sm font-semibold text-white px-6 py-2.5 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
+            style={{
+              background: "linear-gradient(135deg, #D97706, #B45309)",
+              boxShadow: "0 4px 14px rgba(217,119,6,0.3)",
+            }}
+          >
+            Complete setup
+            <ChevronRight className="w-4 h-4" />
+          </a>
         ) : (
           <a
             href="/api/auth/facebook"
@@ -490,7 +533,7 @@ export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast,
   const genericWebhookUrl = `${appUrl}/api/webhooks/lead`
   const googleWebhookUrl = `${appUrl}/api/webhooks/google?secret=${webhookSecret}`
 
-  const connectedCount = integrations.filter((i) => i.is_active).length
+  const connectedCount = integrations.filter((i) => i.is_active && i.setup_complete).length
 
   return (
     <div className="relative min-h-screen" style={{ backgroundColor: "#FAFAF8" }}>

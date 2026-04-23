@@ -38,7 +38,6 @@ export async function GET(req: NextRequest) {
   )
   const tokenData = await tokenRes.json()
   if (!tokenData.access_token) {
-    console.error("Facebook token exchange failed:", tokenData)
     return NextResponse.redirect(`${appUrl}/integrations?error=token_failed`)
   }
 
@@ -49,9 +48,9 @@ export async function GET(req: NextRequest) {
   const llData = await llRes.json()
   const userToken = llData.access_token || tokenData.access_token
 
-  // Fetch pages managed by this user
+  // Fetch ALL pages managed by this user (with their page-level access tokens)
   const pagesRes = await fetch(
-    `https://graph.facebook.com/me/accounts?access_token=${userToken}&fields=id,name,access_token`
+    `https://graph.facebook.com/me/accounts?access_token=${userToken}&fields=id,name,access_token,fan_count`
   )
   const pagesData = await pagesRes.json()
 
@@ -59,16 +58,7 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${appUrl}/integrations?error=no_pages`)
   }
 
-  // Use first page — MVP: we can add page-selector UI later
-  const page = pagesData.data[0] as { id: string; name: string; access_token: string }
-
-  // Subscribe this page to leadgen webhook notifications
-  await fetch(
-    `https://graph.facebook.com/${page.id}/subscribed_apps?subscribed_fields=leadgen&access_token=${page.access_token}`,
-    { method: "POST" }
-  )
-
-  // Save integration (upsert by company_id + type)
+  // Store pages + user token in integrations table, mark setup as incomplete
   const serviceSupabase = createServiceRoleClient()
   const { error: upsertError } = await serviceSupabase
     .from("integrations")
@@ -77,10 +67,15 @@ export async function GET(req: NextRequest) {
         company_id: profile.company_id,
         type: "facebook",
         fb_user_id: user.id,
-        fb_page_id: page.id,
-        fb_page_name: page.name,
-        fb_access_token: page.access_token,
-        is_active: true,
+        fb_user_access_token: userToken,
+        fb_pages_cache: pagesData.data,
+        // Clear old page selection so setup wizard runs fresh
+        fb_page_id: null,
+        fb_page_name: null,
+        fb_access_token: null,
+        fb_selected_form_ids: [],
+        setup_complete: false,
+        is_active: false,
         updated_at: new Date().toISOString(),
       },
       { onConflict: "company_id,type" }
@@ -91,5 +86,6 @@ export async function GET(req: NextRequest) {
     return NextResponse.redirect(`${appUrl}/integrations?error=save_failed`)
   }
 
-  return NextResponse.redirect(`${appUrl}/integrations?success=facebook`)
+  // Redirect to setup wizard to pick page + lead form
+  return NextResponse.redirect(`${appUrl}/integrations/facebook-setup`)
 }

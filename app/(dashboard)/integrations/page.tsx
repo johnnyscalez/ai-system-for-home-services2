@@ -25,7 +25,7 @@ export default async function IntegrationsPage({
 
   const { data: integrations } = await supabase
     .from("integrations")
-    .select("type, is_active, fb_page_name, fb_page_id, lead_count, last_lead_at, created_at")
+    .select("type, is_active, setup_complete, fb_page_name, fb_page_id, fb_selected_form_ids, lead_count, last_lead_at, created_at")
     .eq("company_id", profile.company_id)
 
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ""
