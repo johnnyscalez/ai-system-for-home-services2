@@ -1,11 +1,4 @@
 /** @type {import('next').NextConfig} */
-const nextConfig = {
-  output: "standalone",
-  experimental: {
-    serverActions: {
-      allowedOrigins: ["localhost:3000", "leadreply-production.up.railway.app"],
-    },
-  },
-}
+const nextConfig = {}
 
 module.exports = nextConfig
