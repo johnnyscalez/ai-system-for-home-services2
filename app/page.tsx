@@ -41,8 +41,8 @@ function Background() {
           50%       { transform: scale(1.08); opacity: 0.14; }
         }
         @keyframes orbPulse2 {
-          0%, 100% { transform: scale(1); opacity: 0.09; }
-          50%       { transform: scale(1.06); opacity: 0.12; }
+          0%, 100% { transform: scale(1); opacity: 0.13; }
+          50%       { transform: scale(1.06); opacity: 0.18; }
         }
         @keyframes orbDrift {
           0%, 100% { transform: translate(0, 0); }
@@ -71,7 +71,8 @@ function Background() {
           width: 380, height: 380, borderRadius: "50%",
           background: "#4D7C0F",
           filter: "blur(80px)",
-          animation: "orbPulse2 5s ease-in-out infinite 2.5s",
+          opacity: 0.13,
+          animation: "orbPulse2 5s ease-in-out infinite",
         }} />
         {/* Orb 3 — amber, center-right */}
         <div style={{
