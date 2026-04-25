@@ -4,7 +4,7 @@
     "builder": "NIXPACKS"
   },
   "deploy": {
-    "startCommand": "node_modules/.bin/next start -p $PORT",
+    "startCommand": "node_modules/.bin/concurrently \"node_modules/.bin/next start -p $PORT\" \"node cron-worker.mjs\"",
     "healthcheckPath": "/api/health",
     "healthcheckTimeout": 60,
     "restartPolicyType": "ON_FAILURE",
