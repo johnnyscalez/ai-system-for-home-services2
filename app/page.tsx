@@ -6,8 +6,8 @@ import Link from "next/link"
 import {
   Zap, ArrowRight, Check, MessageSquare,
   ChevronRight, TrendingUp, Clock, Play, Star, Menu, X,
-  CheckCircle2, Phone, Thermometer, Wind, Shield,
-  Users, CalendarCheck, Settings2, Bell
+  CheckCircle2, Phone,
+  Users, CalendarCheck, Bell, Mic, Bot, Route
 } from "lucide-react"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -53,6 +53,28 @@ function Background() {
           from { transform: scaleX(0); }
           to   { transform: scaleX(1); }
         }
+        @keyframes airflowDrift {
+          from { stroke-dashoffset: 0; }
+          to   { stroke-dashoffset: -400; }
+        }
+        @keyframes particleDrift {
+          0%   { transform: translateX(0px); opacity: 0; }
+          5%   { opacity: 0.85; }
+          92%  { opacity: 0.8; }
+          100% { transform: translateX(1900px); opacity: 0; }
+        }
+        @keyframes hvSpin {
+          from { transform: rotate(0deg); }
+          to   { transform: rotate(360deg); }
+        }
+        @keyframes hvFloat {
+          0%, 100% { transform: translateY(0px); }
+          50%       { transform: translateY(-14px); }
+        }
+        @keyframes hvDrift {
+          0%, 100% { transform: translate(0, 0); }
+          50%       { transform: translate(20px, -15px); }
+        }
       `}</style>
 
       {/* Orbs — fixed, behind everything */}
@@ -95,6 +117,224 @@ function Background() {
           animation: "driftUp 8s linear infinite",
         }}
       />
+    </>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// HVAC ATMOSPHERE — line-art SVGs, airflow streams, thermal wash, blueprint grid
+// Sits as a decorative layer behind hero content, all pointer-events-none
+// ─────────────────────────────────────────────────────────────────────────────
+function HvacCondenserFan({ size = 120, spin = 8 }: { size?: number; spin?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 120 120" fill="none">
+      <rect x="6" y="6" width="108" height="108" rx="10" stroke="currentColor" strokeWidth="1.2" opacity="0.45" />
+      <rect x="14" y="14" width="92" height="92" rx="6" stroke="currentColor" strokeWidth="0.8" opacity="0.25" />
+      <circle cx="60" cy="60" r="40" stroke="currentColor" strokeWidth="0.8" opacity="0.25" />
+      <circle cx="60" cy="60" r="32" stroke="currentColor" strokeWidth="0.8" opacity="0.25" />
+      <circle cx="60" cy="60" r="24" stroke="currentColor" strokeWidth="0.8" opacity="0.25" />
+      <circle cx="60" cy="60" r="16" stroke="currentColor" strokeWidth="0.8" opacity="0.25" />
+      <g style={{ transformOrigin: "60px 60px", animation: `hvSpin ${spin}s linear infinite` }}>
+        <path d="M60 60 C 60 35, 50 28, 38 30 C 48 38, 55 48, 60 60 Z" fill="currentColor" opacity="0.18" />
+        <path d="M60 60 C 85 60, 92 50, 90 38 C 82 48, 72 55, 60 60 Z" fill="currentColor" opacity="0.18" />
+        <path d="M60 60 C 60 85, 70 92, 82 90 C 72 82, 65 72, 60 60 Z" fill="currentColor" opacity="0.18" />
+        <path d="M60 60 C 35 60, 28 70, 30 82 C 38 72, 48 65, 60 60 Z" fill="currentColor" opacity="0.18" />
+        <circle cx="60" cy="60" r="6" fill="currentColor" opacity="0.5" />
+      </g>
+    </svg>
+  )
+}
+
+function HvacVent({ size = 120 }: { size?: number }) {
+  return (
+    <svg width={size} height={size * 0.6} viewBox="0 0 120 72" fill="none">
+      <rect x="2" y="2" width="116" height="68" rx="4" stroke="currentColor" strokeWidth="1" opacity="0.4" />
+      {Array.from({ length: 7 }, (_, i) => (
+        <line key={i} x1="10" y1={12 + i * 8} x2="110" y2={12 + i * 8}
+              stroke="currentColor" strokeWidth="0.9" opacity="0.32" />
+      ))}
+    </svg>
+  )
+}
+
+function HvacDuctElbow({ size = 140 }: { size?: number }) {
+  return (
+    <svg width={size} height={size} viewBox="0 0 140 140" fill="none">
+      <path d="M10 30 L70 30 Q110 30 110 70 L110 130" stroke="currentColor" strokeWidth="1.2" opacity="0.4" />
+      <path d="M10 50 L70 50 Q90 50 90 70 L90 130" stroke="currentColor" strokeWidth="1.2" opacity="0.4" />
+      <line x1="14" y1="26" x2="14" y2="54" stroke="currentColor" strokeWidth="0.8" opacity="0.3" />
+      <line x1="20" y1="26" x2="20" y2="54" stroke="currentColor" strokeWidth="0.8" opacity="0.3" />
+      <line x1="26" y1="26" x2="26" y2="54" stroke="currentColor" strokeWidth="0.8" opacity="0.3" />
+      <line x1="86" y1="124" x2="114" y2="124" stroke="currentColor" strokeWidth="0.8" opacity="0.3" />
+      <line x1="86" y1="118" x2="114" y2="118" stroke="currentColor" strokeWidth="0.8" opacity="0.3" />
+      <line x1="86" y1="112" x2="114" y2="112" stroke="currentColor" strokeWidth="0.8" opacity="0.3" />
+    </svg>
+  )
+}
+
+function HvacThermostat({ size = 100 }: { size?: number }) {
+  const ticks = Array.from({ length: 24 }, (_, i) => {
+    const a = (i / 24) * Math.PI * 2 - Math.PI / 2
+    const x1 = 50 + Math.cos(a) * 36
+    const y1 = 50 + Math.sin(a) * 36
+    const x2 = 50 + Math.cos(a) * (i % 6 === 0 ? 30 : 33)
+    const y2 = 50 + Math.sin(a) * (i % 6 === 0 ? 30 : 33)
+    return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth="0.8" opacity="0.4" />
+  })
+  return (
+    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
+      <circle cx="50" cy="50" r="44" stroke="currentColor" strokeWidth="1.2" opacity="0.45" />
+      <circle cx="50" cy="50" r="36" stroke="currentColor" strokeWidth="0.8" opacity="0.3" />
+      {ticks}
+      <text x="50" y="56" textAnchor="middle" fontSize="18"
+            fontFamily="'JetBrains Mono', monospace" fontWeight="600"
+            fill="currentColor" opacity="0.55">72°</text>
+    </svg>
+  )
+}
+
+function HvacCoilPipe({ size = 200 }: { size?: number }) {
+  return (
+    <svg width={size} height={size * 0.5} viewBox="0 0 200 100" fill="none">
+      <path d="M5 50 Q 20 10 35 50 T 65 50 T 95 50 T 125 50 T 155 50 T 185 50 L 195 50"
+            stroke="currentColor" strokeWidth="1.6" opacity="0.4" strokeLinecap="round" />
+      <path d="M5 60 Q 20 20 35 60 T 65 60 T 95 60 T 125 60 T 155 60 T 185 60 L 195 60"
+            stroke="currentColor" strokeWidth="1" opacity="0.25" strokeLinecap="round" />
+    </svg>
+  )
+}
+
+function AirflowStream({ y, delay = 0, duration = 12, color = "#7C3AED", opacity = 0.18, amplitude = 30, uid }: {
+  y: number; delay?: number; duration?: number; color?: string; opacity?: number; amplitude?: number; uid: number
+}) {
+  const length = 1400
+  const path = `M -100 ${y} Q ${length * 0.25} ${y - amplitude} ${length * 0.5} ${y} T ${length * 1.05} ${y}`
+  return (
+    <svg width="100%" height="100%" viewBox={`0 0 ${length} 800`} preserveAspectRatio="xMidYMid slice"
+         style={{ position: "absolute", inset: 0 }}>
+      <defs>
+        <linearGradient id={`ag-${uid}`} x1="0" x2="1">
+          <stop offset="0" stopColor={color} stopOpacity="0" />
+          <stop offset="0.4" stopColor={color} stopOpacity={opacity} />
+          <stop offset="0.6" stopColor={color} stopOpacity={opacity} />
+          <stop offset="1" stopColor={color} stopOpacity="0" />
+        </linearGradient>
+      </defs>
+      <path d={path} fill="none" stroke={`url(#ag-${uid})`} strokeWidth="1.4"
+            strokeDasharray="6 14" strokeLinecap="round"
+            style={{ animation: `airflowDrift ${duration}s linear infinite`, animationDelay: `${delay}s` }} />
+    </svg>
+  )
+}
+
+function AirflowParticles({ count = 14, color = "#60A5FA" }: { count?: number; color?: string }) {
+  const particles = Array.from({ length: count }, (_, i) => ({
+    id: i,
+    top: (i * 7.14) % 100,
+    duration: 14 + (i * 1.37) % 10,
+    delay: -((i * 1.9) % 22),
+    size: 2 + (i * 0.71) % 3,
+    opacity: 0.2 + (i * 0.043) % 0.35,
+  }))
+  return (
+    <div className="absolute inset-0 overflow-hidden pointer-events-none">
+      {particles.map(p => (
+        <span key={p.id} className="absolute rounded-full" style={{
+          top: `${p.top}%`, left: -20,
+          width: p.size, height: p.size,
+          background: color, opacity: p.opacity,
+          boxShadow: `0 0 ${p.size * 3}px ${color}`,
+          animation: `particleDrift ${p.duration}s linear infinite`,
+          animationDelay: `${p.delay}s`,
+        }} />
+      ))}
+    </div>
+  )
+}
+
+function BlueprintGrid() {
+  return (
+    <div className="absolute inset-0 pointer-events-none" style={{
+      backgroundImage: [
+        "linear-gradient(rgba(96,165,250,0.07) 1px, transparent 1px)",
+        "linear-gradient(90deg, rgba(96,165,250,0.07) 1px, transparent 1px)",
+        "linear-gradient(rgba(96,165,250,0.04) 1px, transparent 1px)",
+        "linear-gradient(90deg, rgba(96,165,250,0.04) 1px, transparent 1px)",
+      ].join(", "),
+      backgroundSize: "120px 120px, 120px 120px, 24px 24px, 24px 24px",
+      maskImage: "radial-gradient(ellipse 80% 70% at 50% 40%, black 30%, transparent 75%)",
+      WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 50% 40%, black 30%, transparent 75%)",
+    }} />
+  )
+}
+
+function ThermalWash() {
+  return (
+    <div className="absolute inset-0 pointer-events-none overflow-hidden">
+      <div style={{
+        position: "absolute", top: "10%", left: "8%",
+        width: 380, height: 380, borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(59,130,246,0.18), transparent 70%)",
+        filter: "blur(40px)", animation: "hvDrift 14s ease-in-out infinite",
+      }} />
+      <div style={{
+        position: "absolute", top: "30%", right: "12%",
+        width: 320, height: 320, borderRadius: "50%",
+        background: "radial-gradient(circle, rgba(249,115,22,0.14), transparent 70%)",
+        filter: "blur(40px)",
+        animation: "hvDrift 16s ease-in-out infinite reverse",
+        animationDelay: "-4s",
+      }} />
+    </div>
+  )
+}
+
+function FloatingHvacIcon({ children, top, left, right, bottom, size = 160, drift = 12, opacity = 0.08, rotate = 0, color = "#7C3AED" }: {
+  children: React.ReactNode; top?: string; left?: string; right?: string; bottom?: string
+  size?: number; drift?: number; opacity?: number; rotate?: number; color?: string
+}) {
+  return (
+    <div className="absolute pointer-events-none" style={{
+      top, left, right, bottom, width: size, color, opacity,
+      transform: `rotate(${rotate}deg)`,
+      animation: `hvFloat ${drift}s ease-in-out infinite`,
+    }}>
+      {children}
+    </div>
+  )
+}
+
+function HeroAtmosphere() {
+  return (
+    <>
+      <BlueprintGrid />
+      <ThermalWash />
+      <div className="absolute inset-0 pointer-events-none overflow-hidden">
+        <AirflowStream uid={1} y={120} delay={0}   duration={18} color="#60A5FA" opacity={0.22} amplitude={40} />
+        <AirflowStream uid={2} y={260} delay={-6}  duration={22} color="#7C3AED" opacity={0.16} amplitude={28} />
+        <AirflowStream uid={3} y={400} delay={-12} duration={26} color="#F97316" opacity={0.14} amplitude={50} />
+        <AirflowStream uid={4} y={540} delay={-3}  duration={20} color="#60A5FA" opacity={0.18} amplitude={35} />
+        <AirflowStream uid={5} y={680} delay={-9}  duration={24} color="#7C3AED" opacity={0.14} amplitude={45} />
+      </div>
+      <AirflowParticles count={20} color="#60A5FA" />
+      <FloatingHvacIcon top="14%" left="4%"  size={180} drift={11} opacity={0.07} rotate={-8}  color="#7C3AED">
+        <HvacCondenserFan size={180} spin={14} />
+      </FloatingHvacIcon>
+      <FloatingHvacIcon top="8%"  right="6%" size={120} drift={9}  opacity={0.09} rotate={12}  color="#60A5FA">
+        <HvacThermostat size={120} />
+      </FloatingHvacIcon>
+      <FloatingHvacIcon bottom="32%" left="3%"  size={170} drift={13} opacity={0.06} rotate={6}   color="#0EA5E9">
+        <HvacDuctElbow size={170} />
+      </FloatingHvacIcon>
+      <FloatingHvacIcon bottom="22%" right="4%" size={200} drift={15} opacity={0.07} rotate={-4}  color="#F97316">
+        <HvacCoilPipe size={200} />
+      </FloatingHvacIcon>
+      <FloatingHvacIcon top="48%" left="9%"  size={100} drift={10} opacity={0.10} rotate={0}   color="#7C3AED">
+        <HvacVent size={100} />
+      </FloatingHvacIcon>
+      <FloatingHvacIcon top="58%" right="11%" size={90}  drift={12} opacity={0.10} rotate={20}  color="#60A5FA">
+        <HvacVent size={90} />
+      </FloatingHvacIcon>
     </>
   )
 }
@@ -656,78 +896,191 @@ function StatStrip() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HOW IT WORKS
+// HOW IT WORKS — 4-step alternating 2-col layout with micro-preview cards
 // ─────────────────────────────────────────────────────────────────────────────
-const STEPS = [
+const HIW_STEPS = [
   {
-    icon: Thermometer,
-    iconBg: "#EDE9FE", iconColor: C.primary,
-    num: "01",
-    title: "Every inbound is classified before anyone picks up the phone",
-    desc: "Repair or install? Emergency or tune-up? Inside service area? LeadCloser identifies job type, urgency, and fit the moment a lead comes in — and routes it into the correct path automatically.",
-    glow: "rgba(124,58,237,0.08)",
+    n: "01",
+    title: "Every inbound captured — voice, SMS, web form, or ad",
+    body: "Facebook leads, Google ads, inbound calls, website forms — all pipe into one intake queue. The AI voice agent answers calls. The SMS agent responds within 60 seconds of form submit.",
+    micro: "intake" as const,
   },
   {
-    icon: MessageSquare,
-    iconBg: "#DBEAFE", iconColor: "#2563EB",
-    num: "02",
-    title: "AI qualifies the job and books the right appointment",
-    desc: "Not just any slot — the right one. The system handles price objections, qualifies intent, determines urgency, and books the correct appointment type to the correct time and technician.",
-    glow: "rgba(37,99,235,0.07)",
+    n: "02",
+    title: "AI qualifies the job and handles every objection",
+    body: "Service type, urgency, address, equipment age, budget signals — asked like a senior dispatcher. Price shopping, competitor comparisons, and \"just getting quotes\" handled automatically. Zero guesswork.",
+    micro: "qualify" as const,
   },
   {
-    icon: CalendarCheck,
-    iconBg: "#DCFCE7", iconColor: C.success,
-    num: "03",
-    title: "Owner gets full visibility. Dispatch stays clean.",
-    desc: "Every booking logs job type, lead source, urgency, and technician assignment. You see what came in, what got booked, what's cold, and exactly where leads are being lost — in real time.",
-    glow: "rgba(77,124,15,0.08)",
+    n: "03",
+    title: "Books the right tech, right slot, right appointment type",
+    body: "Reads your live calendar, route density, and tech specialty. Distinguishes emergency from tune-up from install. Locks the appointment and fires a confirmation SMS to the homeowner.",
+    micro: "book" as const,
+  },
+  {
+    n: "04",
+    title: "Every action tracked. Your CRM always current.",
+    body: "Transcript, call recording, lead source, job type, and dispatch notes land in your pipeline automatically. You see what came in, what got booked, what went cold — and why.",
+    micro: "handoff" as const,
   },
 ]
 
+function HiwMicro({ kind }: { kind: "intake" | "qualify" | "book" | "handoff" }) {
+  if (kind === "intake") {
+    return (
+      <div className="rounded-xl p-3 border" style={{ background: "#fff", borderColor: C.border }}>
+        <div className="flex items-center gap-1.5 mb-3 flex-wrap">
+          {[
+            { label: "Web Form",     bg: "#EFF6FF", color: "#1D4ED8" },
+            { label: "Google Ad",    bg: "#FEF3C7", color: "#A16207" },
+            { label: "FB Lead",      bg: "#FCE7F3", color: "#BE185D" },
+            { label: "Inbound Call", bg: "#F0FDF4", color: "#15803D" },
+          ].map(s => (
+            <span key={s.label} className="text-[9px] font-semibold px-1.5 py-0.5 rounded"
+                  style={{ background: s.bg, color: s.color }}>{s.label}</span>
+          ))}
+        </div>
+        <div className="flex items-center gap-2 mb-2">
+          <div className="w-1.5 h-1.5 rounded-full bg-purple-500 animate-pulse" />
+          <span className="text-[10px] font-mono" style={{ color: C.muted }}>POST /lead → intake queue</span>
+        </div>
+        <div className="flex items-center gap-3 text-[10px]">
+          <span className="flex items-center gap-1" style={{ color: C.primary }}>
+            <Mic className="w-2.5 h-2.5" /> AI Voice Agent
+          </span>
+          <span className="flex items-center gap-1" style={{ color: C.primary }}>
+            <MessageSquare className="w-2.5 h-2.5" /> SMS in 60s
+          </span>
+        </div>
+      </div>
+    )
+  }
+  if (kind === "qualify") {
+    return (
+      <div className="rounded-xl p-3 space-y-1.5 border" style={{ background: "#fff", borderColor: C.border }}>
+        {[
+          ["Service",  "AC repair — emergency"],
+          ["Address",  "Verified ✓"],
+          ["Urgency",  "Today"],
+          ["Budget",   "$400–$900"],
+        ].map(([k, v]) => (
+          <div key={k} className="flex items-center justify-between text-[10px]">
+            <span style={{ color: C.muted }}>{k}</span>
+            <span className="font-semibold flex items-center gap-1" style={{ color: C.text }}>
+              <CheckCircle2 className="w-2.5 h-2.5 text-green-500" />{v}
+            </span>
+          </div>
+        ))}
+        <div className="pt-1.5 text-[9px] font-medium" style={{ color: C.muted }}>
+          Objection handled: "just getting prices"
+        </div>
+      </div>
+    )
+  }
+  if (kind === "book") {
+    return (
+      <div className="rounded-xl p-3 border" style={{ background: "#fff", borderColor: C.border }}>
+        <div className="flex items-center justify-between mb-2">
+          <span className="text-[10px] font-semibold" style={{ color: C.text }}>Today · Emergency AC</span>
+          <span className="text-[9px]" style={{ color: C.muted }}>Tech: James M.</span>
+        </div>
+        <div className="grid grid-cols-4 gap-1 mb-2">
+          {["10a", "12p", "2p", "3p"].map((t, i) => (
+            <div key={t} className="text-[9px] text-center py-1.5 rounded font-medium"
+                 style={i === 3 ? { background: C.primary, color: "#fff" } : { background: "#F3F4F6", color: C.muted }}>
+              {t}
+            </div>
+          ))}
+        </div>
+        <p className="text-[9px] font-medium" style={{ color: C.success }}>✓ 3:00 PM locked · Confirm SMS sent</p>
+      </div>
+    )
+  }
+  return (
+    <div className="rounded-xl p-3 border" style={{ background: "#fff", borderColor: C.border }}>
+      <div className="flex items-center gap-2 mb-2">
+        <div className="w-7 h-7 rounded-md flex items-center justify-center" style={{ background: C.primary }}>
+          <Zap className="w-3 h-3 text-white" />
+        </div>
+        <ArrowRight className="w-3 h-3" style={{ color: C.muted }} />
+        <div className="flex-1 px-2 py-1 rounded text-[9px] font-mono"
+             style={{ background: "#F3F4F6", color: C.muted, border: `1px solid ${C.border}` }}>
+          CRM · lead + dispatch notes updated
+        </div>
+      </div>
+      <div className="grid grid-cols-2 gap-1 text-[9px]" style={{ color: C.muted }}>
+        <span>• Transcript ✓</span>
+        <span>• Tags applied ✓</span>
+        <span>• Tech assigned ✓</span>
+        <span>• Confirm SMS ✓</span>
+      </div>
+    </div>
+  )
+}
+
 function HowItWorks() {
   return (
-    <section id="how-it-works" className="max-w-5xl mx-auto px-6 py-24">
-      <motion.div
-        initial={{ opacity: 0, y: 20 }}
-        whileInView={{ opacity: 1, y: 0 }}
-        viewport={{ once: true }}
-        className="text-center mb-16"
-      >
-        <p className="text-sm font-semibold uppercase tracking-widest mb-3" style={{ color: C.primary }}>How it works</p>
-        <h2 className="text-4xl font-bold" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-          Set up once. Runs your front office forever.
-        </h2>
-        <p className="mt-4 text-lg max-w-xl mx-auto" style={{ color: C.muted }}>
-          While you're on the job, your AI is qualifying, booking, routing, and following up — without you.
-        </p>
-      </motion.div>
+    <section id="how-it-works" className="relative py-32 px-6">
+      <div className="max-w-6xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          whileInView={{ opacity: 1, y: 0 }}
+          viewport={{ once: true }}
+          className="text-center mb-20"
+        >
+          <p className="text-sm font-semibold uppercase tracking-widest mb-4" style={{ color: C.primary }}>How it works</p>
+          <h2 className="text-5xl md:text-6xl font-extrabold tracking-tight mb-5"
+              style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+            From form-fill to{" "}
+            <span style={{ color: C.primary }}>booked truck roll</span>
+            <br />in under 4 minutes.
+          </h2>
+          <p className="text-lg max-w-xl mx-auto" style={{ color: C.muted }}>
+            AI voice + SMS handles your front office. Your CRM gets clean, qualified, booked work — automatically.
+          </p>
+        </motion.div>
 
-      <div className="grid md:grid-cols-3 gap-6">
-        {STEPS.map((s, i) => (
-          <motion.div
-            key={i}
-            initial={{ opacity: 0, y: 28 }}
-            whileInView={{ opacity: 1, y: 0 }}
-            viewport={{ once: true }}
-            transition={{ delay: i * 0.13 }}
-            whileHover={{ y: -5, transition: { type: "spring", stiffness: 280, damping: 22 } }}
-            className="relative bg-white rounded-2xl p-7 border cursor-default"
-            style={{
-              borderColor: C.border,
-              boxShadow: `0 4px 24px ${s.glow}, 0 1px 3px rgba(0,0,0,0.03)`,
-            }}
-          >
-            <div className="flex items-start justify-between mb-5">
-              <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: s.iconBg }}>
-                <s.icon className="w-5 h-5" style={{ color: s.iconColor }} />
+        <div className="relative">
+          {/* Vertical connector */}
+          <div className="absolute left-1/2 top-0 bottom-0 w-px hidden md:block"
+               style={{ background: `linear-gradient(180deg, transparent, ${C.border} 10%, ${C.border} 90%, transparent)` }} />
+
+          {HIW_STEPS.map((step, i) => (
+            <motion.div
+              key={step.n}
+              initial={{ opacity: 0, y: 30 }}
+              whileInView={{ opacity: 1, y: 0 }}
+              viewport={{ once: true, margin: "-80px" }}
+              transition={{ duration: 0.55, delay: 0.1 }}
+              className={`grid md:grid-cols-2 gap-12 items-center mb-24 last:mb-0 ${i % 2 ? "md:[&>*:first-child]:order-2" : ""}`}
+            >
+              {/* Text side */}
+              <div className={i % 2 ? "md:pl-16" : "md:pr-16 md:text-right"}>
+                <div className={`flex items-center gap-3 mb-4 ${i % 2 ? "" : "md:justify-end"}`}>
+                  <span className="text-5xl font-extrabold"
+                        style={{ fontFamily: "var(--font-jetbrains)", color: "transparent", WebkitTextStroke: `1.5px ${C.primary}` }}>
+                    {step.n}
+                  </span>
+                </div>
+                <h3 className="text-3xl font-bold mb-3 tracking-tight"
+                    style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>{step.title}</h3>
+                <p className="leading-relaxed text-lg" style={{ color: C.muted }}>{step.body}</p>
               </div>
-              <span className="text-4xl font-bold" style={{ color: C.border, fontFamily: "var(--font-jakarta)" }}>{s.num}</span>
-            </div>
-            <h3 className="font-bold text-lg mb-2" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>{s.title}</h3>
-            <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{s.desc}</p>
-          </motion.div>
-        ))}
+
+              {/* Micro-preview side */}
+              <div className={i % 2 ? "md:pr-16" : "md:pl-16"}>
+                <div className="relative">
+                  <div className="absolute -inset-4 rounded-3xl"
+                       style={{ background: "linear-gradient(135deg, rgba(124,58,237,0.06), rgba(77,124,15,0.04))" }} />
+                  <div className="relative p-5 rounded-2xl border"
+                       style={{ background: C.subtle, borderColor: C.border, boxShadow: "0 4px 20px rgba(124,58,237,0.06)" }}>
+                    <HiwMicro kind={step.micro} />
+                  </div>
+                </div>
+              </div>
+            </motion.div>
+          ))}
+        </div>
       </div>
     </section>
   )
@@ -1021,10 +1374,10 @@ function CRMDashboardSection() {
         className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8"
       >
         {[
-          { icon: Wind,     label: "HVAC Job Intelligence",    desc: "Emergency vs repair vs install — classified instantly" },
-          { icon: Shield,   label: "Smart Objection Logic",  desc: "Price shopping and competitor comparisons handled" },
-          { icon: Bell,     label: "Urgency-Aware Follow-Up",desc: "Sequences differ by job type and lead intent" },
-          { icon: Settings2,label: "10-Min Setup",           desc: "Connect your lead sources. Running in minutes." },
+          { icon: Mic,        label: "AI Voice Agent",           desc: "Answers inbound calls, qualifies on the spot, routes immediately" },
+          { icon: MessageSquare, label: "SMS Agent",             desc: "Texts every lead within 60 seconds — 24/7, no exceptions" },
+          { icon: Route,      label: "Dispatch-Aware Booking",   desc: "Right tech, right slot, right appointment type — every time" },
+          { icon: Bot,        label: "Full Autopilot Back Office",desc: "Every action tracked. Nothing dropped. Your team focuses on the truck." },
         ].map((f, i) => (
           <div
             key={i}
@@ -1359,7 +1712,14 @@ export default function LandingPage() {
       <div className="relative" style={{ zIndex: 10 }}>
 
         {/* ── HERO ── */}
-        <section className="min-h-screen flex flex-col items-center justify-center text-center pt-28 pb-20 px-4">
+        <section className="relative min-h-screen flex flex-col items-center justify-center text-center pt-28 pb-20 px-4 overflow-hidden">
+
+          {/* HVAC atmosphere — sits at z-0 behind all content */}
+          <div className="absolute inset-0 pointer-events-none" style={{ zIndex: 0 }}>
+            <HeroAtmosphere />
+          </div>
+
+          <div className="relative w-full flex flex-col items-center" style={{ zIndex: 2 }}>
 
           {/* Live status badge */}
           <motion.div
@@ -1405,7 +1765,7 @@ export default function LandingPage() {
             className="text-xl max-w-xl mx-auto mt-8 mb-8 leading-relaxed"
             style={{ color: C.muted }}
           >
-            LeadCloser operates the intake, qualification, booking, and dispatch coordination of your HVAC business — so every lead is worked instantly, every appointment is booked correctly, and nothing falls through the cracks.
+            AI voice agent answers your calls. SMS agent texts every lead in 60 seconds. Dispatch-aware booking routes to the right tech and slot. Every customer action tracked on autopilot. This is your entire HVAC back office — run by AI.
           </motion.p>
 
           {/* CTA buttons */}
@@ -1478,6 +1838,7 @@ export default function LandingPage() {
 
           {/* Stat strip */}
           <StatStrip />
+          </div>{/* end relative content wrapper */}
         </section>
 
         {/* ── HOW IT WORKS ── */}
