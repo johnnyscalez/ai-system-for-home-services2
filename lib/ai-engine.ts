@@ -1,6 +1,7 @@
 import { anthropic } from "@/lib/claude"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { createCalendarEvent } from "@/lib/google-calendar"
+import { getConversationFlow } from "@/lib/conversation-flows"
 
 export type ConversationAction =
   | { type: "book_appointment"; scheduled_at: string; address?: string; notes?: string }
@@ -15,7 +16,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "book_appointment",
     description:
-      "Call this when the lead has agreed to a specific appointment date and time. Convert relative times like 'tomorrow at 2pm' to an ISO 8601 datetime based on today's date.",
+      "Call this ONLY when: (1) the lead has confirmed a specific date and time, AND (2) you have their service address. Never call this tool without address — go back and collect it first if missing. Convert relative times like 'tomorrow at 2pm' to an ISO 8601 datetime using the current date from the lead file.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -25,14 +26,14 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
         },
         address: {
           type: "string",
-          description: "Job site address if provided by the lead",
+          description: "Full service address (street, city, state). REQUIRED — do not call this tool without it.",
         },
         notes: {
           type: "string",
-          description: "Any notes about the appointment",
+          description: "Summary of the job: system type, age, issue description, urgency level, ownership status",
         },
       },
-      required: ["scheduled_at"],
+      required: ["scheduled_at", "address"],
     },
   },
   {
@@ -59,8 +60,8 @@ export async function runConversation(
 ): Promise<EngineResult> {
   const supabase = createServiceRoleClient()
 
-  // Load everything in parallel
-  const [leadRes, historyRes, agentRes, kbRes] = await Promise.all([
+  // Load everything in parallel — including full appointment history
+  const [leadRes, historyRes, agentRes, kbRes, appointmentsRes] = await Promise.all([
     supabase.from("leads").select("*").eq("id", leadId).single(),
     supabase
       .from("conversations")
@@ -77,20 +78,32 @@ export async function runConversation(
       .select("business_description, services_offered, service_areas")
       .eq("company_id", companyId)
       .single(),
+    supabase
+      .from("appointments")
+      .select("scheduled_at, status, address, notes, created_at")
+      .eq("lead_id", leadId)
+      .order("scheduled_at", { ascending: false }),
   ])
 
   const lead = leadRes.data
   const history = historyRes.data ?? []
   const agent = agentRes.data
   const kb = kbRes.data
+  const appointments = appointmentsRes.data ?? []
 
   if (!lead) throw new Error("Lead not found")
 
-  const firstName = lead.first_name ?? "there"
   const isInitialOutreach = incomingMessage === null
+  const tz = agent?.timezone ?? "America/New_York"
+
+  // Build rich lead context block — injected into every system prompt call
+  const leadContext = buildLeadContext(lead, appointments, tz)
+
+  // Build service-specific conversation flow playbook
+  const conversationFlow = getConversationFlow(lead.service_type as string | null)
 
   // Build system prompt
-  const systemPrompt =
+  const baseSystemPrompt =
     agent?.generated_system_prompt ||
     buildFallbackSystemPrompt(
       agent?.agent_name ?? "Alex",
@@ -99,6 +112,11 @@ export async function runConversation(
       lead.service_type ?? "home services"
     )
 
+  // Always inject lead context + conversation flow into system prompt.
+  // The flow defines stage-by-stage rules and overrides any vague instructions
+  // in the generated prompt. Lead context provides the live data Claude needs.
+  const systemPrompt = `${baseSystemPrompt}\n\n${conversationFlow}\n\n${leadContext}`
+
   // Build message history for Claude
   const messages: Parameters<typeof anthropic.messages.create>[0]["messages"] = []
 
@@ -106,15 +124,7 @@ export async function runConversation(
     // First contact — ask Claude to write the initial outreach SMS
     messages.push({
       role: "user",
-      content: `NEW LEAD CONTEXT:
-Name: ${firstName} ${lead.last_name ?? ""}
-Phone: ${lead.phone}
-Service interested in: ${lead.service_type ?? "home services"}
-Lead source: ${lead.source}
-${lead.address ? `Address: ${lead.address}` : ""}
-${lead.notes ? `Notes from form: ${lead.notes}` : ""}
-
-Write the first SMS to send to this new lead right now. Keep it to 1-2 sentences. Make it feel personal and not like a mass text. Do NOT start with "Hi!" — be natural.`,
+      content: `Write the first SMS to send to this new lead right now. Keep it to 1-2 sentences. Make it feel personal and not like a mass text. Do NOT start with "Hi!" — be natural. Reference their service interest if it helps personalize it.`,
     })
   } else {
     // Build full conversation history
@@ -321,25 +331,109 @@ export async function processAndSave(
   return result
 }
 
+function buildLeadContext(
+  lead: Record<string, unknown>,
+  appointments: Array<{ scheduled_at: string; status: string; address?: string | null; notes?: string | null }>,
+  timezone: string
+): string {
+  const now = new Date()
+  const past = appointments.filter((a) => new Date(a.scheduled_at) < now)
+  const upcoming = appointments.filter((a) => new Date(a.scheduled_at) >= now)
+  const isReturning = past.length > 0
+
+  const fmtDate = (iso: string) =>
+    new Date(iso).toLocaleString("en-US", {
+      timeZone: timezone,
+      weekday: "long",
+      month: "long",
+      day: "numeric",
+      year: "numeric",
+      hour: "numeric",
+      minute: "2-digit",
+    })
+
+  const nowFmt = now.toLocaleString("en-US", {
+    timeZone: timezone,
+    weekday: "long",
+    month: "long",
+    day: "numeric",
+    year: "numeric",
+    hour: "numeric",
+    minute: "2-digit",
+  })
+
+  let ctx = `
+=== LEAD FILE (READ THIS BEFORE EVERY RESPONSE) ===
+Name: ${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim()
+
+  ctx += `
+Phone: ${lead.phone}
+Service requested: ${lead.service_type ?? "home services"}
+Lead source: ${lead.source ?? "unknown"}
+Current status: ${lead.status}
+Customer type: ${isReturning ? "⭐ RETURNING CUSTOMER — has history with this company" : "NEW LEAD — first contact, no prior jobs"}
+Today / current time: ${nowFmt}
+`
+
+  if (lead.address) ctx += `Address on file: ${lead.address}\n`
+  if (lead.email) ctx += `Email: ${lead.email}\n`
+  if (lead.notes) ctx += `Notes from lead form: ${lead.notes}\n`
+
+  if (past.length > 0) {
+    ctx += `\nPAST APPOINTMENTS (${past.length}):\n`
+    for (const a of past) {
+      ctx += `  • ${fmtDate(a.scheduled_at)} — ${a.status}`
+      if (a.address) ctx += ` at ${a.address}`
+      if (a.notes) ctx += ` | Notes: ${a.notes}`
+      ctx += "\n"
+    }
+  }
+
+  if (upcoming.length > 0) {
+    ctx += `\nUPCOMING APPOINTMENTS (${upcoming.length}):\n`
+    for (const a of upcoming) {
+      ctx += `  • ${fmtDate(a.scheduled_at)} — ${a.status}`
+      if (a.address) ctx += ` at ${a.address}`
+      if (a.notes) ctx += ` | Notes: ${a.notes}`
+      ctx += "\n"
+    }
+  }
+
+  if (past.length === 0 && upcoming.length === 0) {
+    ctx += `\nNo appointments on record yet.\n`
+  }
+
+  ctx += `=== END LEAD FILE ===`
+  return ctx.trim()
+}
+
 function buildFallbackSystemPrompt(
   agentName: string,
   businessDescription: string,
   services: string,
   serviceType: string
 ): string {
-  return `You are ${agentName}, an AI sales assistant for a ${serviceType} company.
-${businessDescription ? `Business: ${businessDescription}` : ""}
-${services ? `Services: ${services}` : ""}
+  return `You are ${agentName}, a sales rep texting leads for a ${serviceType} company via SMS.
+${businessDescription ? `\nAbout the company: ${businessDescription}` : ""}
+${services ? `\nServices offered: ${services}` : ""}
 
-Your job: respond to leads via SMS, qualify them, and book an estimate appointment.
+Your personality: warm, confident, knowledgeable — like a trusted local rep who texts personally,
+not a call center script. You've been with this company for years and know the service inside-out.
 
-Rules:
-- Keep every message to 1-2 short sentences
-- Use the lead's first name naturally
-- Always move toward booking an appointment
-- When they agree to a specific time, use the book_appointment tool immediately
-- When they're clearly qualified (ready to book, good fit), use update_lead_status with "qualified"
-- When they say they're not interested, use update_lead_status with "closed_lost"
-- Never reveal you are an AI
-- Never send more than 2 follow-up messages without a reply`
+Core job:
+- Text leads, qualify them, collect necessary info, and book a free on-site estimate
+- You don't quote prices over text — all pricing happens at the in-person visit
+- You're not pushy — you're helpful. You make it easy to say yes.
+
+SMS rules:
+- 1-2 sentences max per message. Never paragraphs.
+- Use the lead's first name naturally — not every message, but regularly.
+- Never send more than 2 unanswered messages before stopping.
+- Never reveal you are an AI. If asked, deflect warmly.
+- When they confirm a date/time AND you have their address → call book_appointment immediately.
+- When clearly qualified (ready to move forward) → call update_lead_status "qualified".
+- When they explicitly say not interested or chose someone else → call update_lead_status "closed_lost".
+- When they seem frustrated or the situation needs a human → call update_lead_status "needs_attention".
+
+The conversation playbook and stage-by-stage rules follow in the next section.`
 }

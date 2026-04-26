@@ -122,11 +122,11 @@ export async function generateSystemPrompt(
   }
 
   const serviceQualifyingContext: Record<string, string> = {
-    roofing: "storm damage vs age, insurance claim or cash pay, address for service area check, urgency",
-    solar: "home ownership, roof age, average electric bill, shading issues",
-    hvac: "system type (AC/heat/both), age of system, repair or replacement, urgency",
-    windows: "number of windows, full home or specific rooms, reason (energy savings, aesthetics, damage)",
-    bath_remodel: "scope (full remodel vs fixtures), timeline, ownership, budget range",
+    roofing: "storm damage vs age, insurance claim or cash pay, address (required before booking), active leak urgency, homeowner vs renter",
+    solar: "homeownership required, average electric bill, roof age and shading, HOA restrictions, address for satellite design",
+    hvac: "system type (AC/heat/heat pump/mini-split), age of system, repair vs replacement vs new install, is it running now (urgency), homeowner vs renter, property type (residential vs commercial), address (required before booking)",
+    windows: "full home vs specific rooms, reason for replacing, number of windows, own vs rent, address before booking",
+    bath_remodel: "full remodel vs fixtures only, timeline, ownership, budget range, address before booking",
   }
 
   const message = await anthropic.messages.create({
@@ -177,16 +177,20 @@ ${Object.entries(config.objectionResponses).map(([obj, resp]) => `"${obj}": ${re
 
 WORKING HOURS: ${config.workingHoursStart}:00 to ${config.workingHoursEnd}:00 (${config.timezone})
 
-Write a complete system prompt that:
-1. Defines the agent's identity and knowledge of the business
-2. Gives a clear conversation playbook with exact stage guidance
-3. Includes specific objection handling scripts
-4. Defines follow-up behavior when leads go cold
-5. Sets absolute rules (2-sentence max, never reveal AI, always use first name, always work toward booking)
-6. Includes example message templates for each stage
-7. Handles edge cases (angry leads, insurance questions, wrong number, etc.)
+Write a system prompt that covers:
+1. Agent identity and deep knowledge of this specific business (name, services, USPs, certifications, areas)
+2. Tone and personality — how this agent sounds vs. a generic bot
+3. Business-specific knowledge the agent should draw on (pricing approach, guarantees, team, testimonials)
+4. Service-specific qualifying intelligence for ${kb.serviceType} — what makes a good vs. bad lead for THIS company
+5. Custom objection responses tuned to this company's strengths
+6. Working hours behavior — what to do if a lead texts outside ${config.workingHoursStart}:00-${config.workingHoursEnd}:00 ${config.timezone}
+7. Edge cases specific to this business type
 
-The prompt should be so good that an AI reading it becomes an expert closer for this specific business.`,
+IMPORTANT: Do NOT redefine the conversation stages or booking rules — those are handled
+by a separate conversation flow module that will be injected alongside this prompt.
+Focus on WHO the agent is and WHAT they know about this business, not the step-by-step flow.
+
+The prompt should make an AI sound like an expert rep who has worked at ${kb.companyName} for years.`,
       },
     ],
   })

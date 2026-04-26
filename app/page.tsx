@@ -633,7 +633,7 @@ function LiveConversation() {
   }, [visibleCount, done])
 
   return (
-    <div className="flex flex-col" style={{ background: C.surface }}>
+    <div className="flex flex-col overflow-hidden" style={{ background: C.surface, height: 400 }}>
       {/* Header */}
       <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
         <MessageSquare className="w-4 h-4" style={{ color: C.primary }} />
@@ -734,6 +734,7 @@ function HeroProductCard() {
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 1.5, type: "spring" }}
+        className="hidden sm:block"
         style={{
           position: "absolute",
           top: -20, right: -16,
@@ -765,6 +766,7 @@ function HeroProductCard() {
         initial={{ opacity: 0, scale: 0.8 }}
         animate={{ opacity: 1, scale: 1 }}
         transition={{ delay: 1.7, type: "spring" }}
+        className="hidden sm:block"
         style={{
           position: "absolute",
           bottom: -20, left: -16,
@@ -845,8 +847,10 @@ function HeroProductCard() {
         </div>
 
         {/* Two-column body */}
-        <div className="grid" style={{ gridTemplateColumns: "45% 55%" }}>
-          <LeadPipeline />
+        <div className="block md:grid" style={{ gridTemplateColumns: "45% 55%" }}>
+          <div className="hidden md:block">
+            <LeadPipeline />
+          </div>
           <LiveConversation />
         </div>
       </motion.div>
@@ -869,20 +873,21 @@ function StatStrip() {
   ]
 
   return (
-    <div className="max-w-3xl mx-auto mt-20">
-      <div className="grid grid-cols-3 rounded-2xl overflow-hidden border" style={{ borderColor: C.border, background: C.surface, boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}>
+    <div className="max-w-3xl mx-auto mt-16 sm:mt-20 px-4 sm:px-0">
+      <div className="grid grid-cols-1 sm:grid-cols-3 rounded-2xl overflow-hidden border" style={{ borderColor: C.border, background: C.surface, boxShadow: "0 4px 24px rgba(0,0,0,0.06)" }}>
         {stats.map((stat, i) => (
           <div
             key={i}
             ref={stat.ref}
-            className="text-center px-8 py-7"
+            className="text-center px-6 sm:px-8 py-6 sm:py-7"
             style={{
-              borderLeft: stat.bordered ? `1px solid ${C.border}` : undefined,
+              borderLeft: stat.bordered && i > 0 ? `1px solid ${C.border}` : undefined,
               borderRight: stat.bordered ? `1px solid ${C.border}` : undefined,
+              borderTop: i > 0 ? `1px solid ${C.border}` : undefined,
             }}
           >
             <p
-              className="text-4xl font-bold leading-none"
+              className="text-3xl sm:text-4xl font-bold leading-none"
               style={{ color: stat.color, fontFamily: "var(--font-jetbrains)" }}
             >
               {stat.display}
@@ -1156,8 +1161,9 @@ function CRMDashboardSection() {
         </p>
       </motion.div>
 
-      {/* Glow behind the card */}
-      <div className="relative">
+      {/* Glow behind the card — outer div scrolls horizontally on mobile */}
+      <div className="overflow-x-auto -mx-6 px-4 sm:mx-0 sm:px-0">
+      <div className="relative" style={{ minWidth: 760 }}>
         <div className="absolute inset-0 pointer-events-none" style={{
           background: "radial-gradient(ellipse 80% 50% at 50% 100%, rgba(124,58,237,0.12) 0%, transparent 70%)",
           filter: "blur(40px)",
@@ -1363,6 +1369,7 @@ function CRMDashboardSection() {
             <span className="text-xs font-semibold" style={{ color: C.primary }}>View all 47 leads →</span>
           </div>
         </motion.div>
+      </div>
       </div>
 
       {/* Feature pills below the card */}
@@ -1738,7 +1745,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5, duration: 0.6 }}
-            className="text-7xl md:text-8xl leading-none tracking-tighter max-w-4xl"
+            className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl leading-none tracking-tighter max-w-4xl"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
             <span className="font-normal" style={{ color: "#D1D5DB" }}>Your HVAC Company,</span>
@@ -1762,7 +1769,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.8, duration: 0.6 }}
-            className="text-xl max-w-xl mx-auto mt-8 mb-8 leading-relaxed"
+            className="text-base sm:text-xl max-w-xl mx-auto mt-6 sm:mt-8 mb-6 sm:mb-8 leading-relaxed px-2 sm:px-0"
             style={{ color: C.muted }}
           >
             AI voice agent answers your calls. SMS agent texts every lead in 60 seconds. Dispatch-aware booking routes to the right tech and slot. Every customer action tracked on autopilot. This is your entire HVAC back office — run by AI.
@@ -1831,7 +1838,7 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 40 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 1.2, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
-            className="mt-20 w-full max-w-5xl mx-auto px-4"
+            className="mt-12 sm:mt-20 w-full max-w-5xl mx-auto px-3 sm:px-4"
           >
             <HeroProductCard />
           </motion.div>
