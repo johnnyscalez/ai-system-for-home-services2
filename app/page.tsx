@@ -32,22 +32,17 @@ function Background() {
   return (
     <>
       <style>{`
-        @keyframes driftUp {
-          0%   { transform: translateY(0px); }
-          100% { transform: translateY(-28px); }
-        }
         @keyframes orbPulse {
-          0%, 100% { transform: scale(1); opacity: 0.10; }
-          50%       { transform: scale(1.08); opacity: 0.14; }
+          0%, 100% { opacity: 0.10; }
+          50%       { opacity: 0.14; }
         }
         @keyframes orbPulse2 {
-          0%, 100% { transform: scale(1); opacity: 0.13; }
-          50%       { transform: scale(1.06); opacity: 0.18; }
+          0%, 100% { opacity: 0.13; }
+          50%       { opacity: 0.18; }
         }
         @keyframes orbDrift {
-          0%, 100% { transform: translate(0, 0); }
-          33%       { transform: translate(12px, -8px); }
-          66%       { transform: translate(-8px, 6px); }
+          0%, 100% { opacity: 0.06; }
+          50%       { opacity: 0.09; }
         }
         @keyframes underlineDraw {
           from { transform: scaleX(0); }
@@ -107,14 +102,14 @@ function Background() {
         }} />
       </div>
 
-      {/* Dot grid — fixed, drifts upward */}
+      {/* Dot grid — fixed, static (no transform to avoid iOS Safari scroll bug) */}
       <div
         className="fixed inset-0 pointer-events-none"
         style={{
           zIndex: 1,
           backgroundImage: "radial-gradient(circle, #D4D0CC 1px, transparent 1px)",
           backgroundSize: "28px 28px",
-          animation: "driftUp 8s linear infinite",
+          opacity: 0.5,
         }}
       />
     </>
@@ -722,6 +717,57 @@ function LiveConversation() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// MOBILE HERO CARD — chat-only, clean, no 3D
+// ─────────────────────────────────────────────────────────────────────────────
+function MobileHeroCard() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 32 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 1.2, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+      className="rounded-2xl overflow-hidden border"
+      style={{
+        background: C.surface,
+        borderColor: C.border,
+        boxShadow: "0 20px 60px rgba(124,58,237,0.18), 0 4px 16px rgba(0,0,0,0.06)",
+      }}
+    >
+      {/* Browser chrome */}
+      <div className="flex items-center px-3 py-2.5 gap-2" style={{ background: "#111827" }}>
+        <div className="flex gap-1">
+          <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
+          <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+          <div className="w-2.5 h-2.5 rounded-full bg-green-400" />
+        </div>
+        <div className="flex-1 flex justify-center">
+          <div className="flex items-center gap-1.5 rounded px-3 py-0.5" style={{ background: "rgba(255,255,255,0.07)" }}>
+            <Zap className="w-2.5 h-2.5" style={{ color: C.primary }} />
+            <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.45)" }}>LeadCloser — AI Agent Live</span>
+          </div>
+        </div>
+        <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" />
+      </div>
+
+      {/* Chat conversation */}
+      <LiveConversation />
+
+      {/* Stats strip */}
+      <div className="grid grid-cols-2 border-t" style={{ borderColor: C.border, background: "#FAFAF8" }}>
+        {[
+          { val: "47 sec", label: "Avg response time", color: C.primary },
+          { val: "3.2×",   label: "More jobs booked",  color: C.success },
+        ].map((s, i) => (
+          <div key={i} className="text-center py-4" style={{ borderLeft: i > 0 ? `1px solid ${C.border}` : undefined }}>
+            <p className="text-xl font-bold" style={{ color: s.color, fontFamily: "var(--font-jetbrains)" }}>{s.val}</p>
+            <p className="text-[10px] mt-0.5" style={{ color: C.muted }}>{s.label}</p>
+          </div>
+        ))}
+      </div>
+    </motion.div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // HERO PRODUCT CARD
 // ─────────────────────────────────────────────────────────────────────────────
 function HeroProductCard() {
@@ -1133,6 +1179,94 @@ const ACTIVITY = [
   { icon: "📩", text: "New lead: Tom Harris — just now",     sub: "Emergency AC · Houston TX" },
 ]
 
+// ─────────────────────────────────────────────────────────────────────────────
+// MOBILE CRM PREVIEW — stats + activity feed only
+// ─────────────────────────────────────────────────────────────────────────────
+function MobileCRMPreview() {
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      whileInView={{ opacity: 1, y: 0 }}
+      viewport={{ once: true, margin: "-40px" }}
+      transition={{ duration: 0.6, ease: [0.22, 1, 0.36, 1] }}
+      className="rounded-2xl overflow-hidden border"
+      style={{
+        borderColor: C.border,
+        background: C.surface,
+        boxShadow: "0 16px 48px rgba(124,58,237,0.10), 0 4px 16px rgba(0,0,0,0.04)",
+      }}
+    >
+      {/* Header bar */}
+      <div className="flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: C.border, background: "#111827" }}>
+        <div className="flex gap-1">
+          <div className="w-2.5 h-2.5 rounded-full bg-red-400" />
+          <div className="w-2.5 h-2.5 rounded-full bg-amber-400" />
+          <div className="w-2.5 h-2.5 rounded-full bg-green-400" />
+        </div>
+        <div className="flex-1 flex justify-center">
+          <span className="text-[10px]" style={{ color: "rgba(255,255,255,0.45)" }}>LeadCloser — Pipeline</span>
+        </div>
+        <span className="flex items-center gap-1 text-[10px] font-semibold text-green-400">
+          <span className="w-1.5 h-1.5 rounded-full bg-green-400 animate-pulse" /> AI Active
+        </span>
+      </div>
+
+      {/* 2×2 stats grid */}
+      <div className="grid grid-cols-2" style={{ background: "#FAFAF8" }}>
+        {[
+          { label: "New Leads",    value: "47",  icon: Users,         color: "text-blue-600",   bg: "bg-blue-50"   },
+          { label: "Contacted",    value: "39",  icon: MessageSquare, color: "text-purple-600", bg: "bg-purple-50" },
+          { label: "Booked",       value: "12",  icon: CalendarCheck, color: "text-green-700",  bg: "bg-green-50"  },
+          { label: "Booking Rate", value: "31%", icon: TrendingUp,    color: "text-amber-600",  bg: "bg-amber-50"  },
+        ].map((stat, i) => (
+          <div
+            key={i}
+            className={`flex items-center gap-3 px-4 py-4 border-b ${i % 2 === 0 ? "border-r" : ""}`}
+            style={{ borderColor: C.border }}
+          >
+            <div className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${stat.bg}`}>
+              <stat.icon className={`w-4 h-4 ${stat.color}`} />
+            </div>
+            <div>
+              <p className="text-xl font-bold leading-none" style={{ color: C.text, fontFamily: "var(--font-jetbrains)" }}>{stat.value}</p>
+              <p className="text-[10px] mt-0.5" style={{ color: C.muted }}>{stat.label}</p>
+            </div>
+          </div>
+        ))}
+      </div>
+
+      {/* Live activity feed */}
+      <div>
+        <div className="flex items-center gap-2 px-4 py-2.5 border-b" style={{ borderColor: C.border, background: "#FAFAF8" }}>
+          <Bell className="w-3.5 h-3.5" style={{ color: C.primary }} />
+          <span className="text-xs font-semibold" style={{ color: C.text }}>Live Activity</span>
+          <span className="ml-auto w-2 h-2 rounded-full bg-green-500 animate-pulse" />
+        </div>
+        <div className="divide-y" style={{ borderColor: C.border }}>
+          {ACTIVITY.map((a, i) => (
+            <div key={i} className="flex items-start gap-3 px-4 py-3">
+              <span className="text-base shrink-0 mt-0.5">{a.icon}</span>
+              <div>
+                <p className="text-[12px] font-medium leading-snug" style={{ color: C.text }}>{a.text}</p>
+                <p className="text-[10px] mt-0.5" style={{ color: C.muted }}>{a.sub}</p>
+              </div>
+            </div>
+          ))}
+        </div>
+      </div>
+
+      {/* Footer */}
+      <div className="flex items-center justify-between px-4 py-3 border-t" style={{ borderColor: C.border, background: "#FAFAF8" }}>
+        <span className="flex items-center gap-1.5 text-xs" style={{ color: C.muted }}>
+          <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+          AI responding to 3 leads now
+        </span>
+        <span className="text-xs font-semibold" style={{ color: C.primary }}>View all →</span>
+      </div>
+    </motion.div>
+  )
+}
+
 function CRMDashboardSection() {
   const [flashNew, setFlashNew] = useState(false)
   const [liveLeadVisible, setLiveLeadVisible] = useState(false)
@@ -1161,7 +1295,14 @@ function CRMDashboardSection() {
         </p>
       </motion.div>
 
-      {/* Glow behind the card — outer div scrolls horizontally on mobile */}
+      {/* Mobile version — stats + activity */}
+      <div className="md:hidden mb-8">
+        <MobileCRMPreview />
+      </div>
+
+      {/* Desktop version — full CRM board */}
+      <div className="hidden md:block">
+      {/* Glow behind the card */}
       <div className="overflow-x-auto -mx-6 px-4 sm:mx-0 sm:px-0">
       <div className="relative" style={{ minWidth: 760 }}>
         <div className="absolute inset-0 pointer-events-none" style={{
@@ -1371,20 +1512,21 @@ function CRMDashboardSection() {
         </motion.div>
       </div>
       </div>
+      </div>{/* end hidden md:block desktop wrapper */}
 
-      {/* Feature pills below the card */}
+      {/* Feature pills — shown on all screen sizes */}
       <motion.div
         initial={{ opacity: 0, y: 16 }}
         whileInView={{ opacity: 1, y: 0 }}
         viewport={{ once: true }}
         transition={{ delay: 0.3 }}
-        className="grid grid-cols-2 md:grid-cols-4 gap-4 mt-8"
+        className="grid grid-cols-2 md:grid-cols-4 gap-3 mt-8"
       >
         {[
-          { icon: Mic,        label: "AI Voice Agent",           desc: "Answers inbound calls, qualifies on the spot, routes immediately" },
-          { icon: MessageSquare, label: "SMS Agent",             desc: "Texts every lead within 60 seconds — 24/7, no exceptions" },
-          { icon: Route,      label: "Dispatch-Aware Booking",   desc: "Right tech, right slot, right appointment type — every time" },
-          { icon: Bot,        label: "Full Autopilot Back Office",desc: "Every action tracked. Nothing dropped. Your team focuses on the truck." },
+          { icon: Mic,           label: "AI Voice Agent",            desc: "Answers inbound calls, qualifies on the spot, routes immediately" },
+          { icon: MessageSquare, label: "SMS Agent",                 desc: "Texts every lead within 60 seconds — 24/7, no exceptions" },
+          { icon: Route,         label: "Dispatch-Aware Booking",    desc: "Right tech, right slot, right appointment type — every time" },
+          { icon: Bot,           label: "Full Autopilot Back Office", desc: "Every action tracked. Nothing dropped. Your team focuses on the truck." },
         ].map((f, i) => (
           <div
             key={i}
@@ -1840,7 +1982,9 @@ export default function LandingPage() {
             transition={{ delay: 1.2, duration: 0.8, ease: [0.22, 1, 0.36, 1] }}
             className="mt-12 sm:mt-20 w-full max-w-5xl mx-auto px-3 sm:px-4"
           >
-            <HeroProductCard />
+            {/* Mobile: simple chat card. Desktop: full 3D product card */}
+            <div className="md:hidden"><MobileHeroCard /></div>
+            <div className="hidden md:block"><HeroProductCard /></div>
           </motion.div>
 
           {/* Stat strip */}
