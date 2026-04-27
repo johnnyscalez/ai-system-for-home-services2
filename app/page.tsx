@@ -628,9 +628,11 @@ function LiveConversation() {
   }, [visibleCount, done])
 
   return (
-    <div className="flex flex-col overflow-hidden" style={{ background: C.surface, height: 400 }}>
-      {/* Header */}
-      <div className="flex items-center gap-2 px-4 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
+    // Fixed height — NEVER grows. All children must fit within this box.
+    <div className="flex flex-col" style={{ background: C.surface, height: 400, overflow: "hidden" }}>
+
+      {/* Header — shrink-0 so it never flexes */}
+      <div className="shrink-0 flex items-center gap-2 px-4 py-3" style={{ borderBottom: `1px solid ${C.border}` }}>
         <MessageSquare className="w-4 h-4" style={{ color: C.primary }} />
         <span className="text-xs font-semibold flex-1" style={{ color: C.text }}>AI Agent</span>
         <span className="w-2 h-2 rounded-full bg-green-500 animate-pulse" />
@@ -639,18 +641,19 @@ function LiveConversation() {
         <Phone className="w-3 h-3" style={{ color: C.muted }} />
       </div>
 
-      {/* Messages */}
-      <div className="flex-1 px-3 py-3 space-y-2.5 overflow-hidden" style={{ minHeight: 200 }}>
+      {/* Messages — bottom-aligned flex column. New messages appear at bottom,
+          older ones clip at top. The container never changes size. */}
+      <div className="flex-1 overflow-hidden flex flex-col justify-end gap-2 px-3 py-3">
         <AnimatePresence initial={false}>
           {CONVO.slice(0, visibleCount).map((msg, i) => (
             <motion.div
               key={i}
-              initial={{ opacity: 0, y: 10 }}
+              initial={{ opacity: 0, y: 8 }}
               animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.3, ease: "easeOut" }}
-              className={`flex ${msg.role === "lead" ? "justify-start" : "justify-end"}`}
+              transition={{ duration: 0.25, ease: "easeOut" }}
+              className={`shrink-0 flex ${msg.role === "lead" ? "justify-start" : "justify-end"}`}
             >
-              <div className="space-y-1" style={{ maxWidth: "80%" }}>
+              <div className="space-y-1" style={{ maxWidth: "82%" }}>
                 <div
                   className="rounded-2xl px-3 py-2 text-[11px] leading-relaxed"
                   style={
@@ -677,7 +680,7 @@ function LiveConversation() {
               initial={{ opacity: 0 }}
               animate={{ opacity: 1 }}
               exit={{ opacity: 0 }}
-              className="flex justify-end"
+              className="shrink-0 flex justify-end"
             >
               <div className="flex items-center gap-1 px-3 py-2 rounded-2xl" style={{ background: "#EDE9FE" }}>
                 {[0, 1, 2].map((d) => (
@@ -695,23 +698,23 @@ function LiveConversation() {
         </AnimatePresence>
       </div>
 
-      {/* Success bar */}
-      <AnimatePresence>
-        {done && (
-          <motion.div
-            initial={{ opacity: 0, height: 0 }}
-            animate={{ opacity: 1, height: "auto" }}
-            exit={{ opacity: 0, height: 0 }}
-            transition={{ duration: 0.35 }}
-            className="flex items-center gap-2 px-4 py-2.5"
-            style={{ background: "#F0FDF4", borderTop: "1px solid #BBF7D0" }}
-          >
-            <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
-            <span className="text-xs font-semibold text-green-700 flex-1">Appointment booked in 3 min 22 sec</span>
-            <span className="text-[10px] text-purple-600 underline cursor-pointer">Added to CRM →</span>
-          </motion.div>
-        )}
-      </AnimatePresence>
+      {/* Success bar — ALWAYS in the DOM with fixed height 44px.
+          Only opacity animates — zero height change, zero layout shift. */}
+      <div
+        className="shrink-0 flex items-center gap-2 px-4"
+        style={{ height: 44, background: "#F0FDF4", borderTop: "1px solid #BBF7D0", overflow: "hidden" }}
+      >
+        <motion.div
+          initial={false}
+          animate={{ opacity: done ? 1 : 0, y: done ? 0 : 6 }}
+          transition={{ duration: 0.3 }}
+          className="flex items-center gap-2 w-full"
+        >
+          <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" />
+          <span className="text-xs font-semibold text-green-700 flex-1">Appointment booked in 3 min 22 sec</span>
+          <span className="text-[10px] text-purple-600 underline cursor-pointer">Added to CRM →</span>
+        </motion.div>
+      </div>
     </div>
   )
 }
