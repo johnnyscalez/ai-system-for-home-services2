@@ -6,7 +6,26 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Globe, Camera, Share2, RefreshCw, Scan, CheckCircle2, AlertCircle, Save } from "lucide-react"
+import { Globe, Camera, Share2, RefreshCw, Scan, CheckCircle2, AlertCircle, Save, Sparkles, Plus } from "lucide-react"
+
+const KNOWLEDGE_CHIPS: { label: string; text: string }[] = [
+  { label: "Equipment brands",    text: "We carry and install Carrier, Lennox, and Trane equipment." },
+  { label: "Factory Authorized",  text: "We are a Carrier Factory Authorized Dealer." },
+  { label: "All brands serviced", text: "We service all major HVAC brands regardless of who installed them." },
+  { label: "Financing",           text: "We offer 0% financing for 12 months through GreenSky Financing." },
+  { label: "Maintenance plans",   text: "We offer annual maintenance plans starting at $149/year covering one tune-up and priority service." },
+  { label: "Parts warranty",      text: "All parts and labor come with a 1-year warranty." },
+  { label: "Emergency service",   text: "We offer emergency same-day service 24 hours a day, 7 days a week." },
+  { label: "Residential only",    text: "We only service residential properties — we do not work on commercial buildings." },
+  { label: "No oil/propane",      text: "We do not service oil or propane heating systems — gas and electric only." },
+  { label: "Spanish speaking",    text: "Spanish-speaking technicians are available upon request." },
+  { label: "No phone quotes",     text: "We never give price quotes over the phone — all estimates are done on-site and are completely free." },
+  { label: "No hidden fees",      text: "We have a strict no-hidden-fees policy — the price quoted on-site is the price charged." },
+  { label: "Free 2nd opinion",    text: "We offer free second opinions on any competitor quote." },
+  { label: "Price match",         text: "We match any written quote from a licensed competitor for the same scope of work." },
+  { label: "Licensed & insured",  text: "We are fully licensed and insured in [your state]." },
+  { label: "Service area zips",   text: "We serve the following zip codes: [list zip codes here]." },
+]
 
 const FIELDS: { key: string; label: string; placeholder: string; long?: boolean }[] = [
   { key: "business_description", label: "Business overview", placeholder: "What your company does, who you serve...", long: true },
@@ -25,6 +44,7 @@ export default function KnowledgeBasePage() {
   const supabase = createClient()
   const [companyId, setCompanyId] = useState<string | null>(null)
   const [data, setData] = useState<Record<string, string>>({})
+  const [customAiKnowledge, setCustomAiKnowledge] = useState("")
   const [scanning, setScanning] = useState(false)
   const [scanned, setScanned] = useState(false)
   const [scanError, setScanError] = useState("")
@@ -47,6 +67,7 @@ export default function KnowledgeBasePage() {
         d.social_facebook = kb.social_facebook ?? ""
         d.social_instagram = kb.social_instagram ?? ""
         setData(d)
+        setCustomAiKnowledge(kb.custom_ai_knowledge ?? "")
       }
     }
     load()
@@ -96,6 +117,7 @@ export default function KnowledgeBasePage() {
     payload.website_url = data.website_url || null
     payload.social_facebook = data.social_facebook || null
     payload.social_instagram = data.social_instagram || null
+    payload.custom_ai_knowledge = customAiKnowledge || null
 
     const { error } = await supabase
       .from("knowledge_base")
@@ -172,6 +194,63 @@ export default function KnowledgeBasePage() {
             )}
           </div>
         ))}
+      </div>
+
+      {/* ── AI Custom Knowledge ─────────────────────────────────────────── */}
+      <div className="border border-primary/30 bg-primary/5 rounded-xl p-5 space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
+            <Sparkles className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-sm">What your AI should always know</h3>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+              These facts are injected into <strong>every call and text</strong> your AI makes — voice agent and SMS agent.
+              Add anything specific to your business: equipment brands you carry, financing terms, warranty policy,
+              what you don&apos;t service, special offers. Your AI treats everything here as ground truth.
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <p className="text-xs text-muted-foreground mb-2 font-medium">Click to add examples:</p>
+          <div className="flex flex-wrap gap-2">
+            {KNOWLEDGE_CHIPS.map((chip) => (
+              <button
+                key={chip.label}
+                type="button"
+                onClick={() => {
+                  const current = customAiKnowledge.trim()
+                  setCustomAiKnowledge(current ? `${current}\n${chip.text}` : chip.text)
+                  setSaved(false)
+                }}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-background border border-border hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        <div className="space-y-1.5">
+          <textarea
+            placeholder={
+              "We carry Carrier, Lennox, and Trane equipment.\n" +
+              "We offer 0% financing for 12 months through GreenSky.\n" +
+              "All parts and labor come with a 1-year warranty.\n" +
+              "We do not service commercial properties.\n" +
+              "Emergency same-day service available 24/7."
+            }
+            value={customAiKnowledge}
+            onChange={(e) => { setCustomAiKnowledge(e.target.value); setSaved(false) }}
+            rows={6}
+            className="w-full rounded-lg border border-border bg-background px-3 py-2 font-mono text-xs leading-relaxed resize-none focus:outline-none focus:ring-2 focus:ring-primary/30"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            One fact per line. Changes apply to all future calls and texts immediately after saving.
+          </p>
+        </div>
       </div>
 
       <Button onClick={handleSave} disabled={saving} className="gap-2 w-full">

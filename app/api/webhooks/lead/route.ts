@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave } from "@/lib/ai-engine"
 import { sendSMS, formatPhone } from "@/lib/twilio"
+import { notifyNewLead } from "@/lib/notifications"
 
 // Accepts lead data from Facebook Lead Ads, Google Ads, or any webhook source.
 // Caller must include the company's webhook_secret in the x-webhook-secret header.
@@ -82,6 +83,10 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: "Failed to create lead" }, { status: 500 })
     }
     leadId = newLead.id
+
+    // Notify contractor of new lead (non-blocking)
+    const leadName = `${(body.first_name as string) ?? ""} ${(body.last_name as string) ?? ""}`.trim()
+    notifyNewLead(company.id, leadName, phone, (body.source as string) ?? "webhook").catch(() => {})
   }
 
   // Get company's Twilio number
@@ -104,16 +109,12 @@ export async function POST(req: NextRequest) {
 
     if (result.response) {
       const msg = await sendSMS(phone, result.response, phoneNumber.phone_number)
-
-      // Save the Twilio SID on the outbound message
-      await supabase
-        .from("conversations")
-        .update({ twilio_sid: msg.sid })
-        .eq("lead_id", leadId)
-        .eq("direction", "outbound")
-        .is("twilio_sid", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
+      if (result.outboundConversationId) {
+        await supabase
+          .from("conversations")
+          .update({ twilio_sid: msg.sid })
+          .eq("id", result.outboundConversationId)
+      }
 
       // Update lead status to contacted
       await supabase

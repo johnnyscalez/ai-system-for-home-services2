@@ -4,15 +4,18 @@ import { Badge } from "@/components/ui/badge"
 import { ConversationThread } from "@/components/leads/ConversationThread"
 import {
   Phone, Mail, MapPin, Calendar, Clock, User,
-  ArrowLeft, Zap
+  ArrowLeft, Zap, Wrench, Thermometer
 } from "lucide-react"
 import Link from "next/link"
 import { formatDistanceToNow } from "@/lib/utils"
+import { CallLeadButton } from "@/components/leads/CallLeadButton"
+import { getJobTypeLabel, getJobTypeColor } from "@/lib/job-types"
 
 const STATUS_STYLES: Record<string, string> = {
   new: "bg-sky-500/15 text-sky-400 border-sky-500/20",
   contacted: "bg-violet-500/15 text-violet-400 border-violet-500/20",
   qualified: "bg-amber-500/15 text-amber-400 border-amber-500/20",
+  followed_up: "bg-orange-500/15 text-orange-400 border-orange-500/20",
   appointment_booked: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
   closed_won: "bg-emerald-600/15 text-emerald-300 border-emerald-600/20",
   closed_lost: "bg-red-500/15 text-red-400 border-red-500/20",
@@ -80,12 +83,21 @@ export default async function LeadDetailPage({
             {lead.first_name} {lead.last_name}
           </span>
         </div>
-        <Badge
-          variant="outline"
-          className={`text-xs capitalize ${STATUS_STYLES[lead.status] ?? ""}`}
-        >
-          {lead.status.replace(/_/g, " ")}
-        </Badge>
+        <div className="flex items-center gap-2">
+          <Badge
+            variant="outline"
+            className={`text-xs capitalize ${STATUS_STYLES[lead.status] ?? ""}`}
+          >
+            {lead.status.replace(/_/g, " ")}
+          </Badge>
+          {lead.is_active_conversation && lead.last_inbound_at &&
+            new Date(lead.last_inbound_at) > new Date(Date.now() - 2 * 60 * 60 * 1000) && (
+            <Badge variant="outline" className="text-xs bg-emerald-500/15 text-emerald-500 border-emerald-500/20 gap-1">
+              <Zap className="w-2.5 h-2.5" />
+              Active conversation
+            </Badge>
+          )}
+        </div>
       </div>
 
       <div className="flex flex-1 overflow-hidden">
@@ -104,6 +116,14 @@ export default async function LeadDetailPage({
                 {lead.source} lead · {formatDistanceToNow(lead.created_at)} ago
               </p>
             </div>
+          </div>
+
+          {/* Quick actions */}
+          <div className="w-full">
+            <CallLeadButton
+              leadId={id}
+              disabled={lead.ai_paused || ["closed_won", "closed_lost"].includes(lead.status)}
+            />
           </div>
 
           {/* Contact info */}
@@ -129,6 +149,33 @@ export default async function LeadDetailPage({
             </div>
           </div>
 
+          {/* Job type — AI-classified, shown prominently when known */}
+          {lead.job_type && (
+            <div className="space-y-1.5">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Job Type</p>
+              <Badge
+                variant="outline"
+                className={`text-xs w-full justify-center py-1 ${getJobTypeColor(lead.job_type as string)}`}
+              >
+                {getJobTypeLabel(lead.job_type as string)}
+              </Badge>
+              <div className="space-y-1 text-xs text-muted-foreground">
+                {lead.system_type && (
+                  <div className="flex items-center gap-2">
+                    <Thermometer className="w-3 h-3 shrink-0" />
+                    <span>{lead.system_type as string}</span>
+                  </div>
+                )}
+                {lead.system_age && (
+                  <div className="flex items-center gap-2">
+                    <Clock className="w-3 h-3 shrink-0" />
+                    <span>Age: {lead.system_age as string}</span>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
           {/* Lead details */}
           <div className="space-y-2">
             <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Details</p>
@@ -136,16 +183,22 @@ export default async function LeadDetailPage({
               {lead.service_type && (
                 <div className="flex items-center gap-2">
                   <Zap className="w-3.5 h-3.5 text-muted-foreground" />
-                  <span className="capitalize">{lead.service_type.replace(/_/g, " ")}</span>
+                  <span className="capitalize">{(lead.service_type as string).replace(/_/g, " ")}</span>
+                </div>
+              )}
+              {!lead.job_type && lead.system_type && (
+                <div className="flex items-center gap-2">
+                  <Thermometer className="w-3.5 h-3.5 text-muted-foreground" />
+                  <span>{lead.system_type as string}</span>
                 </div>
               )}
               <div className="flex items-center gap-2">
                 <User className="w-3.5 h-3.5 text-muted-foreground" />
-                <span className="capitalize">{lead.source} source</span>
+                <span className="capitalize">{lead.source as string} source</span>
               </div>
               <div className="flex items-center gap-2">
                 <Clock className="w-3.5 h-3.5 text-muted-foreground" />
-                <span>Created {formatDistanceToNow(lead.created_at)} ago</span>
+                <span>Created {formatDistanceToNow(lead.created_at as string)} ago</span>
               </div>
             </div>
           </div>

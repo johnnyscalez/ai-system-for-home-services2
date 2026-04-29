@@ -99,10 +99,11 @@ export default function OnboardingPage() {
     certifications: "",
     testimonials: "",
     customFacts: "",
+    customAiKnowledge: "",
   })
 
   const [aiAgent, setAiAgent] = useState<AIAgentData>({
-    agentName: "Alex",
+    agentName: "Linda",
     tone: "friendly_professional",
     primaryGoal: "book_estimate",
     customInstructions: "",
@@ -167,7 +168,53 @@ export default function OnboardingPage() {
     const { data: { user } } = await supabase.auth.getUser()
     if (!user) { router.push("/login"); return }
 
+    // Auto-generate the AI system prompt if the user skipped it in Step 4
+    let finalPrompt = aiAgent.generatedPrompt
+    if (!finalPrompt) {
+      try {
+        const res = await fetch("/api/onboarding/generate-prompt", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({
+            kb: {
+              companyName: business.companyName,
+              serviceType: business.serviceType,
+              serviceArea: business.serviceArea,
+              businessDescription: intelligence.businessDescription,
+              servicesOffered: intelligence.servicesOffered,
+              pricingInfo: intelligence.pricingInfo,
+              teamInfo: intelligence.teamInfo,
+              uniqueSellingPoints: intelligence.uniqueSellingPoints,
+              yearsInBusiness: intelligence.yearsInBusiness,
+              certifications: intelligence.certifications,
+              testimonials: intelligence.testimonials,
+              customFacts: intelligence.customFacts,
+              websiteUrl: intelligence.websiteUrl,
+            },
+            config: {
+              agentName: aiAgent.agentName,
+              tone: aiAgent.tone,
+              primaryGoal: aiAgent.primaryGoal,
+              customInstructions: aiAgent.customInstructions,
+              qualifyingQuestions: aiAgent.qualifyingQuestions,
+              objectionResponses: aiAgent.objectionResponses,
+            },
+          }),
+        })
+        if (res.ok) {
+          const data = await res.json()
+          finalPrompt = data.prompt ?? ""
+        }
+      } catch {
+        // Non-fatal — fallback prompt handles it
+      }
+    }
+
     // 1. Create company
+    const webhookSecret = Array.from(crypto.getRandomValues(new Uint8Array(24)))
+      .map((b) => b.toString(16).padStart(2, "0"))
+      .join("")
+
     const { data: company, error: companyError } = await supabase
       .from("companies")
       .insert({
@@ -178,6 +225,7 @@ export default function OnboardingPage() {
         notification_phone: business.notificationPhone,
         avg_job_value: business.avgJobValue ? parseFloat(business.avgJobValue) : 0,
         onboarding_completed: true,
+        webhook_secret: webhookSecret,
       })
       .select()
       .single()
@@ -207,6 +255,7 @@ export default function OnboardingPage() {
       certifications: intelligence.certifications || null,
       testimonials: intelligence.testimonials || null,
       custom_facts: intelligence.customFacts || null,
+      custom_ai_knowledge: intelligence.customAiKnowledge || null,
       social_facebook: intelligence.socialFacebook || null,
       social_instagram: intelligence.socialInstagram || null,
     })
@@ -225,8 +274,8 @@ export default function OnboardingPage() {
       working_hours_start: aiAgent.workingHoursStart,
       working_hours_end: aiAgent.workingHoursEnd,
       timezone: aiAgent.timezone,
-      generated_system_prompt: aiAgent.generatedPrompt || null,
-      prompt_generated_at: aiAgent.generatedPrompt ? new Date().toISOString() : null,
+      generated_system_prompt: finalPrompt || null,
+      prompt_generated_at: finalPrompt ? new Date().toISOString() : null,
     })
 
     // 5. Save legacy settings record for backwards compat

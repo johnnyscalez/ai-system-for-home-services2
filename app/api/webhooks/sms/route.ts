@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave } from "@/lib/ai-engine"
 import { sendSMS, validateTwilioSignature, formatPhone } from "@/lib/twilio"
+import { notifyAppointmentBooked, notifyNeedsAttention } from "@/lib/notifications"
 
 // Twilio sends POST with form-encoded body to this endpoint.
 // Configure this URL in Twilio console under the phone number's "A message comes in" webhook.
@@ -50,7 +51,7 @@ export async function POST(req: NextRequest) {
   // Find or create the lead by phone number
   let { data: lead } = await supabase
     .from("leads")
-    .select("id, status, ai_paused")
+    .select("id, status, ai_paused, first_name, last_name")
     .eq("company_id", companyId)
     .eq("phone", normalizedFrom)
     .maybeSingle()
@@ -66,7 +67,7 @@ export async function POST(req: NextRequest) {
         status: "new",
         metadata: { inbound_first_message: messageBody },
       })
-      .select("id, status, ai_paused")
+      .select("id, status, ai_paused, first_name, last_name")
       .single()
 
     lead = newLead
@@ -82,21 +83,23 @@ export async function POST(req: NextRequest) {
     return twimlOk()
   }
 
+  // Mark this lead as actively replying
+  await supabase
+    .from("leads")
+    .update({ last_inbound_at: new Date().toISOString(), is_active_conversation: true })
+    .eq("id", lead.id)
+
   try {
     const result = await processAndSave(lead.id, companyId, messageBody, twilioSid)
 
     if (result.response) {
       const msg = await sendSMS(normalizedFrom, result.response, to)
-
-      // Update Twilio SID on the just-inserted outbound message
-      await supabase
-        .from("conversations")
-        .update({ twilio_sid: msg.sid })
-        .eq("lead_id", lead.id)
-        .eq("direction", "outbound")
-        .is("twilio_sid", null)
-        .order("created_at", { ascending: false })
-        .limit(1)
+      if (result.outboundConversationId) {
+        await supabase
+          .from("conversations")
+          .update({ twilio_sid: msg.sid })
+          .eq("id", result.outboundConversationId)
+      }
     }
 
     // Cancel any pending no-reply sequences since they replied
@@ -135,6 +138,37 @@ export async function POST(req: NextRequest) {
         .update({ status: "cancelled" })
         .eq("lead_id", lead.id)
         .eq("status", "pending")
+
+      // Notify contractor
+      const { data: leadData } = await supabase
+        .from("leads")
+        .select("first_name, last_name, phone")
+        .eq("id", lead.id)
+        .single()
+      const { data: apt } = await supabase
+        .from("appointments")
+        .select("scheduled_at, address")
+        .eq("lead_id", lead.id)
+        .eq("status", "scheduled")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()
+      if (leadData && apt) {
+        const name = `${leadData.first_name ?? ""} ${leadData.last_name ?? ""}`.trim() || leadData.phone
+        notifyAppointmentBooked(companyId, name, apt.scheduled_at, apt.address ?? "").catch(() => {})
+      }
+    }
+
+    if (result.action?.type === "update_status" && result.action.status === "needs_attention") {
+      const { data: leadData } = await supabase
+        .from("leads")
+        .select("first_name, last_name, phone")
+        .eq("id", lead.id)
+        .single()
+      if (leadData) {
+        const name = `${leadData.first_name ?? ""} ${leadData.last_name ?? ""}`.trim() || leadData.phone
+        notifyNeedsAttention(companyId, name, leadData.phone).catch(() => {})
+      }
     }
   } catch (err) {
     console.error("SMS conversation engine error:", err)

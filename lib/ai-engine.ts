@@ -2,6 +2,8 @@ import { anthropic } from "@/lib/claude"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { createCalendarEvent } from "@/lib/google-calendar"
 import { getConversationFlow } from "@/lib/conversation-flows"
+import { getAvailableSlots, formatSlotsForPrompt, DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
+import type { AppointmentWindow } from "@/lib/availability"
 
 export type ConversationAction =
   | { type: "book_appointment"; scheduled_at: string; address?: string; notes?: string }
@@ -10,6 +12,7 @@ export type ConversationAction =
 export type EngineResult = {
   response: string
   action?: ConversationAction
+  outboundConversationId?: string
 }
 
 const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
@@ -60,8 +63,10 @@ export async function runConversation(
 ): Promise<EngineResult> {
   const supabase = createServiceRoleClient()
 
-  // Load everything in parallel — including full appointment history
-  const [leadRes, historyRes, agentRes, kbRes, appointmentsRes] = await Promise.all([
+  const horizonMs = 14 * 24 * 60 * 60 * 1000
+
+  // Load everything in parallel — lead history, agent config, availability, company schedule
+  const [leadRes, historyRes, agentRes, kbRes, appointmentsRes, companyAptsRes] = await Promise.all([
     supabase.from("leads").select("*").eq("id", leadId).single(),
     supabase
       .from("conversations")
@@ -70,19 +75,28 @@ export async function runConversation(
       .order("created_at", { ascending: true }),
     supabase
       .from("ai_agent_config")
-      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone")
+      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day")
       .eq("company_id", companyId)
       .single(),
     supabase
       .from("knowledge_base")
-      .select("business_description, services_offered, service_areas")
+      .select("business_description, services_offered, service_areas, custom_ai_knowledge")
       .eq("company_id", companyId)
       .single(),
+    // Lead's own appointment history (past + upcoming)
     supabase
       .from("appointments")
       .select("scheduled_at, status, address, notes, created_at")
       .eq("lead_id", leadId)
       .order("scheduled_at", { ascending: false }),
+    // All company appointments in the booking horizon (to know which slots are taken)
+    supabase
+      .from("appointments")
+      .select("scheduled_at")
+      .eq("company_id", companyId)
+      .eq("status", "scheduled")
+      .gte("scheduled_at", new Date().toISOString())
+      .lte("scheduled_at", new Date(Date.now() + horizonMs).toISOString()),
   ])
 
   const lead = leadRes.data
@@ -90,11 +104,24 @@ export async function runConversation(
   const agent = agentRes.data
   const kb = kbRes.data
   const appointments = appointmentsRes.data ?? []
+  const companyApts = companyAptsRes.data ?? []
 
   if (!lead) throw new Error("Lead not found")
 
   const isInitialOutreach = incomingMessage === null
   const tz = agent?.timezone ?? "America/New_York"
+
+  // Compute real available booking slots from company availability settings
+  const availableSlots = getAvailableSlots(
+    {
+      available_days: (agent?.available_days as string[] | null) ?? DEFAULT_DAYS,
+      appointment_windows: (agent?.appointment_windows as AppointmentWindow[] | null) ?? DEFAULT_WINDOWS,
+      booking_horizon_days: agent?.booking_horizon_days ?? 7,
+      max_appointments_per_day: agent?.max_appointments_per_day ?? null,
+      timezone: tz,
+    },
+    companyApts
+  )
 
   // Build rich lead context block — injected into every system prompt call
   const leadContext = buildLeadContext(lead, appointments, tz)
@@ -102,20 +129,31 @@ export async function runConversation(
   // Build service-specific conversation flow playbook
   const conversationFlow = getConversationFlow(lead.service_type as string | null)
 
+  // Format available slots block — AI offers ONLY these real times, never invents them
+  const slotsBlock = formatSlotsForPrompt(availableSlots)
+
   // Build system prompt
   const baseSystemPrompt =
     agent?.generated_system_prompt ||
     buildFallbackSystemPrompt(
-      agent?.agent_name ?? "Alex",
+      agent?.agent_name ?? "Linda",
       kb?.business_description ?? "",
       kb?.services_offered ?? "",
       lead.service_type ?? "home services"
     )
 
-  // Always inject lead context + conversation flow into system prompt.
-  // The flow defines stage-by-stage rules and overrides any vague instructions
-  // in the generated prompt. Lead context provides the live data Claude needs.
-  const systemPrompt = `${baseSystemPrompt}\n\n${conversationFlow}\n\n${leadContext}`
+  // System prompt order:
+  // 1. Who the agent is + business knowledge
+  // 2. HVAC conversation flow + stage rules
+  // 3. Real available slots (the AI must offer only these)
+  // 4. Lead file (live lead data, history, returning vs new)
+  const customKnowledgeBlock = kb?.custom_ai_knowledge
+    ? `=== YOUR COMPANY-SPECIFIC KNOWLEDGE ===\n${kb.custom_ai_knowledge}\n=== END COMPANY-SPECIFIC KNOWLEDGE ===`
+    : ""
+
+  const systemPrompt = [baseSystemPrompt, customKnowledgeBlock, conversationFlow, slotsBlock, leadContext]
+    .filter(Boolean)
+    .join("\n\n")
 
   // Build message history for Claude
   const messages: Parameters<typeof anthropic.messages.create>[0]["messages"] = []
@@ -236,15 +274,17 @@ export async function processAndSave(
   // Run the AI engine
   const result = await runConversation(leadId, companyId, incomingMessage)
 
-  // Save outbound AI message
+  // Save outbound AI message and capture its ID for Twilio SID update
+  let outboundConversationId: string | undefined
   if (result.response) {
-    await supabase.from("conversations").insert({
+    const { data: conv } = await supabase.from("conversations").insert({
       lead_id: leadId,
       company_id: companyId,
       direction: "outbound",
       sent_by: "ai",
       body: result.response,
-    })
+    }).select("id").single()
+    outboundConversationId = conv?.id
   }
 
   // Handle actions
@@ -328,7 +368,7 @@ export async function processAndSave(
       .eq("id", leadId)
   }
 
-  return result
+  return { ...result, outboundConversationId }
 }
 
 function buildLeadContext(
@@ -413,27 +453,63 @@ function buildFallbackSystemPrompt(
   services: string,
   serviceType: string
 ): string {
-  return `You are ${agentName}, a sales rep texting leads for a ${serviceType} company via SMS.
-${businessDescription ? `\nAbout the company: ${businessDescription}` : ""}
-${services ? `\nServices offered: ${services}` : ""}
+  return `You are ${agentName}, texting leads for a ${serviceType} company. Get a reply, qualify them, book a free estimate.
+${businessDescription ? `Company: ${businessDescription}` : ""}
+${services ? `Services: ${services}` : ""}
 
-Your personality: warm, confident, knowledgeable — like a trusted local rep who texts personally,
-not a call center script. You've been with this company for years and know the service inside-out.
+WHO YOU ARE
+You're a real person — been with this company a while, know the trade, text like a normal human. Not a bot, not a script. A rep who actually wants to help people get their problem fixed.
 
-Core job:
-- Text leads, qualify them, collect necessary info, and book a free on-site estimate
-- You don't quote prices over text — all pricing happens at the in-person visit
-- You're not pushy — you're helpful. You make it easy to say yes.
+YOUR ONLY JOB
+Get replies → collect info → book the free on-site estimate.
 
-SMS rules:
-- 1-2 sentences max per message. Never paragraphs.
-- Use the lead's first name naturally — not every message, but regularly.
-- Never send more than 2 unanswered messages before stopping.
-- Never reveal you are an AI. If asked, deflect warmly.
-- When they confirm a date/time AND you have their address → call book_appointment immediately.
-- When clearly qualified (ready to move forward) → call update_lead_status "qualified".
-- When they explicitly say not interested or chose someone else → call update_lead_status "closed_lost".
-- When they seem frustrated or the situation needs a human → call update_lead_status "needs_attention".
+HOW LONG YOUR TEXTS SHOULD BE
+Before every message ask: "what's the shortest thing a real person would text here?"
 
-The conversation playbook and stage-by-stage rules follow in the next section.`
+Message types and their limits:
+- Quick nudge / follow-up → 6–15 words. "Hey, still need help with your AC?"
+- Clarifying question → 8–18 words. "Is it not cooling at all or just blowing warm air?"
+- Simple answer → 10–25 words. "Yeah we handle that — just need to take a look first."
+- Informative reply → 15–35 words. "Usually depends on the issue, but the tech explains everything before doing any work."
+- Booking message → 15–30 words. "Got morning Thursday 8–10 or afternoon Friday 1–3 — what works better?"
+- Reassurance → 15–35 words. "Tech walks you through everything on-site before touching anything — no surprise charges."
+
+THE RULE: 1 idea per message. No fluff. Readable in one glance.
+
+YOUR PERSONALITY
+Casual, real, like texting a real person.
+Use: "yeah", "got it", "no worries", "sounds good", "for sure", "totally", "makes sense"
+Use their first name — not every message, roughly 1 in 3.
+Never use: "Absolutely!", "Great question!", "I completely understand your concern", "I'd be happy to assist!"
+Never open with "Hi!" or "Hello!" — just start talking.
+
+NEVER DO THIS
+- Paragraph-length texts
+- Two questions in one message
+- Corporate or call center language
+- Sounding like a chatbot
+
+ALWAYS DO THIS
+- One thought, one question, send
+- Match their energy — casual lead = casual reply
+- One gentle follow-up if they ghost, then stop
+- Acknowledge frustration before anything else
+
+HARD RULES
+1. Never ask 2 questions in the same message — ever
+2. Never call book_appointment without the address — collect it first, always
+3. Never quote prices — "we do a free on-site estimate so you get a real number, not a guess"
+4. Never admit to being AI. If asked: "Ha, nope — ${agentName} here 😄 What's going on with it?"
+5. Never send more than 2 unanswered messages — then stop completely
+6. Frustrated or angry → "That makes sense — want me to have someone call you directly?" Then stop pushing
+7. Commercial property → flag needs_attention immediately. Don't book. "I'll have our commercial team reach out."
+8. Active gas leak or CO mentioned → "This sounds urgent — please call 911 or us directly right now. Don't wait."
+
+TOOLS
+- book_appointment → only when (1) specific date AND time confirmed AND (2) address in hand. Both required.
+- update_lead_status "qualified" → clearly warming up, asking smart questions, ready to move
+- update_lead_status "closed_lost" → explicitly not interested or already hired someone else
+- update_lead_status "needs_attention" → frustrated, commercial, renter without auth, anything needing a human
+
+The service-specific conversation playbook follows below.`
 }

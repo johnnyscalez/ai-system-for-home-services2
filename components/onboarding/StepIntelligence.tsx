@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ChevronRight, Scan, RefreshCw, Globe, Camera, Share2, CheckCircle2, AlertCircle } from "lucide-react"
+import { ChevronRight, Scan, RefreshCw, Globe, Camera, Share2, CheckCircle2, AlertCircle, Sparkles, Plus } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export type IntelligenceData = {
@@ -22,6 +22,7 @@ export type IntelligenceData = {
   certifications: string
   testimonials: string
   customFacts: string
+  customAiKnowledge: string
 }
 
 interface Props {
@@ -42,27 +43,41 @@ const FIELDS: { key: keyof IntelligenceData; label: string; placeholder: string;
   {
     key: "servicesOffered",
     label: "Services offered",
-    placeholder: "Full roof replacement, storm damage repair, gutters, inspections...",
+    placeholder: "AC repair, furnace replacement, new installs, maintenance plans, ductwork...",
     long: true,
   },
   { key: "serviceAreas", label: "Service areas", placeholder: "Dallas, Plano, Frisco, McKinney TX" },
   {
     key: "uniqueSellingPoints",
     label: "Why customers choose you",
-    placeholder: "Lifetime warranty, 24/7 response, GAF Master Elite certified, A+ BBB...",
+    placeholder: "Carrier Factory Authorized, 24/7 emergency, family-owned, 15-year warranty...",
     long: true,
   },
-  { key: "pricingInfo", label: "Pricing & offers", placeholder: "Free inspections, financing available, insurance claims specialist..." },
-  { key: "teamInfo", label: "Team & owner", placeholder: "Family-owned, 15 employees, owner Mike Smith with 20 years experience..." },
-  { key: "yearsInBusiness", label: "Years in business", placeholder: "15 years, founded 2009..." },
-  { key: "certifications", label: "Certifications & credentials", placeholder: "GAF Master Elite, Owens Corning Preferred, licensed & insured..." },
-  { key: "testimonials", label: "Customer testimonials", placeholder: "\"Best roofing company in Dallas\" — John S. Google Review 5★" },
-  {
-    key: "customFacts",
-    label: "Anything else the AI should know",
-    placeholder: "Common local questions, seasonal promotions, competitor differentiators, local context...",
-    long: true,
-  },
+  { key: "pricingInfo", label: "Pricing & offers", placeholder: "Free estimates, 0% financing, seasonal tune-up specials..." },
+  { key: "teamInfo", label: "Team & owner", placeholder: "Family-owned, 12 techs, owner Mike Smith — 20 years experience..." },
+  { key: "yearsInBusiness", label: "Years in business", placeholder: "18 years, founded 2006..." },
+  { key: "certifications", label: "Certifications & credentials", placeholder: "NATE-certified, EPA 608, Carrier Factory Authorized, licensed & insured..." },
+  { key: "testimonials", label: "Customer testimonials", placeholder: '"Best HVAC company in Dallas" — Sarah M. Google Review 5★' },
+]
+
+// Clickable chips — each appends a ready-to-edit sentence to the custom knowledge textarea
+const KNOWLEDGE_CHIPS: { label: string; text: string }[] = [
+  { label: "Equipment brands",    text: "We carry and install Carrier, Lennox, and Trane equipment." },
+  { label: "Factory Authorized",  text: "We are a Carrier Factory Authorized Dealer." },
+  { label: "All brands serviced", text: "We service all major HVAC brands regardless of who installed them." },
+  { label: "Financing",           text: "We offer 0% financing for 12 months through GreenSky Financing." },
+  { label: "Maintenance plans",   text: "We offer annual maintenance plans starting at $149/year covering one tune-up and priority service." },
+  { label: "Parts warranty",      text: "All parts and labor come with a 1-year warranty." },
+  { label: "Emergency service",   text: "We offer emergency same-day service 24 hours a day, 7 days a week." },
+  { label: "Residential only",    text: "We only service residential properties — we do not work on commercial buildings." },
+  { label: "No oil/propane",      text: "We do not service oil or propane heating systems — gas and electric only." },
+  { label: "Spanish speaking",    text: "Spanish-speaking technicians are available upon request." },
+  { label: "No phone quotes",     text: "We never give price quotes over the phone — all estimates are done on-site and are completely free." },
+  { label: "No hidden fees",      text: "We have a strict no-hidden-fees policy — the price quoted on-site is the price charged." },
+  { label: "Free 2nd opinion",    text: "We offer free second opinions on any competitor quote." },
+  { label: "Price match",         text: "We match any written quote from a licensed competitor for the same scope of work." },
+  { label: "Licensed & insured",  text: "We are fully licensed and insured in [your state]." },
+  { label: "Service area zips",   text: "We serve the following zip codes: [list zip codes here]." },
 ]
 
 export function StepIntelligence({ data, companyName, onChange, onNext, onBack }: Props) {
@@ -73,6 +88,12 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
   function set(field: keyof IntelligenceData) {
     return (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) =>
       onChange({ ...data, [field]: e.target.value })
+  }
+
+  function appendChip(text: string) {
+    const current = data.customAiKnowledge.trim()
+    const appended = current ? `${current}\n${text}` : text
+    onChange({ ...data, customAiKnowledge: appended })
   }
 
   async function handleScan() {
@@ -98,14 +119,14 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
       onChange({
         ...data,
         businessDescription: extracted.businessDescription || data.businessDescription,
-        servicesOffered: extracted.servicesOffered || data.servicesOffered,
-        serviceAreas: extracted.serviceAreas || data.serviceAreas,
-        pricingInfo: extracted.pricingInfo || data.pricingInfo,
-        teamInfo: extracted.teamInfo || data.teamInfo,
+        servicesOffered:     extracted.servicesOffered     || data.servicesOffered,
+        serviceAreas:        extracted.serviceAreas        || data.serviceAreas,
+        pricingInfo:         extracted.pricingInfo         || data.pricingInfo,
+        teamInfo:            extracted.teamInfo             || data.teamInfo,
         uniqueSellingPoints: extracted.uniqueSellingPoints || data.uniqueSellingPoints,
-        yearsInBusiness: extracted.yearsInBusiness || data.yearsInBusiness,
-        certifications: extracted.certifications || data.certifications,
-        testimonials: extracted.testimonials || data.testimonials,
+        yearsInBusiness:     extracted.yearsInBusiness     || data.yearsInBusiness,
+        certifications:      extracted.certifications       || data.certifications,
+        testimonials:        extracted.testimonials         || data.testimonials,
       })
       setScanned(true)
     } catch (err) {
@@ -121,10 +142,11 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
     <div>
       <h1 className="text-2xl font-bold mb-2">Build your AI knowledge base</h1>
       <p className="text-muted-foreground mb-8">
-        Enter your website and we&apos;ll automatically extract everything your AI needs to know about {companyName || "your business"}. You can review and edit everything it finds.
+        Enter your website and we&apos;ll automatically extract everything your AI needs to know about{" "}
+        {companyName || "your business"}. You can review and edit everything it finds.
       </p>
 
-      {/* URL inputs */}
+      {/* URL scan */}
       <div className="bg-card border border-border rounded-xl p-5 mb-6 space-y-4">
         <div className="space-y-1.5">
           <Label htmlFor="websiteUrl">
@@ -134,22 +156,18 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
           <div className="flex gap-2">
             <Input
               id="websiteUrl"
-              placeholder="https://apexroofing.com"
+              placeholder="https://acmeair.com"
               value={data.websiteUrl}
               onChange={set("websiteUrl")}
               className="flex-1"
             />
-            <Button
-              onClick={handleScan}
-              disabled={!data.websiteUrl || scanning}
-              className="shrink-0 gap-2"
-            >
+            <Button onClick={handleScan} disabled={!data.websiteUrl || scanning} className="shrink-0 gap-2">
               {scanning ? (
-                <><RefreshCw className="w-3.5 h-3.5 animate-spin" /> Scanning...</>
+                <><RefreshCw className="w-3.5 h-3.5 animate-spin" />Scanning...</>
               ) : scanned ? (
-                <><RefreshCw className="w-3.5 h-3.5" /> Re-scan</>
+                <><RefreshCw className="w-3.5 h-3.5" />Re-scan</>
               ) : (
-                <><Scan className="w-3.5 h-3.5" /> Scan my business</>
+                <><Scan className="w-3.5 h-3.5" />Scan my business</>
               )}
             </Button>
           </div>
@@ -161,24 +179,14 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
               <Share2 className="w-3.5 h-3.5 inline mr-1.5 text-blue-400" />
               Facebook page <span className="text-muted-foreground font-normal">(optional)</span>
             </Label>
-            <Input
-              id="socialFacebook"
-              placeholder="facebook.com/apexroofing"
-              value={data.socialFacebook}
-              onChange={set("socialFacebook")}
-            />
+            <Input id="socialFacebook" placeholder="facebook.com/acmeair" value={data.socialFacebook} onChange={set("socialFacebook")} />
           </div>
           <div className="space-y-1.5">
             <Label htmlFor="socialInstagram">
               <Camera className="w-3.5 h-3.5 inline mr-1.5 text-pink-400" />
               Instagram <span className="text-muted-foreground font-normal">(optional)</span>
             </Label>
-            <Input
-              id="socialInstagram"
-              placeholder="instagram.com/apexroofing"
-              value={data.socialInstagram}
-              onChange={set("socialInstagram")}
-            />
+            <Input id="socialInstagram" placeholder="instagram.com/acmeair" value={data.socialInstagram} onChange={set("socialInstagram")} />
           </div>
         </div>
 
@@ -186,26 +194,17 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
           <div className="flex items-center gap-3 py-2">
             <div className="flex gap-1">
               {[0, 1, 2].map((i) => (
-                <div
-                  key={i}
-                  className="w-2 h-2 rounded-full bg-primary animate-bounce"
-                  style={{ animationDelay: `${i * 0.15}s` }}
-                />
+                <div key={i} className="w-2 h-2 rounded-full bg-primary animate-bounce" style={{ animationDelay: `${i * 0.15}s` }} />
               ))}
             </div>
-            <span className="text-sm text-muted-foreground">
-              Reading your website and extracting business intelligence...
-            </span>
+            <span className="text-sm text-muted-foreground">Reading your website and extracting business intelligence...</span>
           </div>
         )}
-
         {scanned && !scanning && (
           <div className="flex items-center gap-2 text-sm text-emerald-400">
-            <CheckCircle2 className="w-4 h-4" />
-            Scan complete — review and edit the fields below
+            <CheckCircle2 className="w-4 h-4" />Scan complete — review and edit the fields below
           </div>
         )}
-
         {scanError && (
           <div className="flex items-start gap-2 text-sm text-amber-400">
             <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
@@ -214,7 +213,7 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
         )}
       </div>
 
-      {/* Editable fields */}
+      {/* Standard fields */}
       <div className="space-y-4 mb-8">
         {FIELDS.map(({ key, label, placeholder, long }) => (
           <div key={key} className="space-y-1.5">
@@ -223,24 +222,68 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
               {data[key] && <span className="ml-2 text-xs text-emerald-400">✓ filled</span>}
             </Label>
             {long ? (
-              <Textarea
-                id={key}
-                placeholder={placeholder}
-                value={data[key]}
-                onChange={set(key)}
-                rows={3}
-                className="resize-none"
-              />
+              <Textarea id={key} placeholder={placeholder} value={data[key]} onChange={set(key)} rows={3} className="resize-none" />
             ) : (
-              <Input
-                id={key}
-                placeholder={placeholder}
-                value={data[key]}
-                onChange={set(key)}
-              />
+              <Input id={key} placeholder={placeholder} value={data[key]} onChange={set(key)} />
             )}
           </div>
         ))}
+      </div>
+
+      {/* ── AI Custom Knowledge — the most important section ────────────────── */}
+      <div className="border border-primary/30 bg-primary/5 rounded-xl p-5 mb-8 space-y-4">
+        <div className="flex items-start gap-3">
+          <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
+            <Sparkles className="w-4 h-4 text-primary" />
+          </div>
+          <div>
+            <h3 className="font-semibold text-sm">What your AI should always know</h3>
+            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
+              These facts get injected into <strong>every call and text</strong> your AI agent makes.
+              Things like equipment brands, financing terms, warranty details, and what you don&apos;t service —
+              so your AI never says the wrong thing about your specific business.
+            </p>
+          </div>
+        </div>
+
+        {/* Example chips */}
+        <div>
+          <p className="text-xs text-muted-foreground mb-2 font-medium">Click to add examples:</p>
+          <div className="flex flex-wrap gap-2">
+            {KNOWLEDGE_CHIPS.map((chip) => (
+              <button
+                key={chip.label}
+                type="button"
+                onClick={() => appendChip(chip.text)}
+                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-background border border-border hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-colors"
+              >
+                <Plus className="w-3 h-3" />
+                {chip.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Textarea */}
+        <div className="space-y-1.5">
+          <Textarea
+            id="customAiKnowledge"
+            placeholder={
+              "We carry Carrier, Lennox, and Trane equipment.\n" +
+              "We offer 0% financing for 12 months through GreenSky.\n" +
+              "All parts and labor come with a 1-year warranty.\n" +
+              "We do not service commercial properties.\n" +
+              "Emergency same-day service available 24/7."
+            }
+            value={data.customAiKnowledge}
+            onChange={set("customAiKnowledge")}
+            rows={6}
+            className="resize-none bg-background font-mono text-xs leading-relaxed"
+          />
+          <p className="text-[11px] text-muted-foreground">
+            One fact per line. Your AI will treat everything here as ground truth about your company.
+          </p>
+        </div>
       </div>
 
       <div className="flex gap-3">

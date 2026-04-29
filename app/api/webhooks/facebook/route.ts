@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave } from "@/lib/ai-engine"
 import { sendSMS, formatPhone } from "@/lib/twilio"
+import { notifyNewLead } from "@/lib/notifications"
 import crypto from "crypto"
 
 // GET — Facebook webhook verification challenge
@@ -139,15 +140,16 @@ export async function POST(req: NextRequest) {
 
         if (!newLead) continue
         leadId = newLead.id
+
+        // Notify contractor of new lead (non-blocking)
+        const leadName = `${firstName ?? ""} ${lastName ?? ""}`.trim()
+        notifyNewLead(integration.company_id, leadName, phone, "facebook").catch(() => {})
       }
 
       // Update integration stats
       await supabase
         .from("integrations")
-        .update({
-          last_lead_at: new Date().toISOString(),
-          lead_count: supabase.rpc("increment", { row_id: integration.company_id }),
-        })
+        .update({ last_lead_at: new Date().toISOString() })
         .eq("company_id", integration.company_id)
         .eq("type", "facebook")
 
@@ -165,14 +167,12 @@ export async function POST(req: NextRequest) {
         const result = await processAndSave(leadId, integration.company_id, null)
         if (result.response) {
           const msg = await sendSMS(phone, result.response, phoneNumber.phone_number)
-          await supabase
-            .from("conversations")
-            .update({ twilio_sid: msg.sid })
-            .eq("lead_id", leadId)
-            .eq("direction", "outbound")
-            .is("twilio_sid", null)
-            .order("created_at", { ascending: false })
-            .limit(1)
+          if (result.outboundConversationId) {
+            await supabase
+              .from("conversations")
+              .update({ twilio_sid: msg.sid })
+              .eq("id", result.outboundConversationId)
+          }
 
           await supabase
             .from("leads")

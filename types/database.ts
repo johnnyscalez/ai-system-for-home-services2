@@ -5,6 +5,7 @@ export type LeadStatus =
   | "contacted"
   | "qualified"
   | "appointment_booked"
+  | "followed_up"
   | "closed_won"
   | "closed_lost"
   | "cold"
@@ -73,6 +74,8 @@ export interface Lead {
   notes: string | null
   metadata: Record<string, unknown>
   last_message_at: string | null
+  last_inbound_at: string | null
+  is_active_conversation: boolean
   ai_paused: boolean
   created_at: string
   updated_at: string

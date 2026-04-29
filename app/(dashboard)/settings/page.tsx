@@ -3,7 +3,8 @@ import Link from "next/link"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Zap, Phone, Link2, CreditCard, Database, ArrowRight, Sparkles } from "lucide-react"
+import { Zap, Phone, Link2, CreditCard, Database, ArrowRight, Sparkles, FlaskConical } from "lucide-react"
+import { TestLeadButton } from "@/components/settings/TestLeadButton"
 
 export default async function SettingsPage() {
   const supabase = await createServerSupabaseClient()
@@ -60,8 +61,24 @@ export default async function SettingsPage() {
             {phoneData?.phone_number ?? "Not provisioned yet"}
           </p>
           <p className="text-xs text-muted-foreground mt-1">
-            Your AI texts every lead from this number. Leads can reply and it goes to your CRM.
+            Your AI texts and calls every lead from this number. Replies go straight to your CRM.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Test AI */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <FlaskConical className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-base">Test Your AI</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent className="space-y-3">
+          <p className="text-sm text-muted-foreground">
+            Runs a test lead through your full AI setup and shows you the exact opening message your AI would send. No real SMS is sent.
+          </p>
+          <TestLeadButton />
         </CardContent>
       </Card>
 

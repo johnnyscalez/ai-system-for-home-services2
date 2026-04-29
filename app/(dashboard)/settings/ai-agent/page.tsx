@@ -9,10 +9,30 @@ import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import {
   Sparkles, RefreshCw, Save, Plus, Trash2,
-  Eye, EyeOff, CheckCircle2,
+  Eye, EyeOff, CheckCircle2, CalendarDays, Clock,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { KnowledgeBaseData, AgentConfigData } from "@/lib/claude"
+import { DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
+import type { AppointmentWindow } from "@/lib/availability"
+
+const DAYS_OF_WEEK = [
+  { value: "monday",    label: "Mon" },
+  { value: "tuesday",   label: "Tue" },
+  { value: "wednesday", label: "Wed" },
+  { value: "thursday",  label: "Thu" },
+  { value: "friday",    label: "Fri" },
+  { value: "saturday",  label: "Sat" },
+  { value: "sunday",    label: "Sun" },
+]
+
+const HORIZON_OPTIONS = [
+  { value: 3,  label: "3 days" },
+  { value: 5,  label: "5 days" },
+  { value: 7,  label: "1 week" },
+  { value: 10, label: "10 days" },
+  { value: 14, label: "2 weeks" },
+]
 
 const TONES = [
   { value: "friendly_professional", label: "Friendly & Professional" },
@@ -48,6 +68,15 @@ export default function AIAgentPage() {
   const [newObjection, setNewObjection] = useState("")
   const [newResponse, setNewResponse] = useState("")
 
+  // Booking availability
+  const [availableDays, setAvailableDays] = useState<string[]>(DEFAULT_DAYS)
+  const [appointmentWindows, setAppointmentWindows] = useState<AppointmentWindow[]>(DEFAULT_WINDOWS)
+  const [bookingHorizonDays, setBookingHorizonDays] = useState(7)
+  const [newWindowLabel, setNewWindowLabel] = useState("")
+  const [newWindowStart, setNewWindowStart] = useState("09:00")
+  const [newWindowEnd, setNewWindowEnd] = useState("11:00")
+  const [showAddWindow, setShowAddWindow] = useState(false)
+
   useEffect(() => {
     async function load() {
       const { data: { user } } = await supabase.auth.getUser()
@@ -74,6 +103,9 @@ export default function AIAgentPage() {
         setWorkingHoursStart(config.working_hours_start ?? 8)
         setWorkingHoursEnd(config.working_hours_end ?? 20)
         setGeneratedPrompt(config.generated_system_prompt ?? "")
+        if (config.available_days) setAvailableDays(config.available_days as string[])
+        if (config.appointment_windows) setAppointmentWindows(config.appointment_windows as AppointmentWindow[])
+        if (config.booking_horizon_days) setBookingHorizonDays(config.booking_horizon_days as number)
       }
 
       const { data: kbData } = await supabase.from("knowledge_base").select("*").eq("company_id", profile.company_id).single()
@@ -143,6 +175,9 @@ export default function AIAgentPage() {
       working_hours_end: workingHoursEnd,
       generated_system_prompt: generatedPrompt || null,
       prompt_generated_at: generatedPrompt ? new Date().toISOString() : null,
+      available_days: availableDays,
+      appointment_windows: appointmentWindows,
+      booking_horizon_days: bookingHorizonDays,
     }, { onConflict: "company_id" })
     setSaving(false)
     setSaved(true)
@@ -225,6 +260,210 @@ export default function AIAgentPage() {
               <option key={i} value={i}>{i === 0 ? "12:00 AM" : i < 12 ? `${i}:00 AM` : i === 12 ? "12:00 PM" : `${i - 12}:00 PM`}</option>
             ))}
           </select>
+        </div>
+      </div>
+
+      {/* Booking windows */}
+      <div className="space-y-4">
+        <div>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+            <CalendarDays className="w-3.5 h-3.5" />
+            Booking Windows
+          </h2>
+          <p className="text-xs text-muted-foreground mt-1">
+            Your AI Agent offers ONLY these slots when booking appointments — never random times.
+          </p>
+        </div>
+
+        {/* Day toggles */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-foreground">Available days</p>
+          <div className="flex gap-2 flex-wrap">
+            {DAYS_OF_WEEK.map((day) => {
+              const active = availableDays.includes(day.value)
+              return (
+                <button
+                  key={day.value}
+                  onClick={() => {
+                    setAvailableDays(
+                      active
+                        ? availableDays.filter((d) => d !== day.value)
+                        : [...availableDays, day.value]
+                    )
+                    setSaved(false)
+                  }}
+                  className={cn(
+                    "w-11 h-11 rounded-lg border text-sm font-medium transition-all",
+                    active
+                      ? "bg-primary text-white border-primary shadow-sm"
+                      : "border-border text-muted-foreground hover:border-primary/40 hover:text-foreground"
+                  )}
+                >
+                  {day.label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+
+        {/* Time windows */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-foreground">Time windows</p>
+          <div className="space-y-2">
+            {appointmentWindows.map((win) => (
+              <div
+                key={win.id}
+                className={cn(
+                  "flex items-center gap-3 px-4 py-3 rounded-xl border transition-all",
+                  win.enabled
+                    ? "bg-primary/5 border-primary/20"
+                    : "bg-muted/30 border-border opacity-60"
+                )}
+              >
+                {/* Toggle */}
+                <button
+                  onClick={() => {
+                    setAppointmentWindows(
+                      appointmentWindows.map((w) =>
+                        w.id === win.id ? { ...w, enabled: !w.enabled } : w
+                      )
+                    )
+                    setSaved(false)
+                  }}
+                  className={cn(
+                    "w-9 h-5 rounded-full relative transition-colors shrink-0",
+                    win.enabled ? "bg-primary" : "bg-muted-foreground/30"
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow-sm transition-all",
+                      win.enabled ? "left-[18px]" : "left-0.5"
+                    )}
+                  />
+                </button>
+
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">{win.label}</p>
+                  <p className="text-xs text-muted-foreground flex items-center gap-1">
+                    <Clock className="w-3 h-3" />
+                    {win.start.replace(":", ":")} – {win.end.replace(":", ":")}
+                  </p>
+                </div>
+
+                {/* Delete custom windows only */}
+                {!["morning", "midmorning", "afternoon", "late_afternoon"].includes(win.id) && (
+                  <button
+                    onClick={() => {
+                      setAppointmentWindows(appointmentWindows.filter((w) => w.id !== win.id))
+                      setSaved(false)
+                    }}
+                    className="text-muted-foreground hover:text-destructive transition-colors"
+                  >
+                    <Trash2 className="w-3.5 h-3.5" />
+                  </button>
+                )}
+              </div>
+            ))}
+          </div>
+
+          {/* Add custom window */}
+          {showAddWindow ? (
+            <div className="border border-dashed border-border rounded-xl p-4 space-y-3 bg-muted/20">
+              <p className="text-xs font-medium text-muted-foreground">New time window</p>
+              <Input
+                placeholder="Label (e.g. Early morning)"
+                value={newWindowLabel}
+                onChange={(e) => setNewWindowLabel(e.target.value)}
+                className="h-8 text-sm"
+              />
+              <div className="flex items-center gap-2">
+                <div className="flex-1 space-y-1">
+                  <p className="text-xs text-muted-foreground">Start</p>
+                  <Input
+                    type="time"
+                    value={newWindowStart}
+                    onChange={(e) => setNewWindowStart(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+                <span className="text-muted-foreground text-sm mt-5">to</span>
+                <div className="flex-1 space-y-1">
+                  <p className="text-xs text-muted-foreground">End</p>
+                  <Input
+                    type="time"
+                    value={newWindowEnd}
+                    onChange={(e) => setNewWindowEnd(e.target.value)}
+                    className="h-8 text-sm"
+                  />
+                </div>
+              </div>
+              <div className="flex gap-2">
+                <Button
+                  size="sm"
+                  disabled={!newWindowLabel || !newWindowStart || !newWindowEnd}
+                  onClick={() => {
+                    const id = `custom_${Date.now()}`
+                    setAppointmentWindows([
+                      ...appointmentWindows,
+                      { id, label: newWindowLabel, start: newWindowStart, end: newWindowEnd, enabled: true },
+                    ])
+                    setNewWindowLabel("")
+                    setNewWindowStart("09:00")
+                    setNewWindowEnd("11:00")
+                    setShowAddWindow(false)
+                    setSaved(false)
+                  }}
+                >
+                  Add window
+                </Button>
+                <Button size="sm" variant="ghost" onClick={() => setShowAddWindow(false)}>
+                  Cancel
+                </Button>
+              </div>
+            </div>
+          ) : (
+            <Button
+              variant="outline"
+              size="sm"
+              className="gap-1.5 text-xs"
+              onClick={() => setShowAddWindow(true)}
+            >
+              <Plus className="w-3.5 h-3.5" /> Add custom window
+            </Button>
+          )}
+        </div>
+
+        {/* Booking horizon */}
+        <div className="space-y-2">
+          <p className="text-xs font-medium text-foreground">How far ahead can the AI book?</p>
+          <div className="flex gap-2 flex-wrap">
+            {HORIZON_OPTIONS.map((opt) => (
+              <button
+                key={opt.value}
+                onClick={() => { setBookingHorizonDays(opt.value); setSaved(false) }}
+                className={cn(
+                  "px-3 py-1.5 rounded-lg border text-sm transition-all",
+                  bookingHorizonDays === opt.value
+                    ? "border-primary bg-primary/10 text-foreground font-medium"
+                    : "border-border text-muted-foreground hover:border-primary/40"
+                )}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
+        </div>
+
+        {/* Summary pill */}
+        <div className="flex items-center gap-2 text-xs text-muted-foreground bg-muted/40 rounded-lg px-3 py-2 w-fit">
+          <CalendarDays className="w-3.5 h-3.5 text-primary shrink-0" />
+          AI offers up to{" "}
+          <span className="font-semibold text-foreground">
+            {availableDays.length * appointmentWindows.filter((w) => w.enabled).length}
+          </span>{" "}
+          slots per week · books up to{" "}
+          <span className="font-semibold text-foreground">{bookingHorizonDays} days</span> out
         </div>
       </div>
 

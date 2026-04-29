@@ -34,11 +34,15 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Purchase the first available number and configure the SMS webhook
+    // Purchase the first available number and configure SMS + voice webhooks
     const purchased = await client.incomingPhoneNumbers.create({
       phoneNumber: availableNumbers[0].phoneNumber,
       smsUrl: smsWebhookUrl,
       smsMethod: "POST",
+      voiceUrl: `${appUrl}/api/voice/inbound`,
+      voiceMethod: "POST",
+      statusCallback: `${appUrl}/api/voice/status`,
+      statusCallbackMethod: "POST",
       friendlyName: `LeadReply — ${user.id.slice(0, 8)}`,
     })
 
