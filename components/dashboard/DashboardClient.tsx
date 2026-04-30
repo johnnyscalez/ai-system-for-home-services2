@@ -6,7 +6,7 @@ import Link from "next/link"
 import {
   Users, MessageSquare, CalendarCheck, TrendingUp,
   Snowflake, AlertTriangle, Zap, ArrowRight,
-  DollarSign, BarChart3, Clock, Sparkles,
+  DollarSign, BarChart3, Clock, Sparkles, Flame,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -92,10 +92,10 @@ function GlowOrbs() {
 
 // ── Stat card ──────────────────────────────────────────────────────────────────
 function StatCard({
-  label, value, icon: Icon, iconBg, iconColor, valueColor, suffix = "", prefix = "",
+  label, subLabel, value, icon: Icon, iconBg, iconColor, valueColor, suffix = "", prefix = "",
   shadowColor = "rgba(124,58,237,0.10)", delay = 0,
 }: {
-  label: string; value: number; icon: React.ElementType
+  label: string; subLabel?: string; value: number; icon: React.ElementType
   iconBg: string; iconColor: string; valueColor?: string
   suffix?: string; prefix?: string; shadowColor?: string; delay?: number
 }) {
@@ -124,6 +124,7 @@ function StatCard({
           {prefix}{displayed.toLocaleString()}{suffix}
         </span>
         <p className="text-sm text-[#78716C] mt-1 font-medium">{label}</p>
+        {subLabel && <p className="text-[11px] text-[#A8A29E] mt-0.5 leading-tight">{subLabel}</p>}
       </div>
     </motion.div>
   )
@@ -283,12 +284,12 @@ export function DashboardClient({ greeting, firstName, companyName, stats, recen
             animate="show"
             className="relative grid grid-cols-3 gap-4"
           >
-            <StatCard label="New leads this month"   value={stats.newLeads}     icon={Users}        iconBg="bg-blue-50"    iconColor="text-blue-600"   delay={0} />
-            <StatCard label="AI contacted"            value={stats.contacted}    icon={MessageSquare} iconBg="bg-purple-50"  iconColor="text-[#7C3AED]" shadowColor="rgba(124,58,237,0.12)" delay={80} />
-            <StatCard label="Appointments booked"    value={stats.booked}       icon={CalendarCheck} iconBg="bg-green-50"   iconColor="text-green-600" valueColor="text-[#4D7C0F]" shadowColor="rgba(77,124,15,0.12)" delay={160} />
-            <StatCard label="Booking rate"           value={stats.bookingRate}  icon={BarChart3}     iconBg="bg-amber-50"   iconColor="text-amber-600" suffix="%" delay={240} />
-            <StatCard label="Follow-ups sent (month)" value={stats.followUpsSent} icon={Zap}          iconBg="bg-violet-50"  iconColor="text-violet-600" shadowColor="rgba(124,58,237,0.10)" delay={320} />
-            <StatCard label="Cold leads"             value={stats.cold}         icon={Snowflake}     iconBg="bg-slate-100"  iconColor="text-slate-500" valueColor="text-[#78716C]" shadowColor="rgba(0,0,0,0.05)" delay={400} />
+            <StatCard label="New leads this month"    value={stats.newLeads}      icon={Users}        iconBg="bg-blue-50"    iconColor="text-blue-600"   delay={0} />
+            <StatCard label="Appointments booked"    value={stats.booked}        icon={CalendarCheck} iconBg="bg-green-50"   iconColor="text-green-600" valueColor="text-[#4D7C0F]" shadowColor="rgba(77,124,15,0.12)" delay={80} />
+            <StatCard label="Booking rate"           value={stats.bookingRate}   icon={BarChart3}     iconBg="bg-amber-50"   iconColor="text-amber-600" suffix="%" delay={160} />
+            <StatCard label="Follow-ups sent by AI"  value={stats.followUpsSent} icon={Zap}           iconBg="bg-violet-50"  iconColor="text-violet-600" shadowColor="rgba(124,58,237,0.10)" delay={240} />
+            <StatCard label="Hot leads"              subLabel="Replied but not yet booked" value={stats.qualified}     icon={Flame}        iconBg="bg-orange-50"  iconColor="text-orange-500" valueColor="text-orange-600" shadowColor="rgba(249,115,22,0.10)" delay={320} />
+            <StatCard label="Cold leads"             subLabel="No reply in 7+ days"        value={stats.cold}          icon={Snowflake}     iconBg="bg-slate-100"  iconColor="text-slate-500" valueColor="text-[#78716C]" shadowColor="rgba(0,0,0,0.05)" delay={400} />
           </motion.div>
         </div>
 
