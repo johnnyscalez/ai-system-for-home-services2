@@ -4,19 +4,29 @@ import { processAndSave } from "@/lib/ai-engine"
 import { sendSMS, formatPhone } from "@/lib/twilio"
 import { notifyNewLead } from "@/lib/notifications"
 
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Methods": "POST, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, x-webhook-secret",
+}
+
+export async function OPTIONS() {
+  return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
+}
+
 // Accepts lead data from Facebook Lead Ads, Google Ads, or any webhook source.
 // Caller must include the company's webhook_secret in the x-webhook-secret header.
 export async function POST(req: NextRequest) {
   const secret = req.headers.get("x-webhook-secret")
   if (!secret) {
-    return NextResponse.json({ error: "Missing webhook secret" }, { status: 401 })
+    return NextResponse.json({ error: "Missing webhook secret" }, { status: 401, headers: CORS_HEADERS })
   }
 
   let body: Record<string, unknown>
   try {
     body = await req.json()
   } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
+    return NextResponse.json({ error: "Invalid JSON" }, { status: 400, headers: CORS_HEADERS })
   }
 
   const supabase = createServiceRoleClient()
@@ -29,13 +39,13 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (!company) {
-    return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401 })
+    return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401, headers: CORS_HEADERS })
   }
 
   // Normalize phone
   const rawPhone = (body.phone as string) ?? ""
   if (!rawPhone) {
-    return NextResponse.json({ error: "Phone number required" }, { status: 400 })
+    return NextResponse.json({ error: "Phone number required" }, { status: 400, headers: CORS_HEADERS })
   }
   const phone = formatPhone(rawPhone)
 
@@ -80,7 +90,7 @@ export async function POST(req: NextRequest) {
 
     if (error || !newLead) {
       console.error("Failed to create lead:", error)
-      return NextResponse.json({ error: "Failed to create lead" }, { status: 500 })
+      return NextResponse.json({ error: "Failed to create lead" }, { status: 500, headers: CORS_HEADERS })
     }
     leadId = newLead.id
 
@@ -100,7 +110,7 @@ export async function POST(req: NextRequest) {
   if (!phoneNumber?.phone_number) {
     // No phone number provisioned yet — log and return success anyway
     console.warn(`Company ${company.id} has no active phone number — skipping SMS`)
-    return NextResponse.json({ success: true, lead_id: leadId, sms_sent: false })
+    return NextResponse.json({ success: true, lead_id: leadId, sms_sent: false }, { headers: CORS_HEADERS })
   }
 
   try {
@@ -134,9 +144,9 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    return NextResponse.json({ success: true, lead_id: leadId, sms_sent: true })
+    return NextResponse.json({ success: true, lead_id: leadId, sms_sent: true }, { headers: CORS_HEADERS })
   } catch (err) {
     console.error("AI engine / SMS error:", err)
-    return NextResponse.json({ success: true, lead_id: leadId, sms_sent: false })
+    return NextResponse.json({ success: true, lead_id: leadId, sms_sent: false }, { headers: CORS_HEADERS })
   }
 }
