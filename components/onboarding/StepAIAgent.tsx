@@ -1,30 +1,9 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
-import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { ChevronRight } from "lucide-react"
-import { cn } from "@/lib/utils"
 import type { KnowledgeBaseData } from "@/lib/claude"
-
-const TONES = [
-  {
-    value: "friendly_professional",
-    label: "Friendly & Professional",
-    desc: "Warm and personable, like a trusted local business. Most effective for home services.",
-  },
-  {
-    value: "casual",
-    label: "Casual",
-    desc: "Relaxed and conversational, like texting a friend. Works well for younger audiences.",
-  },
-  {
-    value: "formal",
-    label: "Formal",
-    desc: "Business-like and respectful. Better for high-ticket or corporate clients.",
-  },
-]
 
 export type AIAgentData = {
   agentName: string
@@ -60,48 +39,10 @@ export function StepAIAgent({ data, onChange, onNext, onBack }: Props) {
     <div>
       <h1 className="text-2xl font-bold mb-2">Configure your AI agent</h1>
       <p className="text-muted-foreground mb-8">
-        A few quick settings — our AI handles the rest automatically.
+        Two things we need to know — Linda handles everything else on her own.
       </p>
 
       <div className="space-y-8">
-
-        {/* Identity */}
-        <div className="space-y-4">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Identity</h2>
-          <div className="space-y-1.5">
-            <Label htmlFor="agentName">Agent name</Label>
-            <Input
-              id="agentName"
-              placeholder="Alex"
-              value={data.agentName}
-              onChange={(e) => set("agentName", e.target.value)}
-              className="max-w-xs"
-            />
-            <p className="text-xs text-muted-foreground">The name your AI uses when texting leads.</p>
-          </div>
-        </div>
-
-        {/* Tone */}
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Tone</h2>
-          <div className="grid sm:grid-cols-3 gap-3">
-            {TONES.map((t) => (
-              <button
-                key={t.value}
-                onClick={() => set("tone", t.value)}
-                className={cn(
-                  "text-left p-4 rounded-xl border transition-all",
-                  data.tone === t.value
-                    ? "border-primary bg-primary/5"
-                    : "border-border bg-card hover:border-primary/40"
-                )}
-              >
-                <div className="font-medium text-sm mb-1">{t.label}</div>
-                <div className="text-xs text-muted-foreground leading-relaxed">{t.desc}</div>
-              </button>
-            ))}
-          </div>
-        </div>
 
         {/* Disqualifiers */}
         <div className="space-y-3">
