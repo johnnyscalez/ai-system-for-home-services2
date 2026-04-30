@@ -2,7 +2,7 @@
 
 import { Button } from "@/components/ui/button"
 import { Badge } from "@/components/ui/badge"
-import { Share2, Link2, Check, ChevronRight, ExternalLink, Search } from "lucide-react"
+import { Share2, Link2, Check, ChevronRight, Search, Info } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export type LeadSourceState = {
@@ -17,140 +17,126 @@ interface Props {
   onNext: () => void
 }
 
-export function StepLeadSources({ sources, onChange, onNext }: Props) {
-  const anyConnected = sources.facebook || sources.googleAds || sources.webhook
-  const hasFbAppId = !!process.env.NEXT_PUBLIC_FB_APP_ID
+function SourceCard({
+  icon,
+  title,
+  badge,
+  description,
+  selected,
+  onToggle,
+  setupNote,
+  howItWorks,
+}: {
+  icon: React.ReactNode
+  title: string
+  badge?: React.ReactNode
+  description: string
+  selected: boolean
+  onToggle: () => void
+  setupNote: string
+  howItWorks: string
+}) {
+  return (
+    <div className={cn(
+      "rounded-xl border p-5 transition-all space-y-4",
+      selected ? "border-primary bg-primary/5" : "border-border bg-card"
+    )}>
+      <div className="flex items-start justify-between gap-4">
+        <div className="flex items-start gap-4">
+          <div className={cn(
+            "w-10 h-10 rounded-lg flex items-center justify-center shrink-0",
+            selected ? "bg-primary/15" : "bg-muted"
+          )}>
+            {icon}
+          </div>
+          <div className="flex-1">
+            <div className="flex items-center gap-2 mb-1 flex-wrap">
+              <span className="font-semibold">{title}</span>
+              {badge}
+            </div>
+            <p className="text-sm text-muted-foreground">{description}</p>
+          </div>
+        </div>
+        <Button
+          size="sm"
+          variant={selected ? "outline" : "default"}
+          className="shrink-0"
+          onClick={onToggle}
+        >
+          {selected ? (
+            <><Check className="w-3.5 h-3.5 mr-1.5" /> Selected</>
+          ) : "Select"}
+        </Button>
+      </div>
 
+      {selected && (
+        <div className="ml-14 space-y-2">
+          {/* How it works */}
+          <div className="flex items-start gap-2 text-xs text-muted-foreground bg-muted/50 rounded-lg px-3 py-2.5">
+            <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-primary" />
+            <span>{howItWorks}</span>
+          </div>
+          {/* What happens next */}
+          <div className="flex items-start gap-2 text-xs text-emerald-600 bg-emerald-50 border border-emerald-100 rounded-lg px-3 py-2.5">
+            <Check className="w-3.5 h-3.5 shrink-0 mt-0.5" />
+            <span>{setupNote}</span>
+          </div>
+        </div>
+      )}
+    </div>
+  )
+}
+
+export function StepLeadSources({ sources, onChange, onNext }: Props) {
   return (
     <div>
-      <h1 className="text-2xl font-bold mb-2">Connect your lead sources</h1>
+      <h1 className="text-2xl font-bold mb-2">Where do your leads come from?</h1>
       <p className="text-muted-foreground mb-8">
-        Where do your leads come from? We&apos;ll start texting them the moment they submit. You can connect multiple sources.
+        Select all the sources you run ads or collect leads from. We&apos;ll walk you through the full connection after setup — takes 2 minutes each.
       </p>
 
       <div className="space-y-4 mb-8">
-        {/* Facebook */}
-        <div className={cn(
-          "rounded-xl border p-5 transition-all",
-          sources.facebook ? "border-primary bg-primary/5" : "border-border bg-card"
-        )}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-blue-500/15 flex items-center justify-center shrink-0">
-                <Share2 className="w-5 h-5 text-blue-400" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold">Facebook Lead Ads</span>
-                  <Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-400 border-blue-500/20">Most popular</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Connect your Facebook ad account and select which lead form to sync. Every submission triggers an instant AI text.
-                </p>
-                {sources.facebook && (
-                  <p className="text-xs text-primary mt-2 flex items-center gap-1">
-                    <Check className="w-3 h-3" /> Connected — will be fully configured after setup
-                  </p>
-                )}
-                {!hasFbAppId && !sources.facebook && (
-                  <p className="text-xs text-muted-foreground mt-2">
-                    Requires your Facebook App credentials in settings after setup.
-                  </p>
-                )}
-              </div>
-            </div>
-            <Button
-              size="sm"
-              variant={sources.facebook ? "outline" : "default"}
-              className="shrink-0"
-              onClick={() => onChange({ ...sources, facebook: !sources.facebook })}
-            >
-              {sources.facebook ? "Disconnect" : "Connect"}
-            </Button>
-          </div>
-        </div>
+
+        {/* Facebook Lead Ads */}
+        <SourceCard
+          icon={<Share2 className={cn("w-5 h-5", sources.facebook ? "text-primary" : "text-muted-foreground")} />}
+          title="Facebook Lead Ads"
+          badge={<Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-200">Most popular</Badge>}
+          description="Connect your Facebook ad account. Every lead that submits your lead form gets an AI text within 60 seconds."
+          selected={sources.facebook}
+          onToggle={() => onChange({ ...sources, facebook: !sources.facebook })}
+          howItWorks="After completing setup, you'll connect your Facebook account in the Integrations tab — takes about 2 minutes. You'll pick exactly which Facebook Page, ad account, and lead form to sync."
+          setupNote="After onboarding → go to Integrations → Facebook Lead Ads → authorize your account and select your lead form."
+        />
 
         {/* Google Ads */}
-        <div className={cn(
-          "rounded-xl border p-5 transition-all",
-          sources.googleAds ? "border-primary bg-primary/5" : "border-border bg-card"
-        )}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-red-500/15 flex items-center justify-center shrink-0">
-                <Search className="w-5 h-5 text-red-400" />
-              </div>
-              <div>
-                <span className="font-semibold">Google Ads Lead Forms</span>
-                <p className="text-sm text-muted-foreground mt-1">
-                  Connect your Google Ads account to sync leads from Google Lead Form extensions directly.
-                </p>
-                {sources.googleAds && (
-                  <p className="text-xs text-primary mt-2 flex items-center gap-1">
-                    <Check className="w-3 h-3" /> Connected — will be fully configured after setup
-                  </p>
-                )}
-              </div>
-            </div>
-            <Button
-              size="sm"
-              variant={sources.googleAds ? "outline" : "default"}
-              className="shrink-0"
-              onClick={() => onChange({ ...sources, googleAds: !sources.googleAds })}
-            >
-              {sources.googleAds ? "Disconnect" : "Connect"}
-            </Button>
-          </div>
-        </div>
+        <SourceCard
+          icon={<Search className={cn("w-5 h-5", sources.googleAds ? "text-primary" : "text-muted-foreground")} />}
+          title="Google Ads Lead Forms"
+          badge={<Badge variant="outline" className="text-xs">Webhook-based</Badge>}
+          description="Capture leads from Google Ads Lead Form Extensions. Google delivers leads to your unique webhook URL — no OAuth required."
+          selected={sources.googleAds}
+          onToggle={() => onChange({ ...sources, googleAds: !sources.googleAds })}
+          howItWorks="Google Ads Lead Form Extensions send lead data to a webhook URL. After setup, you'll get your unique URL to paste into Google Ads under 'Lead delivery → Webhook'."
+          setupNote="After onboarding → go to Integrations → Google Ads → copy your webhook URL → paste it in Google Ads account settings."
+        />
 
-        {/* Webhook */}
-        <div className={cn(
-          "rounded-xl border p-5 transition-all",
-          sources.webhook ? "border-primary bg-primary/5" : "border-border bg-card"
-        )}>
-          <div className="flex items-start justify-between gap-4">
-            <div className="flex items-start gap-4">
-              <div className="w-10 h-10 rounded-lg bg-primary/15 flex items-center justify-center shrink-0">
-                <Link2 className="w-5 h-5 text-primary" />
-              </div>
-              <div>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className="font-semibold">Webhook / Other sources</span>
-                  <Badge variant="outline" className="text-xs">Universal</Badge>
-                </div>
-                <p className="text-sm text-muted-foreground">
-                  Angi, HomeAdvisor, your website form, Zapier — paste your unique webhook URL anywhere. Works with anything.
-                </p>
-                {sources.webhook && (
-                  <div className="mt-3 space-y-1">
-                    <p className="text-xs text-muted-foreground">Your webhook URL will be shown after setup completes:</p>
-                    <code className="text-xs text-primary">https://app.leadreply.ai/api/webhooks/lead?secret=••••</code>
-                    <a
-                      href="https://docs.leadreply.ai/webhook"
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="text-xs text-primary flex items-center gap-1 hover:underline mt-1"
-                    >
-                      View docs <ExternalLink className="w-2.5 h-2.5" />
-                    </a>
-                  </div>
-                )}
-              </div>
-            </div>
-            <Button
-              size="sm"
-              variant={sources.webhook ? "outline" : "default"}
-              className="shrink-0"
-              onClick={() => onChange({ ...sources, webhook: !sources.webhook })}
-            >
-              {sources.webhook ? "Remove" : "Add"}
-            </Button>
-          </div>
-        </div>
+        {/* Webhook / Other */}
+        <SourceCard
+          icon={<Link2 className={cn("w-5 h-5", sources.webhook ? "text-primary" : "text-muted-foreground")} />}
+          title="Webhook / Other sources"
+          badge={<Badge variant="outline" className="text-xs">Universal</Badge>}
+          description="Works with Angi, HomeAdvisor, your website contact form, Zapier, or anything else that can send an HTTP request."
+          selected={sources.webhook}
+          onToggle={() => onChange({ ...sources, webhook: !sources.webhook })}
+          howItWorks="After setup you'll get a unique webhook URL. Paste it into any lead source that supports webhooks — or use Zapier to connect platforms that don't."
+          setupNote="After onboarding → go to Integrations → Webhook → copy your URL → paste it into your lead source."
+        />
+
       </div>
 
       <div className="flex items-center gap-3">
-        <Button onClick={onNext} disabled={!anyConnected} className="gap-2">
+        <Button onClick={onNext} className="gap-2">
           Continue <ChevronRight className="w-4 h-4" />
         </Button>
         <button
