@@ -1,18 +1,17 @@
 import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
-import { createServiceRoleClient } from "@/lib/supabase-server"
-import { createClient } from "@/lib/supabase"
-
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
-
-const PRICE_IDS: Record<string, string> = {
-  starter: process.env.STRIPE_PRICE_STARTER ?? "",
-  growth:  process.env.STRIPE_PRICE_GROWTH  ?? "",
-  scale:   process.env.STRIPE_PRICE_SCALE   ?? "",
-}
+import { createServiceRoleClient, createServerSupabaseClient } from "@/lib/supabase-server"
 
 export async function POST(req: NextRequest) {
-  const supabase = createClient()
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "")
+
+  const PRICE_IDS: Record<string, string> = {
+    starter: process.env.STRIPE_PRICE_STARTER ?? "",
+    growth:  process.env.STRIPE_PRICE_GROWTH  ?? "",
+    scale:   process.env.STRIPE_PRICE_SCALE   ?? "",
+  }
+
+  const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 

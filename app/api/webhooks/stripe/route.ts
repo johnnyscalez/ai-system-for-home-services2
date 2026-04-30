@@ -2,8 +2,6 @@ import { NextRequest, NextResponse } from "next/server"
 import Stripe from "stripe"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 
-const stripe = new Stripe(process.env.STRIPE_SECRET_KEY!)
-
 export const runtime = "nodejs"
 
 const PLAN_MAP: Record<string, string> = {
@@ -20,6 +18,7 @@ function planFromPriceId(priceId: string): string {
 }
 
 export async function POST(req: NextRequest) {
+  const stripe = new Stripe(process.env.STRIPE_SECRET_KEY ?? "")
   const rawBody = await req.text()
   const sig = req.headers.get("stripe-signature")
 
