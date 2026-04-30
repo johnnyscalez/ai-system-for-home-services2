@@ -7,32 +7,99 @@ import { normalizeLead } from "@/lib/normalize-lead"
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
-  "Access-Control-Allow-Methods": "POST, OPTIONS",
-  "Access-Control-Allow-Headers": "Content-Type, x-webhook-secret",
+  "Access-Control-Allow-Methods": "POST, GET, OPTIONS",
+  "Access-Control-Allow-Headers": "Content-Type, x-webhook-secret, Authorization",
 }
 
 export async function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS_HEADERS })
 }
 
-// Accepts lead data from Facebook Lead Ads, Google Ads, or any webhook source.
-// Caller must include the company's webhook_secret in the x-webhook-secret header.
+/**
+ * Extracts the webhook secret from wherever the caller put it:
+ *   1. x-webhook-secret header  (preferred)
+ *   2. Authorization: Bearer <secret> header
+ *   3. ?secret= query param  (most form builders can append to URL)
+ *   4. secret / webhook_secret field inside the body
+ */
+function extractSecret(req: NextRequest, body: Record<string, unknown>): string | null {
+  return (
+    req.headers.get("x-webhook-secret") ||
+    (req.headers.get("authorization") ?? "").replace(/^Bearer\s+/i, "").trim() || null ||
+    new URL(req.url).searchParams.get("secret") ||
+    new URL(req.url).searchParams.get("key") ||
+    (typeof body.secret === "string" ? body.secret : null) ||
+    (typeof body.webhook_secret === "string" ? body.webhook_secret : null) ||
+    null
+  )
+}
+
+/**
+ * Parses the request body regardless of Content-Type.
+ * Handles: application/json, application/x-www-form-urlencoded,
+ * multipart/form-data, and plain-text JSON with wrong content-type.
+ */
+async function parseBody(req: NextRequest): Promise<Record<string, unknown>> {
+  const ct = req.headers.get("content-type") ?? ""
+
+  // application/json or no content-type — try JSON first
+  if (ct.includes("application/json") || ct === "") {
+    try {
+      return await req.json()
+    } catch {
+      // fall through
+    }
+  }
+
+  // application/x-www-form-urlencoded or multipart/form-data
+  if (ct.includes("application/x-www-form-urlencoded") || ct.includes("multipart/form-data")) {
+    try {
+      const form = await req.formData()
+      const obj: Record<string, unknown> = {}
+      form.forEach((value, key) => { obj[key] = value })
+      return obj
+    } catch {
+      // fall through
+    }
+  }
+
+  // Last resort: read raw text and try to parse as JSON
+  try {
+    const text = await req.text()
+    if (text.trim().startsWith("{")) return JSON.parse(text)
+    // Try URL-encoded as plain text
+    const params = new URLSearchParams(text)
+    const obj: Record<string, unknown> = {}
+    params.forEach((value, key) => { obj[key] = value })
+    if (Object.keys(obj).length > 0) return obj
+  } catch {
+    // fall through
+  }
+
+  return {}
+}
+
+// GET support: some no-code tools send lead data as query params
+export async function GET(req: NextRequest) {
+  const { searchParams } = new URL(req.url)
+  const body: Record<string, unknown> = {}
+  searchParams.forEach((value, key) => { body[key] = value })
+  return handleLead(req, body)
+}
+
 export async function POST(req: NextRequest) {
-  const secret = req.headers.get("x-webhook-secret")
+  const body = await parseBody(req)
+  return handleLead(req, body)
+}
+
+async function handleLead(req: NextRequest, body: Record<string, unknown>) {
+  const secret = extractSecret(req, body)
   if (!secret) {
     return NextResponse.json({ error: "Missing webhook secret" }, { status: 401, headers: CORS_HEADERS })
   }
 
-  let body: Record<string, unknown>
-  try {
-    body = await req.json()
-  } catch {
-    return NextResponse.json({ error: "Invalid JSON" }, { status: 400, headers: CORS_HEADERS })
-  }
-
   const supabase = createServiceRoleClient()
 
-  // Look up company by webhook_secret
   const { data: company } = await supabase
     .from("companies")
     .select("id, service_type")
@@ -43,7 +110,6 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401, headers: CORS_HEADERS })
   }
 
-  // Normalize any field format into our standard shape
   const lead = normalizeLead(body)
 
   if (!lead.phone) {
@@ -51,7 +117,7 @@ export async function POST(req: NextRequest) {
   }
   const phone = formatPhone(lead.phone)
 
-  // Upsert lead (idempotent on phone + company_id)
+  // Upsert lead — idempotent on phone + company_id
   const { data: existing } = await supabase
     .from("leads")
     .select("id, status")
@@ -62,7 +128,6 @@ export async function POST(req: NextRequest) {
   let leadId: string
 
   if (existing) {
-    // Re-engage cold lead if they re-submit
     if (existing.status === "cold" || existing.status === "closed_lost") {
       await supabase
         .from("leads")
@@ -96,12 +161,10 @@ export async function POST(req: NextRequest) {
     }
     leadId = newLead.id
 
-    // Notify contractor of new lead (non-blocking)
     const leadName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim()
     notifyNewLead(company.id, leadName, phone, (body.source as string) ?? "webhook").catch(() => {})
   }
 
-  // Get company's Twilio number
   const { data: phoneNumber } = await supabase
     .from("phone_numbers")
     .select("phone_number")
@@ -110,13 +173,11 @@ export async function POST(req: NextRequest) {
     .single()
 
   if (!phoneNumber?.phone_number) {
-    // No phone number provisioned yet — log and return success anyway
     console.warn(`Company ${company.id} has no active phone number — skipping SMS`)
     return NextResponse.json({ success: true, lead_id: leadId, sms_sent: false }, { headers: CORS_HEADERS })
   }
 
   try {
-    // Run AI engine for initial outreach (null = new lead)
     const result = await processAndSave(leadId, company.id, null)
 
     if (result.response) {
@@ -127,14 +188,11 @@ export async function POST(req: NextRequest) {
           .update({ twilio_sid: msg.sid })
           .eq("id", result.outboundConversationId)
       }
-
-      // Update lead status to contacted
       await supabase
         .from("leads")
         .update({ status: "contacted", last_message_at: new Date().toISOString() })
         .eq("id", leadId)
 
-      // Schedule first no-reply follow-up (1 hour from now)
       const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000).toISOString()
       await supabase.from("sequences").insert({
         lead_id: leadId,
