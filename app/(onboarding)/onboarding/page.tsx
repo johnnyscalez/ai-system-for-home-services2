@@ -1,8 +1,7 @@
 "use client"
 
-import { useState, useEffect } from "react"
+import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { createClient } from "@/lib/supabase"
 import { Zap, Check } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { StepLeadSources, type LeadSourceState } from "@/components/onboarding/StepLeadSources"
@@ -10,7 +9,6 @@ import { StepBusiness, type BusinessData } from "@/components/onboarding/StepBus
 import { StepIntelligence, type IntelligenceData } from "@/components/onboarding/StepIntelligence"
 import { StepAIAgent, type AIAgentData } from "@/components/onboarding/StepAIAgent"
 import { StepPhone } from "@/components/onboarding/StepPhone"
-import type { ServiceType } from "@/types/database"
 
 const DEFAULT_OBJECTIONS: Record<string, string> = {
   "Just getting prices": "Totally understand! Our inspections are free and no obligation — we just want to give you an accurate number. Does Tuesday or Thursday work?",
@@ -20,33 +18,6 @@ const DEFAULT_OBJECTIONS: Record<string, string> = {
   "Call me instead": "Of course! What's the best time to call you today?",
 }
 
-const DEFAULT_QUESTIONS: Record<ServiceType, { id: string; question: string }[]> = {
-  roofing: [
-    { id: "q1", question: "Is this storm damage or just age?" },
-    { id: "q2", question: "Are you looking to go through insurance or pay out of pocket?" },
-    { id: "q3", question: "What's the property address so we can check your area?" },
-  ],
-  solar: [
-    { id: "q1", question: "Do you own your home?" },
-    { id: "q2", question: "What's your average monthly electric bill?" },
-    { id: "q3", question: "What's the address — we need to check roof size and sun exposure?" },
-  ],
-  hvac: [
-    { id: "q1", question: "Is it your AC, heat, or both that needs attention?" },
-    { id: "q2", question: "How old is your current system?" },
-    { id: "q3", question: "Is this a repair or are you looking at replacement?" },
-  ],
-  windows: [
-    { id: "q1", question: "Are you replacing all windows or just specific ones?" },
-    { id: "q2", question: "Is this primarily for energy savings, aesthetics, or damage?" },
-    { id: "q3", question: "What's the property address?" },
-  ],
-  bath_remodel: [
-    { id: "q1", question: "Are you thinking a full remodel or just fixtures/tub?" },
-    { id: "q2", question: "Do you have a timeline in mind?" },
-    { id: "q3", question: "Do you own the home?" },
-  ],
-}
 
 const STEPS = [
   { n: 1, label: "Lead sources" },
@@ -60,10 +31,10 @@ type Step = 1 | 2 | 3 | 4 | 5
 
 export default function OnboardingPage() {
   const router = useRouter()
-  const supabase = createClient()
 
   const [step, setStep] = useState<Step>(1)
   const [error, setError] = useState("")
+  const scrollRef = useRef<HTMLDivElement>(null)
   const [loading, setLoading] = useState(false)
   const [provisioning, setProvisioning] = useState(false)
   const [provisionedNumber, setProvisionedNumber] = useState("")
@@ -81,7 +52,6 @@ export default function OnboardingPage() {
     state: "",
     serviceArea: "",
     notificationPhone: "",
-    avgJobValue: "",
     country: "US",
   })
 
@@ -108,6 +78,7 @@ export default function OnboardingPage() {
     primaryGoal: "book_estimate",
     customInstructions: "",
     qualifyingQuestions: [],
+    disqualifiers: "",
     objectionResponses: DEFAULT_OBJECTIONS,
     workingHoursStart: 8,
     workingHoursEnd: 20,
@@ -115,13 +86,10 @@ export default function OnboardingPage() {
     generatedPrompt: "",
   })
 
-  // Pre-fill qualifying questions when service type is chosen
+  // Scroll to top whenever step changes
   useEffect(() => {
-    if (business.serviceType && aiAgent.qualifyingQuestions.length === 0) {
-      const defaults = DEFAULT_QUESTIONS[business.serviceType as ServiceType]
-      if (defaults) setAiAgent((prev) => ({ ...prev, qualifyingQuestions: defaults }))
-    }
-  }, [business.serviceType]) // eslint-disable-line react-hooks/exhaustive-deps
+    scrollRef.current?.scrollTo({ top: 0, behavior: "smooth" })
+  }, [step])
 
   function handleStep2Next() {
     if (!business.companyName || !business.serviceType || !business.serviceArea || !business.notificationPhone) {
@@ -132,8 +100,12 @@ export default function OnboardingPage() {
     setStep(3)
   }
 
-  async function handleStep4Next() {
+  function handleStep4Next() {
     setStep(5)
+    setError("")
+  }
+
+  async function handleProvisionPhone() {
     setProvisioning(true)
     setError("")
 
@@ -141,10 +113,7 @@ export default function OnboardingPage() {
       const res = await fetch("/api/onboarding/provision-phone", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          country: "US",
-          state: business.state,
-        }),
+        body: JSON.stringify({ country: "US", state: business.state }),
       })
       const data = await res.json()
 
@@ -165,151 +134,33 @@ export default function OnboardingPage() {
     setLoading(true)
     setError("")
 
-    const { data: { user } } = await supabase.auth.getUser()
-    if (!user) { router.push("/login"); return }
+    try {
+      const res = await fetch("/api/onboarding/complete", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          business,
+          intelligence,
+          aiAgent,
+          provisionedNumber,
+          provisionedTwilioSid,
+          sources,
+        }),
+      })
 
-    // Auto-generate the AI system prompt if the user skipped it in Step 4
-    let finalPrompt = aiAgent.generatedPrompt
-    if (!finalPrompt) {
-      try {
-        const res = await fetch("/api/onboarding/generate-prompt", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({
-            kb: {
-              companyName: business.companyName,
-              serviceType: business.serviceType,
-              serviceArea: business.serviceArea,
-              businessDescription: intelligence.businessDescription,
-              servicesOffered: intelligence.servicesOffered,
-              pricingInfo: intelligence.pricingInfo,
-              teamInfo: intelligence.teamInfo,
-              uniqueSellingPoints: intelligence.uniqueSellingPoints,
-              yearsInBusiness: intelligence.yearsInBusiness,
-              certifications: intelligence.certifications,
-              testimonials: intelligence.testimonials,
-              customFacts: intelligence.customFacts,
-              websiteUrl: intelligence.websiteUrl,
-            },
-            config: {
-              agentName: aiAgent.agentName,
-              tone: aiAgent.tone,
-              primaryGoal: aiAgent.primaryGoal,
-              customInstructions: aiAgent.customInstructions,
-              qualifyingQuestions: aiAgent.qualifyingQuestions,
-              objectionResponses: aiAgent.objectionResponses,
-            },
-          }),
-        })
-        if (res.ok) {
-          const data = await res.json()
-          finalPrompt = data.prompt ?? ""
-        }
-      } catch {
-        // Non-fatal — fallback prompt handles it
+      const data = await res.json()
+      if (!res.ok) {
+        setError(data.error ?? "Setup failed. Please try again.")
+        return
       }
-    }
 
-    // 1. Create company
-    const webhookSecret = Array.from(crypto.getRandomValues(new Uint8Array(24)))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
-
-    const { data: company, error: companyError } = await supabase
-      .from("companies")
-      .insert({
-        name: business.companyName,
-        owner_id: user.id,
-        service_type: business.serviceType,
-        service_area: business.serviceArea,
-        notification_phone: business.notificationPhone,
-        avg_job_value: business.avgJobValue ? parseFloat(business.avgJobValue) : 0,
-        onboarding_completed: true,
-        webhook_secret: webhookSecret,
-      })
-      .select()
-      .single()
-
-    if (companyError || !company) {
-      setError("Failed to create company. Please try again.")
+      router.push("/dashboard")
+      router.refresh()
+    } catch {
+      setError("Network error. Please try again.")
+    } finally {
       setLoading(false)
-      return
     }
-
-    const companyId = company.id
-
-    // 2. Link user to company
-    await supabase.from("users").update({ company_id: companyId }).eq("id", user.id)
-
-    // 3. Save knowledge base
-    await supabase.from("knowledge_base").insert({
-      company_id: companyId,
-      website_url: intelligence.websiteUrl || null,
-      business_description: intelligence.businessDescription || null,
-      services_offered: intelligence.servicesOffered || null,
-      service_areas: intelligence.serviceAreas || null,
-      pricing_info: intelligence.pricingInfo || null,
-      team_info: intelligence.teamInfo || null,
-      unique_selling_points: intelligence.uniqueSellingPoints || null,
-      years_in_business: intelligence.yearsInBusiness || null,
-      certifications: intelligence.certifications || null,
-      testimonials: intelligence.testimonials || null,
-      custom_facts: intelligence.customFacts || null,
-      custom_ai_knowledge: intelligence.customAiKnowledge || null,
-      social_facebook: intelligence.socialFacebook || null,
-      social_instagram: intelligence.socialInstagram || null,
-    })
-
-    // 4. Save AI agent config
-    await supabase.from("ai_agent_config").insert({
-      company_id: companyId,
-      agent_name: aiAgent.agentName,
-      agent_persona: aiAgent.tone,
-      primary_goal: aiAgent.primaryGoal,
-      tone: aiAgent.tone,
-      custom_instructions: aiAgent.customInstructions || null,
-      qualifying_questions: aiAgent.qualifyingQuestions,
-      objection_responses: aiAgent.objectionResponses,
-      follow_up_enabled: true,
-      working_hours_start: aiAgent.workingHoursStart,
-      working_hours_end: aiAgent.workingHoursEnd,
-      timezone: aiAgent.timezone,
-      generated_system_prompt: finalPrompt || null,
-      prompt_generated_at: finalPrompt ? new Date().toISOString() : null,
-    })
-
-    // 5. Save legacy settings record for backwards compat
-    await supabase.from("settings").insert({
-      company_id: companyId,
-      ai_name: aiAgent.agentName,
-      qualifying_questions: aiAgent.qualifyingQuestions,
-      objection_responses: aiAgent.objectionResponses,
-      follow_up_enabled: true,
-      working_hours_start: aiAgent.workingHoursStart,
-      working_hours_end: aiAgent.workingHoursEnd,
-      timezone: aiAgent.timezone,
-    })
-
-    // 6. Save phone number
-    if (provisionedNumber) {
-      await supabase.from("phone_numbers").insert({
-        company_id: companyId,
-        phone_number: provisionedNumber,
-        twilio_sid: provisionedTwilioSid || null,
-        is_active: true,
-      })
-    }
-
-    // 7. Save facebook connection if selected
-    if (sources.facebook) {
-      await supabase.from("facebook_connections").insert({
-        company_id: companyId,
-        is_active: true,
-      })
-    }
-
-    router.push("/dashboard")
-    router.refresh()
   }
 
   const kbForAgent = {
@@ -371,7 +222,7 @@ export default function OnboardingPage() {
       </div>
 
       {/* Content */}
-      <div className="flex-1 overflow-y-auto">
+      <div ref={scrollRef} className="flex-1 overflow-y-auto">
         <div className="max-w-2xl mx-auto px-4 py-10">
           {step === 1 && (
             <StepLeadSources
@@ -421,8 +272,9 @@ export default function OnboardingPage() {
               loading={loading}
               error={error}
               onBack={() => setStep(4)}
+              onProvision={handleProvisionPhone}
               onFinish={handleFinish}
-              onRetry={handleStep4Next}
+              onRetry={handleProvisionPhone}
             />
           )}
         </div>

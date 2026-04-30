@@ -75,7 +75,6 @@ export type BusinessData = {
   state: string
   serviceArea: string
   notificationPhone: string
-  avgJobValue: string
   country: string
 }
 
@@ -94,6 +93,7 @@ export function StepBusiness({ data, onChange, onNext, onBack, error }: Props) {
   }
 
   const canProceed = !!data.companyName && !!data.serviceType && !!data.state && !!data.serviceArea && !!data.notificationPhone
+
 
   return (
     <div>
@@ -172,24 +172,6 @@ export function StepBusiness({ data, onChange, onNext, onBack, error }: Props) {
           <p className="text-xs text-muted-foreground">
             We&apos;ll text this number the moment your AI books an appointment.
           </p>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="avgJobValue">
-            Average job value{" "}
-            <span className="text-muted-foreground font-normal">(optional — powers your ROI dashboard)</span>
-          </Label>
-          <div className="relative">
-            <span className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground text-sm">$</span>
-            <Input
-              id="avgJobValue"
-              type="number"
-              placeholder="8500"
-              className="pl-7"
-              value={data.avgJobValue}
-              onChange={set("avgJobValue")}
-            />
-          </div>
         </div>
 
         {error && <p className="text-sm text-destructive">{error}</p>}

@@ -5,10 +5,8 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { Badge } from "@/components/ui/badge"
 import {
-  ChevronRight, Sparkles, Plus, Trash2, RefreshCw,
-  ChevronDown, ChevronUp, Eye, EyeOff
+  ChevronRight, Sparkles, Plus, Trash2, RefreshCw, Wand2
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { KnowledgeBaseData, AgentConfigData } from "@/lib/claude"
@@ -31,12 +29,6 @@ const TONES = [
   },
 ]
 
-const GOALS = [
-  { value: "book_estimate", label: "Book estimate appointment", desc: "Move every qualified lead to a scheduled appointment" },
-  { value: "qualify_first", label: "Qualify first, then book", desc: "Fully qualify before offering appointment slots" },
-  { value: "gather_info", label: "Gather project details", desc: "Collect detailed info for an accurate quote" },
-]
-
 const DEFAULT_OBJECTIONS: Record<string, string> = {
   "Just getting prices": "Totally understand! Our inspections are free and no obligation — we just want to give you an accurate number. Does Tuesday or Thursday work?",
   "Already talking to someone else": "That's smart to compare! Most of our customers did that. When's better — Tuesday at 10 or Thursday at 2?",
@@ -51,6 +43,7 @@ export type AIAgentData = {
   primaryGoal: string
   customInstructions: string
   qualifyingQuestions: { id: string; question: string }[]
+  disqualifiers: string
   objectionResponses: Record<string, string>
   workingHoursStart: number
   workingHoursEnd: number
@@ -70,9 +63,8 @@ interface Props {
 }
 
 export function StepAIAgent({ data, kb, companyName, serviceType, serviceArea, onChange, onNext, onBack }: Props) {
-  const [generating, setGenerating] = useState(false)
-  const [generated, setGenerated] = useState(!!data.generatedPrompt)
-  const [showPrompt, setShowPrompt] = useState(false)
+  const [generatingQuestions, setGeneratingQuestions] = useState(false)
+  const [questionsGenerated, setQuestionsGenerated] = useState(data.qualifyingQuestions.length > 0)
   const [newObjection, setNewObjection] = useState("")
   const [newObjectionResponse, setNewObjectionResponse] = useState("")
   const [addingObjection, setAddingObjection] = useState(false)
@@ -108,37 +100,34 @@ export function StepAIAgent({ data, kb, companyName, serviceType, serviceArea, o
     set("objectionResponses", next)
   }
 
-  async function handleGenerate() {
-    setGenerating(true)
+  async function handleGenerateQuestions() {
+    setGeneratingQuestions(true)
     try {
-      const config: AgentConfigData = {
-        agentName: data.agentName,
-        tone: data.tone,
-        primaryGoal: data.primaryGoal,
-        customInstructions: data.customInstructions,
-        qualifyingQuestions: data.qualifyingQuestions.filter((q) => q.question),
-        objectionResponses: data.objectionResponses,
-        workingHoursStart: data.workingHoursStart,
-        workingHoursEnd: data.workingHoursEnd,
-        timezone: data.timezone,
-      }
-
-      const res = await fetch("/api/onboarding/generate-prompt", {
+      const res = await fetch("/api/onboarding/generate-questions", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ kb: { ...kb, companyName, serviceType, serviceArea }, config }),
+        body: JSON.stringify({
+          serviceType,
+          serviceArea,
+          companyName,
+          disqualifiers: data.disqualifiers,
+          kb: { ...kb, companyName, serviceType, serviceArea },
+        }),
       })
 
       const json = await res.json()
-      if (json.prompt) {
-        set("generatedPrompt", json.prompt)
-        setGenerated(true)
-        setShowPrompt(true)
+      if (json.questions && Array.isArray(json.questions)) {
+        const questions = json.questions.map((q: string, i: number) => ({
+          id: `q_gen_${i}_${Date.now()}`,
+          question: q,
+        }))
+        set("qualifyingQuestions", questions)
+        setQuestionsGenerated(true)
       }
     } catch {
       // fall through
     } finally {
-      setGenerating(false)
+      setGeneratingQuestions(false)
     }
   }
 
@@ -146,7 +135,7 @@ export function StepAIAgent({ data, kb, companyName, serviceType, serviceArea, o
     <div>
       <h1 className="text-2xl font-bold mb-2">Configure your AI agent</h1>
       <p className="text-muted-foreground mb-8">
-        Define how your AI behaves, what it asks, and how it handles objections. Then generate its system prompt.
+        Your AI qualifies leads, handles objections, and books appointments. Set up its personality and how it qualifies leads.
       </p>
 
       <div className="space-y-8">
@@ -188,70 +177,100 @@ export function StepAIAgent({ data, kb, companyName, serviceType, serviceArea, o
           </div>
         </div>
 
-        {/* Goal */}
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Primary goal</h2>
-          <div className="space-y-2">
-            {GOALS.map((g) => (
-              <button
-                key={g.value}
-                onClick={() => set("primaryGoal", g.value)}
-                className={cn(
-                  "w-full text-left p-4 rounded-xl border transition-all flex items-center gap-4",
-                  data.primaryGoal === g.value
-                    ? "border-primary bg-primary/5"
-                    : "border-border bg-card hover:border-primary/40"
-                )}
-              >
-                <div className={cn(
-                  "w-4 h-4 rounded-full border-2 shrink-0",
-                  data.primaryGoal === g.value ? "border-primary bg-primary" : "border-muted-foreground"
-                )} />
-                <div>
-                  <div className="font-medium text-sm">{g.label}</div>
-                  <div className="text-xs text-muted-foreground">{g.desc}</div>
-                </div>
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Qualifying questions */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-            <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Qualifying questions</h2>
-            <Button variant="outline" size="sm" onClick={addQuestion} className="gap-1.5">
-              <Plus className="w-3.5 h-3.5" /> Add question
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Your AI will ask these naturally during the conversation. 2-3 questions max recommended.
+        {/* Qualifying questions — smart generation */}
+        <div className="space-y-4">
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Qualifying questions</h2>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Your AI acts like an experienced salesperson — it figures out what to ask based on the conversation.
+            Tell us who to <strong className="text-foreground">disqualify immediately</strong> and we&apos;ll generate the right set of smart qualifying questions.
           </p>
-          <div className="space-y-2">
-            {data.qualifyingQuestions.map((q) => (
-              <div key={q.id} className="flex gap-2">
-                <Input
-                  value={q.question}
-                  onChange={(e) => updateQuestion(q.id, e.target.value)}
-                  placeholder="e.g. Is this storm damage or just age?"
-                  className="flex-1"
-                />
-                <Button
-                  variant="ghost"
-                  size="icon"
-                  onClick={() => removeQuestion(q.id)}
-                  className="shrink-0 text-muted-foreground hover:text-destructive"
-                >
-                  <Trash2 className="w-4 h-4" />
+
+          {/* Disqualifiers */}
+          <div className="space-y-1.5">
+            <Label htmlFor="disqualifiers">
+              Who should the AI <span className="text-destructive font-semibold">NOT book</span>?
+            </Label>
+            <Textarea
+              id="disqualifiers"
+              placeholder={
+                "Examples:\n" +
+                "— Renters (we only work with homeowners)\n" +
+                "— Commercial / industrial properties\n" +
+                "— Systems under 2 years old (still under manufacturer warranty)\n" +
+                "— Leads outside [your service area]\n" +
+                "— Anyone asking for an emergency same-day appointment on weekends"
+              }
+              value={data.disqualifiers}
+              onChange={(e) => set("disqualifiers", e.target.value)}
+              rows={5}
+              className="resize-none text-sm"
+            />
+            <p className="text-[11px] text-muted-foreground">Be specific. The AI will screen these out early in the conversation.</p>
+          </div>
+
+          {/* Generate button */}
+          <Button
+            type="button"
+            onClick={handleGenerateQuestions}
+            disabled={generatingQuestions}
+            variant={questionsGenerated ? "outline" : "default"}
+            className="gap-2"
+          >
+            {generatingQuestions ? (
+              <><RefreshCw className="w-4 h-4 animate-spin" /> Generating questions...</>
+            ) : questionsGenerated ? (
+              <><RefreshCw className="w-4 h-4" /> Regenerate questions</>
+            ) : (
+              <><Wand2 className="w-4 h-4" /> Create qualifying questions the AI agent asks your leads</>
+            )}
+          </Button>
+
+          {/* Question list */}
+          {data.qualifyingQuestions.length > 0 && (
+            <div className="space-y-2 pt-1">
+              <div className="flex items-center justify-between">
+                <p className="text-xs font-medium text-foreground">
+                  {data.qualifyingQuestions.length} questions generated — edit, remove, or add your own
+                </p>
+                <Button variant="ghost" size="sm" onClick={addQuestion} className="gap-1.5 text-xs h-7">
+                  <Plus className="w-3.5 h-3.5" /> Add
                 </Button>
               </div>
-            ))}
-            {data.qualifyingQuestions.length === 0 && (
-              <p className="text-xs text-muted-foreground italic">
-                No custom questions — AI will use smart defaults for {serviceType || "your service"}.
+              <div className="space-y-2">
+                {data.qualifyingQuestions.map((q, i) => (
+                  <div key={q.id} className="flex gap-2 items-center">
+                    <div className="w-5 h-5 rounded-full bg-primary/10 flex items-center justify-center text-xs font-semibold text-primary shrink-0">
+                      {i + 1}
+                    </div>
+                    <Input
+                      value={q.question}
+                      onChange={(e) => updateQuestion(q.id, e.target.value)}
+                      placeholder="Enter a qualifying question..."
+                      className="flex-1 text-sm"
+                    />
+                    <Button
+                      variant="ghost"
+                      size="icon"
+                      onClick={() => removeQuestion(q.id)}
+                      className="shrink-0 text-muted-foreground hover:text-destructive"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                    </Button>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {data.qualifyingQuestions.length === 0 && !generatingQuestions && (
+            <div className="flex items-center gap-2.5 p-3 rounded-lg bg-muted/40 border border-border">
+              <Sparkles className="w-4 h-4 text-muted-foreground shrink-0" />
+              <p className="text-xs text-muted-foreground">
+                Click the button above to generate smart qualifying questions tailored to your business.
+                The AI will use them intelligently — not as a rigid script.
               </p>
-            )}
-          </div>
+            </div>
+          )}
         </div>
 
         {/* Objection responses */}
@@ -272,7 +291,7 @@ export function StepAIAgent({ data, kb, companyName, serviceType, serviceArea, o
             {Object.entries(data.objectionResponses).map(([objection, response]) => (
               <div key={objection} className="bg-card border border-border rounded-lg p-3 space-y-2">
                 <div className="flex items-start justify-between gap-2">
-                  <span className="text-sm font-medium text-amber-400">&ldquo;{objection}&rdquo;</span>
+                  <span className="text-sm font-medium text-amber-500">&ldquo;{objection}&rdquo;</span>
                   <Button
                     variant="ghost"
                     size="icon"
@@ -323,7 +342,7 @@ export function StepAIAgent({ data, kb, companyName, serviceType, serviceArea, o
         {/* Working hours */}
         <div className="space-y-3">
           <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Working hours</h2>
-          <p className="text-xs text-muted-foreground">AI only texts leads during these hours (in lead&apos;s timezone).</p>
+          <p className="text-xs text-muted-foreground">AI only texts leads during these hours.</p>
           <div className="flex items-center gap-3">
             <select
               value={data.workingHoursStart}
@@ -353,78 +372,27 @@ export function StepAIAgent({ data, kb, companyName, serviceType, serviceArea, o
 
         {/* Custom instructions */}
         <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Custom instructions</h2>
+          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Anything else?</h2>
           <Textarea
-            placeholder="Anything else the AI should know or do... e.g. 'Always mention we offer 0% financing' or 'Never discuss competitor pricing'"
+            placeholder={
+              "Extra instructions for your AI — anything not covered above.\n\n" +
+              "Examples:\n" +
+              "— Always mention our senior discount (10% off for 65+)\n" +
+              "— Never promise a specific price over text\n" +
+              "— If lead mentions a competitor by name, don't respond negatively\n" +
+              "— Always offer our maintenance plan after booking an appointment"
+            }
             value={data.customInstructions}
             onChange={(e) => set("customInstructions", e.target.value)}
-            rows={3}
-            className="resize-none"
+            rows={5}
+            className="resize-none text-sm"
           />
-        </div>
-
-        {/* Generate prompt */}
-        <div className="bg-card border border-border rounded-xl p-5 space-y-4">
-          <div className="flex items-center justify-between">
-            <div>
-              <h2 className="font-semibold flex items-center gap-2">
-                <Sparkles className="w-4 h-4 text-primary" />
-                AI System Prompt
-              </h2>
-              <p className="text-xs text-muted-foreground mt-1">
-                We generate a world-class SMS sales prompt using everything you&apos;ve configured.
-                {generated && " You can edit it directly."}
-              </p>
-            </div>
-            {generated && (
-              <Badge variant="outline" className="bg-emerald-500/10 text-emerald-400 border-emerald-500/20 text-xs">
-                Generated
-              </Badge>
-            )}
-          </div>
-
-          <Button
-            onClick={handleGenerate}
-            disabled={generating}
-            variant={generated ? "outline" : "default"}
-            className="gap-2"
-          >
-            {generating ? (
-              <><RefreshCw className="w-4 h-4 animate-spin" /> Generating prompt...</>
-            ) : generated ? (
-              <><RefreshCw className="w-4 h-4" /> Regenerate</>
-            ) : (
-              <><Sparkles className="w-4 h-4" /> Generate my AI prompt</>
-            )}
-          </Button>
-
-          {generated && data.generatedPrompt && (
-            <div className="space-y-2">
-              <button
-                onClick={() => setShowPrompt(!showPrompt)}
-                className="text-xs text-primary flex items-center gap-1 hover:underline"
-              >
-                {showPrompt ? <><EyeOff className="w-3 h-3" /> Hide prompt</> : <><Eye className="w-3 h-3" /> View & edit prompt</>}
-                {showPrompt ? <ChevronUp className="w-3 h-3" /> : <ChevronDown className="w-3 h-3" />}
-              </button>
-
-              {showPrompt && (
-                <Textarea
-                  value={data.generatedPrompt}
-                  onChange={(e) => set("generatedPrompt", e.target.value)}
-                  rows={20}
-                  className="font-mono text-xs resize-y"
-                />
-              )}
-            </div>
-          )}
         </div>
 
         <div className="flex gap-3 pt-2">
           <Button variant="outline" onClick={onBack}>Back</Button>
           <Button onClick={onNext} className="gap-2">
-            {generated ? "Continue with this prompt" : "Skip, use defaults"}
-            <ChevronRight className="w-4 h-4" />
+            Continue <ChevronRight className="w-4 h-4" />
           </Button>
         </div>
       </div>

@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ChevronRight, Scan, RefreshCw, Globe, Camera, Share2, CheckCircle2, AlertCircle, Sparkles, Plus } from "lucide-react"
+import { ChevronRight, Scan, RefreshCw, Globe, Camera, Share2, CheckCircle2, AlertCircle, Sparkles, Plus, ShieldAlert } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 export type IntelligenceData = {
@@ -201,8 +201,17 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
           </div>
         )}
         {scanned && !scanning && (
-          <div className="flex items-center gap-2 text-sm text-emerald-400">
-            <CheckCircle2 className="w-4 h-4" />Scan complete — review and edit the fields below
+          <div className="space-y-2">
+            <div className="flex items-center gap-2 text-sm text-emerald-400">
+              <CheckCircle2 className="w-4 h-4" />Scan complete!
+            </div>
+            <div className="flex items-start gap-3 bg-amber-500/10 border border-amber-500/30 rounded-lg px-4 py-3">
+              <ShieldAlert className="w-4 h-4 text-amber-400 shrink-0 mt-0.5" />
+              <div>
+                <p className="text-sm font-semibold text-amber-300">Review everything below before continuing</p>
+                <p className="text-xs text-amber-400/80 mt-0.5">AI pulled this from your website — go through each field and correct anything that&apos;s wrong or missing. Your AI is only as accurate as what&apos;s here.</p>
+              </div>
+            </div>
           </div>
         )}
         {scanError && (
@@ -230,59 +239,74 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
         ))}
       </div>
 
-      {/* ── AI Custom Knowledge — the most important section ────────────────── */}
-      <div className="border border-primary/30 bg-primary/5 rounded-xl p-5 mb-8 space-y-4">
-        <div className="flex items-start gap-3">
-          <div className="w-8 h-8 rounded-lg bg-primary/15 flex items-center justify-center shrink-0 mt-0.5">
-            <Sparkles className="w-4 h-4 text-primary" />
+      {/* ── AI Custom Knowledge — critical section ────────────────────────── */}
+      <div className="relative mb-8">
+        {/* Bold gradient border wrapper */}
+        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 p-[2px] pointer-events-none" />
+        <div className="relative rounded-2xl bg-white dark:bg-background p-5 space-y-4">
+          {/* Header */}
+          <div className="flex items-start gap-3">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0 shadow-lg shadow-purple-500/25">
+              <Sparkles className="w-5 h-5 text-white" />
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-base text-foreground">What your AI should always know</h3>
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white uppercase tracking-wide">
+                  Most important
+                </span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                These facts get injected into <strong className="text-foreground">every call and text</strong> your AI makes.
+                Don&apos;t skip this — it&apos;s the difference between an AI that sounds exactly like your business
+                and a generic bot.
+              </p>
+            </div>
           </div>
+
+          {/* Example chips */}
           <div>
-            <h3 className="font-semibold text-sm">What your AI should always know</h3>
-            <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
-              These facts get injected into <strong>every call and text</strong> your AI agent makes.
-              Things like equipment brands, financing terms, warranty details, and what you don&apos;t service —
-              so your AI never says the wrong thing about your specific business.
+            <p className="text-xs font-semibold text-foreground mb-2">Click anything that applies to your business:</p>
+            <div className="flex flex-wrap gap-2">
+              {KNOWLEDGE_CHIPS.map((chip) => (
+                <button
+                  key={chip.label}
+                  type="button"
+                  onClick={() => appendChip(chip.text)}
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 hover:border-purple-400 transition-colors font-medium"
+                >
+                  <Plus className="w-3 h-3" />
+                  {chip.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Textarea */}
+          <div className="space-y-1.5">
+            <Textarea
+              id="customAiKnowledge"
+              placeholder={
+                "Examples — replace with YOUR specific details:\n\n" +
+                "We install Carrier, Trane, and Lennox — NOT Goodman or Rheem.\n" +
+                "We offer 0% financing for 18 months through Wells Fargo Home Projects.\n" +
+                "Minimum job size is $500 — we do not do minor repairs under that.\n" +
+                "We do NOT service commercial or new construction — residential only.\n" +
+                "Same-day emergency service available 7 days a week, including holidays.\n" +
+                "We are a Carrier Factory Authorized Dealer since 2009.\n" +
+                "Our most common question: 'Do you service all brands?' — YES we do.\n" +
+                "Customers always ask about Nest/Ecobee thermostats — we install both.\n" +
+                "We cover [your city], [nearby city], and [county] — NOT [city you don't serve]."
+              }
+              value={data.customAiKnowledge}
+              onChange={set("customAiKnowledge")}
+              rows={8}
+              className="resize-none bg-purple-50/50 border-purple-200 focus:border-purple-400 font-mono text-xs leading-relaxed placeholder:text-muted-foreground/60"
+            />
+            <p className="text-[11px] text-muted-foreground">
+              One fact per line. Mention brand names, what you don&apos;t do, common questions leads ask, local area specifics, and financing details. Your AI treats everything here as ground truth.
             </p>
           </div>
-        </div>
-
-        {/* Example chips */}
-        <div>
-          <p className="text-xs text-muted-foreground mb-2 font-medium">Click to add examples:</p>
-          <div className="flex flex-wrap gap-2">
-            {KNOWLEDGE_CHIPS.map((chip) => (
-              <button
-                key={chip.label}
-                type="button"
-                onClick={() => appendChip(chip.text)}
-                className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-background border border-border hover:border-primary/50 hover:bg-primary/5 hover:text-primary transition-colors"
-              >
-                <Plus className="w-3 h-3" />
-                {chip.label}
-              </button>
-            ))}
-          </div>
-        </div>
-
-        {/* Textarea */}
-        <div className="space-y-1.5">
-          <Textarea
-            id="customAiKnowledge"
-            placeholder={
-              "We carry Carrier, Lennox, and Trane equipment.\n" +
-              "We offer 0% financing for 12 months through GreenSky.\n" +
-              "All parts and labor come with a 1-year warranty.\n" +
-              "We do not service commercial properties.\n" +
-              "Emergency same-day service available 24/7."
-            }
-            value={data.customAiKnowledge}
-            onChange={set("customAiKnowledge")}
-            rows={6}
-            className="resize-none bg-background font-mono text-xs leading-relaxed"
-          />
-          <p className="text-[11px] text-muted-foreground">
-            One fact per line. Your AI will treat everything here as ground truth about your company.
-          </p>
         </div>
       </div>
 
