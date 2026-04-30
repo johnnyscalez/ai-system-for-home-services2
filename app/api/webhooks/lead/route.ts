@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave } from "@/lib/ai-engine"
 import { sendSMS, formatPhone } from "@/lib/twilio"
 import { notifyNewLead } from "@/lib/notifications"
+import { normalizeLead } from "@/lib/normalize-lead"
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -42,12 +43,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401, headers: CORS_HEADERS })
   }
 
-  // Normalize phone
-  const rawPhone = (body.phone as string) ?? ""
-  if (!rawPhone) {
+  // Normalize any field format into our standard shape
+  const lead = normalizeLead(body)
+
+  if (!lead.phone) {
     return NextResponse.json({ error: "Phone number required" }, { status: 400, headers: CORS_HEADERS })
   }
-  const phone = formatPhone(rawPhone)
+  const phone = formatPhone(lead.phone)
 
   // Upsert lead (idempotent on phone + company_id)
   const { data: existing } = await supabase
@@ -74,15 +76,15 @@ export async function POST(req: NextRequest) {
       .insert({
         company_id: company.id,
         phone,
-        first_name: (body.first_name as string) ?? null,
-        last_name: (body.last_name as string) ?? null,
-        email: (body.email as string) ?? null,
-        address: (body.address as string) ?? null,
-        notes: (body.notes as string) ?? null,
-        service_type: (body.service_type as string) ?? company.service_type ?? null,
+        first_name: lead.first_name,
+        last_name: lead.last_name,
+        email: lead.email,
+        address: lead.address,
+        notes: lead.notes,
+        service_type: lead.service_type ?? company.service_type ?? null,
         source: (body.source as "facebook" | "webhook" | "manual") ?? "webhook",
-        source_form_id: (body.form_id as string) ?? null,
-        metadata: (body.metadata as Record<string, unknown>) ?? {},
+        source_form_id: lead.source_form_id,
+        metadata: lead.metadata,
         status: "new",
       })
       .select("id")
@@ -95,7 +97,7 @@ export async function POST(req: NextRequest) {
     leadId = newLead.id
 
     // Notify contractor of new lead (non-blocking)
-    const leadName = `${(body.first_name as string) ?? ""} ${(body.last_name as string) ?? ""}`.trim()
+    const leadName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim()
     notifyNewLead(company.id, leadName, phone, (body.source as string) ?? "webhook").catch(() => {})
   }
 
