@@ -15,12 +15,31 @@ export async function POST(req: NextRequest) {
   const smsWebhookUrl = `${appUrl}/api/webhooks/sms`
 
   try {
-    // Search for local numbers in the contractor's state
+    // Check if account already has a number (handles trial accounts + retry scenarios)
+    const existingNumbers = await client.incomingPhoneNumbers.list({ limit: 1 })
+    if (existingNumbers.length > 0) {
+      const existing = existingNumbers[0]
+      // Re-configure webhooks in case they weren't set before
+      await client.incomingPhoneNumbers(existing.sid).update({
+        smsUrl: smsWebhookUrl,
+        smsMethod: "POST",
+        voiceUrl: `${appUrl}/api/voice/inbound`,
+        voiceMethod: "POST",
+        statusCallback: `${appUrl}/api/voice/status`,
+        statusCallbackMethod: "POST",
+      })
+      return NextResponse.json({
+        phoneNumber: existing.phoneNumber,
+        twilioSid: existing.sid,
+      })
+    }
+
+    // No existing number — search for a local number in the contractor's state
     let availableNumbers = await client
       .availablePhoneNumbers("US")
       .local.list({ inRegion: state, smsEnabled: true, limit: 5 })
 
-    // If nothing available in that state, fall back to any US number
+    // Fall back to any US number if none in that state
     if (!availableNumbers.length) {
       availableNumbers = await client
         .availablePhoneNumbers("US")
@@ -34,7 +53,6 @@ export async function POST(req: NextRequest) {
       )
     }
 
-    // Purchase the first available number and configure SMS + voice webhooks
     const purchased = await client.incomingPhoneNumbers.create({
       phoneNumber: availableNumbers[0].phoneNumber,
       smsUrl: smsWebhookUrl,

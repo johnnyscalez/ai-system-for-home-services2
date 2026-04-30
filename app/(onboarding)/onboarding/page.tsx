@@ -10,13 +10,6 @@ import { StepIntelligence, type IntelligenceData } from "@/components/onboarding
 import { StepAIAgent, type AIAgentData } from "@/components/onboarding/StepAIAgent"
 import { StepPhone } from "@/components/onboarding/StepPhone"
 
-const DEFAULT_OBJECTIONS: Record<string, string> = {
-  "Just getting prices": "Totally understand! Our inspections are free and no obligation — we just want to give you an accurate number. Does Tuesday or Thursday work?",
-  "Already talking to someone else": "That's smart to compare! Most of our customers did that. When's better — Tuesday at 10 or Thursday at 2?",
-  "How much does it cost?": "It really depends on the scope — that's exactly what the free inspection figures out. Takes about 20 minutes. Which day works?",
-  "Not interested right now": "No worries at all! Would it be okay if I checked back in a couple weeks when timing might work better?",
-  "Call me instead": "Of course! What's the best time to call you today?",
-}
 
 
 const STEPS = [
@@ -79,7 +72,7 @@ export default function OnboardingPage() {
     customInstructions: "",
     qualifyingQuestions: [],
     disqualifiers: "",
-    objectionResponses: DEFAULT_OBJECTIONS,
+    objectionResponses: {},
     workingHoursStart: 8,
     workingHoursEnd: 20,
     timezone: "America/New_York",
