@@ -26,6 +26,7 @@ export type AgentConfigData = {
   primaryGoal: string
   customInstructions?: string
   qualifyingQuestions: { question: string }[]
+  disqualifiers?: string
   objectionResponses: Record<string, string>
   workingHoursStart: number
   workingHoursEnd: number
@@ -115,82 +116,75 @@ export async function generateSystemPrompt(
     formal: "professional and formal — respectful and business-like",
   }
 
-  const goalDescriptions: Record<string, string> = {
-    book_estimate: "book a free estimate/inspection appointment",
-    qualify_first: "qualify the lead fully before offering an appointment",
-    gather_info: "gather detailed project information for an accurate quote",
-  }
-
-  const serviceQualifyingContext: Record<string, string> = {
-    roofing: "storm damage vs age, insurance claim or cash pay, address (required before booking), active leak urgency, homeowner vs renter",
-    solar: "homeownership required, average electric bill, roof age and shading, HOA restrictions, address for satellite design",
-    hvac: "system type (AC/heat/heat pump/mini-split), age of system, repair vs replacement vs new install, is it running now (urgency), homeowner vs renter, property type (residential vs commercial), address (required before booking)",
-    windows: "full home vs specific rooms, reason for replacing, number of windows, own vs rent, address before booking",
-    bath_remodel: "full remodel vs fixtures only, timeline, ownership, budget range, address before booking",
+  const serviceIntelligence: Record<string, string> = {
+    roofing: "Understand storm damage vs normal wear, insurance vs cash pay, active leaks (urgent), single/multi-story, flat vs pitched. Must get address before booking. Verify homeownership.",
+    solar: "Homeownership is mandatory. Understand current electric bill, roof age, shading issues, HOA restrictions, rented vs owned panels. Must get address for satellite assessment.",
+    hvac: "Understand the exact issue: AC not cooling, heat not working, strange noises, high bills, or new install. Determine system type (central AC, heat pump, mini-split, ductless), approximate age, whether it's running at all right now (urgency), and if it's a repair vs replacement vs new install situation. Residential only unless otherwise specified. Must get address before booking.",
+    windows: "Understand how many windows, which rooms, reason (energy savings, damage, aesthetics, storm prep), single vs double hung, full house vs partial. Verify ownership.",
+    bath_remodel: "Full remodel vs fixture swap, single vs multiple bathrooms, has a budget in mind, owns the home, timeline flexibility.",
   }
 
   const message = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
     max_tokens: 4000,
-    system: `You are an expert AI sales trainer who writes world-class system prompts for AI SMS sales agents. You specialize in home services contractor sales. You know that:
-- The best SMS sales conversations are SHORT (1-2 sentences per message)
-- They feel like a real person texting, not a bot
-- They guide naturally through stages: open → qualify → handle objection → book → confirm
-- They use the lead's name, reference exactly what they inquired about
-- They always make the next step dead simple (offer two specific time slots, not "when are you available?")
-- They never give up after one no — they follow up with different angles
-- They know the business deeply and can speak to specific services, areas, certifications`,
+    system: `You are a world-class AI sales coach who writes system prompts for AI SMS agents at home services companies.
+Your prompts produce agents that feel like brilliant, experienced human reps — not robots reading from a script.
+You understand that great SMS sales is about reading the conversation, adapting in real time, and earning trust fast.`,
     messages: [
       {
         role: "user",
-        content: `Write a complete, world-class system prompt for an AI SMS sales agent with these exact specs:
+        content: `Write a complete system prompt for an AI SMS agent for a ${kb.serviceType} company. This prompt must make the AI act like an intelligent, experienced salesperson — not a chatbot following a checklist.
 
-COMPANY: ${kb.companyName}
-SERVICE TYPE: ${kb.serviceType}
-SERVICE AREAS: ${kb.serviceArea}
-AGENT NAME: ${config.agentName}
-TONE: ${toneDescriptions[config.tone] || config.tone}
-PRIMARY GOAL: ${goalDescriptions[config.primaryGoal] || config.primaryGoal}
-
-BUSINESS KNOWLEDGE BASE:
-${kb.businessDescription ? `Company Overview: ${kb.businessDescription}` : ""}
-${kb.servicesOffered ? `Services: ${kb.servicesOffered}` : ""}
-${kb.uniqueSellingPoints ? `Why Choose Us: ${kb.uniqueSellingPoints}` : ""}
-${kb.pricingInfo ? `Pricing/Offers: ${kb.pricingInfo}` : ""}
+===== COMPANY =====
+Name: ${kb.companyName}
+Service type: ${kb.serviceType}
+Service area: ${kb.serviceArea}
+${kb.businessDescription ? `Overview: ${kb.businessDescription}` : ""}
+${kb.servicesOffered ? `Services offered: ${kb.servicesOffered}` : ""}
+${kb.uniqueSellingPoints ? `Why customers choose us: ${kb.uniqueSellingPoints}` : ""}
+${kb.pricingInfo ? `Pricing / offers: ${kb.pricingInfo}` : ""}
 ${kb.teamInfo ? `Team: ${kb.teamInfo}` : ""}
-${kb.yearsInBusiness ? `Experience: ${kb.yearsInBusiness}` : ""}
+${kb.yearsInBusiness ? `Years in business: ${kb.yearsInBusiness}` : ""}
 ${kb.certifications ? `Certifications: ${kb.certifications}` : ""}
-${kb.testimonials ? `Customer Proof: ${kb.testimonials}` : ""}
-${kb.customFacts ? `Additional Context: ${kb.customFacts}` : ""}
+${kb.testimonials ? `Customer proof: ${kb.testimonials}` : ""}
+${kb.customFacts ? `Important specifics: ${kb.customFacts}` : ""}
 
-KEY QUALIFYING INFO FOR ${kb.serviceType.toUpperCase()}:
-${serviceQualifyingContext[kb.serviceType] || "address, timeline, project details, budget"}
+===== AGENT =====
+Name: ${config.agentName}
+Tone: ${toneDescriptions[config.tone] || config.tone}
+Working hours: ${config.workingHoursStart}:00–${config.workingHoursEnd}:00 (${config.timezone})
+${config.customInstructions ? `Owner instructions: ${config.customInstructions}` : ""}
 
-CUSTOM INSTRUCTIONS FROM OWNER:
-${config.customInstructions || "None"}
+===== LEADS TO DISQUALIFY =====
+${config.disqualifiers?.trim()
+  ? `The agent must naturally discover early in conversation whether a lead matches any of these, and politely disengage if so:\n${config.disqualifiers}`
+  : "No specific disqualifiers — attempt to book all leads who are interested and reachable."}
 
-QUALIFYING QUESTIONS TO USE:
-${config.qualifyingQuestions.map((q, i) => `${i + 1}. ${q.question}`).join("\n") || "Use service-appropriate defaults"}
+===== SERVICE INTELLIGENCE =====
+${serviceIntelligence[kb.serviceType] || "Understand the lead's specific need, urgency, property type, and ownership before booking."}
 
-OBJECTION RESPONSES:
-${Object.entries(config.objectionResponses).map(([obj, resp]) => `"${obj}": ${resp}`).join("\n") || "Use best-practice defaults"}
+===== OBJECTION HANDLING =====
+${Object.entries(config.objectionResponses).map(([obj, resp]) => `When lead says "${obj}": ${resp}`).join("\n") || "Use best-practice objection handling for home services."}
 
-WORKING HOURS: ${config.workingHoursStart}:00 to ${config.workingHoursEnd}:00 (${config.timezone})
+===== WHAT TO WRITE =====
+Write a system prompt that makes this AI agent:
 
-Write a system prompt that covers:
-1. Agent identity and deep knowledge of this specific business (name, services, USPs, certifications, areas)
-2. Tone and personality — how this agent sounds vs. a generic bot
-3. Business-specific knowledge the agent should draw on (pricing approach, guarantees, team, testimonials)
-4. Service-specific qualifying intelligence for ${kb.serviceType} — what makes a good vs. bad lead for THIS company
-5. Custom objection responses tuned to this company's strengths
-6. Working hours behavior — what to do if a lead texts outside ${config.workingHoursStart}:00-${config.workingHoursEnd}:00 ${config.timezone}
-7. Edge cases specific to this business type
+1. KNOW THE BUSINESS DEEPLY — like someone who's worked there for years. It should be able to answer questions about services, pricing approach, certifications, service area, and why customers choose this company over competitors.
 
-IMPORTANT: Do NOT redefine the conversation stages or booking rules — those are handled
-by a separate conversation flow module that will be injected alongside this prompt.
-Focus on WHO the agent is and WHAT they know about this business, not the step-by-step flow.
+2. QUALIFY INTELLIGENTLY, NOT BY SCRIPT — The agent does NOT follow a list of questions. Instead, it reads the conversation and asks the single most relevant question at each moment, based on what it already knows. For ${kb.serviceType}, it needs to understand: ${serviceIntelligence[kb.serviceType] || "the nature of the job, urgency, ownership, and location"}. It gathers this naturally over 2-3 exchanges, never making the lead feel interrogated.
 
-The prompt should make an AI sound like an expert rep who has worked at ${kb.companyName} for years.`,
+3. SCREEN OUT DISQUALIFIED LEADS NATURALLY — If the company has specified leads they don't want to book, the agent discovers this through normal conversation (not by bluntly asking "are you a renter?"). Once it determines a lead doesn't qualify, it politely lets them know and doesn't push to book.
+
+4. ANSWER QUESTIONS AND BUILD TRUST — If a lead asks about pricing, process, credentials, timeline, or anything else, the agent answers helpfully and confidently using the company's knowledge base. It doesn't just deflect to "we'll cover that at the appointment."
+
+5. MOVE TOWARD BOOKING — Once the lead is qualified, the agent confidently offers two specific time slots and locks in the appointment. It never says "when are you available?" — it always drives the booking.
+
+6. HANDLE OBJECTIONS WITHOUT FEELING PUSHY — Use the objection responses provided, adapted naturally to the flow of the conversation.
+
+7. RESPECT WORKING HOURS — If a lead texts outside ${config.workingHoursStart}:00–${config.workingHoursEnd}:00, acknowledge them warmly and let them know someone will follow up first thing during business hours.
+
+The system prompt should read as a set of deep behavioral instructions, NOT as a script or list of steps.
+It should make this AI indistinguishable from a smart, knowledgeable human rep who genuinely cares about helping the lead get the right solution.`,
       },
     ],
   })
