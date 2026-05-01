@@ -37,13 +37,15 @@ function fmt12(t: string): string {
 }
 
 /**
- * Returns the next N available booking slots for a company, excluding slots
- * that are already taken by existing scheduled appointments.
+ * Returns the next N available booking slots for a company, excluding:
+ * - Slots already taken by system appointments
+ * - Slots that overlap with any Google Calendar busy event
  * Slots are capped at 6 so the AI prompt stays concise.
  */
 export function getAvailableSlots(
   settings: AvailabilitySettings,
-  companyAppointments: { scheduled_at: string }[]
+  companyAppointments: { scheduled_at: string }[],
+  googleBusyTimes: { start: string; end: string }[] = []
 ): AvailableSlot[] {
   const tz = settings.timezone || "America/New_York"
   const horizon = Math.min(settings.booking_horizon_days || 7, 14)
@@ -96,12 +98,20 @@ export function getAvailableSlots(
       const slotEnd = new Date(slotDate)
       slotEnd.setHours(endH, endM, 0, 0)
 
-      // Skip if a booked appointment falls inside this window
+      // Skip if a booked system appointment falls inside this window
       const taken = bookedThisDay.some((a) => {
         const t = new Date(a.scheduled_at)
         return t >= slotStart && t < slotEnd
       })
       if (taken) continue
+
+      // Skip if a Google Calendar event overlaps this window
+      const gcalBlocked = googleBusyTimes.some((busy) => {
+        const busyStart = new Date(busy.start)
+        const busyEnd   = new Date(busy.end)
+        return busyStart < slotEnd && busyEnd > slotStart
+      })
+      if (gcalBlocked) continue
 
       const dateLabel = date.toLocaleDateString("en-US", {
         weekday: "long",

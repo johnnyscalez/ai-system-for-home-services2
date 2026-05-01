@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { WeekCalendar } from "@/components/calendar/WeekCalendar"
-import { Badge } from "@/components/ui/badge"
+import { AvailabilityPanel } from "@/components/calendar/AvailabilityPanel"
 import { CalendarCheck, ExternalLink } from "lucide-react"
 
 export default async function CalendarPage() {
@@ -48,6 +48,9 @@ export default async function CalendarPage() {
           )}
         </div>
       </div>
+
+      {/* Availability panel — collapsible, sits above the calendar */}
+      <AvailabilityPanel />
 
       {/* Calendar fills remaining space */}
       <div className="flex-1 overflow-hidden">

@@ -1,6 +1,6 @@
 import { anthropic } from "@/lib/claude"
 import { createServiceRoleClient } from "@/lib/supabase-server"
-import { createCalendarEvent } from "@/lib/google-calendar"
+import { createCalendarEvent, getCalendarEvents } from "@/lib/google-calendar"
 import { getConversationFlow } from "@/lib/conversation-flows"
 import { getAvailableSlots, formatSlotsForPrompt, DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
 import type { AppointmentWindow } from "@/lib/availability"
@@ -111,7 +111,30 @@ export async function runConversation(
   const isInitialOutreach = incomingMessage === null
   const tz = agent?.timezone ?? "America/New_York"
 
-  // Compute real available booking slots from company availability settings
+  // Fetch Google Calendar busy times for the booking horizon (non-blocking — failure is silent)
+  let googleBusyTimes: { start: string; end: string }[] = []
+  try {
+    const { data: gcal } = await supabase
+      .from("google_calendar_connections")
+      .select("access_token, refresh_token, calendar_id, is_connected")
+      .eq("company_id", companyId)
+      .single()
+
+    if (gcal?.is_connected && gcal.access_token && gcal.refresh_token) {
+      const events = await getCalendarEvents(
+        gcal.access_token,
+        gcal.refresh_token,
+        gcal.calendar_id ?? "primary",
+        new Date().toISOString(),
+        new Date(Date.now() + horizonMs).toISOString()
+      )
+      googleBusyTimes = events
+        .filter((e) => e.start?.dateTime && e.end?.dateTime)
+        .map((e) => ({ start: e.start!.dateTime!, end: e.end!.dateTime! }))
+    }
+  } catch { /* Google Calendar fetch failure is non-blocking */ }
+
+  // Compute real available booking slots — excludes system appointments AND Google Calendar events
   const availableSlots = getAvailableSlots(
     {
       available_days: (agent?.available_days as string[] | null) ?? DEFAULT_DAYS,
@@ -120,7 +143,8 @@ export async function runConversation(
       max_appointments_per_day: agent?.max_appointments_per_day ?? null,
       timezone: tz,
     },
-    companyApts
+    companyApts,
+    googleBusyTimes
   )
 
   // Build rich lead context block — injected into every system prompt call
