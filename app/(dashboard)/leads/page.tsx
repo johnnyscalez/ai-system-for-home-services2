@@ -5,24 +5,38 @@ import { Users, Clock, Zap } from "lucide-react"
 import { formatDistanceToNow } from "@/lib/utils"
 import type { Lead } from "@/types/database"
 
-const PIPELINE_COLUMNS: { status: Lead["status"]; label: string; color: string; dot: string }[] = [
-  { status: "new",               label: "New",              color: "text-sky-400",     dot: "bg-sky-400" },
-  { status: "contacted",         label: "Contacted",        color: "text-violet-400",  dot: "bg-violet-400" },
-  { status: "qualified",         label: "Qualified",        color: "text-amber-400",   dot: "bg-amber-400" },
-  { status: "followed_up",       label: "Followed Up",      color: "text-orange-400",  dot: "bg-orange-400" },
-  { status: "appointment_booked", label: "Appointment",     color: "text-emerald-400", dot: "bg-emerald-400" },
+// Pipeline columns — DB statuses that map to each column
+const PIPELINE_COLUMNS = [
+  { key: "new",               statuses: ["new", "contacted"],                           label: "New",              color: "text-sky-400",     dot: "bg-sky-400" },
+  { key: "qualified",         statuses: ["qualified", "followed_up", "nurturing"],      label: "Qualified",        color: "text-amber-400",   dot: "bg-amber-400" },
+  { key: "appointment_booked", statuses: ["appointment_booked"],                        label: "Appointment",      color: "text-emerald-400", dot: "bg-emerald-400" },
+  { key: "cold",              statuses: ["cold"],                                        label: "Cold",             color: "text-slate-400",   dot: "bg-slate-400" },
 ]
+
+// User-facing label for each DB status (table view)
+const STATUS_LABEL: Record<string, string> = {
+  new:                "New",
+  contacted:          "New",
+  qualified:          "Qualified",
+  followed_up:        "Qualified",
+  nurturing:          "Qualified",
+  appointment_booked: "Booked",
+  closed_won:         "Won",
+  closed_lost:        "Lost",
+  cold:               "Cold",
+  needs_attention:    "Needs attention",
+}
 
 const statusBadge: Record<string, string> = {
   new:                "bg-sky-500/15 text-sky-400 border-sky-500/20",
-  contacted:          "bg-violet-500/15 text-violet-400 border-violet-500/20",
+  contacted:          "bg-sky-500/15 text-sky-400 border-sky-500/20",
   qualified:          "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  followed_up:        "bg-orange-500/15 text-orange-400 border-orange-500/20",
+  followed_up:        "bg-amber-500/15 text-amber-400 border-amber-500/20",
+  nurturing:          "bg-amber-500/15 text-amber-400 border-amber-500/20",
   appointment_booked: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
   closed_won:         "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
   closed_lost:        "bg-red-500/15 text-red-400 border-red-500/20",
   cold:               "bg-slate-500/15 text-slate-400 border-slate-500/20",
-  nurturing:          "bg-orange-500/15 text-orange-400 border-orange-500/20",
   needs_attention:    "bg-red-500/15 text-red-400 border-red-500/20",
 }
 
@@ -43,7 +57,7 @@ export default async function LeadsPage() {
 
   const allLeads = (leads ?? []) as Lead[]
 
-  const byStatus = (status: Lead["status"]) => allLeads.filter((l) => l.status === status)
+  const byStatuses = (statuses: string[]) => allLeads.filter((l) => statuses.includes(l.status))
 
   // Active conversation = last_inbound_at within 2 hours
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
@@ -61,10 +75,10 @@ export default async function LeadsPage() {
 
       {/* Pipeline board */}
       <div className="flex gap-4 overflow-x-auto pb-2">
-        {PIPELINE_COLUMNS.map(({ status, label, color, dot }) => {
-          const colLeads = byStatus(status)
+        {PIPELINE_COLUMNS.map(({ key, statuses, label, color, dot }) => {
+          const colLeads = byStatuses(statuses)
           return (
-            <div key={status} className="min-w-[220px] flex-shrink-0">
+            <div key={key} className="min-w-[220px] flex-shrink-0">
               {/* Column header */}
               <div className="flex items-center gap-2 mb-3">
                 <div className={`w-2 h-2 rounded-full ${dot}`} />
@@ -170,7 +184,7 @@ export default async function LeadsPage() {
                   <span className="text-xs text-muted-foreground hidden md:block capitalize">{lead.source}</span>
                   <span className="text-xs text-muted-foreground hidden md:block">{formatDistanceToNow(lead.created_at)}</span>
                   <Badge variant="outline" className={`text-xs ${statusBadge[lead.status] ?? ""}`}>
-                    {lead.status.replace(/_/g, " ")}
+                    {STATUS_LABEL[lead.status] ?? lead.status.replace(/_/g, " ")}
                   </Badge>
                 </div>
               </a>

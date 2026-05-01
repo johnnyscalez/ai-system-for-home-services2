@@ -133,7 +133,9 @@ function StatCard({
 // ── Status badge ───────────────────────────────────────────────────────────────
 const STATUS: Record<string, { label: string; cls: string }> = {
   new:                { label: "New",       cls: "bg-blue-50 text-blue-700 border border-blue-100" },
-  contacted:          { label: "Contacted", cls: "bg-purple-50 text-purple-700 border border-purple-100" },
+  contacted:          { label: "New",       cls: "bg-blue-50 text-blue-700 border border-blue-100" },
+  followed_up:        { label: "Qualified", cls: "bg-amber-50 text-amber-700 border border-amber-100" },
+  nurturing:          { label: "Qualified", cls: "bg-amber-50 text-amber-700 border border-amber-100" },
   qualified:          { label: "Qualified", cls: "bg-amber-50 text-amber-700 border border-amber-100" },
   appointment_booked: { label: "Booked",    cls: "bg-green-50 text-green-700 border border-green-100" },
   cold:               { label: "Cold",      cls: "bg-slate-50 text-slate-500 border border-slate-200" },
