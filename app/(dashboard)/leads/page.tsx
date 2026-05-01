@@ -7,36 +7,49 @@ import type { Lead } from "@/types/database"
 
 // Pipeline columns — DB statuses that map to each column
 const PIPELINE_COLUMNS = [
-  { key: "new",               statuses: ["new", "contacted"],                           label: "New",              color: "text-sky-400",     dot: "bg-sky-400" },
-  { key: "qualified",         statuses: ["qualified", "followed_up", "nurturing"],      label: "Qualified",        color: "text-amber-400",   dot: "bg-amber-400" },
-  { key: "appointment_booked", statuses: ["appointment_booked"],                        label: "Appointment",      color: "text-emerald-400", dot: "bg-emerald-400" },
-  { key: "cold",              statuses: ["cold"],                                        label: "Cold",             color: "text-slate-400",   dot: "bg-slate-400" },
+  { key: "just_came_in",      statuses: ["just_came_in", "new", "contacted"],                          label: "Just came in",       color: "text-sky-400",     dot: "bg-sky-400" },
+  { key: "active_conversation", statuses: ["active_conversation", "followed_up", "nurturing"],         label: "Active conversation", color: "text-violet-400",  dot: "bg-violet-400" },
+  { key: "qualified",         statuses: ["qualified"],                                                  label: "Qualified",           color: "text-amber-400",   dot: "bg-amber-400" },
+  { key: "unqualified",       statuses: ["unqualified"],                                                label: "Unqualified",         color: "text-red-400",     dot: "bg-red-400" },
+  { key: "appointment_booked", statuses: ["appointment_booked"],                                        label: "Appointment",         color: "text-emerald-400", dot: "bg-emerald-400" },
+  { key: "closed",            statuses: ["closed", "closed_won"],                                       label: "Closed",              color: "text-green-400",   dot: "bg-green-400" },
+  { key: "lost",              statuses: ["lost", "cold", "closed_lost"],                                label: "Lost",                color: "text-slate-400",   dot: "bg-slate-400" },
 ]
 
 // User-facing label for each DB status (table view)
 const STATUS_LABEL: Record<string, string> = {
-  new:                "New",
-  contacted:          "New",
+  just_came_in:       "Just came in",
+  new:                "Just came in",
+  contacted:          "Just came in",
+  active_conversation: "Active",
+  followed_up:        "Active",
+  nurturing:          "Active",
   qualified:          "Qualified",
-  followed_up:        "Qualified",
-  nurturing:          "Qualified",
+  unqualified:        "Unqualified",
   appointment_booked: "Booked",
-  closed_won:         "Won",
+  closed:             "Closed",
+  closed_won:         "Closed",
+  lost:               "Lost",
+  cold:               "Lost",
   closed_lost:        "Lost",
-  cold:               "Cold",
   needs_attention:    "Needs attention",
 }
 
 const statusBadge: Record<string, string> = {
+  just_came_in:       "bg-sky-500/15 text-sky-400 border-sky-500/20",
   new:                "bg-sky-500/15 text-sky-400 border-sky-500/20",
   contacted:          "bg-sky-500/15 text-sky-400 border-sky-500/20",
+  active_conversation: "bg-violet-500/15 text-violet-400 border-violet-500/20",
+  followed_up:        "bg-violet-500/15 text-violet-400 border-violet-500/20",
+  nurturing:          "bg-violet-500/15 text-violet-400 border-violet-500/20",
   qualified:          "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  followed_up:        "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  nurturing:          "bg-amber-500/15 text-amber-400 border-amber-500/20",
+  unqualified:        "bg-red-500/15 text-red-400 border-red-500/20",
   appointment_booked: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-  closed_won:         "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-  closed_lost:        "bg-red-500/15 text-red-400 border-red-500/20",
+  closed:             "bg-green-500/15 text-green-400 border-green-500/20",
+  closed_won:         "bg-green-500/15 text-green-400 border-green-500/20",
+  lost:               "bg-slate-500/15 text-slate-400 border-slate-500/20",
   cold:               "bg-slate-500/15 text-slate-400 border-slate-500/20",
+  closed_lost:        "bg-slate-500/15 text-slate-400 border-slate-500/20",
   needs_attention:    "bg-red-500/15 text-red-400 border-red-500/20",
 }
 

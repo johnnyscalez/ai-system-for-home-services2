@@ -123,13 +123,6 @@ export async function GET(req: NextRequest) {
         .update({ status: "sent", sent_at: now.toISOString() })
         .eq("id", step.id)
 
-      // Move lead into "followed_up" stage (unless they're already further along)
-      await supabase
-        .from("leads")
-        .update({ status: "followed_up", last_message_at: now.toISOString() })
-        .eq("id", lead.id)
-        .in("status", ["new", "contacted", "nurturing", "followed_up"])
-
       // Schedule next step
       const nextStep = getNextStep(step.sequence_type, step.step)
       if (nextStep) {
@@ -143,12 +136,12 @@ export async function GET(req: NextRequest) {
           status: "pending",
         })
       } else {
-        // Sequence exhausted — mark cold
+        // Sequence exhausted — move to lost
         await supabase
           .from("leads")
-          .update({ status: "cold" })
+          .update({ status: "lost" })
           .eq("id", lead.id)
-          .in("status", ["new", "contacted", "nurturing", "followed_up"])
+          .in("status", ["just_came_in", "new", "contacted", "active_conversation", "nurturing", "followed_up", "cold"])
       }
 
       processed++

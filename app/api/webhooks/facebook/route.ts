@@ -117,7 +117,7 @@ export async function POST(req: NextRequest) {
         if (existing.status === "cold" || existing.status === "closed_lost") {
           await supabase
             .from("leads")
-            .update({ status: "new", updated_at: new Date().toISOString() })
+            .update({ status: "just_came_in", updated_at: new Date().toISOString() })
             .eq("id", existing.id)
         }
         leadId = existing.id
@@ -132,7 +132,7 @@ export async function POST(req: NextRequest) {
             email: fields["email"] || null,
             source: "facebook",
             source_form_id: form_id,
-            status: "new",
+            status: "just_came_in",
             metadata: { leadgen_id, page_id, form_id },
           })
           .select("id")

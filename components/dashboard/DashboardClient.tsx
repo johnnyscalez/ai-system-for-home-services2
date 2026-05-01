@@ -132,16 +132,21 @@ function StatCard({
 
 // ── Status badge ───────────────────────────────────────────────────────────────
 const STATUS: Record<string, { label: string; cls: string }> = {
-  new:                { label: "New",       cls: "bg-blue-50 text-blue-700 border border-blue-100" },
-  contacted:          { label: "New",       cls: "bg-blue-50 text-blue-700 border border-blue-100" },
-  followed_up:        { label: "Qualified", cls: "bg-amber-50 text-amber-700 border border-amber-100" },
-  nurturing:          { label: "Qualified", cls: "bg-amber-50 text-amber-700 border border-amber-100" },
-  qualified:          { label: "Qualified", cls: "bg-amber-50 text-amber-700 border border-amber-100" },
-  appointment_booked: { label: "Booked",    cls: "bg-green-50 text-green-700 border border-green-100" },
-  cold:               { label: "Cold",      cls: "bg-slate-50 text-slate-500 border border-slate-200" },
-  needs_attention:    { label: "Attention", cls: "bg-red-50 text-red-600 border border-red-100" },
-  closed_won:         { label: "Won",       cls: "bg-green-50 text-green-700 border border-green-100" },
-  closed_lost:        { label: "Lost",      cls: "bg-slate-50 text-slate-500 border border-slate-200" },
+  just_came_in:        { label: "Just came in", cls: "bg-sky-50 text-sky-700 border border-sky-100" },
+  new:                 { label: "Just came in", cls: "bg-sky-50 text-sky-700 border border-sky-100" },
+  contacted:           { label: "Just came in", cls: "bg-sky-50 text-sky-700 border border-sky-100" },
+  active_conversation: { label: "Active",       cls: "bg-violet-50 text-violet-700 border border-violet-100" },
+  followed_up:         { label: "Active",       cls: "bg-violet-50 text-violet-700 border border-violet-100" },
+  nurturing:           { label: "Active",       cls: "bg-violet-50 text-violet-700 border border-violet-100" },
+  qualified:           { label: "Qualified",    cls: "bg-amber-50 text-amber-700 border border-amber-100" },
+  unqualified:         { label: "Unqualified",  cls: "bg-red-50 text-red-600 border border-red-100" },
+  appointment_booked:  { label: "Booked",       cls: "bg-green-50 text-green-700 border border-green-100" },
+  closed:              { label: "Closed",       cls: "bg-green-50 text-green-700 border border-green-100" },
+  closed_won:          { label: "Closed",       cls: "bg-green-50 text-green-700 border border-green-100" },
+  lost:                { label: "Lost",         cls: "bg-slate-50 text-slate-500 border border-slate-200" },
+  cold:                { label: "Lost",         cls: "bg-slate-50 text-slate-500 border border-slate-200" },
+  closed_lost:         { label: "Lost",         cls: "bg-slate-50 text-slate-500 border border-slate-200" },
+  needs_attention:     { label: "Attention",    cls: "bg-red-50 text-red-600 border border-red-100" },
 }
 
 // ── Props ──────────────────────────────────────────────────────────────────────

@@ -241,6 +241,45 @@ export async function runConversation(
   return { response: responseText, action }
 }
 
+/**
+ * Runs a fast Haiku call to determine if the lead is qualified, unqualified,
+ * or if there's not yet enough information. Only fires when the lead has sent
+ * at least 2 messages so there's meaningful context.
+ */
+async function checkQualification(
+  conversationHistory: string,
+  disqualifiers: string,
+  serviceType: string
+): Promise<"qualified" | "unqualified" | "unknown"> {
+  if (!disqualifiers?.trim()) return "unknown"
+
+  try {
+    const response = await anthropic.messages.create({
+      model: "claude-haiku-4-5-20251001",
+      max_tokens: 10,
+      messages: [{
+        role: "user",
+        content: `You determine if a ${serviceType} lead qualifies or not.
+
+Disqualifiers (reasons to NOT book):
+${disqualifiers}
+
+Conversation:
+${conversationHistory}
+
+Reply with exactly one word — QUALIFIED, UNQUALIFIED, or UNKNOWN.
+Only say QUALIFIED or UNQUALIFIED if there is clear evidence. Otherwise say UNKNOWN.`,
+      }],
+    })
+    const text = ((response.content[0] as { text: string }).text ?? "").trim().toUpperCase()
+    if (text.startsWith("UNQUALIFIED")) return "unqualified"
+    if (text.startsWith("QUALIFIED")) return "qualified"
+    return "unknown"
+  } catch {
+    return "unknown"
+  }
+}
+
 export async function processAndSave(
   leadId: string,
   companyId: string,
@@ -260,15 +299,15 @@ export async function processAndSave(
       twilio_sid: incomingTwilioSid ?? null,
     })
 
-    // Update lead last_message_at and status to contacted if still new
+    // Move to active_conversation on first reply (from any "just came in" state)
     await supabase
       .from("leads")
       .update({
         last_message_at: new Date().toISOString(),
-        status: "contacted",
+        status: "active_conversation",
       })
       .eq("id", leadId)
-      .eq("status", "new") // only change if still new
+      .in("status", ["just_came_in", "new", "contacted", "followed_up", "nurturing", "cold"])
   }
 
   // Run the AI engine
@@ -352,20 +391,91 @@ export async function processAndSave(
         }
       }
     } else if (result.action.type === "update_status") {
+      // Map legacy statuses to new pipeline stages
+      const legacyMap: Record<string, string> = {
+        qualified: "qualified",
+        closed_lost: "lost",
+        needs_attention: "active_conversation",
+      }
       await supabase
         .from("leads")
         .update({
-          status: result.action.status,
+          status: legacyMap[result.action.status] ?? result.action.status,
           last_message_at: new Date().toISOString(),
         })
         .eq("id", leadId)
     }
   } else if (incomingMessage !== null) {
-    // Update last_message_at
     await supabase
       .from("leads")
       .update({ last_message_at: new Date().toISOString() })
       .eq("id", leadId)
+  }
+
+  // Autopilot qualification — runs when lead has replied (not on initial outreach)
+  // and hasn't already been placed in a terminal stage
+  if (incomingMessage !== null && !result.action) {
+    try {
+      const { data: lead } = await supabase
+        .from("leads")
+        .select("status")
+        .eq("id", leadId)
+        .single()
+
+      const skipStatuses = ["qualified", "unqualified", "appointment_booked", "closed", "lost"]
+      if (lead && !skipStatuses.includes(lead.status)) {
+        // Need enough context — fetch inbound message count
+        const { count: inboundCount } = await supabase
+          .from("conversations")
+          .select("*", { count: "exact", head: true })
+          .eq("lead_id", leadId)
+          .eq("direction", "inbound")
+
+        if ((inboundCount ?? 0) >= 2) {
+          // Fetch full conversation + company disqualifiers
+          const [{ data: convRows }, { data: config }] = await Promise.all([
+            supabase
+              .from("conversations")
+              .select("direction, body")
+              .eq("lead_id", leadId)
+              .order("created_at", { ascending: true })
+              .limit(20),
+            supabase
+              .from("ai_agent_config")
+              .select("disqualifiers, primary_goal")
+              .eq("company_id", companyId)
+              .single(),
+          ])
+
+          const { data: company } = await supabase
+            .from("companies")
+            .select("service_type")
+            .eq("id", companyId)
+            .single()
+
+          if (convRows && config?.disqualifiers) {
+            const history = convRows
+              .map((m) => `${m.direction === "inbound" ? "Lead" : "AI"}: ${m.body}`)
+              .join("\n")
+
+            const verdict = await checkQualification(
+              history,
+              config.disqualifiers,
+              company?.service_type ?? "home services"
+            )
+
+            if (verdict !== "unknown") {
+              await supabase
+                .from("leads")
+                .update({ status: verdict })
+                .eq("id", leadId)
+            }
+          }
+        }
+      }
+    } catch {
+      // Qualification check is non-blocking
+    }
   }
 
   return { ...result, outboundConversationId }

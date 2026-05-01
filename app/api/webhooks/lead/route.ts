@@ -131,7 +131,7 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
     if (existing.status === "cold" || existing.status === "closed_lost") {
       await supabase
         .from("leads")
-        .update({ status: "new", updated_at: new Date().toISOString() })
+        .update({ status: "just_came_in", updated_at: new Date().toISOString() })
         .eq("id", existing.id)
     }
     leadId = existing.id
@@ -150,7 +150,7 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
         source: (body.source as "facebook" | "webhook" | "manual") ?? "webhook",
         source_form_id: lead.source_form_id,
         metadata: lead.metadata,
-        status: "new",
+        status: "just_came_in",
       })
       .select("id")
       .single()
@@ -190,7 +190,7 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
       }
       await supabase
         .from("leads")
-        .update({ status: "contacted", last_message_at: new Date().toISOString() })
+        .update({ status: "just_came_in", last_message_at: new Date().toISOString() })
         .eq("id", leadId)
 
       const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000).toISOString()
