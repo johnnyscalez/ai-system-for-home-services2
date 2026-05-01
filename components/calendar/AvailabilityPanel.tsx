@@ -2,8 +2,6 @@
 
 import { useState, useEffect, useCallback } from "react"
 import { Button } from "@/components/ui/button"
-import { Switch } from "@/components/ui/switch"
-import { Label } from "@/components/ui/label"
 import { Save, Loader2, CheckCircle2, ChevronDown, ChevronUp, Settings2 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
@@ -152,17 +150,25 @@ export function AvailabilityPanel() {
                 <div className="space-y-2">
                   {windows.map((w) => (
                     <div key={w.id} className="flex items-center gap-3">
-                      <Switch
-                        checked={w.enabled}
-                        onCheckedChange={() => toggleWindow(w.id)}
-                        id={`window-${w.id}`}
-                      />
-                      <Label
-                        htmlFor={`window-${w.id}`}
-                        className={cn("text-xs w-24 cursor-pointer", !w.enabled && "text-muted-foreground")}
+                      <button
+                        role="switch"
+                        aria-checked={w.enabled}
+                        onClick={() => toggleWindow(w.id)}
+                        className={cn(
+                          "relative inline-flex h-5 w-9 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors",
+                          w.enabled ? "bg-primary" : "bg-muted"
+                        )}
                       >
+                        <span
+                          className={cn(
+                            "pointer-events-none inline-block h-4 w-4 transform rounded-full bg-white shadow transition-transform",
+                            w.enabled ? "translate-x-4" : "translate-x-0"
+                          )}
+                        />
+                      </button>
+                      <span className={cn("text-xs w-24", !w.enabled && "text-muted-foreground")}>
                         {w.label}
-                      </Label>
+                      </span>
                       <div className="flex items-center gap-1.5">
                         <input
                           type="time"
