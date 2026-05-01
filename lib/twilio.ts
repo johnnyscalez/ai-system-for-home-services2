@@ -1,4 +1,5 @@
 import twilio from "twilio"
+import { parsePhoneNumber } from "libphonenumber-js"
 
 export function getTwilioClient() {
   return twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
@@ -27,9 +28,36 @@ export function validateTwilioSignature(
 }
 
 export function formatPhone(phone: string): string {
-  const digits = phone.replace(/\D/g, "")
-  if (digits.length === 10) return `+1${digits}`
+  const trimmed = phone.trim()
+
+  // Already E.164 — parse and normalise
+  if (trimmed.startsWith("+")) {
+    try {
+      const parsed = parsePhoneNumber(trimmed)
+      if (parsed?.isValid()) return parsed.format("E.164")
+    } catch { /* fall through */ }
+    return trimmed
+  }
+
+  // International dialing prefix 00... → +...
+  if (trimmed.startsWith("00")) {
+    return formatPhone("+" + trimmed.slice(2))
+  }
+
+  const digits = trimmed.replace(/\D/g, "")
+
+  // 11 digits starting with 1 → US/Canada
   if (digits.length === 11 && digits.startsWith("1")) return `+${digits}`
-  if (phone.startsWith("+")) return phone
+
+  // 10 digits NOT starting with 0 → assume US/Canada
+  if (digits.length === 10 && !digits.startsWith("0")) return `+1${digits}`
+
+  // Everything else: prepend + and let libphonenumber validate
+  // e.g. 972529511234 → +972529511234 (Israeli full number without +)
+  try {
+    const parsed = parsePhoneNumber(`+${digits}`)
+    if (parsed?.isValid()) return parsed.format("E.164")
+  } catch { /* fall through */ }
+
   return `+${digits}`
 }
