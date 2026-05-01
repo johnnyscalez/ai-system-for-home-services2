@@ -7,26 +7,27 @@ import { notifyAppointmentBooked, notifyNeedsAttention } from "@/lib/notificatio
 // Twilio sends POST with form-encoded body to this endpoint.
 // Configure this URL in Twilio console under the phone number's "A message comes in" webhook.
 export async function POST(req: NextRequest) {
-  // Validate Twilio signature in production
+  // Parse body first — can only read the stream once
+  const formData = await req.formData().catch(() => null)
+  if (!formData) return twimlOk()
+
+  const params: Record<string, string> = {}
+  formData.forEach((value, key) => { params[key] = value.toString() })
+
+  // Validate Twilio signature in production using the already-parsed params
   if (process.env.NODE_ENV === "production") {
     const signature = req.headers.get("x-twilio-signature") ?? ""
-    const url = process.env.NEXT_PUBLIC_APP_URL + "/api/webhooks/sms"
-    const body = await req.formData()
-    const params: Record<string, string> = {}
-    body.forEach((value, key) => { params[key] = value.toString() })
+    const url = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "") + "/api/webhooks/sms"
     if (!validateTwilioSignature(signature, url, params)) {
+      console.warn("Twilio signature validation failed — possible spoofed request")
       return new NextResponse("Forbidden", { status: 403 })
     }
   }
 
-  // Parse Twilio's form-encoded body
-  const formData = await req.formData().catch(() => null)
-  if (!formData) return twimlOk()
-
-  const from = formData.get("From")?.toString() ?? ""
-  const to = formData.get("To")?.toString() ?? ""
-  const messageBody = formData.get("Body")?.toString()?.trim() ?? ""
-  const twilioSid = formData.get("MessageSid")?.toString() ?? undefined
+  const from = params["From"] ?? ""
+  const to = params["To"] ?? ""
+  const messageBody = params["Body"]?.trim() ?? ""
+  const twilioSid = params["MessageSid"] ?? undefined
 
   if (!from || !to || !messageBody) return twimlOk()
 
