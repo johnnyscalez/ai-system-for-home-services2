@@ -9,6 +9,7 @@ import {
 import Link from "next/link"
 import { formatDistanceToNow } from "@/lib/utils"
 import { CallLeadButton } from "@/components/leads/CallLeadButton"
+import { DeleteLeadButton } from "@/components/leads/DeleteLeadButton"
 import { getJobTypeLabel, getJobTypeColor } from "@/lib/job-types"
 
 const STATUS_STYLES: Record<string, string> = {
@@ -97,6 +98,11 @@ export default async function LeadDetailPage({
               Active conversation
             </Badge>
           )}
+          <DeleteLeadButton
+            leadId={id}
+            leadName={`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim()}
+            redirectAfter={true}
+          />
         </div>
       </div>
 

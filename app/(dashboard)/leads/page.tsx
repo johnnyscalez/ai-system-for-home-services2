@@ -4,6 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { Users, Clock, Zap } from "lucide-react"
 import { formatDistanceToNow } from "@/lib/utils"
 import type { Lead } from "@/types/database"
+import { DeleteLeadButton } from "@/components/leads/DeleteLeadButton"
 
 // Pipeline columns — DB statuses that map to each column
 const PIPELINE_COLUMNS = [
@@ -171,12 +172,14 @@ export default async function LeadsPage() {
             </div>
           ) : (
             allLeads.map((lead) => (
-              <a
+              <div
                 key={lead.id}
-                href={`/leads/${lead.id}`}
                 className="flex items-center justify-between px-5 py-3.5 hover:bg-muted/30 transition-colors"
               >
-                <div className="flex items-center gap-3 min-w-0">
+                <a
+                  href={`/leads/${lead.id}`}
+                  className="flex items-center gap-3 min-w-0 flex-1"
+                >
                   <div className="w-8 h-8 rounded-full bg-muted flex items-center justify-center text-xs font-semibold text-muted-foreground shrink-0">
                     {lead.first_name?.[0] ?? "?"}{lead.last_name?.[0] ?? ""}
                   </div>
@@ -192,15 +195,19 @@ export default async function LeadsPage() {
                     </div>
                     <p className="text-xs text-muted-foreground">{lead.phone}</p>
                   </div>
-                </div>
+                </a>
                 <div className="flex items-center gap-4 shrink-0">
                   <span className="text-xs text-muted-foreground hidden md:block capitalize">{lead.source}</span>
                   <span className="text-xs text-muted-foreground hidden md:block">{formatDistanceToNow(lead.created_at)}</span>
                   <Badge variant="outline" className={`text-xs ${statusBadge[lead.status] ?? ""}`}>
                     {STATUS_LABEL[lead.status] ?? lead.status.replace(/_/g, " ")}
                   </Badge>
+                  <DeleteLeadButton
+                    leadId={lead.id}
+                    leadName={`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim()}
+                  />
                 </div>
-              </a>
+              </div>
             ))
           )}
         </div>
