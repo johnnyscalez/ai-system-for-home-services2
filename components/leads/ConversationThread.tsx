@@ -1,6 +1,7 @@
 "use client"
 
 import { useState, useEffect, useRef, useCallback } from "react"
+import { motion, AnimatePresence } from "framer-motion"
 import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
@@ -43,25 +44,73 @@ export function ConversationThread({
   const [togglingAi, setTogglingAi] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
+  const messagesRef = useRef(messages)
+  const animatedIds = useRef(new Set(initialMessages.map((m) => m.id)))
   const supabase = createClient()
+
+  useEffect(() => { messagesRef.current = messages }, [messages])
 
   // Scroll to bottom when messages change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Real-time subscription for new messages and delivery status updates
+  // Merge incoming rows into state — animates new ones, updates twilio_sid on existing
+  const mergeMessages = useCallback((rows: Message[]) => {
+    setMessages((prev) => {
+      const prevMap = new Map(prev.map((m) => [m.id, m]))
+      let changed = false
+
+      const merged = rows.map((row) => {
+        const existing = prevMap.get(row.id)
+        if (!existing) {
+          changed = true
+          return row
+        }
+        if (existing.twilio_sid !== row.twilio_sid) {
+          changed = true
+          return { ...existing, twilio_sid: row.twilio_sid }
+        }
+        return existing
+      })
+
+      if (!changed && merged.length === prev.length) return prev
+      return merged
+    })
+  }, [])
+
+  // Polling — guaranteed delivery every 3 seconds regardless of realtime status
+  useEffect(() => {
+    const poll = async () => {
+      const { data } = await supabase
+        .from("conversations")
+        .select("id, direction, sent_by, body, created_at, twilio_sid")
+        .eq("lead_id", leadId)
+        .order("created_at", { ascending: true })
+
+      if (!data) return
+
+      // Track which IDs are new for animation
+      data.forEach((row) => {
+        if (!animatedIds.current.has(row.id)) {
+          animatedIds.current.add(row.id)
+        }
+      })
+
+      mergeMessages(data as Message[])
+    }
+
+    const interval = setInterval(poll, 3000)
+    return () => clearInterval(interval)
+  }, [leadId, supabase, mergeMessages])
+
+  // Realtime subscription — bonus layer on top of polling
   useEffect(() => {
     const channel = supabase
-      .channel(`conversations:${leadId}`)
+      .channel(`conversations-thread:${leadId}`)
       .on(
         "postgres_changes",
-        {
-          event: "INSERT",
-          schema: "public",
-          table: "conversations",
-          filter: `lead_id=eq.${leadId}`,
-        },
+        { event: "INSERT", schema: "public", table: "conversations", filter: `lead_id=eq.${leadId}` },
         (payload) => {
           const msg = payload.new as Message
           setMessages((prev) => {
@@ -72,12 +121,7 @@ export function ConversationThread({
       )
       .on(
         "postgres_changes",
-        {
-          event: "UPDATE",
-          schema: "public",
-          table: "conversations",
-          filter: `lead_id=eq.${leadId}`,
-        },
+        { event: "UPDATE", schema: "public", table: "conversations", filter: `lead_id=eq.${leadId}` },
         (payload) => {
           const updated = payload.new as Message
           setMessages((prev) =>
@@ -183,79 +227,94 @@ export function ConversationThread({
             </p>
           </div>
         ) : (
-          messages.map((msg) => {
-            const isOutbound = msg.direction === "outbound"
-            const isAi = msg.sent_by === "ai"
+          <AnimatePresence initial={false}>
+            {messages.map((msg) => {
+              const isOutbound = msg.direction === "outbound"
+              const isAi = msg.sent_by === "ai"
+              const ageSeconds = (Date.now() - new Date(msg.created_at).getTime()) / 1000
+              const deliveryFailed = isOutbound && msg.twilio_sid === null && ageSeconds > 15
+              const isInitial = initialMessages.some((m) => m.id === msg.id)
 
-            const ageSeconds = (Date.now() - new Date(msg.created_at).getTime()) / 1000
-            const deliveryFailed = isOutbound && msg.twilio_sid === null && ageSeconds > 15
+              return (
+                <motion.div
+                  key={msg.id}
+                  layout
+                  initial={isInitial ? false : {
+                    opacity: 0,
+                    y: 18,
+                    scale: 0.96,
+                  }}
+                  animate={{ opacity: 1, y: 0, scale: 1 }}
+                  transition={{
+                    type: "spring",
+                    stiffness: 380,
+                    damping: 28,
+                    mass: 0.8,
+                  }}
+                  className={cn(
+                    "flex gap-2",
+                    isOutbound ? "justify-end" : "justify-start"
+                  )}
+                >
+                  {!isOutbound && (
+                    <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
+                      <User className="w-3.5 h-3.5 text-muted-foreground" />
+                    </div>
+                  )}
 
-            return (
-              <div
-                key={msg.id}
-                className={cn(
-                  "flex gap-2",
-                  isOutbound ? "justify-end" : "justify-start"
-                )}
-              >
-                {!isOutbound && (
-                  <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
-                    <User className="w-3.5 h-3.5 text-muted-foreground" />
-                  </div>
-                )}
-
-                <div className={cn("max-w-[75%] space-y-1", isOutbound && "items-end flex flex-col")}>
-                  <div
-                    className={cn(
-                      "rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
-                      isOutbound
-                        ? isAi
-                          ? "bg-primary text-primary-foreground rounded-br-sm"
-                          : "bg-sky-700 text-white rounded-br-sm"
-                        : "bg-muted text-foreground rounded-bl-sm",
-                      deliveryFailed && "opacity-60"
-                    )}
-                  >
-                    {msg.body}
-                  </div>
-                  <div className="flex items-center gap-1.5 px-1">
-                    {isOutbound && isAi && (
-                      <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                        <Bot className="w-2.5 h-2.5" /> AI
+                  <div className={cn("max-w-[75%] space-y-1", isOutbound && "items-end flex flex-col")}>
+                    <motion.div
+                      className={cn(
+                        "rounded-2xl px-3.5 py-2.5 text-sm leading-relaxed",
+                        isOutbound
+                          ? isAi
+                            ? "bg-primary text-primary-foreground rounded-br-sm"
+                            : "bg-sky-700 text-white rounded-br-sm"
+                          : "bg-muted text-foreground rounded-bl-sm",
+                        deliveryFailed && "opacity-60"
+                      )}
+                    >
+                      {msg.body}
+                    </motion.div>
+                    <div className="flex items-center gap-1.5 px-1">
+                      {isOutbound && isAi && (
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                          <Bot className="w-2.5 h-2.5" /> AI
+                        </span>
+                      )}
+                      {isOutbound && !isAi && (
+                        <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
+                          <User className="w-2.5 h-2.5" /> You
+                        </span>
+                      )}
+                      <span className="text-[10px] text-muted-foreground">
+                        {new Date(msg.created_at).toLocaleTimeString("en-US", {
+                          hour: "numeric", minute: "2-digit",
+                        })}
                       </span>
-                    )}
-                    {isOutbound && !isAi && (
-                      <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
-                        <User className="w-2.5 h-2.5" /> You
-                      </span>
-                    )}
-                    <span className="text-[10px] text-muted-foreground">
-                      {new Date(msg.created_at).toLocaleTimeString("en-US", {
-                        hour: "numeric", minute: "2-digit",
-                      })}
-                    </span>
-                    {deliveryFailed && (
-                      <span className="text-[10px] text-red-400 flex items-center gap-0.5 font-medium">
-                        <XCircle className="w-2.5 h-2.5" /> Not delivered
-                      </span>
-                    )}
+                      {deliveryFailed && (
+                        <span className="text-[10px] text-red-400 flex items-center gap-0.5 font-medium">
+                          <XCircle className="w-2.5 h-2.5" /> Not delivered
+                        </span>
+                      )}
+                    </div>
                   </div>
-                </div>
 
-                {isOutbound && (
-                  <div className={cn(
-                    "w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5",
-                    isAi ? "bg-primary/20" : "bg-sky-700/30"
-                  )}>
-                    {isAi
-                      ? <Bot className="w-3.5 h-3.5 text-primary" />
-                      : <User className="w-3.5 h-3.5 text-sky-400" />
-                    }
-                  </div>
-                )}
-              </div>
-            )
-          })
+                  {isOutbound && (
+                    <div className={cn(
+                      "w-7 h-7 rounded-full flex items-center justify-center shrink-0 mt-0.5",
+                      isAi ? "bg-primary/20" : "bg-sky-700/30"
+                    )}>
+                      {isAi
+                        ? <Bot className="w-3.5 h-3.5 text-primary" />
+                        : <User className="w-3.5 h-3.5 text-sky-400" />
+                      }
+                    </div>
+                  )}
+                </motion.div>
+              )
+            })}
+          </AnimatePresence>
         )}
         <div ref={bottomRef} />
       </div>
@@ -263,10 +322,14 @@ export function ConversationThread({
       {/* Compose */}
       <div className="px-5 py-4 border-t border-border shrink-0 space-y-2">
         {error && (
-          <div className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2">
+          <motion.div
+            initial={{ opacity: 0, y: -8 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="flex items-center gap-2 text-xs text-red-400 bg-red-500/10 border border-red-500/20 rounded-lg px-3 py-2"
+          >
             <AlertCircle className="w-3.5 h-3.5 shrink-0" />
             {error}
-          </div>
+          </motion.div>
         )}
         {aiPaused && (
           <p className="text-xs text-amber-400/80">
