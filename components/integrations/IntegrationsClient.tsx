@@ -100,9 +100,10 @@ function StatusBadge({ connected }: { connected: boolean }) {
 
 // ─── Facebook card ────────────────────────────────────────────────────────────
 
-function FacebookCard({ integration }: { integration: Integration | undefined }) {
+function FacebookCard({ integration, errorCode }: { integration: Integration | undefined; errorCode: string | null }) {
   const connected = !!integration?.is_active && !!integration?.setup_complete
   const needsSetup = !!integration && !integration.setup_complete
+  const noPages = errorCode === "no_pages"
 
   return (
     <motion.div
@@ -190,8 +191,32 @@ function FacebookCard({ integration }: { integration: Integration | undefined })
         </div>
       )}
 
-      {/* How it works (when not connected and not in setup) */}
-      {!connected && !needsSetup && (
+      {/* No pages found — persistent troubleshooter */}
+      {!connected && !needsSetup && noPages && (
+        <div className="mx-6 mb-4 bg-red-50 rounded-xl p-4 border border-red-100">
+          <p className="text-sm font-semibold text-red-700 mb-1">No Facebook Pages found on your account</p>
+          <p className="text-sm text-red-600 mb-3">
+            Facebook only shows pages where you&apos;re a <strong>direct admin</strong> of the page (not just a Business Manager user). Try one of these:
+          </p>
+          <ol className="space-y-2">
+            {[
+              "Go to your Facebook Page → Settings → Page roles → confirm you're listed as Admin",
+              "If managed via Business Manager: go to Business Settings → Pages → add yourself as a direct admin",
+              "Then click Connect Facebook below to try again",
+            ].map((step, i) => (
+              <li key={i} className="flex items-start gap-2 text-sm text-red-700">
+                <span className="w-4 h-4 rounded-full bg-red-100 text-red-700 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                  {i + 1}
+                </span>
+                {step}
+              </li>
+            ))}
+          </ol>
+        </div>
+      )}
+
+      {/* How it works (when not connected, not in setup, no error) */}
+      {!connected && !needsSetup && !noPages && (
         <div className="mx-6 mb-4 bg-[#FAFAF8] rounded-xl p-4 border border-[#E7E5E4]">
           <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wider mb-2">How it works</p>
           <ol className="space-y-1.5">
@@ -603,7 +628,7 @@ export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast,
 
         {/* Cards */}
         <div className="space-y-5">
-          <FacebookCard integration={byType("facebook")} />
+          <FacebookCard integration={byType("facebook")} errorCode={toast === "no_pages" ? "no_pages" : null} />
           <GoogleAdsCard webhookUrl={googleWebhookUrl} />
           <WebsiteFormCard
             webhookUrl={genericWebhookUrl}

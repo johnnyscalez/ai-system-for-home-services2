@@ -48,13 +48,37 @@ export async function GET(req: NextRequest) {
   const llData = await llRes.json()
   const userToken = llData.access_token || tokenData.access_token
 
-  // Fetch ALL pages managed by this user (with their page-level access tokens)
+  // Fetch pages: try personal accounts first, fall back to Business Manager
   const pagesRes = await fetch(
-    `https://graph.facebook.com/me/accounts?access_token=${userToken}&fields=id,name,access_token,fan_count`
+    `https://graph.facebook.com/me/accounts?access_token=${userToken}&fields=id,name,access_token,fan_count&limit=100`
   )
   const pagesData = await pagesRes.json()
+  let allPages: Array<{ id: string; name: string; access_token: string; fan_count?: number }> =
+    pagesData.data ?? []
 
-  if (!pagesData.data?.length) {
+  // Business Manager fallback — pages managed via BM don't appear in /me/accounts
+  if (!allPages.length) {
+    try {
+      const bizRes = await fetch(
+        `https://graph.facebook.com/me/businesses?access_token=${userToken}&fields=id,name&limit=10`
+      )
+      const bizData = await bizRes.json()
+      const businesses: Array<{ id: string }> = bizData.data ?? []
+
+      const pageResults = await Promise.all(
+        businesses.map((biz) =>
+          fetch(
+            `https://graph.facebook.com/${biz.id}/owned_pages?access_token=${userToken}&fields=id,name,access_token,fan_count&limit=100`
+          ).then((r) => r.json()).then((d) => d.data ?? []).catch(() => [])
+        )
+      )
+      allPages = pageResults.flat()
+    } catch {
+      // ignore — will fall through to no_pages error
+    }
+  }
+
+  if (!allPages.length) {
     return NextResponse.redirect(`${appUrl}/integrations?error=no_pages`)
   }
 
@@ -68,7 +92,7 @@ export async function GET(req: NextRequest) {
         type: "facebook",
         fb_user_id: user.id,
         fb_user_access_token: userToken,
-        fb_pages_cache: pagesData.data,
+        fb_pages_cache: allPages,
         // Clear old page selection so setup wizard runs fresh
         fb_page_id: null,
         fb_page_name: null,

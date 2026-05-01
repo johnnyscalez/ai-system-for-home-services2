@@ -14,7 +14,9 @@ export async function GET(req: NextRequest) {
     "leads_retrieval",
     "pages_show_list",
     "pages_read_engagement",
+    "pages_manage_metadata",
     "ads_read",
+    "business_management",
   ].join(",")
 
   const fbUrl = new URL("https://www.facebook.com/dialog/oauth")
