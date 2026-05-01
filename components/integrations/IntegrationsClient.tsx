@@ -2,9 +2,10 @@
 
 import { motion, AnimatePresence } from "framer-motion"
 import { useState, useEffect } from "react"
+import { useRouter } from "next/navigation"
 import {
   Check, Copy, ExternalLink, AlertCircle, Zap, Globe,
-  ChevronRight, CheckCircle2, XCircle, RefreshCw, Info,
+  ChevronRight, CheckCircle2, XCircle, RefreshCw, Info, Loader2, X,
 } from "lucide-react"
 
 interface Integration {
@@ -99,6 +100,28 @@ function StatusBadge({ connected }: { connected: boolean }) {
 }
 
 // ─── Facebook card ────────────────────────────────────────────────────────────
+
+function DisconnectButton() {
+  const router = useRouter()
+  const [loading, setLoading] = useState(false)
+
+  async function handleDisconnect() {
+    setLoading(true)
+    await fetch("/api/integrations/facebook/disconnect", { method: "POST" })
+    router.refresh()
+  }
+
+  return (
+    <button
+      onClick={handleDisconnect}
+      disabled={loading}
+      className="flex items-center gap-1.5 text-xs font-medium text-red-500 hover:text-red-700 px-3 py-2 rounded-xl border border-red-100 hover:border-red-200 hover:bg-red-50 transition-all disabled:opacity-50"
+    >
+      {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
+      Cancel
+    </button>
+  )
+}
 
 function FacebookCard({ integration, errorCode }: { integration: Integration | undefined; errorCode: string | null }) {
   const connected = !!integration?.is_active && !!integration?.setup_complete
@@ -252,17 +275,20 @@ function FacebookCard({ integration, errorCode }: { integration: Integration | u
             </p>
           </>
         ) : needsSetup ? (
-          <a
-            href="/integrations/facebook-setup"
-            className="flex items-center gap-2 text-sm font-semibold text-white px-6 py-2.5 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
-            style={{
-              background: "linear-gradient(135deg, #D97706, #B45309)",
-              boxShadow: "0 4px 14px rgba(217,119,6,0.3)",
-            }}
-          >
-            Complete setup
-            <ChevronRight className="w-4 h-4" />
-          </a>
+          <>
+            <a
+              href="/integrations/facebook-setup"
+              className="flex items-center gap-2 text-sm font-semibold text-white px-6 py-2.5 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
+              style={{
+                background: "linear-gradient(135deg, #D97706, #B45309)",
+                boxShadow: "0 4px 14px rgba(217,119,6,0.3)",
+              }}
+            >
+              Complete setup
+              <ChevronRight className="w-4 h-4" />
+            </a>
+            <DisconnectButton />
+          </>
         ) : (
           <a
             href="/api/auth/facebook"
