@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { Send, Bot, User, Pause, Play, AlertCircle } from "lucide-react"
+import { Send, Bot, User, Pause, Play, AlertCircle, XCircle } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 
 type Message = {
@@ -14,6 +14,7 @@ type Message = {
   sent_by: "ai" | "human"
   body: string
   created_at: string
+  twilio_sid?: string | null
 }
 
 type Props = {
@@ -49,7 +50,7 @@ export function ConversationThread({
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Real-time subscription for new messages
+  // Real-time subscription for new messages and delivery status updates
   useEffect(() => {
     const channel = supabase
       .channel(`conversations:${leadId}`)
@@ -67,6 +68,21 @@ export function ConversationThread({
             if (prev.some((m) => m.id === msg.id)) return prev
             return [...prev, msg]
           })
+        }
+      )
+      .on(
+        "postgres_changes",
+        {
+          event: "UPDATE",
+          schema: "public",
+          table: "conversations",
+          filter: `lead_id=eq.${leadId}`,
+        },
+        (payload) => {
+          const updated = payload.new as Message
+          setMessages((prev) =>
+            prev.map((m) => (m.id === updated.id ? { ...m, twilio_sid: updated.twilio_sid } : m))
+          )
         }
       )
       .subscribe()
@@ -171,6 +187,9 @@ export function ConversationThread({
             const isOutbound = msg.direction === "outbound"
             const isAi = msg.sent_by === "ai"
 
+            const ageSeconds = (Date.now() - new Date(msg.created_at).getTime()) / 1000
+            const deliveryFailed = isOutbound && msg.twilio_sid === null && ageSeconds > 15
+
             return (
               <div
                 key={msg.id}
@@ -193,7 +212,8 @@ export function ConversationThread({
                         ? isAi
                           ? "bg-primary text-primary-foreground rounded-br-sm"
                           : "bg-sky-700 text-white rounded-br-sm"
-                        : "bg-muted text-foreground rounded-bl-sm"
+                        : "bg-muted text-foreground rounded-bl-sm",
+                      deliveryFailed && "opacity-60"
                     )}
                   >
                     {msg.body}
@@ -214,6 +234,11 @@ export function ConversationThread({
                         hour: "numeric", minute: "2-digit",
                       })}
                     </span>
+                    {deliveryFailed && (
+                      <span className="text-[10px] text-red-400 flex items-center gap-0.5 font-medium">
+                        <XCircle className="w-2.5 h-2.5" /> Not delivered
+                      </span>
+                    )}
                   </div>
                 </div>
 
