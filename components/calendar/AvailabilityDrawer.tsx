@@ -39,7 +39,6 @@ export function AvailabilityDrawer({ onClose }: Props) {
   const [availableDays, setAvailableDays] = useState<string[]>(DEFAULT_DAYS)
   const [windows, setWindows] = useState<AppointmentWindow[]>(DEFAULT_WINDOWS)
   const [horizonDays, setHorizonDays] = useState(7)
-  const [maxPerDay, setMaxPerDay] = useState<number | null>(null)
   const [timezone, setTimezone] = useState("America/New_York")
 
   useEffect(() => {
@@ -49,7 +48,6 @@ export function AvailabilityDrawer({ onClose }: Props) {
         if (data.available_days) setAvailableDays(data.available_days)
         if (data.appointment_windows) setWindows(data.appointment_windows)
         if (data.booking_horizon_days) setHorizonDays(data.booking_horizon_days)
-        if (data.max_appointments_per_day !== undefined) setMaxPerDay(data.max_appointments_per_day)
         if (data.timezone) setTimezone(data.timezone)
       })
       .catch(() => {})
@@ -84,7 +82,6 @@ export function AvailabilityDrawer({ onClose }: Props) {
           available_days: availableDays,
           appointment_windows: windows,
           booking_horizon_days: horizonDays,
-          max_appointments_per_day: maxPerDay,
           timezone,
         }),
       })
@@ -216,52 +213,27 @@ export function AvailabilityDrawer({ onClose }: Props) {
             {/* Divider */}
             <div className="border-t border-border/60" />
 
-            {/* Booking window + max per day side by side */}
-            <div className="grid grid-cols-2 gap-6">
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-semibold">Booking window</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">How far ahead the AI schedules</p>
-                </div>
-                <div className="flex gap-1.5">
-                  {HORIZON_OPTIONS.map((d) => (
-                    <button
-                      key={d}
-                      onClick={() => { setHorizonDays(d); setSaved(false) }}
-                      className={cn(
-                        "flex-1 py-2.5 rounded-lg text-sm font-semibold border transition-all",
-                        horizonDays === d
-                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                          : "bg-muted/40 text-muted-foreground border-transparent hover:border-primary/30 hover:bg-primary/5"
-                      )}
-                    >
-                      {d}d
-                    </button>
-                  ))}
-                </div>
+            {/* Booking window */}
+            <div className="space-y-3">
+              <div>
+                <p className="text-sm font-semibold">Booking window</p>
+                <p className="text-xs text-muted-foreground mt-0.5">How far ahead the AI can schedule appointments</p>
               </div>
-
-              <div className="space-y-3">
-                <div>
-                  <p className="text-sm font-semibold">Max per day</p>
-                  <p className="text-xs text-muted-foreground mt-0.5">Appointments cap per day</p>
-                </div>
-                <div className="flex gap-1.5">
-                  {[null, 1, 2, 3, 4, 5].map((n) => (
-                    <button
-                      key={String(n)}
-                      onClick={() => { setMaxPerDay(n); setSaved(false) }}
-                      className={cn(
-                        "flex-1 py-2.5 rounded-lg text-sm font-semibold border transition-all",
-                        maxPerDay === n
-                          ? "bg-primary text-primary-foreground border-primary shadow-sm"
-                          : "bg-muted/40 text-muted-foreground border-transparent hover:border-primary/30 hover:bg-primary/5"
-                      )}
-                    >
-                      {n === null ? "∞" : n}
-                    </button>
-                  ))}
-                </div>
+              <div className="flex gap-2">
+                {HORIZON_OPTIONS.map((d) => (
+                  <button
+                    key={d}
+                    onClick={() => { setHorizonDays(d); setSaved(false) }}
+                    className={cn(
+                      "flex-1 py-2.5 rounded-lg text-sm font-semibold border transition-all",
+                      horizonDays === d
+                        ? "bg-primary text-primary-foreground border-primary shadow-sm"
+                        : "bg-muted/40 text-muted-foreground border-transparent hover:border-primary/30 hover:bg-primary/5"
+                    )}
+                  >
+                    {d}d
+                  </button>
+                ))}
               </div>
             </div>
 
