@@ -20,35 +20,69 @@ export default async function DashboardPage() {
   } | null
 
   const now = new Date()
-  const startOfMonth = new Date(now); startOfMonth.setDate(1); startOfMonth.setHours(0, 0, 0, 0)
+  // Default window: last 30 days
+  const since30d = new Date(now)
+  since30d.setDate(since30d.getDate() - 30)
+  since30d.setHours(0, 0, 0, 0)
+  const sinceIso = since30d.toISOString()
 
   const [
-    { count: totalLeads },
     { count: newLeads },
-    { count: contacted },
-    { count: qualified },
     { count: booked },
+    { count: qualified },
     { count: cold },
     { count: needsAttention },
+    { count: followUpsSent },
     { data: recentLeads },
     { data: upcomingApts },
-    { count: followUpsSent },
   ] = await Promise.all([
-    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", profile.company_id),
-    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", profile.company_id).eq("status", "new"),
-    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", profile.company_id).neq("status", "new"),
-    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", profile.company_id).eq("status", "qualified"),
-    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", profile.company_id).eq("status", "appointment_booked"),
-    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", profile.company_id).eq("status", "cold"),
-    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", profile.company_id).eq("status", "needs_attention"),
-    supabase.from("leads").select("id, first_name, last_name, phone, status, source, created_at").eq("company_id", profile.company_id).order("created_at", { ascending: false }).limit(5),
-    supabase.from("appointments").select("*, leads(first_name, last_name, phone)").eq("company_id", profile.company_id).eq("status", "scheduled").gte("scheduled_at", now.toISOString()).order("scheduled_at").limit(4),
-    supabase.from("conversations").select("*", { count: "exact", head: true }).eq("company_id", profile.company_id).eq("direction", "outbound").eq("sent_by", "ai").gte("created_at", startOfMonth.toISOString()),
+    // Leads that came in during the last 30 days
+    supabase.from("leads").select("*", { count: "exact", head: true })
+      .eq("company_id", profile.company_id)
+      .gte("created_at", sinceIso),
+    // Appointments booked in the last 30 days
+    supabase.from("appointments").select("*", { count: "exact", head: true })
+      .eq("company_id", profile.company_id)
+      .eq("status", "scheduled")
+      .gte("created_at", sinceIso),
+    // Hot leads: replied but haven't booked yet
+    supabase.from("leads").select("*", { count: "exact", head: true })
+      .eq("company_id", profile.company_id)
+      .in("status", ["active_conversation", "qualified", "nurturing"]),
+    // Current cold/lost leads
+    supabase.from("leads").select("*", { count: "exact", head: true })
+      .eq("company_id", profile.company_id)
+      .in("status", ["cold", "lost"]),
+    // Current needs-attention leads
+    supabase.from("leads").select("*", { count: "exact", head: true })
+      .eq("company_id", profile.company_id)
+      .eq("status", "needs_attention"),
+    // Actual follow-up sequences fired — NOT all AI replies
+    supabase.from("sequences").select("*", { count: "exact", head: true })
+      .eq("company_id", profile.company_id)
+      .eq("status", "sent")
+      .gte("sent_at", sinceIso),
+    // 5 most recent leads
+    supabase.from("leads")
+      .select("id, first_name, last_name, phone, status, source, created_at")
+      .eq("company_id", profile.company_id)
+      .order("created_at", { ascending: false })
+      .limit(5),
+    // Next 4 upcoming appointments
+    supabase.from("appointments")
+      .select("*, leads(first_name, last_name, phone)")
+      .eq("company_id", profile.company_id)
+      .eq("status", "scheduled")
+      .gte("scheduled_at", now.toISOString())
+      .order("scheduled_at")
+      .limit(4),
   ])
 
-  const bookingRate = contacted && contacted > 0 ? Math.round(((booked ?? 0) / contacted) * 100) : 0
+  const leads = newLeads ?? 0
+  const aptBooked = booked ?? 0
+  const bookingRate = leads > 0 ? Math.round((aptBooked / leads) * 100) : 0
   const avgJobValue = company?.avg_job_value ?? 0
-  const revenueProjected = (booked ?? 0) * avgJobValue
+  const revenueProjected = aptBooked * avgJobValue
 
   const hour = now.getHours()
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
@@ -59,12 +93,10 @@ export default async function DashboardPage() {
       greeting={greeting}
       firstName={firstName}
       companyName={company?.name ?? ""}
-      stats={{
-        totalLeads: totalLeads ?? 0,
-        newLeads: newLeads ?? 0,
-        contacted: contacted ?? 0,
+      initialStats={{
+        newLeads: leads,
+        booked: aptBooked,
         qualified: qualified ?? 0,
-        booked: booked ?? 0,
         cold: cold ?? 0,
         needsAttention: needsAttention ?? 0,
         followUpsSent: followUpsSent ?? 0,
