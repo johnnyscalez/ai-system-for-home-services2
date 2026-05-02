@@ -3,7 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 import { createCalendarEvent, getCalendarEvents } from "@/lib/google-calendar"
 import { getConversationFlow } from "@/lib/conversation-flows"
 import { getAvailableSlots, formatSlotsForPrompt, DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
-import type { AppointmentWindow } from "@/lib/availability"
+import type { AppointmentWindow, PerDaySlots } from "@/lib/availability"
 
 export type ConversationAction =
   | { type: "book_appointment"; scheduled_at: string; address?: string; notes?: string }
@@ -59,7 +59,8 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
 export async function runConversation(
   leadId: string,
   companyId: string,
-  incomingMessage: string | null
+  incomingMessage: string | null,
+  followUpAngle?: string
 ): Promise<EngineResult> {
   const supabase = createServiceRoleClient()
 
@@ -75,7 +76,7 @@ export async function runConversation(
       .order("created_at", { ascending: true }),
     supabase
       .from("ai_agent_config")
-      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day")
+      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, per_day_slots")
       .eq("company_id", companyId)
       .single(),
     supabase
@@ -108,7 +109,10 @@ export async function runConversation(
 
   if (!lead) throw new Error("Lead not found")
 
-  const isInitialOutreach = incomingMessage === null
+  // True initial outreach = AI-first contact, no prior conversation
+  // Follow-up = proactive AI touch after a time delay, lead has received prior messages
+  const isInitialOutreach = incomingMessage === null && history.length === 0
+  const isFollowUp = incomingMessage === null && history.length > 0
   const tz = agent?.timezone ?? "America/New_York"
 
   // Fetch Google Calendar busy times for the booking horizon (non-blocking — failure is silent)
@@ -121,18 +125,28 @@ export async function runConversation(
       .single()
 
     if (gcal?.is_connected && gcal.access_token && gcal.refresh_token) {
+      const saveRefreshedToken = async (newToken: string) => {
+        await supabase
+          .from("google_calendar_connections")
+          .update({ access_token: newToken })
+          .eq("company_id", companyId)
+      }
+
       const events = await getCalendarEvents(
         gcal.access_token,
         gcal.refresh_token,
         gcal.calendar_id ?? "primary",
         new Date().toISOString(),
-        new Date(Date.now() + horizonMs).toISOString()
+        new Date(Date.now() + horizonMs).toISOString(),
+        saveRefreshedToken
       )
       googleBusyTimes = events
         .filter((e) => e.start?.dateTime && e.end?.dateTime)
         .map((e) => ({ start: e.start!.dateTime!, end: e.end!.dateTime! }))
     }
-  } catch { /* Google Calendar fetch failure is non-blocking */ }
+  } catch (err) {
+    console.error("[ai-engine] Google Calendar fetch failed — slots will not be filtered:", err)
+  }
 
   // Compute real available booking slots — excludes system appointments AND Google Calendar events
   const availableSlots = getAvailableSlots(
@@ -142,6 +156,7 @@ export async function runConversation(
       booking_horizon_days: agent?.booking_horizon_days ?? 7,
       max_appointments_per_day: agent?.max_appointments_per_day ?? null,
       timezone: tz,
+      per_day_slots: (agent?.per_day_slots as PerDaySlots | null) ?? null,
     },
     companyApts,
     googleBusyTimes
@@ -188,8 +203,23 @@ export async function runConversation(
       role: "user",
       content: `Write the first SMS to send to this new lead right now. Keep it to 1-2 sentences. Make it feel personal and not like a mass text. Do NOT start with "Hi!" — be natural. Reference their service interest if it helps personalize it.`,
     })
+  } else if (isFollowUp) {
+    // Proactive follow-up — lead hasn't booked yet, no new inbound message.
+    // Give Claude the conversation history as plain text so it can avoid
+    // repeating what was already said and write a natural check-in.
+    const convoLines = history
+      .slice(-10)
+      .map((m) => `${m.direction === "inbound" ? "Lead" : "You"}: ${m.body}`)
+      .join("\n")
+    const angleInstruction = followUpAngle
+      ? `\n\nSPECIFIC ANGLE FOR THIS FOLLOW-UP:\n${followUpAngle}`
+      : ""
+    messages.push({
+      role: "user",
+      content: `Conversation so far:\n${convoLines}\n\nThe lead hasn't booked yet. You're sending a proactive follow-up — a natural, brief check-in. Write one short SMS, under 15 words. Don't repeat what you've already said. Be casual and human, not salesy or pushy.${angleInstruction}`,
+    })
   } else {
-    // Build full conversation history
+    // Normal reply to an inbound message — build full conversation history
     for (const msg of history) {
       messages.push({
         role: msg.direction === "inbound" ? "user" : "assistant",
@@ -308,7 +338,8 @@ export async function processAndSave(
   leadId: string,
   companyId: string,
   incomingMessage: string | null,
-  incomingTwilioSid?: string
+  incomingTwilioSid?: string,
+  followUpAngle?: string
 ): Promise<EngineResult> {
   const supabase = createServiceRoleClient()
 
@@ -335,7 +366,7 @@ export async function processAndSave(
   }
 
   // Run the AI engine
-  const result = await runConversation(leadId, companyId, incomingMessage)
+  const result = await runConversation(leadId, companyId, incomingMessage, followUpAngle)
 
   // Save outbound AI message and capture its ID for Twilio SID update
   let outboundConversationId: string | undefined
@@ -391,6 +422,13 @@ export async function processAndSave(
               .eq("id", leadId)
               .single()
 
+            const saveRefreshedToken = async (newToken: string) => {
+              await supabase
+                .from("google_calendar_connections")
+                .update({ access_token: newToken })
+                .eq("company_id", companyId)
+            }
+
             const gcalEvent = await createCalendarEvent(
               gcal.access_token,
               gcal.refresh_token,
@@ -401,7 +439,8 @@ export async function processAndSave(
                 location: address ?? "",
                 startTime: scheduled_at,
                 endTime: new Date(new Date(scheduled_at).getTime() + 60 * 60000).toISOString(),
-              }
+              },
+              saveRefreshedToken
             )
 
             // Store google_event_id on the appointment
@@ -410,8 +449,8 @@ export async function processAndSave(
               .update({ google_event_id: gcalEvent.id ?? null })
               .eq("id", apt.id)
           }
-        } catch {
-          // Calendar sync failure is non-blocking
+        } catch (err) {
+          console.error("[ai-engine] Google Calendar event creation failed:", err)
         }
       }
     } else if (result.action.type === "update_status") {

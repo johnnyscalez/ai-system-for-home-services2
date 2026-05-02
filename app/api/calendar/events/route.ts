@@ -35,14 +35,22 @@ export async function GET(req: NextRequest) {
   let googleEvents: object[] = []
   if (gcal?.is_connected && gcal.access_token && gcal.refresh_token) {
     try {
+      const saveRefreshedToken = async (newToken: string) => {
+        await supabase
+          .from("google_calendar_connections")
+          .update({ access_token: newToken })
+          .eq("company_id", profile.company_id)
+      }
       googleEvents = await getCalendarEvents(
         gcal.access_token,
         gcal.refresh_token,
         gcal.calendar_id ?? "primary",
         timeMin,
-        timeMax
+        timeMax,
+        saveRefreshedToken
       )
-    } catch {
+    } catch (err) {
+      console.error("[calendar/events] Google Calendar fetch failed:", err)
       googleEvents = []
     }
   }

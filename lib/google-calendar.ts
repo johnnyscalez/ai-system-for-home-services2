@@ -49,10 +49,16 @@ export async function createCalendarEvent(
     endTime: string
     attendeeEmail?: string
     timezone?: string
-  }
+  },
+  onTokenRefresh?: (newAccessToken: string) => void
 ) {
   const client = createOAuth2Client()
   client.setCredentials({ access_token: accessToken, refresh_token: refreshToken })
+  if (onTokenRefresh) {
+    client.on("tokens", (tokens) => {
+      if (tokens.access_token) onTokenRefresh(tokens.access_token)
+    })
+  }
   const calendar = google.calendar({ version: "v3", auth: client })
   const tz = event.timezone ?? "America/New_York"
 
@@ -90,10 +96,16 @@ export async function getCalendarEvents(
   refreshToken: string,
   calendarId: string,
   timeMin: string,
-  timeMax: string
+  timeMax: string,
+  onTokenRefresh?: (newAccessToken: string) => void
 ) {
   const client = createOAuth2Client()
   client.setCredentials({ access_token: accessToken, refresh_token: refreshToken })
+  if (onTokenRefresh) {
+    client.on("tokens", (tokens) => {
+      if (tokens.access_token) onTokenRefresh(tokens.access_token)
+    })
+  }
   const calendar = google.calendar({ version: "v3", auth: client })
 
   const res = await calendar.events.list({

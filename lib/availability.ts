@@ -6,12 +6,17 @@ export type AppointmentWindow = {
   enabled: boolean
 }
 
+export type DaySlot = { start: string; end: string }
+export type DayConfig = { enabled: boolean; slots: DaySlot[] }
+export type PerDaySlots = Record<string, DayConfig>
+
 export type AvailabilitySettings = {
   available_days: string[]
   appointment_windows: AppointmentWindow[]
   booking_horizon_days: number
   max_appointments_per_day: number | null
   timezone: string
+  per_day_slots?: PerDaySlots | null
 }
 
 export const DEFAULT_WINDOWS: AppointmentWindow[] = [
@@ -37,6 +42,23 @@ function fmt12(t: string): string {
 }
 
 /**
+ * Converts a wall-clock local time (e.g. "1pm on May 5 in America/New_York")
+ * into the correct UTC Date. Without this, setHours() runs in server local time
+ * (UTC on Railway) so an "Afternoon 1pm" slot for an EST contractor gets stored
+ * as 1pm UTC = 9am EST instead of 1pm EST = 5pm UTC.
+ */
+function localWallClockToUtc(localDateStr: string, hours: number, minutes: number, tz: string): Date {
+  // Treat the target wall-clock time as if it were UTC to get a starting point
+  const pseudo = new Date(
+    `${localDateStr}T${String(hours).padStart(2, "0")}:${String(minutes).padStart(2, "0")}:00Z`
+  )
+  // Ask Intl what that UTC instant looks like in the target timezone
+  const asLocal = new Date(pseudo.toLocaleString("en-US", { timeZone: tz }))
+  // The gap is the UTC offset for that timezone at that date (handles DST correctly)
+  return new Date(pseudo.getTime() + (pseudo.getTime() - asLocal.getTime()))
+}
+
+/**
  * Returns the next N available booking slots for a company, excluding:
  * - Slots already taken by system appointments
  * - Slots that overlap with any Google Calendar busy event
@@ -49,29 +71,80 @@ export function getAvailableSlots(
 ): AvailableSlot[] {
   const tz = settings.timezone || "America/New_York"
   const horizon = Math.min(settings.booking_horizon_days || 7, 14)
+  const slots: AvailableSlot[] = []
+  const now = new Date()
+
+  // Per-day mode (new): each day has its own custom time slots
+  if (settings.per_day_slots && Object.keys(settings.per_day_slots).length > 0) {
+    for (let d = 1; d <= horizon && slots.length < 6; d++) {
+      const date = new Date(now)
+      date.setDate(now.getDate() + d)
+
+      const dayName = date
+        .toLocaleDateString("en-US", { weekday: "long", timeZone: tz })
+        .toLowerCase()
+
+      const dayConfig = settings.per_day_slots[dayName]
+      if (!dayConfig?.enabled || !dayConfig.slots?.length) continue
+
+      const localDateStr = date.toLocaleDateString("en-CA", { timeZone: tz })
+      const bookedThisDay = companyAppointments.filter((a) =>
+        new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: tz }) === localDateStr
+      )
+
+      for (const slot of dayConfig.slots) {
+        if (slots.length >= 6) break
+
+        const [startH, startM] = slot.start.split(":").map(Number)
+        const [endH, endM] = slot.end.split(":").map(Number)
+
+        const slotStart = localWallClockToUtc(localDateStr, startH, startM, tz)
+        const slotEnd   = localWallClockToUtc(localDateStr, endH, endM, tz)
+
+        const taken = bookedThisDay.some((a) => {
+          const t = new Date(a.scheduled_at)
+          return t >= slotStart && t < slotEnd
+        })
+        if (taken) continue
+
+        const gcalBlocked = googleBusyTimes.some((busy) => {
+          const busyStart = new Date(busy.start)
+          const busyEnd = new Date(busy.end)
+          return busyStart < slotEnd && busyEnd > slotStart
+        })
+        if (gcalBlocked) continue
+
+        const dateLabel = date.toLocaleDateString("en-US", {
+          weekday: "long", month: "long", day: "numeric", timeZone: tz,
+        })
+
+        slots.push({
+          label: `${dateLabel} (${fmt12(slot.start)}–${fmt12(slot.end)})`,
+          isoStart: slotStart.toISOString(),
+          isoEnd: slotEnd.toISOString(),
+        })
+      }
+    }
+    return slots
+  }
+
+  // Legacy mode: all-days + shared time windows
   const enabledDays = (settings.available_days ?? DEFAULT_DAYS).map((d) => d.toLowerCase())
   const enabledWindows = (settings.appointment_windows ?? DEFAULT_WINDOWS).filter((w) => w.enabled)
 
   if (enabledDays.length === 0 || enabledWindows.length === 0) return []
 
-  const slots: AvailableSlot[] = []
-  const now = new Date()
-
   for (let d = 1; d <= horizon && slots.length < 6; d++) {
     const date = new Date(now)
     date.setDate(now.getDate() + d)
 
-    // Day name in company timezone
     const dayName = date
       .toLocaleDateString("en-US", { weekday: "long", timeZone: tz })
       .toLowerCase()
 
     if (!enabledDays.includes(dayName)) continue
 
-    // Local date string for comparison (YYYY-MM-DD in company tz)
     const localDateStr = date.toLocaleDateString("en-CA", { timeZone: tz })
-
-    // Appointments already booked on this calendar day
     const bookedThisDay = companyAppointments.filter((a) => {
       return new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: tz }) === localDateStr
     })
@@ -87,25 +160,15 @@ export function getAvailableSlots(
       const [startH, startM] = win.start.split(":").map(Number)
       const [endH, endM] = win.end.split(":").map(Number)
 
-      // Build Date objects representing the window start/end in local wall-clock time.
-      // We use the date's year/month/day and set hours directly — this works correctly
-      // for scheduling purposes because Twilio/HVAC techs work in local time.
-      const slotDate = new Date(
-        date.toLocaleDateString("en-CA", { timeZone: tz }) + "T00:00:00"
-      )
-      const slotStart = new Date(slotDate)
-      slotStart.setHours(startH, startM, 0, 0)
-      const slotEnd = new Date(slotDate)
-      slotEnd.setHours(endH, endM, 0, 0)
+      const slotStart = localWallClockToUtc(localDateStr, startH, startM, tz)
+      const slotEnd   = localWallClockToUtc(localDateStr, endH, endM, tz)
 
-      // Skip if a booked system appointment falls inside this window
       const taken = bookedThisDay.some((a) => {
         const t = new Date(a.scheduled_at)
         return t >= slotStart && t < slotEnd
       })
       if (taken) continue
 
-      // Skip if a Google Calendar event overlaps this window
       const gcalBlocked = googleBusyTimes.some((busy) => {
         const busyStart = new Date(busy.start)
         const busyEnd   = new Date(busy.end)
