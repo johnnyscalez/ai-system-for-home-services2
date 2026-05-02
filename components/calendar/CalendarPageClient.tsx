@@ -42,10 +42,10 @@ export function CalendarPageClient({ isGcalConnected, gcalEmail }: Props) {
 
           <button
             onClick={() => setDrawerOpen(true)}
-            className="flex items-center gap-2 text-xs font-medium text-foreground border border-border rounded-lg px-3 py-1.5 hover:border-primary/40 hover:bg-primary/5 hover:text-primary transition-all"
+            className="flex items-center gap-2 text-sm font-semibold text-primary-foreground bg-primary hover:bg-primary/90 px-4 py-2 rounded-lg shadow-sm transition-all"
           >
-            <SlidersHorizontal className="w-3.5 h-3.5" />
-            Availability
+            <SlidersHorizontal className="w-4 h-4" />
+            Edit Availability
           </button>
         </div>
       </div>
