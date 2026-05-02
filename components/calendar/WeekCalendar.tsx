@@ -227,13 +227,29 @@ export function WeekCalendar() {
                       href={ev.htmlLink ?? "#"}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="absolute left-0.5 right-0.5 rounded bg-violet-500/25 border border-violet-500/40 px-1.5 py-1 overflow-hidden hover:bg-violet-500/35 transition-colors"
-                      style={{ top, height: Math.max(height, 24) }}
+                      className="absolute left-0.5 right-0.5 rounded-md overflow-hidden hover:brightness-95 transition-all group"
+                      style={{
+                        top,
+                        height: Math.max(height, 24),
+                        background: "rgba(109,40,217,0.12)",
+                        borderLeft: "3px solid #7c3aed",
+                        borderTop: "1px solid rgba(124,58,237,0.25)",
+                        borderRight: "1px solid rgba(124,58,237,0.25)",
+                        borderBottom: "1px solid rgba(124,58,237,0.25)",
+                      }}
                     >
-                      <p className="text-[10px] font-medium text-violet-300 truncate leading-tight">{ev.summary}</p>
-                      {ev.location && height > 40 && (
-                        <p className="text-[9px] text-violet-400/70 truncate">{ev.location}</p>
-                      )}
+                      <div className="px-1.5 py-1 h-full">
+                        <p className="text-[11px] font-semibold text-violet-800 truncate leading-tight">{ev.summary}</p>
+                        {ev.location && height > 42 && (
+                          <p className="text-[10px] text-violet-600 truncate mt-0.5">{ev.location}</p>
+                        )}
+                        {height > 54 && ev.start?.dateTime && (
+                          <p className="text-[9px] text-violet-500 mt-0.5">
+                            {new Date(ev.start.dateTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                            {ev.end?.dateTime && ` – ${new Date(ev.end.dateTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`}
+                          </p>
+                        )}
+                      </div>
                     </a>
                   )
                 })}

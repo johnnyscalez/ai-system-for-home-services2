@@ -79,7 +79,7 @@ export function CalendarPageClient({ isGcalConnected, gcalEmail }: Props) {
             animate={{ x: 0 }}
             exit={{ x: "100%" }}
             transition={{ type: "spring", stiffness: 340, damping: 32, mass: 0.9 }}
-            className="fixed right-0 top-0 bottom-0 z-40 w-[360px] bg-card border-l border-border shadow-2xl flex flex-col"
+            className="fixed right-0 top-0 bottom-0 z-40 w-[520px] bg-card border-l border-border shadow-2xl flex flex-col"
           >
             <AvailabilityDrawer onClose={() => setDrawerOpen(false)} />
           </motion.div>
