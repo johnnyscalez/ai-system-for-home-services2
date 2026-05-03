@@ -83,6 +83,7 @@ export async function sendConfirmations(appointmentId: string) {
     logoUrl: emailTpl?.logo_url ?? null,
     replyToEmail: emailTpl?.reply_to_email ?? null,
     fromName: emailTpl?.from_name ?? null,
+    bannerColor: emailTpl?.banner_color ?? null,
   }
 
   // Send confirmation email if lead has email and email is enabled
@@ -211,6 +212,7 @@ export async function processAppointmentReminders() {
       logoUrl: emailTpl?.logo_url ?? null,
       replyToEmail: emailTpl?.reply_to_email ?? null,
       fromName: emailTpl?.from_name ?? null,
+      bannerColor: emailTpl?.banner_color ?? null,
     }
 
     const formattedDate = scheduledAt.toLocaleDateString("en-US", {

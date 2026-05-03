@@ -21,10 +21,22 @@ const TABS: { key: TemplateKey; label: string; sublabel: string; icon: typeof Ma
   { key: "reminder_2h", label: "2-Hour Reminder", sublabel: "2 hrs before", icon: Clock, color: "text-red-500" },
 ]
 
+const BANNER_PRESETS = [
+  { color: "#7C3AED", label: "Purple" },
+  { color: "#2563EB", label: "Blue" },
+  { color: "#059669", label: "Green" },
+  { color: "#DC2626", label: "Red" },
+  { color: "#D97706", label: "Amber" },
+  { color: "#0891B2", label: "Cyan" },
+  { color: "#DB2777", label: "Pink" },
+  { color: "#1C1917", label: "Charcoal" },
+]
+
 type Templates = {
   logo_url?: string | null
   from_name?: string | null
   reply_to_email?: string | null
+  banner_color?: string | null
   confirmation_enabled?: boolean
   confirmation_subject?: string | null
   confirmation_custom_message?: string | null
@@ -68,6 +80,8 @@ export function EmailTemplatesClient({
   const isFirstRender = useRef(true)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
+  const activeBannerColor = templates.banner_color ?? "#7C3AED"
+
   const previewData = {
     leadName: "Michael",
     companyName: templates.from_name || companyName,
@@ -79,6 +93,7 @@ export function EmailTemplatesClient({
     logoUrl: templates.logo_url,
     replyToEmail: templates.reply_to_email,
     fromName: templates.from_name || companyName,
+    bannerColor: activeBannerColor,
   }
 
   const previewHtml = buildEmailHtml(
@@ -428,9 +443,47 @@ export function EmailTemplatesClient({
                 animate={{ opacity: 1, y: 0 }}
                 exit={{ opacity: 0, y: -8 }}
                 transition={{ duration: 0.15 }}
-                className="h-full"
+                className="h-full flex flex-col gap-3"
               >
-                <div className="bg-white rounded-xl border border-[#E7E5E4] shadow-sm h-full overflow-hidden">
+                {/* Color picker toolbar */}
+                <div className="bg-white rounded-xl border border-[#E7E5E4] shadow-sm px-4 py-3 flex items-center gap-4 shrink-0">
+                  <span className="text-xs font-semibold text-[#44403C] whitespace-nowrap">Banner color</span>
+                  <div className="flex items-center gap-2 flex-wrap">
+                    {BANNER_PRESETS.map((preset) => (
+                      <button
+                        key={preset.color}
+                        title={preset.label}
+                        onClick={() => update("banner_color", preset.color)}
+                        className="w-7 h-7 rounded-full border-2 transition-all duration-100 hover:scale-110"
+                        style={{
+                          background: preset.color,
+                          borderColor: activeBannerColor === preset.color ? "#1C1917" : "transparent",
+                          boxShadow: activeBannerColor === preset.color ? "0 0 0 2px white, 0 0 0 4px #1C1917" : "none",
+                        }}
+                      />
+                    ))}
+                    {/* Custom color picker */}
+                    <label className="relative w-7 h-7 rounded-full border-2 border-dashed border-[#E7E5E4] hover:border-[#7C3AED] cursor-pointer flex items-center justify-center overflow-hidden transition-colors" title="Custom color">
+                      <span className="text-[10px] text-[#78716C] font-bold select-none">+</span>
+                      <input
+                        type="color"
+                        value={activeBannerColor}
+                        onChange={e => update("banner_color", e.target.value)}
+                        className="absolute inset-0 opacity-0 cursor-pointer w-full h-full"
+                      />
+                    </label>
+                  </div>
+                  <div
+                    className="ml-auto flex items-center gap-2 px-3 py-1.5 rounded-lg border border-[#E7E5E4] text-xs text-[#44403C] font-mono"
+                    style={{ background: activeBannerColor + "18" }}
+                  >
+                    <div className="w-3.5 h-3.5 rounded-sm" style={{ background: activeBannerColor }} />
+                    {activeBannerColor.toUpperCase()}
+                  </div>
+                </div>
+
+                {/* Preview iframe */}
+                <div className="bg-white rounded-xl border border-[#E7E5E4] shadow-sm flex-1 overflow-hidden">
                   <div className="flex items-center gap-3 px-5 py-3 border-b border-[#E7E5E4] bg-[#FAFAF8]">
                     <div className="flex gap-1.5">
                       <div className="w-3 h-3 rounded-full bg-red-400" />

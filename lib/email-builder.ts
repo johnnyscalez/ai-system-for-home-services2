@@ -11,6 +11,16 @@ export type AppointmentEmailData = {
   logoUrl?: string | null
   replyToEmail?: string | null
   fromName?: string | null
+  bannerColor?: string | null
+}
+
+function darkenHex(hex: string, amount = 0.22): string {
+  const clean = hex.replace("#", "")
+  if (clean.length !== 6) return hex
+  const r = Math.max(0, Math.round(parseInt(clean.slice(0, 2), 16) * (1 - amount)))
+  const g = Math.max(0, Math.round(parseInt(clean.slice(2, 4), 16) * (1 - amount)))
+  const b = Math.max(0, Math.round(parseInt(clean.slice(4, 6), 16) * (1 - amount)))
+  return `#${r.toString(16).padStart(2, "0")}${g.toString(16).padStart(2, "0")}${b.toString(16).padStart(2, "0")}`
 }
 
 function formatDate(iso: string, tz: string): string {
@@ -69,7 +79,7 @@ export function buildEmailHtml(
 
 <!-- Header -->
 <table width="100%" cellpadding="0" cellspacing="0" border="0">
-<tr><td style="background:linear-gradient(135deg,#7C3AED 0%,#5B21B6 100%);padding:36px 40px;text-align:center;">
+<tr><td style="background:linear-gradient(135deg,${data.bannerColor ?? "#7C3AED"} 0%,${darkenHex(data.bannerColor ?? "#7C3AED")} 100%);padding:36px 40px;text-align:center;">
 ${data.logoUrl
   ? `<img src="${data.logoUrl}" alt="${data.companyName}" style="max-height:64px;max-width:200px;object-fit:contain;display:block;margin:0 auto 16px;">`
   : `<div style="color:#FFFFFF;font-size:20px;font-weight:700;margin-bottom:16px;">${data.companyName}</div>`}
