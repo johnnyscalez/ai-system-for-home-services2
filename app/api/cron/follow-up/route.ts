@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave } from "@/lib/ai-engine"
 import { sendSMS, getTwilioClient } from "@/lib/twilio"
+import { isVoiceStep, LAST_STEP, FOLLOW_UP_ANGLE } from "@/lib/sequences"
 
 // Called by Vercel Cron every 5 minutes.
 export async function GET(req: NextRequest) {
@@ -88,6 +89,9 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    const angleKey = `${step.sequence_type}:${step.step}`
+    const followUpAngle = FOLLOW_UP_ANGLE[angleKey]
+
     try {
       if (useVoice) {
         // Fire an outbound voice call using the follow-up agent
@@ -103,8 +107,8 @@ export async function GET(req: NextRequest) {
           asyncAmdStatusCallback: `${appUrl}/api/voice/amd?leadId=${lead.id}`,
         })
       } else {
-        // Send a follow-up SMS via AI engine
-        const result = await processAndSave(lead.id, step.company_id, null)
+        // Send a follow-up SMS via AI engine with per-step angle
+        const result = await processAndSave(lead.id, step.company_id, null, undefined, followUpAngle)
 
         if (result.response) {
           const msg = await sendSMS(lead.phone, result.response, phoneRecord.phone_number)
@@ -123,20 +127,10 @@ export async function GET(req: NextRequest) {
         .update({ status: "sent", sent_at: now.toISOString() })
         .eq("id", step.id)
 
-      // Schedule next step
-      const nextStep = getNextStep(step.sequence_type, step.step)
-      if (nextStep) {
-        const nextAt = new Date(now.getTime() + nextStep.delayMs)
-        await supabase.from("sequences").insert({
-          lead_id: lead.id,
-          company_id: step.company_id,
-          sequence_type: step.sequence_type,
-          step: nextStep.step,
-          scheduled_at: nextAt.toISOString(),
-          status: "pending",
-        })
-      } else {
-        // Sequence exhausted — move to lost
+      // Steps are pre-created at lead arrival — no next-step scheduling needed.
+      // If this was the last step, mark the lead as lost.
+      const lastStep = LAST_STEP[step.sequence_type] ?? 0
+      if (step.step >= lastStep) {
         await supabase
           .from("leads")
           .update({ status: "lost" })
@@ -215,36 +209,3 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ processed, callsProcessed })
 }
 
-// Steps that use a voice call instead of SMS
-// no_reply: step 2 (24h) and step 4 (7d) → voice
-// replied_not_booked: step 2 (48h) → voice
-function isVoiceStep(sequenceType: string, step: number): boolean {
-  if (sequenceType === "no_reply" && (step === 2 || step === 4)) return true
-  if (sequenceType === "replied_not_booked" && step === 2) return true
-  return false
-}
-
-type SequenceType = "no_reply" | "replied_not_booked"
-
-const SEQUENCES: Record<SequenceType, { step: number; delayMs: number }[]> = {
-  no_reply: [
-    { step: 1, delayMs: 60 * 60 * 1000 },              // 1h  → SMS
-    { step: 2, delayMs: 24 * 60 * 60 * 1000 },         // 24h → Voice call
-    { step: 3, delayMs: 72 * 60 * 60 * 1000 },         // 72h → SMS
-    { step: 4, delayMs: 7 * 24 * 60 * 60 * 1000 },     // 7d  → Voice call (last attempt)
-  ],
-  replied_not_booked: [
-    { step: 1, delayMs: 4 * 60 * 60 * 1000 },          // 4h  → SMS
-    { step: 2, delayMs: 48 * 60 * 60 * 1000 },         // 48h → Voice call
-    { step: 3, delayMs: 5 * 24 * 60 * 60 * 1000 },     // 5d  → SMS (final)
-  ],
-}
-
-function getNextStep(
-  sequenceType: string,
-  currentStep: number
-): { step: number; delayMs: number } | null {
-  const seq = SEQUENCES[sequenceType as SequenceType]
-  if (!seq) return null
-  return seq.find((s) => s.step === currentStep + 1) ?? null
-}

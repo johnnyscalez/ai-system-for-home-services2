@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave } from "@/lib/ai-engine"
 import { sendSMS, validateTwilioSignature, formatPhone } from "@/lib/twilio"
 import { notifyAppointmentBooked, notifyNeedsAttention } from "@/lib/notifications"
+import { buildRepliedNotBookedSchedule } from "@/lib/sequences"
 
 // Twilio sends POST with form-encoded body to this endpoint.
 // Configure this URL in Twilio console under the phone number's "A message comes in" webhook.
@@ -111,27 +112,28 @@ export async function POST(req: NextRequest) {
       .eq("sequence_type", "no_reply")
       .eq("status", "pending")
 
-    // Schedule replied-not-booked follow-up if not already booked
+    // Schedule replied-not-booked follow-up if not already booked.
+    // Reset ALL steps on EVERY reply so timers always count from the latest message.
     if (result.action?.type !== "book_appointment") {
-      const { data: existing } = await supabase
+      // Cancel all existing pending replied_not_booked steps, then pre-create all 3 fresh
+      await supabase
         .from("sequences")
-        .select("id")
+        .update({ status: "cancelled" })
         .eq("lead_id", lead.id)
         .eq("sequence_type", "replied_not_booked")
         .eq("status", "pending")
-        .maybeSingle()
 
-      if (!existing) {
-        const fourHoursFromNow = new Date(Date.now() + 4 * 60 * 60 * 1000).toISOString()
-        await supabase.from("sequences").insert({
+      const steps = buildRepliedNotBookedSchedule(new Date())
+      await supabase.from("sequences").insert(
+        steps.map((s) => ({
           lead_id: lead.id,
           company_id: companyId,
           sequence_type: "replied_not_booked",
-          step: 1,
-          scheduled_at: fourHoursFromNow,
+          step: s.step,
+          scheduled_at: s.scheduledAt.toISOString(),
           status: "pending",
-        })
-      }
+        }))
+      )
     } else {
       // Appointment booked — cancel all pending sequences
       await supabase
@@ -139,6 +141,20 @@ export async function POST(req: NextRequest) {
         .update({ status: "cancelled" })
         .eq("lead_id", lead.id)
         .eq("status", "pending")
+
+      // Send confirmation email + SMS to lead
+      const { sendConfirmations } = await import("@/lib/appointment-reminders")
+      const { data: bookedApt } = await supabase
+        .from("appointments")
+        .select("id")
+        .eq("lead_id", lead.id)
+        .eq("status", "scheduled")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .single()
+      if (bookedApt) {
+        sendConfirmations(bookedApt.id).catch(() => {})
+      }
 
       // Notify contractor
       const { data: leadData } = await supabase

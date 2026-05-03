@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave } from "@/lib/ai-engine"
 import { sendSMS, formatPhone } from "@/lib/twilio"
 import { notifyNewLead } from "@/lib/notifications"
+import { buildNoReplySchedule } from "@/lib/sequences"
 import crypto from "crypto"
 
 // GET — Facebook webhook verification challenge
@@ -163,6 +164,14 @@ export async function POST(req: NextRequest) {
 
       if (!phoneNumber?.phone_number) continue
 
+      // Fetch company timezone for accurate local-time scheduling
+      const { data: agentCfg } = await supabase
+        .from("ai_agent_config")
+        .select("timezone")
+        .eq("company_id", integration.company_id)
+        .single()
+      const companyTimezone = agentCfg?.timezone ?? "America/New_York"
+
       try {
         const result = await processAndSave(leadId, integration.company_id, null)
         if (result.response) {
@@ -179,14 +188,18 @@ export async function POST(req: NextRequest) {
             .update({ status: "contacted", last_message_at: new Date().toISOString() })
             .eq("id", leadId)
 
-          await supabase.from("sequences").insert({
-            lead_id: leadId,
-            company_id: integration.company_id,
-            sequence_type: "no_reply",
-            step: 1,
-            scheduled_at: new Date(Date.now() + 60 * 60 * 1000).toISOString(),
-            status: "pending",
-          })
+          // Pre-create all 7 no_reply follow-up steps so cron just fires them
+          const steps = buildNoReplySchedule(new Date(), companyTimezone)
+          await supabase.from("sequences").insert(
+            steps.map((s) => ({
+              lead_id: leadId,
+              company_id: integration.company_id,
+              sequence_type: "no_reply",
+              step: s.step,
+              scheduled_at: s.scheduledAt.toISOString(),
+              status: "pending",
+            }))
+          )
         }
       } catch (e) {
         console.error("AI/SMS error for Facebook lead:", leadId, e)

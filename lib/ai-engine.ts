@@ -8,6 +8,8 @@ import type { AppointmentWindow, PerDaySlots } from "@/lib/availability"
 export type ConversationAction =
   | { type: "book_appointment"; scheduled_at: string; address?: string; notes?: string }
   | { type: "update_status"; status: "qualified" | "closed_lost" | "needs_attention" }
+  | { type: "cancel_appointment"; appointment_id: string; reason?: string }
+  | { type: "reschedule_appointment"; appointment_id: string; new_scheduled_at: string }
 
 export type EngineResult = {
   response: string
@@ -23,20 +25,37 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
     input_schema: {
       type: "object" as const,
       properties: {
-        scheduled_at: {
-          type: "string",
-          description: "ISO 8601 datetime e.g. 2024-06-15T14:00:00",
-        },
-        address: {
-          type: "string",
-          description: "Full service address (street, city, state). REQUIRED — do not call this tool without it.",
-        },
-        notes: {
-          type: "string",
-          description: "Summary of the job: system type, age, issue description, urgency level, ownership status",
-        },
+        scheduled_at: { type: "string", description: "ISO 8601 datetime e.g. 2024-06-15T14:00:00" },
+        address: { type: "string", description: "Full service address (street, city, state). REQUIRED — do not call this tool without it." },
+        notes: { type: "string", description: "Summary of the job: system type, age, issue description, urgency level, ownership status" },
       },
       required: ["scheduled_at", "address"],
+    },
+  },
+  {
+    name: "cancel_appointment",
+    description:
+      "Cancel the lead's scheduled appointment. Use ONLY when the lead explicitly and clearly says they want to cancel and will NOT be rescheduling. Always confirm first: 'Just to confirm — you'd like to cancel your appointment?' then call this tool on confirmation. Never use this if they might want to reschedule.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        appointment_id: { type: "string", description: "The appointment ID from the lead file" },
+        reason: { type: "string", description: "Cancellation reason if provided by the lead" },
+      },
+      required: ["appointment_id"],
+    },
+  },
+  {
+    name: "reschedule_appointment",
+    description:
+      "Reschedule the lead's appointment to a new time slot. Use when the lead says they want to change their appointment time. ONLY offer slots from the AVAILABLE BOOKING SLOTS list. Get their preferred slot, confirm it, then call this tool.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        appointment_id: { type: "string", description: "The appointment ID from the lead file" },
+        new_scheduled_at: { type: "string", description: "New ISO 8601 datetime for the appointment, chosen from available slots" },
+      },
+      required: ["appointment_id", "new_scheduled_at"],
     },
   },
   {
@@ -46,10 +65,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
     input_schema: {
       type: "object" as const,
       properties: {
-        status: {
-          type: "string",
-          enum: ["qualified", "closed_lost", "needs_attention"],
-        },
+        status: { type: "string", enum: ["qualified", "closed_lost", "needs_attention"] },
       },
       required: ["status"],
     },
@@ -84,10 +100,10 @@ export async function runConversation(
       .select("business_description, services_offered, service_areas, custom_ai_knowledge")
       .eq("company_id", companyId)
       .single(),
-    // Lead's own appointment history (past + upcoming)
+    // Lead's own appointment history (past + upcoming) — include id for cancel/reschedule tools
     supabase
       .from("appointments")
-      .select("scheduled_at, status, address, notes, created_at")
+      .select("id, scheduled_at, status, address, notes, created_at, confirmation_sms_sent, reminder_1d_sms_sent, reminder_2h_sms_sent, rescheduled_from, cancelled_at")
       .eq("lead_id", leadId)
       .order("scheduled_at", { ascending: false }),
     // All company appointments in the booking horizon (to know which slots are taken)
@@ -252,6 +268,12 @@ export async function runConversation(
       if (block.name === "book_appointment") {
         const input = block.input as { scheduled_at: string; address?: string; notes?: string }
         action = { type: "book_appointment", ...input }
+      } else if (block.name === "cancel_appointment") {
+        const input = block.input as { appointment_id: string; reason?: string }
+        action = { type: "cancel_appointment", ...input }
+      } else if (block.name === "reschedule_appointment") {
+        const input = block.input as { appointment_id: string; new_scheduled_at: string }
+        action = { type: "reschedule_appointment", ...input }
       } else if (block.name === "update_lead_status") {
         const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention" }
         action = { type: "update_status", status: input.status }
@@ -271,7 +293,11 @@ export async function runConversation(
           {
             type: "tool_result" as const,
             tool_use_id: (claudeResponse.content.find((b) => b.type === "tool_use") as { id: string })?.id ?? "",
-            content: "Action recorded. Now send your confirmation text to the lead.",
+            content: action?.type === "cancel_appointment"
+              ? "Appointment cancelled. Send a brief, warm confirmation to the lead that it's been cancelled."
+              : action?.type === "reschedule_appointment"
+              ? "Appointment rescheduled. Confirm the new date and time to the lead in a short, friendly text."
+              : "Action recorded. Now send your confirmation text to the lead.",
           },
         ],
       },
@@ -453,6 +479,82 @@ export async function processAndSave(
           console.error("[ai-engine] Google Calendar event creation failed:", err)
         }
       }
+    } else if (result.action.type === "cancel_appointment") {
+      const { appointment_id, reason } = result.action
+      await supabase
+        .from("appointments")
+        .update({
+          status: "cancelled",
+          cancelled_at: new Date().toISOString(),
+          cancellation_reason: reason ?? null,
+        })
+        .eq("id", appointment_id)
+        .eq("company_id", companyId)
+
+      await supabase
+        .from("leads")
+        .update({ status: "active_conversation", last_message_at: new Date().toISOString() })
+        .eq("id", leadId)
+
+    } else if (result.action.type === "reschedule_appointment") {
+      const { appointment_id, new_scheduled_at } = result.action
+
+      // Capture the old time before overwriting
+      const { data: oldApt } = await supabase
+        .from("appointments")
+        .select("scheduled_at, google_event_id")
+        .eq("id", appointment_id)
+        .single()
+
+      await supabase
+        .from("appointments")
+        .update({
+          scheduled_at: new_scheduled_at,
+          rescheduled_from: oldApt?.scheduled_at ?? null,
+          // Reset reminder flags so new reminders fire for the new time
+          reminder_2d_email_sent: false,
+          reminder_2d_sms_sent: false,
+          reminder_1d_email_sent: false,
+          reminder_1d_sms_sent: false,
+          reminder_2h_email_sent: false,
+          reminder_2h_sms_sent: false,
+        })
+        .eq("id", appointment_id)
+        .eq("company_id", companyId)
+
+      await supabase
+        .from("leads")
+        .update({ status: "appointment_booked", last_message_at: new Date().toISOString() })
+        .eq("id", leadId)
+
+      // Update Google Calendar event if it exists
+      if (oldApt?.google_event_id) {
+        try {
+          const { data: gcal } = await supabase
+            .from("google_calendar_connections")
+            .select("access_token, refresh_token, calendar_id, is_connected")
+            .eq("company_id", companyId)
+            .single()
+          if (gcal?.is_connected && gcal.access_token && gcal.refresh_token) {
+            const { deleteCalendarEvent, createCalendarEvent } = await import("@/lib/google-calendar")
+            await deleteCalendarEvent(gcal.access_token, gcal.refresh_token, gcal.calendar_id ?? "primary", oldApt.google_event_id)
+            const { data: leadData } = await supabase.from("leads").select("first_name, last_name").eq("id", leadId).single()
+            const newGcalEvent = await createCalendarEvent(
+              gcal.access_token, gcal.refresh_token, gcal.calendar_id ?? "primary",
+              {
+                summary: `Estimate: ${leadData?.first_name ?? ""} ${leadData?.last_name ?? ""}`.trim(),
+                description: "",
+                startTime: new_scheduled_at,
+                endTime: new Date(new Date(new_scheduled_at).getTime() + 60 * 60000).toISOString(),
+              }
+            )
+            await supabase.from("appointments").update({ google_event_id: newGcalEvent.id ?? null }).eq("id", appointment_id)
+          }
+        } catch (err) {
+          console.error("[ai-engine] Google Calendar reschedule failed:", err)
+        }
+      }
+
     } else if (result.action.type === "update_status") {
       // Map legacy statuses to new pipeline stages
       const legacyMap: Record<string, string> = {
@@ -546,40 +648,33 @@ export async function processAndSave(
 
 function buildLeadContext(
   lead: Record<string, unknown>,
-  appointments: Array<{ scheduled_at: string; status: string; address?: string | null; notes?: string | null }>,
+  appointments: Array<{
+    id: string; scheduled_at: string; status: string;
+    address?: string | null; notes?: string | null;
+    confirmation_sms_sent?: boolean; reminder_1d_sms_sent?: boolean; reminder_2h_sms_sent?: boolean;
+    rescheduled_from?: string | null; cancelled_at?: string | null;
+  }>,
   timezone: string
 ): string {
   const now = new Date()
-  const past = appointments.filter((a) => new Date(a.scheduled_at) < now)
-  const upcoming = appointments.filter((a) => new Date(a.scheduled_at) >= now)
+  const past = appointments.filter((a) => new Date(a.scheduled_at) < now && a.status !== "cancelled")
+  const upcoming = appointments.filter((a) => new Date(a.scheduled_at) >= now && a.status !== "cancelled")
+  const cancelled = appointments.filter((a) => a.status === "cancelled")
   const isReturning = past.length > 0
 
   const fmtDate = (iso: string) =>
     new Date(iso).toLocaleString("en-US", {
-      timeZone: timezone,
-      weekday: "long",
-      month: "long",
-      day: "numeric",
-      year: "numeric",
-      hour: "numeric",
-      minute: "2-digit",
+      timeZone: timezone, weekday: "long", month: "long",
+      day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
     })
 
   const nowFmt = now.toLocaleString("en-US", {
-    timeZone: timezone,
-    weekday: "long",
-    month: "long",
-    day: "numeric",
-    year: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
+    timeZone: timezone, weekday: "long", month: "long",
+    day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
   })
 
-  let ctx = `
-=== LEAD FILE (READ THIS BEFORE EVERY RESPONSE) ===
-Name: ${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim()
-
-  ctx += `
+  let ctx = `=== LEAD FILE (READ THIS BEFORE EVERY RESPONSE) ===
+Name: ${`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Unknown"}
 Phone: ${lead.phone}
 Service requested: ${lead.service_type ?? "home services"}
 Lead source: ${lead.source ?? "unknown"}
@@ -592,6 +687,25 @@ Today / current time: ${nowFmt}
   if (lead.email) ctx += `Email: ${lead.email}\n`
   if (lead.notes) ctx += `Notes from lead form: ${lead.notes}\n`
 
+  if (upcoming.length > 0) {
+    ctx += `\nUPCOMING APPOINTMENTS (${upcoming.length}):\n`
+    for (const a of upcoming) {
+      ctx += `  • [ID: ${a.id}] ${fmtDate(a.scheduled_at)} — ${a.status}`
+      if (a.address) ctx += ` at ${a.address}`
+      if (a.notes) ctx += ` | Notes: ${a.notes}`
+      if (a.rescheduled_from) ctx += ` | Rescheduled from: ${fmtDate(a.rescheduled_from)}`
+      // Reminder context — so AI knows if this lead has received automated reminders
+      const reminders: string[] = []
+      if (a.confirmation_sms_sent) reminders.push("confirmation SMS sent")
+      if (a.reminder_1d_sms_sent) reminders.push("24h reminder SMS sent")
+      if (a.reminder_2h_sms_sent) reminders.push("2h reminder SMS sent")
+      if (reminders.length > 0) ctx += ` | Automated reminders: ${reminders.join(", ")}`
+      ctx += "\n"
+    }
+    ctx += `\n⚠️ IMPORTANT: If they want to RESCHEDULE, use reschedule_appointment with the appointment ID above and a new slot from the AVAILABLE SLOTS list.
+If they want to CANCEL, confirm first then use cancel_appointment with the appointment ID above.\n`
+  }
+
   if (past.length > 0) {
     ctx += `\nPAST APPOINTMENTS (${past.length}):\n`
     for (const a of past) {
@@ -602,17 +716,16 @@ Today / current time: ${nowFmt}
     }
   }
 
-  if (upcoming.length > 0) {
-    ctx += `\nUPCOMING APPOINTMENTS (${upcoming.length}):\n`
-    for (const a of upcoming) {
-      ctx += `  • ${fmtDate(a.scheduled_at)} — ${a.status}`
-      if (a.address) ctx += ` at ${a.address}`
-      if (a.notes) ctx += ` | Notes: ${a.notes}`
+  if (cancelled.length > 0) {
+    ctx += `\nCANCELLED APPOINTMENTS (${cancelled.length}):\n`
+    for (const a of cancelled) {
+      ctx += `  • ${fmtDate(a.scheduled_at)} — cancelled`
+      if (a.cancelled_at) ctx += ` on ${fmtDate(a.cancelled_at)}`
       ctx += "\n"
     }
   }
 
-  if (past.length === 0 && upcoming.length === 0) {
+  if (past.length === 0 && upcoming.length === 0 && cancelled.length === 0) {
     ctx += `\nNo appointments on record yet.\n`
   }
 

@@ -4,6 +4,7 @@ import { processAndSave } from "@/lib/ai-engine"
 import { sendSMS, formatPhone } from "@/lib/twilio"
 import { notifyNewLead } from "@/lib/notifications"
 import { normalizeLead } from "@/lib/normalize-lead"
+import { buildNoReplySchedule } from "@/lib/sequences"
 
 const CORS_HEADERS = {
   "Access-Control-Allow-Origin": "*",
@@ -177,6 +178,13 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
     return NextResponse.json({ success: true, lead_id: leadId, sms_sent: false }, { headers: CORS_HEADERS })
   }
 
+  const { data: agentCfg } = await supabase
+    .from("ai_agent_config")
+    .select("timezone")
+    .eq("company_id", company.id)
+    .single()
+  const companyTimezone = agentCfg?.timezone ?? "America/New_York"
+
   try {
     const result = await processAndSave(leadId, company.id, null)
 
@@ -193,15 +201,18 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
         .update({ status: "just_came_in", last_message_at: new Date().toISOString() })
         .eq("id", leadId)
 
-      const oneHourFromNow = new Date(Date.now() + 60 * 60 * 1000).toISOString()
-      await supabase.from("sequences").insert({
-        lead_id: leadId,
-        company_id: company.id,
-        sequence_type: "no_reply",
-        step: 1,
-        scheduled_at: oneHourFromNow,
-        status: "pending",
-      })
+      // Pre-create all 7 no_reply follow-up steps so cron just fires them
+      const steps = buildNoReplySchedule(new Date(), companyTimezone)
+      await supabase.from("sequences").insert(
+        steps.map((s) => ({
+          lead_id: leadId,
+          company_id: company.id,
+          sequence_type: "no_reply",
+          step: s.step,
+          scheduled_at: s.scheduledAt.toISOString(),
+          status: "pending",
+        }))
+      )
     }
 
     return NextResponse.json({ success: true, lead_id: leadId, sms_sent: true }, { headers: CORS_HEADERS })

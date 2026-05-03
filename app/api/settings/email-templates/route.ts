@@ -11,8 +11,8 @@ export async function GET() {
   if (!profile?.company_id) return NextResponse.json({ error: "No company" }, { status: 403 })
 
   const { data } = await supabase
-    .from("ai_agent_config")
-    .select("available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, timezone, working_hours_start, working_hours_end, per_day_slots")
+    .from("email_templates")
+    .select("*")
     .eq("company_id", profile.company_id)
     .single()
 
@@ -29,20 +29,14 @@ export async function POST(req: NextRequest) {
   if (!profile?.company_id) return NextResponse.json({ error: "No company" }, { status: 403 })
 
   const body = await req.json()
-  const { available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, timezone, per_day_slots } = body
 
   await supabase
-    .from("ai_agent_config")
-    .update({
-      available_days,
-      appointment_windows,
-      booking_horizon_days,
-      max_appointments_per_day: max_appointments_per_day ?? null,
-      timezone,
-      ...(per_day_slots !== undefined ? { per_day_slots } : {}),
+    .from("email_templates")
+    .upsert({
+      company_id: profile.company_id,
+      ...body,
       updated_at: new Date().toISOString(),
-    })
-    .eq("company_id", profile.company_id)
+    }, { onConflict: "company_id" })
 
   return NextResponse.json({ success: true })
 }
