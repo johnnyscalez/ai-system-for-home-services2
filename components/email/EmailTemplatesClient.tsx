@@ -1,13 +1,12 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useEffect, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
-import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
-  CheckCircle2, Clock, Mail, Save, Upload, Loader2,
+  CheckCircle2, Clock, Mail, Upload, Loader2,
   ToggleLeft, ToggleRight, MessageSquare, Eye, ExternalLink
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -63,10 +62,11 @@ export function EmailTemplatesClient({
 }) {
   const [activeTab, setActiveTab] = useState<TemplateKey>("confirmation")
   const [templates, setTemplates] = useState<Templates>(initialTemplates ?? {})
-  const [saving, setSaving] = useState(false)
-  const [saved, setSaved] = useState(false)
+  const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle")
   const [uploading, setUploading] = useState(false)
   const [activeView, setActiveView] = useState<"settings" | "preview">("settings")
+  const isFirstRender = useRef(true)
+  const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const previewData = {
     leadName: "Michael",
@@ -89,8 +89,33 @@ export function EmailTemplatesClient({
 
   function update(key: keyof Templates, value: string | boolean) {
     setTemplates(prev => ({ ...prev, [key]: value }))
-    setSaved(false)
   }
+
+  const doSave = useCallback(async (data: Templates) => {
+    setSaveStatus("saving")
+    try {
+      await fetch("/api/settings/email-templates", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(data),
+      })
+      setSaveStatus("saved")
+      setTimeout(() => setSaveStatus("idle"), 2500)
+    } catch {
+      setSaveStatus("idle")
+    }
+  }, [])
+
+  // Auto-save 1.5s after any change, skip on first render
+  useEffect(() => {
+    if (isFirstRender.current) {
+      isFirstRender.current = false
+      return
+    }
+    if (saveTimer.current) clearTimeout(saveTimer.current)
+    saveTimer.current = setTimeout(() => doSave(templates), 1500)
+    return () => { if (saveTimer.current) clearTimeout(saveTimer.current) }
+  }, [templates, doSave])
 
   const handleLogoUpload = useCallback(async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0]
@@ -105,21 +130,6 @@ export function EmailTemplatesClient({
     } catch { /* non-fatal */ }
     finally { setUploading(false) }
   }, [])
-
-  const handleSave = async () => {
-    setSaving(true)
-    setSaved(false)
-    try {
-      await fetch("/api/settings/email-templates", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(templates),
-      })
-      setSaved(true)
-      setTimeout(() => setSaved(false), 3000)
-    } catch { /* non-fatal */ }
-    finally { setSaving(false) }
-  }
 
   const enabled = getField(templates, activeTab, "enabled") as boolean
   const subject = getField(templates, activeTab, "subject") as string
@@ -147,19 +157,29 @@ export function EmailTemplatesClient({
               </h1>
               <p className="text-sm text-[#78716C] mt-1">Automated confirmations and reminders sent to your leads</p>
             </div>
-            <div className="flex items-center gap-3">
-              {saved && (
+            <div className="flex items-center gap-2 text-xs font-medium">
+              {saveStatus === "saving" && (
                 <motion.span
-                  initial={{ opacity: 0, x: 8 }}
-                  animate={{ opacity: 1, x: 0 }}
-                  className="flex items-center gap-1.5 text-xs text-emerald-500 font-medium"
+                  initial={{ opacity: 0 }}
+                  animate={{ opacity: 1 }}
+                  className="flex items-center gap-1.5 text-[#78716C]"
+                >
+                  <Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…
+                </motion.span>
+              )}
+              {saveStatus === "saved" && (
+                <motion.span
+                  initial={{ opacity: 0, y: 4 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0 }}
+                  className="flex items-center gap-1.5 text-emerald-500"
                 >
                   <CheckCircle2 className="w-3.5 h-3.5" /> Saved
                 </motion.span>
               )}
-              <Button onClick={handleSave} disabled={saving} size="sm" className="gap-1.5 bg-[#7C3AED] hover:bg-[#6D28D9]">
-                {saving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</> : <><Save className="w-3.5 h-3.5" /> Save changes</>}
-              </Button>
+              {saveStatus === "idle" && (
+                <span className="text-[#A8A29E]">Changes save automatically</span>
+              )}
             </div>
           </div>
 
