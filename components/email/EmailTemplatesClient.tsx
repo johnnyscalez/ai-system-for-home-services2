@@ -73,7 +73,13 @@ export function EmailTemplatesClient({
   connectedGmailEmail?: string | null
 }) {
   const [activeTab, setActiveTab] = useState<TemplateKey>("confirmation")
-  const [templates, setTemplates] = useState<Templates>(initialTemplates ?? {})
+  const [templates, setTemplates] = useState<Templates>(() => {
+    const base = initialTemplates ?? {}
+    if (!base.reply_to_email && connectedGmailEmail) {
+      return { ...base, reply_to_email: connectedGmailEmail }
+    }
+    return base
+  })
   const [saveStatus, setSaveStatus] = useState<"idle" | "saving" | "saved">("idle")
   const [uploading, setUploading] = useState(false)
   const [activeView, setActiveView] = useState<"settings" | "preview">("settings")
@@ -361,10 +367,12 @@ export function EmailTemplatesClient({
                               type="email"
                               value={templates.reply_to_email ?? ""}
                               onChange={e => update("reply_to_email", e.target.value)}
-                              placeholder="you@yourcompany.com"
+                              placeholder={connectedGmailEmail ?? "you@yourcompany.com"}
                               className="mt-1.5 text-sm"
                             />
-                            <p className="text-xs text-[#A8A29E] mt-1">When leads reply to the email, it goes to this address.</p>
+                            <p className="text-xs text-[#A8A29E] mt-1">
+                              When leads reply to the email, it goes to this address — not necessarily the Gmail you send from.
+                            </p>
                           </div>
                         </div>
                       </>
