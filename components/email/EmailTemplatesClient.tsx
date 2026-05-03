@@ -11,7 +11,7 @@ import {
   ToggleLeft, ToggleRight, MessageSquare, Eye, ExternalLink
 } from "lucide-react"
 import { cn } from "@/lib/utils"
-import { buildEmailHtml, type EmailTemplateType } from "@/lib/email"
+import { buildEmailHtml, type EmailTemplateType } from "@/lib/email-builder"
 
 type TemplateKey = "confirmation" | "reminder_2d" | "reminder_1d" | "reminder_2h"
 
