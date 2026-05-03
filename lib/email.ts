@@ -4,8 +4,6 @@ import { buildEmailHtml, type EmailTemplateType, type AppointmentEmailData } fro
 
 export type { EmailTemplateType, AppointmentEmailData } from "@/lib/email-builder"
 
-const resend = new Resend(process.env.RESEND_API_KEY)
-
 export type GmailCredentials = {
   accessToken: string
   refreshToken: string
@@ -48,6 +46,7 @@ export async function sendAppointmentEmail(
   }
 
   const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
+  const resend = new Resend(process.env.RESEND_API_KEY)
   await resend.emails.send({
     from: `${fromName} <${fromEmail}>`,
     to,
