@@ -11,23 +11,18 @@ export default async function EmailPage() {
     .from("users").select("company_id").eq("id", user.id).single()
   if (!profile?.company_id) redirect("/onboarding")
 
-  const { data: templates } = await supabase
-    .from("email_templates")
-    .select("*")
-    .eq("company_id", profile.company_id)
-    .single()
-
-  const { data: company } = await supabase
-    .from("companies")
-    .select("name, service_type")
-    .eq("id", profile.company_id)
-    .single()
+  const [{ data: templates }, { data: company }, { data: gmailConn }] = await Promise.all([
+    supabase.from("email_templates").select("*").eq("company_id", profile.company_id).single(),
+    supabase.from("companies").select("name, service_type").eq("id", profile.company_id).single(),
+    supabase.from("gmail_connections").select("gmail_email, is_connected").eq("company_id", profile.company_id).eq("is_connected", true).single(),
+  ])
 
   return (
     <EmailTemplatesClient
       initialTemplates={templates ?? null}
       companyName={company?.name ?? "Your Company"}
       serviceType={company?.service_type ?? "home services"}
+      connectedGmailEmail={gmailConn?.gmail_email ?? null}
     />
   )
 }

@@ -1,5 +1,5 @@
 import { createServiceRoleClient } from "@/lib/supabase-server"
-import { sendAppointmentEmail, type EmailTemplateType } from "@/lib/email"
+import { sendAppointmentEmail, type EmailTemplateType, type GmailCredentials } from "@/lib/email"
 import { sendSMS } from "@/lib/twilio"
 
 async function getContext(appointmentId: string) {
@@ -32,7 +32,21 @@ async function getContext(appointmentId: string) {
     .eq("is_active", true)
     .single()
 
-  return { apt, agentCfg, emailTpl, phoneNum }
+  const { data: gmailConn } = await supabase
+    .from("gmail_connections")
+    .select("gmail_email, access_token, refresh_token")
+    .eq("company_id", apt.company_id)
+    .eq("is_connected", true)
+    .single()
+
+  return { apt, agentCfg, emailTpl, phoneNum, gmailConn }
+}
+
+async function persistGmailToken(supabase: ReturnType<typeof createServiceRoleClient>, companyId: string, newToken: string) {
+  await supabase
+    .from("gmail_connections")
+    .update({ access_token: newToken, updated_at: new Date().toISOString() })
+    .eq("company_id", companyId)
 }
 
 export async function sendConfirmations(appointmentId: string) {
@@ -40,7 +54,7 @@ export async function sendConfirmations(appointmentId: string) {
   const ctx = await getContext(appointmentId)
   if (!ctx) return
 
-  const { apt, agentCfg, emailTpl, phoneNum } = ctx
+  const { apt, agentCfg, emailTpl, phoneNum, gmailConn } = ctx
   const lead = apt.leads as { first_name: string | null; last_name: string | null; phone: string; email: string | null } | null
   const company = apt.companies as { name: string; service_type: string | null } | null
   if (!lead || !company) return
@@ -48,6 +62,15 @@ export async function sendConfirmations(appointmentId: string) {
   const timezone = agentCfg?.timezone ?? "America/New_York"
   const leadName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "there"
   const companyName = emailTpl?.from_name || company.name
+
+  const gmail: GmailCredentials | null = gmailConn
+    ? {
+        accessToken: gmailConn.access_token,
+        refreshToken: gmailConn.refresh_token,
+        fromEmail: gmailConn.gmail_email,
+        onTokenRefresh: (t) => persistGmailToken(supabase, apt.company_id, t),
+      }
+    : null
 
   const emailData = {
     leadName,
@@ -71,6 +94,7 @@ export async function sendConfirmations(appointmentId: string) {
         emailData,
         emailTpl?.confirmation_subject,
         emailTpl?.confirmation_custom_message,
+        gmail,
       )
       await supabase.from("appointments").update({ confirmation_email_sent: true }).eq("id", appointmentId)
     } catch (err) {
@@ -156,6 +180,22 @@ export async function processAppointmentReminders() {
       .eq("is_active", true)
       .single()
 
+    const { data: gmailConn } = await supabase
+      .from("gmail_connections")
+      .select("gmail_email, access_token, refresh_token")
+      .eq("company_id", apt.company_id)
+      .eq("is_connected", true)
+      .single()
+
+    const gmail: GmailCredentials | null = gmailConn
+      ? {
+          accessToken: gmailConn.access_token,
+          refreshToken: gmailConn.refresh_token,
+          fromEmail: gmailConn.gmail_email,
+          onTokenRefresh: (t) => persistGmailToken(supabase, apt.company_id, t),
+        }
+      : null
+
     const timezone = agentCfg?.timezone ?? "America/New_York"
     const leadName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "there"
     const companyName = emailTpl?.from_name || company.name
@@ -183,7 +223,7 @@ export async function processAppointmentReminders() {
     async function sendReminderEmail(type: EmailTemplateType, subject?: string | null, message?: string | null) {
       if (!lead!.email) return
       try {
-        await sendAppointmentEmail(lead!.email!, type, emailData, subject, message)
+        await sendAppointmentEmail(lead!.email!, type, emailData, subject, message, gmail)
       } catch (err) {
         console.error(`[reminders] ${type} email failed:`, err)
       }

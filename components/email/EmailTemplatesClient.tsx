@@ -8,7 +8,7 @@ import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import {
   CheckCircle2, Clock, Mail, Save, Upload, Loader2,
-  ToggleLeft, ToggleRight, MessageSquare, Eye
+  ToggleLeft, ToggleRight, MessageSquare, Eye, ExternalLink
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { buildEmailHtml, type EmailTemplateType } from "@/lib/email"
@@ -54,10 +54,12 @@ export function EmailTemplatesClient({
   initialTemplates,
   companyName,
   serviceType,
+  connectedGmailEmail,
 }: {
   initialTemplates: Templates | null
   companyName: string
   serviceType: string
+  connectedGmailEmail?: string | null
 }) {
   const [activeTab, setActiveTab] = useState<TemplateKey>("confirmation")
   const [templates, setTemplates] = useState<Templates>(initialTemplates ?? {})
@@ -159,6 +161,26 @@ export function EmailTemplatesClient({
                 {saving ? <><Loader2 className="w-3.5 h-3.5 animate-spin" /> Saving…</> : <><Save className="w-3.5 h-3.5" /> Save changes</>}
               </Button>
             </div>
+          </div>
+
+          {/* Gmail connection status banner */}
+          <div className={cn(
+            "flex items-center gap-3 px-4 py-3 rounded-xl border mb-5 text-sm",
+            connectedGmailEmail
+              ? "bg-emerald-50 border-emerald-200 text-emerald-800"
+              : "bg-amber-50 border-amber-200 text-amber-800"
+          )}>
+            <Mail className="w-4 h-4 shrink-0" />
+            {connectedGmailEmail ? (
+              <span>Emails sent from <strong>{connectedGmailEmail}</strong> via your Gmail account.</span>
+            ) : (
+              <span>
+                No Gmail connected — emails sent via LeadReply.{" "}
+                <a href="/api/auth/gmail?return_to=settings" className="underline font-medium hover:opacity-80">
+                  Connect Gmail <ExternalLink className="w-3 h-3 inline ml-0.5" />
+                </a>
+              </span>
+            )}
           </div>
 
           {/* 4 template cards */}

@@ -1,6 +1,14 @@
 import { Resend } from "resend"
+import { sendEmailViaGmail } from "@/lib/gmail"
 
 const resend = new Resend(process.env.RESEND_API_KEY)
+
+export type GmailCredentials = {
+  accessToken: string
+  refreshToken: string
+  fromEmail: string
+  onTokenRefresh?: (newToken: string) => void
+}
 
 export type EmailTemplateType = "confirmation" | "reminder_2d" | "reminder_1d" | "reminder_2h"
 
@@ -141,6 +149,7 @@ export async function sendAppointmentEmail(
   data: AppointmentEmailData,
   subject?: string | null,
   customMessage?: string | null,
+  gmail?: GmailCredentials | null,
 ): Promise<void> {
   const defaultSubjects: Record<EmailTemplateType, string> = {
     confirmation: `Your Appointment is Confirmed ✓`,
@@ -149,14 +158,31 @@ export async function sendAppointmentEmail(
     reminder_2h: `Your Appointment Starts in 2 Hours — ${data.companyName}`,
   }
 
+  const resolvedSubject = subject || defaultSubjects[templateType]
+  const html = buildEmailHtml(templateType, data, customMessage)
   const fromName = data.fromName || data.companyName
-  const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
 
+  if (gmail) {
+    await sendEmailViaGmail(
+      gmail.accessToken,
+      gmail.refreshToken,
+      to,
+      resolvedSubject,
+      html,
+      fromName,
+      gmail.fromEmail,
+      data.replyToEmail ?? null,
+      gmail.onTokenRefresh,
+    )
+    return
+  }
+
+  const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
   await resend.emails.send({
     from: `${fromName} <${fromEmail}>`,
     to,
-    subject: subject || defaultSubjects[templateType],
-    html: buildEmailHtml(templateType, data, customMessage),
+    subject: resolvedSubject,
+    html,
     ...(data.replyToEmail ? { replyTo: data.replyToEmail } : {}),
   })
 }
