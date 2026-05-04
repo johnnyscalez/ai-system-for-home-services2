@@ -104,6 +104,37 @@ export async function POST(req: NextRequest) {
         fields["last_name"] ||
         (fullName.includes(" ") ? fullName.split(" ").slice(1).join(" ") : null)
 
+      // Extract job/project details from any non-identity form fields.
+      // Facebook lead forms often include custom questions like "What type of service do you need?"
+      // We capture everything that isn't phone/name/email/location as notes so the AI can use it.
+      const IDENTITY_KEYS = new Set([
+        "phone_number", "phone", "mobile_phone", "mobile",
+        "first_name", "last_name", "full_name", "email", "email_address",
+        "city", "state", "zip", "zip_code", "country", "postal_code",
+      ])
+      const JOB_TYPE_KEYS = [
+        "job_type", "service_type", "service_requested", "service_needed",
+        "type_of_service", "project_type", "service_interest",
+        "what_type_of_service", "what_service_do_you_need",
+      ]
+
+      // Pull explicit job-type field first
+      let jobType: string | null = null
+      for (const k of JOB_TYPE_KEYS) {
+        if (fields[k]) { jobType = fields[k]; break }
+      }
+
+      // Collect all remaining custom question answers as notes
+      const extraParts: string[] = []
+      if (jobType) extraParts.push(jobType)
+      for (const [k, v] of Object.entries(fields)) {
+        if (!v || IDENTITY_KEYS.has(k) || JOB_TYPE_KEYS.includes(k)) continue
+        // Format the key nicely: "what_is_the_issue" → "What is the issue"
+        const label = k.replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase())
+        extraParts.push(`${label}: ${v}`)
+      }
+      const formNotes = extraParts.length > 0 ? extraParts.join(" | ") : null
+
       // Upsert lead
       const { data: existing } = await supabase
         .from("leads")
@@ -134,7 +165,8 @@ export async function POST(req: NextRequest) {
             source: "facebook",
             source_form_id: form_id,
             status: "just_came_in",
-            metadata: { leadgen_id, page_id, form_id },
+            notes: formNotes,
+            metadata: { leadgen_id, page_id, form_id, job_type: jobType },
           })
           .select("id")
           .single()

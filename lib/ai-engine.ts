@@ -222,7 +222,9 @@ export async function runConversation(
 - 1-2 sentences max.
 - Feel personal, not mass-text.
 - Do NOT start with "Hi!" — be natural.
-- Reference their service interest to personalise it.
+- If "Notes from lead form" appears in the lead file, use that specific detail to personalize the message — say "AC repair" not "HVAC", say "new roof" not "roofing". Be specific about what they need, not just the service category.
+- If there are no notes, reference their general service interest naturally.
+- Never say "I saw you reached out about [service category]" — that sounds like a form letter.
 - Working hours rules do NOT apply here — just write the message text.`,
     })
   } else if (isFollowUp) {
