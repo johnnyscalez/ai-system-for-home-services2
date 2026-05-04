@@ -5,7 +5,7 @@ import { getOrCreateSession, appendMessages } from "@/lib/voice-session"
 
 export const runtime = "nodejs"
 
-const VOICE = "Polly.Joanna-Neural"
+const VOICE = "Google.en-US-Studio-O"
 
 function twiml(xml: string) {
   return new NextResponse(xml, { status: 200, headers: { "Content-Type": "text/xml" } })
