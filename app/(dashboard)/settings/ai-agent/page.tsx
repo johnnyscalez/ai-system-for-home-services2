@@ -4,7 +4,6 @@ import { useState, useEffect } from "react"
 import { createClient } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
-import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import {
@@ -34,17 +33,6 @@ const HORIZON_OPTIONS = [
   { value: 14, label: "2 weeks" },
 ]
 
-const TONES = [
-  { value: "friendly_professional", label: "Friendly & Professional" },
-  { value: "casual", label: "Casual" },
-  { value: "formal", label: "Formal" },
-]
-
-const GOALS = [
-  { value: "book_estimate", label: "Book estimate appointment" },
-  { value: "qualify_first", label: "Qualify first, then book" },
-  { value: "gather_info", label: "Gather project details" },
-]
 
 export default function AIAgentPage() {
   const supabase = createClient()
@@ -52,9 +40,6 @@ export default function AIAgentPage() {
   const [company, setCompany] = useState<{ name: string; service_type: string; service_area: string } | null>(null)
   const [kb, setKb] = useState<Partial<KnowledgeBaseData>>({})
 
-  const [agentName, setAgentName] = useState("Alex")
-  const [tone, setTone] = useState("friendly_professional")
-  const [primaryGoal, setPrimaryGoal] = useState("book_estimate")
   const [customInstructions, setCustomInstructions] = useState("")
   const [qualifyingQuestions, setQualifyingQuestions] = useState<{ id: string; question: string }[]>([])
   const [objectionResponses, setObjectionResponses] = useState<Record<string, string>>({})
@@ -94,9 +79,6 @@ export default function AIAgentPage() {
 
       const { data: config } = await supabase.from("ai_agent_config").select("*").eq("company_id", profile.company_id).single()
       if (config) {
-        setAgentName(config.agent_name ?? "Alex")
-        setTone(config.tone ?? "friendly_professional")
-        setPrimaryGoal(config.primary_goal ?? "book_estimate")
         setCustomInstructions(config.custom_instructions ?? "")
         setQualifyingQuestions((config.qualifying_questions as { id: string; question: string }[]) ?? [])
         setObjectionResponses((config.objection_responses as Record<string, string>) ?? {})
@@ -138,9 +120,9 @@ export default function AIAgentPage() {
         ...kb,
       }
       const config: AgentConfigData = {
-        agentName,
-        tone,
-        primaryGoal,
+        agentName: "Linda",
+        tone: "friendly_professional",
+        primaryGoal: "book_estimate",
         customInstructions,
         qualifyingQuestions: qualifyingQuestions.filter((q) => q.question),
         objectionResponses,
@@ -165,9 +147,9 @@ export default function AIAgentPage() {
     setSaving(true)
     await supabase.from("ai_agent_config").upsert({
       company_id: companyId,
-      agent_name: agentName,
-      tone,
-      primary_goal: primaryGoal,
+      agent_name: "Linda",
+      tone: "friendly_professional",
+      primary_goal: "book_estimate",
       custom_instructions: customInstructions || null,
       qualifying_questions: qualifyingQuestions,
       objection_responses: objectionResponses,
@@ -196,53 +178,6 @@ export default function AIAgentPage() {
            saved ? <><CheckCircle2 className="w-3.5 h-3.5" />Saved</> :
            <><Save className="w-3.5 h-3.5" />Save</>}
         </Button>
-      </div>
-
-      {/* Identity */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Identity</h2>
-        <div className="space-y-1.5 max-w-xs">
-          <Label>Agent name</Label>
-          <Input value={agentName} onChange={(e) => { setAgentName(e.target.value); setSaved(false) }} placeholder="Alex" />
-        </div>
-      </div>
-
-      {/* Tone */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Tone</h2>
-        <div className="flex flex-wrap gap-2">
-          {TONES.map((t) => (
-            <button
-              key={t.value}
-              onClick={() => { setTone(t.value); setSaved(false) }}
-              className={cn(
-                "px-4 py-2 rounded-lg border text-sm transition-all",
-                tone === t.value ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:border-primary/40"
-              )}
-            >
-              {t.label}
-            </button>
-          ))}
-        </div>
-      </div>
-
-      {/* Goal */}
-      <div className="space-y-3">
-        <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Primary goal</h2>
-        <div className="flex flex-wrap gap-2">
-          {GOALS.map((g) => (
-            <button
-              key={g.value}
-              onClick={() => { setPrimaryGoal(g.value); setSaved(false) }}
-              className={cn(
-                "px-4 py-2 rounded-lg border text-sm transition-all",
-                primaryGoal === g.value ? "border-primary bg-primary/10 text-foreground" : "border-border text-muted-foreground hover:border-primary/40"
-              )}
-            >
-              {g.label}
-            </button>
-          ))}
-        </div>
       </div>
 
       {/* Working hours */}
