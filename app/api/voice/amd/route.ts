@@ -27,71 +27,68 @@ export async function POST(req: NextRequest) {
 
   const db = createServiceRoleClient()
 
-  // Leave a voicemail if machine detected at end of message (machine_end_beep)
-  // For machine_start we cancel immediately — no point leaving a partial voicemail
+  // Helper: find the next pending SMS step (not voice) and move it up to ~5 min from now.
+  // This avoids creating a new step 1 voice entry which would cause an infinite call loop.
+  async function expediteNextSmsStep(delayMs: number) {
+    if (!leadId) return
+    const { data: pending } = await db
+      .from("sequences")
+      .select("id, step")
+      .eq("lead_id", leadId)
+      .eq("sequence_type", "no_reply")
+      .eq("status", "pending")
+      .order("step", { ascending: true })
+    // Voice steps are 1 and 4 — skip those, pick the first SMS step
+    const next = pending?.find((s) => s.step !== 1 && s.step !== 4)
+    if (next) {
+      await db.from("sequences")
+        .update({ scheduled_at: new Date(Date.now() + delayMs).toISOString() })
+        .eq("id", next.id)
+    }
+  }
+
+  // machine_start — cancel immediately, let pre-scheduled SMS steps handle follow-up
   if (answeredBy === "machine_start") {
     try {
       const twilio = getTwilioClient()
       await twilio.calls(callSid).update({ status: "completed" })
       await updateSession(callSid, { status: "completed" })
-
-      // Schedule SMS follow-up instead
-      if (leadId) {
-        await db.from("sequences").insert({
-          lead_id:       leadId,
-          company_id:    session.company_id,
-          sequence_type: "no_reply",
-          step:          1,
-          scheduled_at:  new Date(Date.now() + 2 * 60 * 1000).toISOString(), // 2 min
-          status:        "pending",
-        })
-      }
+      // Move the next SMS step up to fire in 5 min instead of waiting days
+      await expediteNextSmsStep(5 * 60 * 1000)
     } catch { /* non-blocking */ }
-
     return NextResponse.json({ ok: true })
   }
 
-  // machine_end_beep — leave a brief voicemail then hang up
-  // We modify the call to play a voicemail TwiML
+  // machine_end_beep — leave a brief voicemail, then expedite next SMS step
   if (answeredBy === "machine_end_beep") {
     try {
       const { data: agentConfig } = await db
         .from("ai_agent_config")
-        .select("agent_name")
+        .select("agent_name, timezone")
         .eq("company_id", session.company_id)
         .single()
 
-      const { data: kb } = await db
-        .from("knowledge_base")
-        .select("business_description")
-        .eq("company_id", session.company_id)
+      const { data: lead } = await db
+        .from("leads")
+        .select("service_type")
+        .eq("id", session.lead_id)
         .single()
 
-      const agentName = agentConfig?.agent_name ?? "Linda"
-      const appUrl    = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+      const agentName   = agentConfig?.agent_name ?? "Linda"
+      const serviceType = lead?.service_type ?? "home services"
 
       const twilio = getTwilioClient()
       await twilio.calls(callSid).update({
         twiml: `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Joanna-Neural">Hi, this is ${agentName} calling about your HVAC inquiry. I wanted to reach out and schedule a free on-site estimate for you. Please give us a call back or reply to our text message and we'll get you taken care of. Talk soon!</Say>
+  <Say voice="Polly.Joanna-Neural">Hi, this is ${agentName} calling about your ${serviceType} inquiry. I wanted to reach out and get you scheduled for a free on-site estimate. Please give us a call back or just reply to our text and we will get you taken care of. Talk soon!</Say>
   <Hangup/>
 </Response>`,
       })
 
       await updateSession(callSid, { status: "completed" })
-
-      // Schedule SMS follow-up after voicemail
-      if (leadId) {
-        await db.from("sequences").insert({
-          lead_id:       leadId,
-          company_id:    session.company_id,
-          sequence_type: "no_reply",
-          step:          1,
-          scheduled_at:  new Date(Date.now() + 3 * 60 * 1000).toISOString(), // 3 min after voicemail
-          status:        "pending",
-        })
-      }
+      // Expedite the next SMS step to fire shortly after the voicemail
+      await expediteNextSmsStep(5 * 60 * 1000)
     } catch { /* non-blocking */ }
   }
 

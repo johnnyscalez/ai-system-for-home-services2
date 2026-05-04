@@ -30,27 +30,25 @@ export async function POST(req: NextRequest) {
 
   await updateSession(callSid, { status: sessionStatus })
 
-  // If no-answer or busy on outbound — fall back to SMS
+  // If no-answer or busy on outbound — expedite the next pending SMS step.
+  // Do NOT insert a new step 1 (voice) — that creates an infinite call loop.
   if ((callStatus === "no-answer" || callStatus === "busy") && session.direction === "outbound") {
     try {
-      // Trigger SMS follow-up for unanswered outbound call
-      await db.from("sequences").insert({
-        lead_id:    session.lead_id,
-        company_id: session.company_id,
-        sequence_type: "no_reply",
-        step: 1,
-        scheduled_at: new Date(Date.now() + 5 * 60 * 1000).toISOString(), // 5 min
-        status: "pending",
-      })
+      const { data: pending } = await db
+        .from("sequences")
+        .select("id, step")
+        .eq("lead_id", session.lead_id)
+        .eq("sequence_type", "no_reply")
+        .eq("status", "pending")
+        .order("step", { ascending: true })
+      // Voice steps are 1 and 4 — skip those
+      const next = pending?.find((s) => s.step !== 1 && s.step !== 4)
+      if (next) {
+        await db.from("sequences")
+          .update({ scheduled_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() })
+          .eq("id", next.id)
+      }
     } catch { /* non-blocking */ }
-  }
-
-  // If call failed unexpectedly — flag for attention
-  if (callStatus === "failed") {
-    await db.from("leads")
-      .update({ status: "needs_attention" })
-      .eq("id", session.lead_id)
-      .in("status", ["new", "contacted"])
   }
 
   // Log call duration on lead metadata
