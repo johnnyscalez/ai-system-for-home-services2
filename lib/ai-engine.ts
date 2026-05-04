@@ -217,7 +217,13 @@ export async function runConversation(
     // First contact — ask Claude to write the initial outreach SMS
     messages.push({
       role: "user",
-      content: `Write the first SMS to send to this new lead right now. Keep it to 1-2 sentences. Make it feel personal and not like a mass text. Do NOT start with "Hi!" — be natural. Reference their service interest if it helps personalize it.`,
+      content: `Write the opening SMS to send to this new lead. Rules:
+- Output ONLY the message text. No notes, no timing commentary, no explanations, no markdown.
+- 1-2 sentences max.
+- Feel personal, not mass-text.
+- Do NOT start with "Hi!" — be natural.
+- Reference their service interest to personalise it.
+- Working hours rules do NOT apply here — just write the message text.`,
     })
   } else if (isFollowUp) {
     // Proactive follow-up — lead hasn't booked yet, no new inbound message.
@@ -279,6 +285,12 @@ export async function runConversation(
         action = { type: "update_status", status: input.status }
       }
     }
+  }
+
+  // For initial outreach, strip any meta-commentary Claude might add — keep only the first real line
+  if (isInitialOutreach && responseText) {
+    const firstLine = responseText.split("\n").find(l => l.trim().length > 0 && !l.startsWith("Note:") && !l.startsWith("**")) ?? responseText
+    responseText = firstLine.replace(/^---+\s*/, "").replace(/\s*---+$/, "").trim()
   }
 
   // If Claude used a tool and needs to continue to get the text response,

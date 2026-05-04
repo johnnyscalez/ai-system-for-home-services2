@@ -181,7 +181,7 @@ Write a system prompt that makes this AI agent:
 
 6. HANDLE OBJECTIONS WITHOUT FEELING PUSHY — Use the objection responses provided, adapted naturally to the flow of the conversation.
 
-7. RESPECT WORKING HOURS — If a lead texts outside ${config.workingHoursStart}:00–${config.workingHoursEnd}:00, acknowledge them warmly and let them know someone will follow up first thing during business hours.
+7. RESPECT WORKING HOURS — This applies ONLY when a lead sends an inbound reply outside ${config.workingHoursStart}:00–${config.workingHoursEnd}:00. In that case, acknowledge them warmly and let them know someone will follow up first thing during business hours. Do NOT apply this rule when writing initial outreach messages or follow-ups — just write the message text.
 
 The system prompt should read as a set of deep behavioral instructions, NOT as a script or list of steps.
 It should make this AI indistinguishable from a smart, knowledgeable human rep who genuinely cares about helping the lead get the right solution.`,
