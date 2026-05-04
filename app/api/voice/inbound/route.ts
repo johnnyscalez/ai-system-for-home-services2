@@ -1,8 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { formatPhone } from "@/lib/twilio"
-import { getOrCreateSession } from "@/lib/voice-session"
-import { runVoiceTurn } from "@/lib/voice-engine"
+import { getOrCreateSession, appendMessages } from "@/lib/voice-session"
 
 export const runtime = "nodejs"
 
@@ -42,18 +41,16 @@ function errorTwiML(): string {
 export async function POST(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
 
-  // Parse Twilio's form-encoded body
   const body = await req.formData().catch(() => null)
   if (!body) return twiml(errorTwiML())
 
-  const callSid   = body.get("CallSid")?.toString()
-  const fromRaw   = body.get("From")?.toString() ?? ""
-  const toRaw     = body.get("To")?.toString() ?? ""
+  const callSid = body.get("CallSid")?.toString()
+  const fromRaw = body.get("From")?.toString() ?? ""
+  const toRaw   = body.get("To")?.toString() ?? ""
 
   if (!callSid) return twiml(errorTwiML())
 
-  // Support outbound calls: leadId + companyId passed as query params
-  const url = new URL(req.url)
+  const url              = new URL(req.url)
   const leadIdParam      = url.searchParams.get("leadId")
   const companyIdParam   = url.searchParams.get("companyId")
   const direction        = (url.searchParams.get("direction") ?? "inbound") as "inbound" | "outbound"
@@ -64,13 +61,23 @@ export async function POST(req: NextRequest) {
 
   let leadId: string
   let companyId: string
+  let leadFirstName: string | null = null
+  let leadServiceType: string | null = null
 
   if (leadIdParam && companyIdParam) {
-    // Outbound call — ids pre-specified
     leadId    = leadIdParam
     companyId = companyIdParam
+
+    const { data: lead } = await db
+      .from("leads")
+      .select("first_name, service_type, ai_paused")
+      .eq("id", leadId)
+      .single()
+
+    if (lead?.ai_paused) return twiml(errorTwiML())
+    leadFirstName   = lead?.first_name   ?? null
+    leadServiceType = lead?.service_type ?? null
   } else {
-    // Inbound call — look up company by Twilio number, lead by caller number
     const { data: phoneRecord } = await db
       .from("phone_numbers")
       .select("company_id")
@@ -85,7 +92,7 @@ export async function POST(req: NextRequest) {
 
     let { data: lead } = await db
       .from("leads")
-      .select("id, status, ai_paused")
+      .select("id, status, ai_paused, first_name, service_type")
       .eq("company_id", companyId)
       .eq("phone", normalizedFrom)
       .maybeSingle()
@@ -94,7 +101,7 @@ export async function POST(req: NextRequest) {
       const { data: newLead } = await db
         .from("leads")
         .insert({ company_id: companyId, phone: normalizedFrom, source: "voice_inbound", status: "new" })
-        .select("id, status, ai_paused")
+        .select("id, status, ai_paused, first_name, service_type")
         .single()
       lead = newLead
     }
@@ -102,26 +109,51 @@ export async function POST(req: NextRequest) {
     if (!lead) return twiml(errorTwiML())
     if (lead.ai_paused) return twiml(errorTwiML())
 
-    leadId = lead.id
+    leadId          = lead.id
+    leadFirstName   = lead.first_name   ?? null
+    leadServiceType = lead.service_type ?? null
   }
 
   try {
-    const initialCollected: Record<string, string> = {
-      ...(callbackReason ? { callback_reason: callbackReason } : {}),
-      ...(isFollowUp ? { is_follow_up: "true" } : {}),
-    }
-    const session = await getOrCreateSession(callSid, leadId, companyId, direction, initialCollected)
+    const [sessionResult, agentResult] = await Promise.all([
+      getOrCreateSession(callSid, leadId, companyId, direction, {
+        ...(callbackReason ? { callback_reason: callbackReason } : {}),
+        ...(isFollowUp ? { is_follow_up: "true" } : {}),
+      }),
+      db.from("ai_agent_config").select("agent_name").eq("company_id", companyId).single(),
+    ])
 
-    // Update lead status to contacted
+    const session   = sessionResult
+    const agentName = agentResult.data?.agent_name ?? "Linda"
+
+    // Mark new leads as contacted
     await db.from("leads")
       .update({ status: "contacted", last_message_at: new Date().toISOString() })
       .eq("id", leadId)
       .eq("status", "new")
 
-    // Generate greeting with Claude
-    const result = await runVoiceTurn(session, null)
+    // Build greeting from template — no Claude call here keeps response well under Twilio's 15s limit.
+    // Claude is invoked on the first real speech turn at /api/voice/turn instead.
+    let greetingText: string
+    if (direction === "outbound") {
+      const nameHi    = leadFirstName ? `, ${leadFirstName}` : ""
+      const serviceOf = leadServiceType ? ` about your ${leadServiceType} inquiry` : ""
+      if (callbackReason) {
+        greetingText = `Hey${nameHi}, this is ${agentName}! Calling you back${serviceOf} — is now a good time?`
+      } else {
+        greetingText = `Hey${nameHi}, this is ${agentName} following up${serviceOf}. Did I catch you at an okay time?`
+      }
+    } else {
+      greetingText = `Thanks for calling! This is ${agentName} — how can I help you today?`
+    }
 
-    return twiml(gatherTwiML(result.text, appUrl))
+    // Seed session history so Claude has full context when /voice/turn is called
+    await appendMessages(session, [
+      { role: "user",      content: direction === "outbound" ? "(outbound call connected)" : "(inbound call connected)" },
+      { role: "assistant", content: greetingText },
+    ])
+
+    return twiml(gatherTwiML(greetingText, appUrl))
   } catch (err) {
     console.error("Voice inbound error:", err)
     return twiml(errorTwiML())
