@@ -35,7 +35,9 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute =
     path === "/" ||
     path === "/api/health" ||
-    path.startsWith("/api/webhooks")
+    path.startsWith("/api/webhooks") ||
+    path.startsWith("/api/voice") ||
+    path.startsWith("/api/cron")
   const isProtected = !isAuthRoute && !isPublicRoute
 
   if (!user && isProtected) {
