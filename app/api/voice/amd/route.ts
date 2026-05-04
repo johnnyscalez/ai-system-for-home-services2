@@ -77,11 +77,13 @@ export async function POST(req: NextRequest) {
       const agentName   = agentConfig?.agent_name ?? "Linda"
       const serviceType = lead?.service_type ?? "home services"
 
+      const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+      const vmText = `Hi, this is ${agentName} calling about your ${serviceType} inquiry. I wanted to reach out and get you scheduled for a free on-site estimate. Please give us a call back or just reply to our text and we will get you taken care of. Talk soon!`
       const twilio = getTwilioClient()
       await twilio.calls(callSid).update({
         twiml: `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Polly.Ruth-Neural">Hi, this is ${agentName} calling about your ${serviceType} inquiry. I wanted to reach out and get you scheduled for a free on-site estimate. Please give us a call back or just reply to our text and we will get you taken care of. Talk soon!</Say>
+  <Play>${appUrl}/api/voice/speak?t=${encodeURIComponent(vmText)}</Play>
   <Hangup/>
 </Response>`,
       })

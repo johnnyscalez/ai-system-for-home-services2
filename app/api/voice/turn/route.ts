@@ -6,24 +6,22 @@ import { notifyAppointmentBooked, notifyNeedsAttention } from "@/lib/notificatio
 
 export const runtime = "nodejs"
 
-const VOICE = "Polly.Ruth-Neural"
-
 function twiml(xml: string) {
   return new NextResponse(xml, { status: 200, headers: { "Content-Type": "text/xml" } })
 }
 
-function escapeXml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;")
+function speakUrl(text: string, appUrl: string): string {
+  return `${appUrl}/api/voice/speak?t=${encodeURIComponent(text)}`
 }
 
 function gatherTwiML(text: string, appUrl: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="${VOICE}">${escapeXml(text)}</Say>
+  <Play>${speakUrl(text, appUrl)}</Play>
   <Gather input="speech" action="${appUrl}/api/voice/turn" method="POST"
     speechTimeout="auto" speechModel="phone_call" enhanced="true" timeout="10" language="en-US">
   </Gather>
-  <Say voice="${VOICE}">Are you still there?</Say>
+  <Play>${speakUrl("Are you still there?", appUrl)}</Play>
   <Gather input="speech" action="${appUrl}/api/voice/turn" method="POST"
     speechTimeout="auto" speechModel="phone_call" enhanced="true" timeout="8" language="en-US">
   </Gather>
@@ -31,25 +29,26 @@ function gatherTwiML(text: string, appUrl: string): string {
 </Response>`
 }
 
-function endTwiML(text: string): string {
+function endTwiML(text: string, appUrl: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="${VOICE}">${escapeXml(text)}</Say>
+  <Play>${speakUrl(text, appUrl)}</Play>
   <Hangup/>
 </Response>`
 }
 
-function transferTwiML(text: string, notificationPhone: string | null): string {
+function transferTwiML(text: string, notificationPhone: string | null, appUrl: string): string {
   if (!notificationPhone) {
-    return endTwiML("I'll have someone from our team call you back shortly. Thanks for calling!")
+    return endTwiML("I'll have someone from our team call you back shortly. Thanks for calling!", appUrl)
   }
+  const unavailableUrl = speakUrl("Looks like they're unavailable right now. Someone will call you back soon. Thanks!", appUrl)
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="${VOICE}">${escapeXml(text)}</Say>
+  <Play>${speakUrl(text, appUrl)}</Play>
   <Dial timeout="30" action="/api/voice/transfer-complete">
-    <Number>${escapeXml(notificationPhone)}</Number>
+    <Number>${notificationPhone}</Number>
   </Dial>
-  <Say voice="${VOICE}">Looks like they're unavailable right now. Someone will call you back soon. Thanks!</Say>
+  <Play>${unavailableUrl}</Play>
   <Hangup/>
 </Response>`
 }
@@ -57,7 +56,7 @@ function transferTwiML(text: string, notificationPhone: string | null): string {
 function retryTwiML(appUrl: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="${VOICE}">Sorry, I didn't quite catch that. Could you say that again?</Say>
+  <Play>${speakUrl("Sorry, I didn't quite catch that. Could you say that again?", appUrl)}</Play>
   <Gather input="speech" action="${appUrl}/api/voice/turn" method="POST"
     speechTimeout="auto" speechModel="phone_call" enhanced="true" timeout="10" language="en-US">
   </Gather>
@@ -69,13 +68,13 @@ export async function POST(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
 
   const body = await req.formData().catch(() => null)
-  if (!body) return twiml(endTwiML("Thanks for calling. Goodbye!"))
+  if (!body) return twiml(endTwiML("Thanks for calling. Goodbye!", appUrl))
 
   const callSid      = body.get("CallSid")?.toString()
   const speechResult = body.get("SpeechResult")?.toString()?.trim()
   const confidence   = parseFloat(body.get("Confidence")?.toString() ?? "1")
 
-  if (!callSid) return twiml(endTwiML("Thanks for calling."))
+  if (!callSid) return twiml(endTwiML("Thanks for calling.", appUrl))
 
   // No speech or very low confidence — ask to repeat
   if (!speechResult || confidence < 0.3) {
@@ -84,7 +83,7 @@ export async function POST(req: NextRequest) {
 
   const session = await getSession(callSid)
   if (!session || session.status !== "active") {
-    return twiml(endTwiML("Thanks for calling. Have a great day!"))
+    return twiml(endTwiML("Thanks for calling. Have a great day!", appUrl))
   }
 
   try {
@@ -102,7 +101,7 @@ export async function POST(req: NextRequest) {
     // Route TwiML based on action
     switch (result.action.type) {
       case "end":
-        return twiml(endTwiML(result.text))
+        return twiml(endTwiML(result.text, appUrl))
 
       case "book": {
         const { data: aptLead } = await db
@@ -140,7 +139,7 @@ export async function POST(req: NextRequest) {
           const name = `${tLead.first_name ?? ""} ${tLead.last_name ?? ""}`.trim() || tLead.phone
           notifyNeedsAttention(session.company_id, name, tLead.phone).catch(() => {})
         }
-        return twiml(transferTwiML(result.text, company?.notification_phone ?? null))
+        return twiml(transferTwiML(result.text, company?.notification_phone ?? null, appUrl))
       }
 
       default:
@@ -148,6 +147,6 @@ export async function POST(req: NextRequest) {
     }
   } catch (err) {
     console.error("Voice turn error:", err)
-    return twiml(endTwiML("I'm sorry, I'm having a technical issue. Someone from our team will call you back. Thanks!"))
+    return twiml(endTwiML("I'm sorry, I'm having a technical issue. Someone from our team will call you back. Thanks!", appUrl))
   }
 }

@@ -5,24 +5,24 @@ import { getOrCreateSession, appendMessages } from "@/lib/voice-session"
 
 export const runtime = "nodejs"
 
-const VOICE = "Polly.Ruth-Neural"
-
 function twiml(xml: string) {
   return new NextResponse(xml, { status: 200, headers: { "Content-Type": "text/xml" } })
 }
 
-function escapeXml(s: string): string {
-  return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;").replace(/'/g, "&apos;")
+function speakUrl(text: string, appUrl: string): string {
+  return `${appUrl}/api/voice/speak?t=${encodeURIComponent(text)}`
 }
 
 function gatherTwiML(text: string, appUrl: string): string {
+  const url = speakUrl(text, appUrl)
+  const retryUrl = speakUrl("Sorry, I didn't catch that — are you still there?", appUrl)
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="${VOICE}">${escapeXml(text)}</Say>
+  <Play>${url}</Play>
   <Gather input="speech" action="${appUrl}/api/voice/turn" method="POST"
     speechTimeout="auto" speechModel="phone_call" enhanced="true" timeout="10" language="en-US">
   </Gather>
-  <Say voice="${VOICE}">Sorry, I didn't catch that — are you still there?</Say>
+  <Play>${retryUrl}</Play>
   <Gather input="speech" action="${appUrl}/api/voice/turn" method="POST"
     speechTimeout="auto" speechModel="phone_call" enhanced="true" timeout="8" language="en-US">
   </Gather>
@@ -30,10 +30,10 @@ function gatherTwiML(text: string, appUrl: string): string {
 </Response>`
 }
 
-function errorTwiML(): string {
+function errorTwiML(appUrl: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="${VOICE}">Thanks for calling. Our team will be in touch shortly.</Say>
+  <Play>${speakUrl("Thanks for calling. Our team will be in touch shortly.", appUrl)}</Play>
   <Hangup/>
 </Response>`
 }
@@ -43,7 +43,7 @@ export async function POST(req: NextRequest) {
   console.log("[voice/inbound] POST received", req.url)
 
   const body = await req.formData().catch((e) => { console.error("[voice/inbound] formData parse failed:", e); return null })
-  if (!body) return twiml(errorTwiML())
+  if (!body) return twiml(errorTwiML(appUrl))
 
   const callSid = body.get("CallSid")?.toString()
   const fromRaw = body.get("From")?.toString() ?? ""
@@ -51,7 +51,7 @@ export async function POST(req: NextRequest) {
 
   console.log("[voice/inbound] callSid:", callSid, "from:", fromRaw, "to:", toRaw)
 
-  if (!callSid) return twiml(errorTwiML())
+  if (!callSid) return twiml(errorTwiML(appUrl))
 
   const url              = new URL(req.url)
   const leadIdParam      = url.searchParams.get("leadId")
@@ -77,7 +77,7 @@ export async function POST(req: NextRequest) {
       .eq("id", leadId)
       .single()
 
-    if (lead?.ai_paused) return twiml(errorTwiML())
+    if (lead?.ai_paused) return twiml(errorTwiML(appUrl))
     leadFirstName   = lead?.first_name   ?? null
     leadServiceType = lead?.service_type ?? null
   } else {
@@ -90,7 +90,7 @@ export async function POST(req: NextRequest) {
 
     if (!phoneRecord?.company_id) {
       console.error("[voice/inbound] No phone_numbers row found for:", toRaw)
-      return twiml(errorTwiML())
+      return twiml(errorTwiML(appUrl))
     }
     companyId = phoneRecord.company_id
 
@@ -112,8 +112,8 @@ export async function POST(req: NextRequest) {
       lead = newLead
     }
 
-    if (!lead) return twiml(errorTwiML())
-    if (lead.ai_paused) return twiml(errorTwiML())
+    if (!lead) return twiml(errorTwiML(appUrl))
+    if (lead.ai_paused) return twiml(errorTwiML(appUrl))
 
     leadId          = lead.id
     leadFirstName   = lead.first_name   ?? null
@@ -162,6 +162,6 @@ export async function POST(req: NextRequest) {
     return twiml(gatherTwiML(greetingText, appUrl))
   } catch (err) {
     console.error("Voice inbound error:", err)
-    return twiml(errorTwiML())
+    return twiml(errorTwiML(appUrl))
   }
 }
