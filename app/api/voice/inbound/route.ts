@@ -40,13 +40,16 @@ function errorTwiML(): string {
 
 export async function POST(req: NextRequest) {
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  console.log("[voice/inbound] POST received", req.url)
 
-  const body = await req.formData().catch(() => null)
+  const body = await req.formData().catch((e) => { console.error("[voice/inbound] formData parse failed:", e); return null })
   if (!body) return twiml(errorTwiML())
 
   const callSid = body.get("CallSid")?.toString()
   const fromRaw = body.get("From")?.toString() ?? ""
   const toRaw   = body.get("To")?.toString() ?? ""
+
+  console.log("[voice/inbound] callSid:", callSid, "from:", fromRaw, "to:", toRaw)
 
   if (!callSid) return twiml(errorTwiML())
 
@@ -85,7 +88,10 @@ export async function POST(req: NextRequest) {
       .eq("is_active", true)
       .maybeSingle()
 
-    if (!phoneRecord?.company_id) return twiml(errorTwiML())
+    if (!phoneRecord?.company_id) {
+      console.error("[voice/inbound] No phone_numbers row found for:", toRaw)
+      return twiml(errorTwiML())
+    }
     companyId = phoneRecord.company_id
 
     const normalizedFrom = formatPhone(fromRaw)
