@@ -81,7 +81,7 @@ export async function POST(req: NextRequest) {
       await twilio.calls(callSid).update({
         twiml: `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Say voice="Google.en-US-Studio-O">Hi, this is ${agentName} calling about your ${serviceType} inquiry. I wanted to reach out and get you scheduled for a free on-site estimate. Please give us a call back or just reply to our text and we will get you taken care of. Talk soon!</Say>
+  <Say voice="Polly.Ruth-Neural">Hi, this is ${agentName} calling about your ${serviceType} inquiry. I wanted to reach out and get you scheduled for a free on-site estimate. Please give us a call back or just reply to our text and we will get you taken care of. Talk soon!</Say>
   <Hangup/>
 </Response>`,
       })
