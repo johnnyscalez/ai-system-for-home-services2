@@ -148,6 +148,16 @@ export async function GET(req: NextRequest) {
       processed++
     } catch (err) {
       console.error(`Failed to process sequence step ${step.id}:`, err)
+      // Voice call failures (bad number, international, Twilio config) would loop
+      // forever as "pending" and block the whole sequence. Cancel them immediately
+      // so the next cron run can process the SMS steps that are still pending.
+      if (useVoice) {
+        await supabase
+          .from("sequences")
+          .update({ status: "cancelled" })
+          .eq("id", step.id)
+        console.log(`[cron] Voice step ${step.id} (step ${step.step}) cancelled after failure — sequence SMS steps will continue`)
+      }
     }
   }
 

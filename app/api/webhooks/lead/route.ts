@@ -198,21 +198,34 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
       }
       await supabase
         .from("leads")
-        .update({ status: "just_came_in", last_message_at: new Date().toISOString() })
+        .update({ status: "contacted", last_message_at: new Date().toISOString() })
         .eq("id", leadId)
 
-      // Pre-create all 7 no_reply follow-up steps so cron just fires them
-      const steps = buildNoReplySchedule(new Date(), companyTimezone)
-      await supabase.from("sequences").insert(
-        steps.map((s) => ({
-          lead_id: leadId,
-          company_id: company.id,
-          sequence_type: "no_reply",
-          step: s.step,
-          scheduled_at: s.scheduledAt.toISOString(),
-          status: "pending",
-        }))
-      )
+      // Pre-create all 7 no_reply follow-up steps — guard against duplicates
+      // (webhook may be called more than once for the same lead)
+      const { count: existingSteps } = await supabase
+        .from("sequences")
+        .select("*", { count: "exact", head: true })
+        .eq("lead_id", leadId)
+        .eq("sequence_type", "no_reply")
+        .eq("status", "pending")
+
+      if ((existingSteps ?? 0) === 0) {
+        const steps = buildNoReplySchedule(new Date(), companyTimezone)
+        const { error: seqError } = await supabase.from("sequences").insert(
+          steps.map((s) => ({
+            lead_id: leadId,
+            company_id: company.id,
+            sequence_type: "no_reply",
+            step: s.step,
+            scheduled_at: s.scheduledAt.toISOString(),
+            status: "pending",
+          }))
+        )
+        if (seqError) {
+          console.error(`[webhook/lead] Failed to insert sequences for lead ${leadId}:`, seqError)
+        }
+      }
     }
 
     return NextResponse.json({ success: true, lead_id: leadId, sms_sent: true }, { headers: CORS_HEADERS })

@@ -220,18 +220,31 @@ export async function POST(req: NextRequest) {
             .update({ status: "contacted", last_message_at: new Date().toISOString() })
             .eq("id", leadId)
 
-          // Pre-create all 7 no_reply follow-up steps so cron just fires them
-          const steps = buildNoReplySchedule(new Date(), companyTimezone)
-          await supabase.from("sequences").insert(
-            steps.map((s) => ({
-              lead_id: leadId,
-              company_id: integration.company_id,
-              sequence_type: "no_reply",
-              step: s.step,
-              scheduled_at: s.scheduledAt.toISOString(),
-              status: "pending",
-            }))
-          )
+          // Pre-create all 7 no_reply follow-up steps — guard against duplicates
+          // (Facebook retries the webhook on non-200 responses)
+          const { count: existingSteps } = await supabase
+            .from("sequences")
+            .select("*", { count: "exact", head: true })
+            .eq("lead_id", leadId)
+            .eq("sequence_type", "no_reply")
+            .eq("status", "pending")
+
+          if ((existingSteps ?? 0) === 0) {
+            const steps = buildNoReplySchedule(new Date(), companyTimezone)
+            const { error: seqError } = await supabase.from("sequences").insert(
+              steps.map((s) => ({
+                lead_id: leadId,
+                company_id: integration.company_id,
+                sequence_type: "no_reply",
+                step: s.step,
+                scheduled_at: s.scheduledAt.toISOString(),
+                status: "pending",
+              }))
+            )
+            if (seqError) {
+              console.error(`[webhook/facebook] Failed to insert sequences for lead ${leadId}:`, seqError)
+            }
+          }
         }
       } catch (e) {
         console.error("AI/SMS error for Facebook lead:", leadId, e)
