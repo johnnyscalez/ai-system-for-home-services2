@@ -1,10 +1,11 @@
 export type ServiceType = "roofing" | "solar" | "hvac" | "windows" | "bath_remodel"
 export type Plan = "trial" | "starter" | "growth" | "scale"
 export type LeadStatus =
-  | "just_came_in"      // lead arrived, AI sent opener, no reply yet
+  | "just_came_in"       // lead arrived, AI sent opener, no reply yet
+  | "following_up"       // no reply — AI is actively sending follow-up sequence
   | "active_conversation" // lead replied, AI is working them
-  | "qualified"         // AI confirmed good fit
-  | "unqualified"       // AI confirmed not a good fit
+  | "qualified"          // AI confirmed good fit
+  | "unqualified"        // AI confirmed not a good fit
   | "appointment_booked"
   | "closed"
   | "lost"

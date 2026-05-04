@@ -1,20 +1,21 @@
 import { redirect } from "next/navigation"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { Badge } from "@/components/ui/badge"
-import { Users, Clock, Zap } from "lucide-react"
+import { Users, Clock, Zap, MessageSquare } from "lucide-react"
 import { formatDistanceToNow } from "@/lib/utils"
 import type { Lead } from "@/types/database"
 import { DeleteLeadButton } from "@/components/leads/DeleteLeadButton"
 
 // Pipeline columns — DB statuses that map to each column
 const PIPELINE_COLUMNS = [
-  { key: "just_came_in",      statuses: ["just_came_in", "new", "contacted"],                          label: "Just came in",       color: "text-sky-400",     dot: "bg-sky-400" },
-  { key: "active_conversation", statuses: ["active_conversation", "followed_up", "nurturing"],         label: "Active conversation", color: "text-violet-400",  dot: "bg-violet-400" },
-  { key: "qualified",         statuses: ["qualified"],                                                  label: "Qualified",           color: "text-amber-400",   dot: "bg-amber-400" },
-  { key: "unqualified",       statuses: ["unqualified"],                                                label: "Unqualified",         color: "text-red-400",     dot: "bg-red-400" },
-  { key: "appointment_booked", statuses: ["appointment_booked"],                                        label: "Appointment",         color: "text-emerald-400", dot: "bg-emerald-400" },
-  { key: "closed",            statuses: ["closed", "closed_won"],                                       label: "Closed",              color: "text-green-400",   dot: "bg-green-400" },
-  { key: "lost",              statuses: ["lost", "cold", "closed_lost"],                                label: "Lost",                color: "text-slate-400",   dot: "bg-slate-400" },
+  { key: "just_came_in",      statuses: ["just_came_in", "new", "contacted"],                          label: "Just came in",           color: "text-sky-400",     dot: "bg-sky-400" },
+  { key: "following_up",      statuses: ["following_up"],                                               label: "No Reply – Following Up", color: "text-orange-400",  dot: "bg-orange-400" },
+  { key: "active_conversation", statuses: ["active_conversation", "followed_up", "nurturing"],         label: "Active conversation",     color: "text-violet-400",  dot: "bg-violet-400" },
+  { key: "qualified",         statuses: ["qualified"],                                                  label: "Qualified",               color: "text-amber-400",   dot: "bg-amber-400" },
+  { key: "unqualified",       statuses: ["unqualified"],                                                label: "Unqualified",             color: "text-red-400",     dot: "bg-red-400" },
+  { key: "appointment_booked", statuses: ["appointment_booked"],                                        label: "Appointment",             color: "text-emerald-400", dot: "bg-emerald-400" },
+  { key: "closed",            statuses: ["closed", "closed_won"],                                       label: "Closed",                  color: "text-green-400",   dot: "bg-green-400" },
+  { key: "lost",              statuses: ["lost", "cold", "closed_lost"],                                label: "Lost",                    color: "text-slate-400",   dot: "bg-slate-400" },
 ]
 
 // User-facing label for each DB status (table view)
@@ -22,6 +23,7 @@ const STATUS_LABEL: Record<string, string> = {
   just_came_in:       "Just came in",
   new:                "Just came in",
   contacted:          "Just came in",
+  following_up:       "No reply",
   active_conversation: "Active",
   followed_up:        "Active",
   nurturing:          "Active",
@@ -40,6 +42,7 @@ const statusBadge: Record<string, string> = {
   just_came_in:       "bg-sky-500/15 text-sky-400 border-sky-500/20",
   new:                "bg-sky-500/15 text-sky-400 border-sky-500/20",
   contacted:          "bg-sky-500/15 text-sky-400 border-sky-500/20",
+  following_up:       "bg-orange-500/15 text-orange-400 border-orange-500/20",
   active_conversation: "bg-violet-500/15 text-violet-400 border-violet-500/20",
   followed_up:        "bg-violet-500/15 text-violet-400 border-violet-500/20",
   nurturing:          "bg-violet-500/15 text-violet-400 border-violet-500/20",
@@ -136,6 +139,16 @@ export default async function LeadsPage() {
                         </div>
                       )}
 
+                      {/* Following up badge */}
+                      {lead.status === "following_up" && (
+                        <div className="flex items-center gap-1 mb-2">
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-semibold bg-orange-500/15 text-orange-400 border border-orange-500/20">
+                            <MessageSquare className="w-2.5 h-2.5" />
+                            Following up
+                          </span>
+                        </div>
+                      )}
+
                       {/* Meta row */}
                       <div className="flex items-center justify-between gap-2">
                         <span className="text-xs text-muted-foreground capitalize">{lead.source}</span>
@@ -190,6 +203,12 @@ export default async function LeadsPage() {
                         <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-500 border border-emerald-500/20">
                           <Zap className="w-2 h-2" />
                           Active
+                        </span>
+                      )}
+                      {lead.status === "following_up" && (
+                        <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-orange-500/15 text-orange-400 border border-orange-500/20">
+                          <MessageSquare className="w-2 h-2" />
+                          Following up
                         </span>
                       )}
                     </div>

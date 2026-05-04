@@ -402,7 +402,7 @@ export async function processAndSave(
         status: "active_conversation",
       })
       .eq("id", leadId)
-      .in("status", ["just_came_in", "new", "contacted", "followed_up", "nurturing", "cold"])
+      .in("status", ["just_came_in", "new", "contacted", "following_up", "followed_up", "nurturing", "cold"])
   }
 
   // Run the AI engine

@@ -128,14 +128,21 @@ export async function GET(req: NextRequest) {
         .eq("id", step.id)
 
       // Steps are pre-created at lead arrival — no next-step scheduling needed.
-      // If this was the last step, mark the lead as lost.
       const lastStep = LAST_STEP[step.sequence_type] ?? 0
       if (step.step >= lastStep) {
+        // Last step exhausted — mark lead as lost
         await supabase
           .from("leads")
           .update({ status: "lost" })
           .eq("id", lead.id)
-          .in("status", ["just_came_in", "new", "contacted", "active_conversation", "nurturing", "followed_up", "cold"])
+          .in("status", ["just_came_in", "new", "contacted", "following_up", "active_conversation", "nurturing", "followed_up", "cold"])
+      } else if (step.sequence_type === "no_reply") {
+        // Mid-sequence, still no reply — move lead into the "following up" pipeline column
+        await supabase
+          .from("leads")
+          .update({ status: "following_up" })
+          .eq("id", lead.id)
+          .in("status", ["just_came_in", "new", "contacted", "following_up"])
       }
 
       processed++
