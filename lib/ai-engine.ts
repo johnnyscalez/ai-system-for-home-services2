@@ -61,7 +61,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "update_lead_status",
     description:
-      "Update the lead's status. Use 'qualified' when they've answered key questions and are a good fit. Use 'closed_lost' when they explicitly say they're not interested or already chose someone else. Use 'needs_attention' when they seem frustrated or there's a situation that needs human review.",
+      "Update the lead's status. Use 'qualified' the moment the lead has answered the discover-stage questions (what's wrong, how old the unit is, whether they own the home). Call this DURING Stage 2–3, NOT after booking — it moves them into the qualified pipeline. Do not wait until after the appointment is booked. Use 'closed_lost' when they explicitly say they're not interested or already chose someone else. Use 'needs_attention' when they seem frustrated, it's a renter without landlord auth, or a commercial property.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -700,6 +700,23 @@ Today / current time: ${nowFmt}
   if (lead.address) ctx += `Address on file: ${lead.address}\n`
   if (lead.email) ctx += `Email: ${lead.email}\n`
   if (lead.notes) ctx += `Notes from lead form: ${lead.notes}\n`
+
+  // Pass through all custom form fields from metadata so AI has full lead context
+  if (lead.metadata && typeof lead.metadata === "object" && lead.metadata !== null) {
+    const meta = lead.metadata as Record<string, unknown>
+    const entries = Object.entries(meta).filter(([, v]) => v !== null && v !== undefined && v !== "")
+    if (entries.length > 0) {
+      ctx += `Custom form fields:\n`
+      for (const [k, v] of entries) {
+        ctx += `  ${k}: ${v}\n`
+      }
+      // Surface urgency/emergency prominently so AI can't miss it
+      const urgencyVal = (meta["urgency"] ?? meta["emergency"] ?? meta["priority"] ?? meta["service_urgency"] ?? "") as string
+      if (/emergency|today|urgent|asap|now|immediately/i.test(String(urgencyVal))) {
+        ctx += `\n⚠️ URGENCY FLAG: Lead selected "${urgencyVal}" — treat this as an emergency. Offer the EARLIEST available slot. Same-day if available. Compress discovery to minimum.\n`
+      }
+    }
+  }
 
   if (upcoming.length > 0) {
     ctx += `\nUPCOMING APPOINTMENTS (${upcoming.length}):\n`
