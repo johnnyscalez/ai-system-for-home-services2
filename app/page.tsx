@@ -404,6 +404,15 @@ function LiveConversation() {
     return () => clearTimeout(t)
   }, [visibleCount, done, tick])
 
+  useEffect(() => {
+    if (!done) return
+    const t = setTimeout(() => {
+      setVisibleCount(0)
+      setDone(false)
+    }, 3200)
+    return () => clearTimeout(t)
+  }, [done])
+
   return (
     <div className="flex flex-col rounded-xl overflow-hidden"
          style={{ background: C.surface, height: 420, border: `1px solid ${C.border}`,
