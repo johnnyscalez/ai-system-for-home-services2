@@ -90,6 +90,7 @@ export async function saveCallTurn(
       direction: "inbound",
       body: leadSaid,
       sent_by: "human",
+      channel: "voice",
       created_at: now,
     },
     {
@@ -98,6 +99,7 @@ export async function saveCallTurn(
       direction: "outbound",
       body: agentSaid,
       sent_by: "ai",
+      channel: "voice",
       created_at: now,
     },
   ])

@@ -15,15 +15,18 @@ export default async function ConversationsPage() {
 
   const { data: leads } = await supabase
     .from("leads")
-    .select("id, first_name, last_name, phone, status, last_message_at, conversations(id)")
+    .select("id, first_name, last_name, phone, status, last_message_at, conversations!inner(id, channel)")
     .eq("company_id", profile.company_id)
     .not("last_message_at", "is", null)
     .order("last_message_at", { ascending: false })
 
-  const rows = (leads ?? []) as {
+  const rows = (leads ?? []).map((l) => ({
+    ...l,
+    conversations: (l.conversations as { id: string; channel: string }[]).filter((c) => c.channel === "sms"),
+  })) as {
     id: string; first_name: string | null; last_name: string | null;
     phone: string; status: string; last_message_at: string | null;
-    conversations: { id: string }[];
+    conversations: { id: string; channel: string }[];
   }[]
 
   const statusBadge: Record<string, string> = {

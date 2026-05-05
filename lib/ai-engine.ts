@@ -101,6 +101,7 @@ export async function runConversation(
       .from("conversations")
       .select("direction, body, sent_by, created_at")
       .eq("lead_id", leadId)
+      .eq("channel", "sms")
       .order("created_at", { ascending: true }),
     supabase
       .from("ai_agent_config")
@@ -676,6 +677,7 @@ export async function processAndSave(
           .select("*", { count: "exact", head: true })
           .eq("lead_id", leadId)
           .eq("direction", "inbound")
+          .eq("channel", "sms")
 
         if ((inboundCount ?? 0) >= 2) {
           // Fetch full conversation + company disqualifiers
@@ -684,6 +686,7 @@ export async function processAndSave(
               .from("conversations")
               .select("direction, body")
               .eq("lead_id", leadId)
+              .eq("channel", "sms")
               .order("created_at", { ascending: true })
               .limit(20),
             supabase

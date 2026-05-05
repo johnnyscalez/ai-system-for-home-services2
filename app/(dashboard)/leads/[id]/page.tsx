@@ -52,6 +52,7 @@ export default async function LeadDetailPage({
     .from("conversations")
     .select("*")
     .eq("lead_id", id)
+    .eq("channel", "sms")
     .order("created_at", { ascending: true })
 
   const { data: appointments } = await supabase
