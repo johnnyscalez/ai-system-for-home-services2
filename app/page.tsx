@@ -70,6 +70,13 @@ function Background() {
           0%, 100% { transform: translate(0, 0); }
           50%       { transform: translate(20px, -15px); }
         }
+        @media (prefers-reduced-motion: reduce) {
+          *, *::before, *::after {
+            animation-duration: 0.01ms !important;
+            animation-iteration-count: 1 !important;
+            transition-duration: 0.01ms !important;
+          }
+        }
       `}</style>
 
       {/* Orbs — fixed, behind everything */}
@@ -370,7 +377,7 @@ function Nav() {
             className="w-8 h-8 rounded-lg flex items-center justify-center"
             style={{ background: C.primary, boxShadow: "0 4px 14px rgba(124,58,237,0.35)" }}
           >
-            <Zap className="w-4 h-4 text-white" />
+            <Zap className="w-4 h-4 text-white" aria-hidden="true" />
           </motion.div>
           <span
             className="font-bold text-xl tracking-tight"
@@ -415,7 +422,7 @@ function Nav() {
               boxShadow: "0 4px 14px rgba(124,58,237,0.40)",
             }}
           >
-            Start Free Trial <ArrowRight className="w-3.5 h-3.5" />
+            Start Free Trial <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
           </Link>
         </div>
 
@@ -620,10 +627,14 @@ function LiveConversation() {
   useEffect(() => {
     if (done) return
     if (visibleCount >= CONVO.length) {
-      const t = setTimeout(() => setDone(true), 1200)
+      const t = setTimeout(() => setDone(true), 2000)
       return () => clearTimeout(t)
     }
-    const t = setTimeout(() => setVisibleCount((n) => n + 1), visibleCount === 0 ? 800 : 700)
+    // AI messages get a longer delay (typing indicator shows during this window)
+    // Lead messages reply a bit faster — mirrors real conversation rhythm
+    const nextRole = CONVO[visibleCount]?.role
+    const delay = visibleCount === 0 ? 1200 : nextRole === "ai" ? 2200 : 1400
+    const t = setTimeout(() => setVisibleCount((n) => n + 1), delay)
     return () => clearTimeout(t)
   }, [visibleCount, done])
 
@@ -648,9 +659,9 @@ function LiveConversation() {
           {CONVO.slice(0, visibleCount).map((msg, i) => (
             <motion.div
               key={i}
-              initial={{ opacity: 0, y: 8 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ duration: 0.25, ease: "easeOut" }}
+              initial={{ opacity: 0, y: 14, scale: 0.97 }}
+              animate={{ opacity: 1, y: 0, scale: 1 }}
+              transition={{ duration: 0.55, ease: [0.22, 1, 0.36, 1] }}
               className={`shrink-0 flex ${msg.role === "lead" ? "justify-start" : "justify-end"}`}
             >
               <div className="space-y-1" style={{ maxWidth: "82%" }}>
@@ -1804,14 +1815,14 @@ function CTABand() {
             className="inline-flex items-center justify-center gap-2 bg-white font-bold px-8 py-4 rounded-full hover:-translate-y-1 active:scale-[0.98] transition-all duration-200"
             style={{ color: C.primary, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}
           >
-            Run My Front Office with AI <ArrowRight className="w-4 h-4" />
+            Run My Front Office with AI <ArrowRight className="w-4 h-4" aria-hidden="true" />
           </Link>
           <Link
             href="#how-it-works"
             className="inline-flex items-center justify-center gap-2 font-medium px-8 py-4 rounded-full border transition-all duration-200 hover:bg-white/10"
             style={{ color: "rgba(255,255,255,0.85)", borderColor: "rgba(255,255,255,0.3)" }}
           >
-            <Play className="w-4 h-4" />
+            <Play className="w-4 h-4" aria-hidden="true" />
             Watch 2-Min Demo
           </Link>
         </motion.div>
@@ -1832,7 +1843,7 @@ function Footer() {
       <div className="flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="flex items-center gap-2.5">
           <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: C.primary }}>
-            <Zap className="w-3.5 h-3.5 text-white" />
+            <Zap className="w-3.5 h-3.5 text-white" aria-hidden="true" />
           </div>
           <span className="font-bold" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>LeadCloser</span>
           <span className="text-sm" style={{ color: C.muted }}>— AI Operating System for HVAC</span>
@@ -1890,10 +1901,10 @@ export default function LandingPage() {
             initial={{ opacity: 0, y: 20 }}
             animate={{ opacity: 1, y: 0 }}
             transition={{ delay: 0.5, duration: 0.6 }}
-            className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl leading-none tracking-tighter max-w-4xl"
+            className="text-4xl sm:text-6xl md:text-7xl lg:text-8xl leading-none tracking-tighter max-w-4xl text-balance"
             style={{ fontFamily: "var(--font-jakarta)" }}
           >
-            <span className="font-normal" style={{ color: "#D1D5DB" }}>Your HVAC Company,</span>
+            <span className="font-normal" style={{ color: "#78716C" }}>Your HVAC Company,</span>
             <br />
             <span className="font-extrabold relative inline-block" style={{ color: C.text }}>
               Finally Runs Right.
@@ -1935,14 +1946,14 @@ export default function LandingPage() {
                 boxShadow: "0 12px 32px rgba(124,58,237,0.35)",
               }}
             >
-              Run My Front Office with AI <ArrowRight className="w-4 h-4" />
+              Run My Front Office with AI <ArrowRight className="w-4 h-4" aria-hidden="true" />
             </Link>
             <button
               className="inline-flex items-center justify-center gap-2 text-base font-medium px-7 py-3.5 rounded-full border transition-all duration-200 hover:border-purple-300 hover:text-purple-600"
               style={{ borderColor: C.border, background: C.surface, color: "#374151" }}
             >
               <span className="w-6 h-6 rounded-full flex items-center justify-center" style={{ background: C.primary }}>
-                <Play className="w-3 h-3 text-white fill-white" />
+                <Play className="w-3 h-3 text-white fill-white" aria-hidden="true" />
               </span>
               See It In Action
             </button>
