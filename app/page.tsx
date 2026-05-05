@@ -645,10 +645,10 @@ function StatStrip() {
   const inView = useInView(ref, { once: true })
 
   const stats = [
-    { value: "60",   unit: "sec",  label: "Time to first contact", mono: true },
-    { value: "94",   unit: "%",    label: "Lead contact rate",      mono: true },
+    { value: "<10",  unit: "sec",  label: "Time to first contact",      mono: true },
+    { value: "100",  unit: "%",    label: "No lead left unanswered",     mono: true },
     { value: "14",   unit: "days", label: "Follow-up runs automatically", mono: true },
-    { value: "$0",   unit: "",     label: "Per automated follow-up", mono: true },
+    { value: "$0",   unit: "",     label: "To hire a front office rep",  mono: true },
   ]
 
   return (
