@@ -65,7 +65,7 @@ const GUARDRAILS = [
 
 const TESTIMONIALS = [
   {
-    quote: "We were losing leads left and right — nobody was following up fast enough. First week with LeadCloser, we booked 9 appointments off Facebook. Before, we were getting maybe 2 or 3.",
+    quote: "We were losing leads left and right — nobody was following up fast enough. First week with LeadCloser, we booked 9 appointments off our ads. Before, we were getting maybe 2 or 3.",
     name:  "Dave K.",
     role:  "Owner, ProTemp HVAC — Dallas, TX",
     stars: 5,
@@ -77,7 +77,7 @@ const TESTIMONIALS = [
     stars: 5,
   },
   {
-    quote: "Setup took me 20 minutes. I haven't manually followed up with a Facebook lead since. The CRM shows every conversation and the AI handles all of it.",
+    quote: "Setup took me 20 minutes. I haven't manually followed up with a paid lead since. The CRM shows every conversation and the AI handles all of it.",
     name:  "Carlos R.",
     role:  "Owner, Premier Comfort — Miami, FL",
     stars: 5,
@@ -88,8 +88,8 @@ const PLANS = [
   {
     name:      "Starter",
     price:     297,
-    desc:      "For companies getting started with Facebook lead ads.",
-    features:  ["100 leads/month", "AI SMS follow-up", "2-week auto sequences", "Built-in CRM", "Appointment reminders", "1 Facebook account", "Local area code number"],
+    desc:      "For companies getting started with paid ads.",
+    features:  ["100 leads/month", "AI SMS follow-up", "2-week auto sequences", "Built-in CRM", "Appointment reminders", "1 lead source connection", "Local area code number"],
     cta:       "Start Free Trial",
     highlight: false,
     badge:     null as string | null,
@@ -98,7 +98,7 @@ const PLANS = [
     name:      "Growth",
     price:     497,
     desc:      "For companies running consistent ad spend and growing fast.",
-    features:  ["300 leads/month", "AI SMS + voice calls", "Custom AI script", "3 Facebook accounts", "3 team members", "Google Calendar sync", "Gmail for appointment emails"],
+    features:  ["300 leads/month", "AI SMS + voice calls", "Custom AI script", "3 lead source connections", "3 team members", "Google Calendar sync", "Gmail for appointment emails"],
     cta:       "Start Free Trial",
     highlight: true,
     badge:     "Most Popular" as string | null,
@@ -550,9 +550,9 @@ function HeroSection() {
               className="text-lg leading-relaxed mb-8 max-w-lg"
               style={{ color: C.muted }}
             >
-              The moment a lead fills out your Facebook form, your AI starts the conversation —
-              qualifying them, handling every objection, and booking the estimate appointment.
-              Nothing on your team has to touch it.
+              The moment a lead comes in — from your Facebook ads, Google ads, or website —
+              your AI starts the conversation: qualifying them, handling every objection,
+              and booking the estimate appointment. Nothing on your team has to touch it.
             </motion.p>
 
             {/* CTAs */}
@@ -836,7 +836,7 @@ function SystemOverviewSection() {
                    style={{ background: C.primary }}>M</div>
               <div className="min-w-0">
                 <div className="text-xs font-bold truncate" style={{ color: C.text }}>Mike Johnson</div>
-                <div className="text-xs truncate" style={{ color: C.muted }}>Facebook · AC Repair</div>
+                <div className="text-xs truncate" style={{ color: C.muted }}>Google Ads · AC Repair</div>
               </div>
               <span className="ml-auto shrink-0 text-xs px-1.5 py-0.5 rounded-full font-medium"
                     style={{ background: "#F0FDF4", color: C.success }}>Booked</span>
@@ -999,7 +999,7 @@ function ProblemSection() {
   const inView = useInView(ref, { once: true, margin: "-80px" })
 
   const withoutSteps = [
-    { time: "2:04 PM", text: "Mike submits your Facebook form", bad: false },
+    { time: "2:04 PM", text: "Mike submits a form from your ad", bad: false },
     { time: "2:09 PM", text: "Mike submits 2 competitor forms", bad: true },
     { time: "4:38 PM", text: "You see the email, call the number", bad: false },
     { time: "4:39 PM", text: "Voicemail. You leave a message.", bad: true },
@@ -1007,7 +1007,7 @@ function ProblemSection() {
   ]
 
   const withSteps = [
-    { time: "2:04 PM", text: "Mike submits your Facebook form", good: false },
+    { time: "2:04 PM", text: "Mike submits a form from your ad", good: false },
     { time: "2:04 PM", text: "\"Hey Mike, saw you reached out about your AC...\"", good: true },
     { time: "2:09 PM", text: "Mike replies. AI qualifies him.", good: true },
     { time: "2:19 PM", text: "Appointment booked. $8,200 job on your calendar.", good: true },
@@ -1116,8 +1116,8 @@ function HowItWorksSection() {
     {
       num: "01",
       icon: <MessageSquare className="w-6 h-6" aria-hidden="true" />,
-      title: "Lead submits your Facebook form",
-      body: "Your AI gets the notification in seconds — no delay, no waiting for someone to check email. While you're on a job, your AI is already handling it.",
+      title: "A lead comes in from any source",
+      body: "Facebook ads, Google ads, your website — your AI gets the notification in seconds. No delay, no waiting for someone to check email. While you're on a job, it's already handling it.",
       color: C.primary,
       bg: "#F5F3FF",
     },
@@ -1834,8 +1834,8 @@ function SetupSection() {
       body: "The AI reads your site and pulls your services, service area, certifications, and best reviews automatically." },
     { num: "2", title: "Add any extra facts",
       body: "One-click chips: \"We offer 0% financing,\" \"Emergency same-day service,\" \"Spanish-speaking techs.\" Done in 30 seconds." },
-    { num: "3", title: "Connect your Facebook ads",
-      body: "OAuth in two clicks. Select which forms to pull leads from. Disconnects cleanly if you ever want to stop." },
+    { num: "3", title: "Connect your lead sources",
+      body: "Facebook ads, Google ads, or paste your website's webhook URL. Takes two clicks. Pull leads from any form, any platform." },
     { num: "4", title: "Connect Gmail",
       body: "Appointment emails send from your actual email address. Not noreply@someapp.com — from you." },
     { num: "5", title: "Get your local phone number",
