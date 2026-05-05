@@ -1,4 +1,5 @@
 import { anthropic } from "@/lib/claude"
+import { buildQualificationBlock } from "@/lib/ai-engine"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { createCalendarEvent } from "@/lib/google-calendar"
 import { determineAgentType, getAgentPrompt } from "@/lib/voice-agents"
@@ -184,7 +185,7 @@ export async function runVoiceTurn(
   const [leadRes, agentRes, kbRes, appointmentsRes, companyAptsRes] = await Promise.all([
     db.from("leads").select("*").eq("id", session.lead_id).single(),
     db.from("ai_agent_config")
-      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day")
+      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, disqualifiers")
       .eq("company_id", session.company_id).single(),
     db.from("knowledge_base")
       .select("business_description, services_offered, service_areas, custom_ai_knowledge")
@@ -244,9 +245,11 @@ ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
     ? `=== YOUR COMPANY-SPECIFIC KNOWLEDGE ===\n${kb.custom_ai_knowledge}\n=== END COMPANY-SPECIFIC KNOWLEDGE ===`
     : ""
 
+  const qualificationBlock = buildQualificationBlock(agent?.disqualifiers ?? null)
+
   const voiceRules = VOICE_RULES.replaceAll("[AgentName]", agentName)
 
-  const systemPrompt = [voiceRules, basePrompt, customKnowledgeBlock, agentPrompt, slotsBlock, leadContext]
+  const systemPrompt = [voiceRules, basePrompt, customKnowledgeBlock, qualificationBlock, agentPrompt, slotsBlock, leadContext]
     .filter(Boolean)
     .join("\n\n")
 

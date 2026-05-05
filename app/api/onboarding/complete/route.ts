@@ -117,6 +117,7 @@ export async function POST(req: NextRequest) {
         timezone: aiAgent.timezone,
         generated_system_prompt: systemPrompt || null,
         prompt_generated_at: systemPrompt ? new Date().toISOString() : null,
+        disqualifiers: aiAgent.disqualifiers || null,
       }),
 
       // 5. Legacy settings record

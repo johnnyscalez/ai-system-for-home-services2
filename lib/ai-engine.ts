@@ -92,7 +92,7 @@ export async function runConversation(
       .order("created_at", { ascending: true }),
     supabase
       .from("ai_agent_config")
-      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, per_day_slots")
+      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, per_day_slots, disqualifiers")
       .eq("company_id", companyId)
       .single(),
     supabase
@@ -200,13 +200,16 @@ export async function runConversation(
   // System prompt order:
   // 1. Who the agent is + business knowledge
   // 2. HVAC conversation flow + stage rules
-  // 3. Real available slots (the AI must offer only these)
-  // 4. Lead file (live lead data, history, returning vs new)
+  // 3. Qualification rules (company-specific disqualifiers)
+  // 4. Real available slots (the AI must offer only these)
+  // 5. Lead file (live lead data, history, returning vs new)
   const customKnowledgeBlock = kb?.custom_ai_knowledge
     ? `=== YOUR COMPANY-SPECIFIC KNOWLEDGE ===\n${kb.custom_ai_knowledge}\n=== END COMPANY-SPECIFIC KNOWLEDGE ===`
     : ""
 
-  const systemPrompt = [baseSystemPrompt, customKnowledgeBlock, conversationFlow, slotsBlock, leadContext]
+  const qualificationBlock = buildQualificationBlock(agent?.disqualifiers ?? null)
+
+  const systemPrompt = [baseSystemPrompt, customKnowledgeBlock, conversationFlow, qualificationBlock, slotsBlock, leadContext]
     .filter(Boolean)
     .join("\n\n")
 
@@ -342,27 +345,40 @@ export async function runConversation(
  */
 async function checkQualification(
   conversationHistory: string,
-  disqualifiers: string,
+  disqualifiers: string | null,
   serviceType: string
 ): Promise<"qualified" | "unqualified" | "unknown"> {
-  if (!disqualifiers?.trim()) return "unknown"
-
   try {
+    const disqualifierSection = disqualifiers?.trim()
+      ? `Reasons this company does NOT want to book a lead:\n${disqualifiers.trim()}`
+      : `No specific disqualifiers set — any interested, reachable homeowner who needs ${serviceType} work qualifies.`
+
     const response = await anthropic.messages.create({
       model: "claude-haiku-4-5-20251001",
       max_tokens: 10,
       messages: [{
         role: "user",
-        content: `You determine if a ${serviceType} lead qualifies or not.
+        content: `Determine if this ${serviceType} lead is QUALIFIED, UNQUALIFIED, or UNKNOWN based on the conversation.
 
-Disqualifiers (reasons to NOT book):
-${disqualifiers}
+${disqualifierSection}
+
+A lead is QUALIFIED when:
+- They have answered the key discovery questions (what's wrong, property details, ownership)
+- Nothing in the conversation matches a disqualifier
+- They appear genuinely interested and reachable
+
+A lead is UNQUALIFIED when:
+- They clearly match one of the disqualifiers above
+- They are a renter without landlord authorization
+- They are a commercial property (if residential only)
+- They have explicitly said they're not interested or already booked someone else
+
+Reply UNKNOWN if there is not yet enough information to decide.
 
 Conversation:
 ${conversationHistory}
 
-Reply with exactly one word — QUALIFIED, UNQUALIFIED, or UNKNOWN.
-Only say QUALIFIED or UNQUALIFIED if there is clear evidence. Otherwise say UNKNOWN.`,
+Reply with exactly one word: QUALIFIED, UNQUALIFIED, or UNKNOWN.`,
       }],
     })
     const text = ((response.content[0] as { text: string }).text ?? "").trim().toUpperCase()
@@ -632,14 +648,14 @@ export async function processAndSave(
             .eq("id", companyId)
             .single()
 
-          if (convRows && config?.disqualifiers) {
+          if (convRows) {
             const history = convRows
               .map((m) => `${m.direction === "inbound" ? "Lead" : "AI"}: ${m.body}`)
               .join("\n")
 
             const verdict = await checkQualification(
               history,
-              config.disqualifiers,
+              config?.disqualifiers ?? null,
               company?.service_type ?? "home services"
             )
 
@@ -658,6 +674,48 @@ export async function processAndSave(
   }
 
   return { ...result, outboundConversationId }
+}
+
+export function buildQualificationBlock(disqualifiers: string | null): string {
+  if (!disqualifiers?.trim()) {
+    return `=== QUALIFICATION RULES ===
+Every lead starts unqualified. Your job is to qualify them through natural conversation.
+
+WHO QUALIFIES: Any lead who is interested, reachable, owns the property (or has authority to book), and the job falls within your service area and scope.
+
+WHEN TO CALL update_lead_status "qualified":
+- They've answered the discover-stage questions (what's wrong, property details, ownership)
+- Nothing in the conversation disqualifies them
+- Call it in the same response as you move toward booking — do NOT wait until after the appointment is booked
+
+WHEN TO CALL update_lead_status "closed_lost":
+- They explicitly say they're not interested or already chose someone else
+- They are a renter without landlord authorization
+- Commercial property (unless you serve commercial)
+=== END QUALIFICATION RULES ===`
+  }
+
+  return `=== QUALIFICATION RULES ===
+This company has defined who they do NOT want to book. Read this carefully — it defines what "qualified" means for every lead you talk to.
+
+WHO NOT TO BOOK:
+${disqualifiers.trim()}
+
+YOUR JOB DURING DISCOVER STAGE:
+Weave qualifying questions naturally into the conversation to find out whether this lead matches any disqualifier above. Do NOT ask bluntly — discover organically through normal questions. Examples:
+- Ownership disqualifier → ask "Is this your place?" naturally
+- Location/zip disqualifier → ask "What area are you in?" or collect the address early
+- System age disqualifier → ask "How old is the unit roughly?"
+- Property type disqualifier → ask "Is it a house or more of a commercial building?"
+- Budget/financing disqualifier → gauge interest level before mentioning price
+
+ONCE YOU'VE CONFIRMED THEY QUALIFY (none of the disqualifiers apply):
+→ Immediately call update_lead_status "qualified" in that same response, then move to booking.
+
+IF THEY MATCH A DISQUALIFIER:
+→ Call update_lead_status "closed_lost". Be polite and brief: "Thanks for reaching out — this one might be a bit outside what we handle, but [suggest a next step if possible]."
+→ Do NOT push to book a disqualified lead under any circumstances.
+=== END QUALIFICATION RULES ===`
 }
 
 function buildLeadContext(
