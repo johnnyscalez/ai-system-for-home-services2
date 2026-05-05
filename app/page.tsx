@@ -619,17 +619,6 @@ function HeroSection() {
               </div>
             </motion.div>
 
-            <motion.div
-              initial={{ opacity: 0, x: -20, y: 10 }} animate={{ opacity: 1, x: 0, y: 0 }}
-              transition={{ delay: 1.6, duration: 0.5 }}
-              className="absolute -left-4 bottom-16 px-3 py-2 rounded-xl text-xs font-medium shadow-lg"
-              style={{ background: C.surface, border: `1px solid ${C.border}`,
-                       boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}>
-              <div className="flex items-center gap-1.5">
-                <Clock className="w-3 h-3" style={{ color: C.primary }} aria-hidden="true" />
-                <span style={{ color: C.text }}>Response time: 14 seconds</span>
-              </div>
-            </motion.div>
           </motion.div>
         </div>
       </div>
