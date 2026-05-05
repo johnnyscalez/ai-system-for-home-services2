@@ -71,7 +71,7 @@ export async function POST(req: NextRequest) {
 
     const { data: lead } = await db
       .from("leads")
-      .select("first_name, service_type, ai_paused")
+      .select("first_name, service_type, ai_paused, notes, metadata, job_type")
       .eq("id", leadId)
       .single()
 
@@ -139,16 +139,47 @@ export async function POST(req: NextRequest) {
     // Build greeting from template — no Claude call here keeps response well under Twilio's 15s limit.
     // Claude is invoked on the first real speech turn at /api/voice/turn instead.
     let greetingText: string
+    const nameHi = leadFirstName ? ` ${leadFirstName}` : ""
+
     if (direction === "outbound") {
-      const nameHi    = leadFirstName ? `, ${leadFirstName}` : ""
-      const serviceOf = leadServiceType ? ` about your ${leadServiceType} inquiry` : ""
       if (callbackReason) {
-        greetingText = `Hey${nameHi}, this is ${agentName}! Calling you back${serviceOf} — is now a good time?`
+        // Lead texted "call me" — greet them by name and let them know you're calling back right away
+        greetingText = `Hey${nameHi}! It's ${agentName} — you asked me to give you a call. What's up?`
       } else {
-        greetingText = `Hey${nameHi}, this is ${agentName} following up${serviceOf}. Did I catch you at an okay time?`
+        // Proactive outbound — use specific context from the lead file when available
+        const { data: fullLead } = await db
+          .from("leads")
+          .select("notes, metadata, job_type")
+          .eq("id", leadId)
+          .single()
+
+        const notes    = fullLead?.notes as string | null
+        const meta     = fullLead?.metadata as Record<string, unknown> | null
+        const jobType  = fullLead?.job_type as string | null
+
+        // Pull the most specific detail we have about why they reached out
+        const issue    = notes?.split("\n")[0]?.trim() ||
+                         (meta ? Object.values(meta).find((v) => typeof v === "string" && (v as string).length > 2) as string : null) ||
+                         null
+
+        if (issue && issue.length < 80) {
+          greetingText = `Hey${nameHi}! It's ${agentName} — I saw you reached out about ${issue}. Did I catch you at an okay time?`
+        } else if (jobType) {
+          const readable = jobType.replace(/_/g, " ")
+          greetingText = `Hey${nameHi}! It's ${agentName} — you reached out about ${readable}. Did I catch you at a good time?`
+        } else if (leadServiceType) {
+          greetingText = `Hey${nameHi}! It's ${agentName} — you reached out about your ${leadServiceType}. Did I catch you at an okay time?`
+        } else {
+          greetingText = `Hey${nameHi}! It's ${agentName} — just following up on your inquiry. Did I catch you at a good time?`
+        }
       }
     } else {
-      greetingText = `Thanks for calling! This is ${agentName} — how can I help you today?`
+      // Inbound — they called us, greet warmly by name if we have it
+      if (leadFirstName) {
+        greetingText = `Hey ${leadFirstName}! This is ${agentName} — what can I help you with?`
+      } else {
+        greetingText = `Thanks for calling! This is ${agentName} — how can I help you today?`
+      }
     }
 
     // Seed session history so Claude has full context when /voice/turn is called

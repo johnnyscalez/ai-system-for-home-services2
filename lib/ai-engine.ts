@@ -635,12 +635,26 @@ export async function processAndSave(
           .maybeSingle()
 
         if (leadData?.phone && phoneRecord?.phone_number) {
+          // Fetch recent SMS context so voice agent knows exactly what this call is about
+          const { data: smsHistory } = await supabase
+            .from("conversations")
+            .select("direction, body")
+            .eq("lead_id", leadId)
+            .eq("channel", "sms")
+            .order("created_at", { ascending: false })
+            .limit(8)
+
+          const smsSummary = (smsHistory ?? [])
+            .reverse()
+            .map((m) => `${m.direction === "inbound" ? "Lead" : "AI"}: ${m.body}`)
+            .join(" | ")
+
           const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadcloser.app"
           const twilio = getTwilioClient()
           await twilio.calls.create({
             to: leadData.phone,
             from: phoneRecord.phone_number,
-            url: `${appUrl}/api/voice/inbound?leadId=${leadId}&companyId=${companyId}&direction=outbound`,
+            url: `${appUrl}/api/voice/inbound?leadId=${leadId}&companyId=${companyId}&direction=outbound&callbackReason=${encodeURIComponent(smsSummary.slice(0, 300))}`,
             statusCallback: `${appUrl}/api/voice/status`,
             statusCallbackMethod: "POST",
             statusCallbackEvent: ["completed", "failed", "no-answer", "busy"],

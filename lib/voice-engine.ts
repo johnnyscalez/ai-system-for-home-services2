@@ -261,15 +261,31 @@ ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
     const callbackReason = session.collected?.callback_reason
     let directionHint: string
 
+    // Build a rich context snippet from what we know about this lead
+    const firstName  = (lead.first_name as string | null) ?? null
+    const notes      = (lead.notes as string | null) ?? null
+    const meta       = lead.metadata as Record<string, unknown> | null
+    const metaLines  = meta
+      ? Object.entries(meta)
+          .filter(([, v]) => v !== null && v !== undefined && v !== "")
+          .map(([k, v]) => `${k}: ${v}`)
+          .join(", ")
+      : null
+    const leadDetails = [
+      firstName   ? `Name: ${firstName}`          : null,
+      jobLabel    ? `Job type: ${jobLabel}`        : null,
+      notes       ? `Notes from form: ${notes}`   : null,
+      metaLines   ? `Form fields: ${metaLines}`   : null,
+    ].filter(Boolean).join(" | ")
+
     if (session.direction === "outbound") {
-      const jobHint = jobLabel ? ` Their inquiry is about: ${jobLabel}.` : ""
       if (callbackReason) {
-        directionHint = `SCHEDULED CALLBACK — you are calling this lead back. They requested this callback. Reason: "${callbackReason}".${jobHint} Reference their specific need naturally in your opening. Start the call now.`
+        directionHint = `CALLBACK — this lead texted "call me" in the SMS conversation. Here is the SMS context so you know exactly what this call is about: "${callbackReason}". Lead details: ${leadDetails || "none on file"}. Open naturally using what you already know — do NOT ask "what's going on with your HVAC?" if you already know. React to what they say. Start the call now.`
       } else {
-        directionHint = `OUTBOUND CALL — you called this lead.${jobHint} Reference their specific HVAC inquiry in your opening. Start the call now.`
+        directionHint = `OUTBOUND CALL — you called this lead. Lead details: ${leadDetails || "none on file"}. Open by referencing the SPECIFIC issue or job type from the lead file — not a generic "what's going on with your HVAC?" Use their name. Be specific. Start the call now.`
       }
     } else {
-      directionHint = `INBOUND CALL — they called us. Greet them and find out what they need.`
+      directionHint = `INBOUND CALL — they called us. Lead details: ${leadDetails || "none on file"}. If you have their name, use it. If you already know why they're calling from the lead file (notes, job type, form fields), reference that naturally. If you don't know why they're calling yet, find out with ONE question. Start the call now.`
     }
 
     messages.push({ role: "user", content: directionHint })
