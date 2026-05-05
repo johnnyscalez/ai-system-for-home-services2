@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 import { createCalendarEvent, getCalendarEvents } from "@/lib/google-calendar"
 import { getConversationFlow } from "@/lib/conversation-flows"
 import { getAvailableSlots, formatSlotsForPrompt, DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
+import { getTwilioClient } from "@/lib/twilio"
 import type { AppointmentWindow, PerDaySlots } from "@/lib/availability"
 
 export type ConversationAction =
@@ -10,6 +11,7 @@ export type ConversationAction =
   | { type: "update_status"; status: "qualified" | "closed_lost" | "needs_attention" }
   | { type: "cancel_appointment"; appointment_id: string; reason?: string }
   | { type: "reschedule_appointment"; appointment_id: string; new_scheduled_at: string }
+  | { type: "request_callback" }
 
 export type EngineResult = {
   response: string
@@ -56,6 +58,16 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
         new_scheduled_at: { type: "string", description: "New ISO 8601 datetime for the appointment, chosen from available slots" },
       },
       required: ["appointment_id", "new_scheduled_at"],
+    },
+  },
+  {
+    name: "request_callback",
+    description:
+      "Use IMMEDIATELY when the lead says 'call me', 'give me a call', 'can you call me', 'just call me', 'phone me', or anything clearly requesting a phone call. This triggers an outbound call to the lead right now. Rules: (1) Call this tool first, (2) send ONE message only — 'Calling you now!' — nothing else. Do NOT ask if the phone number is correct — you already have it in the lead file. Do NOT ask for their address before calling. Do NOT ask any more questions. Just confirm you're calling and stop.",
+    input_schema: {
+      type: "object" as const,
+      properties: {},
+      required: [],
     },
   },
   {
@@ -288,6 +300,8 @@ export async function runConversation(
       } else if (block.name === "update_lead_status") {
         const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention" }
         action = { type: "update_status", status: input.status }
+      } else if (block.name === "request_callback") {
+        action = { type: "request_callback" }
       }
     }
   }
@@ -314,6 +328,8 @@ export async function runConversation(
               ? "Appointment cancelled. Send a brief, warm confirmation to the lead that it's been cancelled."
               : action?.type === "reschedule_appointment"
               ? "Appointment rescheduled. Confirm the new date and time to the lead in a short, friendly text."
+              : action?.type === "request_callback"
+              ? "Call initiated. Send exactly this message and nothing else: 'Calling you now!' Do NOT ask any more questions."
               : "Action recorded. Now send your confirmation text to the lead.",
           },
         ],
@@ -599,6 +615,41 @@ export async function processAndSave(
           last_message_at: new Date().toISOString(),
         })
         .eq("id", leadId)
+
+    } else if (result.action.type === "request_callback") {
+      // Trigger an outbound Twilio call to the lead
+      try {
+        const { data: leadData } = await supabase
+          .from("leads")
+          .select("phone")
+          .eq("id", leadId)
+          .single()
+
+        const { data: phoneRecord } = await supabase
+          .from("phone_numbers")
+          .select("phone_number")
+          .eq("company_id", companyId)
+          .eq("is_active", true)
+          .limit(1)
+          .maybeSingle()
+
+        if (leadData?.phone && phoneRecord?.phone_number) {
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadcloser.app"
+          const twilio = getTwilioClient()
+          await twilio.calls.create({
+            to: leadData.phone,
+            from: phoneRecord.phone_number,
+            url: `${appUrl}/api/voice/inbound?leadId=${leadId}&companyId=${companyId}&direction=outbound`,
+            statusCallback: `${appUrl}/api/voice/status`,
+            statusCallbackMethod: "POST",
+            statusCallbackEvent: ["completed", "failed", "no-answer", "busy"],
+            machineDetection: "DetectMessageEnd",
+            asyncAmdStatusCallback: `${appUrl}/api/voice/amd?leadId=${leadId}`,
+          })
+        }
+      } catch (err) {
+        console.error("[ai-engine] request_callback call trigger failed:", err)
+      }
     }
   } else if (incomingMessage !== null) {
     await supabase
