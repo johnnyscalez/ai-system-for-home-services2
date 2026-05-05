@@ -8,6 +8,7 @@ import {
   Clock, Play, Star, Menu, X,
   CheckCircle2, Phone, Shield, Mic,
   CalendarCheck, Bell, PhoneCall,
+  BarChart3, Brain, Kanban, Repeat, TrendingUp,
 } from "lucide-react"
 
 // ─────────────────────────────────────────────────────────────────────────────
@@ -668,6 +669,320 @@ function StatStrip() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SYSTEM OVERVIEW — "The front office your HVAC company never had"
+// ─────────────────────────────────────────────────────────────────────────────
+function SystemOverviewSection() {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: "-80px" })
+
+  const dashMetrics = [
+    { label: "Revenue this month",  value: "$284K", sub: "recovered from ad spend", color: C.success },
+    { label: "Leads reached",       value: "94%",   sub: "within 60 seconds",       color: C.primary },
+    { label: "Avg response time",   value: "14s",   sub: "while you were on a job", color: "#0EA5E9" },
+    { label: "Show rate",           value: "91%",   sub: "of booked appointments",  color: "#D97706" },
+  ]
+
+  const leadProfile = [
+    { label: "System type",  value: "Central AC · Split" },
+    { label: "Unit age",     value: "12 years" },
+    { label: "Issue",        value: "Blows warm air" },
+    { label: "Urgency",      value: "High — 2 days down" },
+    { label: "Homeowner",    value: "Yes — confirmed" },
+    { label: "Address",      value: "2241 Ridgeline, Frisco TX" },
+  ]
+
+  const pipeline = [
+    { label: "New",       count: 12, color: C.primary },
+    { label: "Talking",   count: 8,  color: "#0EA5E9" },
+    { label: "Qualified", count: 5,  color: "#D97706" },
+    { label: "Booked",    count: 19, color: C.success },
+  ]
+
+  const miniConvo = [
+    { role: "ai",   text: "Hey Mike, saw you reached out about your AC — what's it doing?" },
+    { role: "lead", text: "Not cooling. Been two days." },
+    { role: "ai",   text: "Running but warm air, or completely off?" },
+    { role: "lead", text: "Runs but warm." },
+    { role: "ai",   text: "How old is the unit?" },
+  ]
+
+  const followUpSteps = [
+    { time: "Instant", type: "sms",   label: "First text" },
+    { time: "30 min",  type: "voice", label: "AI voice call" },
+    { time: "24 hrs",  type: "sms",   label: "Follow-up text" },
+    { time: "Day 2",   type: "voice", label: "2nd AI call" },
+    { time: "Day 4",   type: "sms",   label: "Value message" },
+    { time: "Day 7",   type: "sms",   label: "Check-in" },
+    { time: "Day 14",  type: "sms",   label: "Long game" },
+  ]
+
+  return (
+    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }}>
+      <div className="max-w-7xl mx-auto">
+
+        <motion.div
+          initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-14"
+        >
+          <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
+               style={{ background: "#F5F3FF", color: C.primary }}>
+            The complete system
+          </div>
+          <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
+              style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
+            The front office your HVAC company
+            <br />
+            <span style={{ color: C.primary }}>never had.</span>{" "}
+            <span style={{ color: C.muted, fontWeight: 400 }}>Now it does.</span>
+          </h2>
+          <p className="text-lg max-w-2xl mx-auto" style={{ color: C.muted }}>
+            Six AI systems running at once. Every lead is followed up. Every call is made.
+            Every appointment is confirmed, reminded, and logged.
+            You watch it happen from one dashboard.
+          </p>
+        </motion.div>
+
+        {/* Bento grid */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+
+          {/* Analytics Dashboard — spans 2 cols */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.1 }}
+            className="md:col-span-2 rounded-2xl p-6 border"
+            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(124,58,237,0.07)" }}
+          >
+            <div className="flex items-center gap-2 mb-5">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#F5F3FF", color: C.primary }}>
+                <BarChart3 className="w-4 h-4" aria-hidden="true" />
+              </div>
+              <div>
+                <div className="text-sm font-bold" style={{ color: C.text }}>Analytics Dashboard</div>
+                <div className="text-xs" style={{ color: C.muted }}>Revenue and conversion — live</div>
+              </div>
+              <span className="ml-auto text-xs px-2 py-0.5 rounded-full font-medium" style={{ background: "#F0FDF4", color: C.success }}>Live</span>
+            </div>
+
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
+              {dashMetrics.map((m, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, scale: 0.93 }} animate={inView ? { opacity: 1, scale: 1 } : {}}
+                  transition={{ delay: 0.2 + i * 0.07 }}
+                  className="rounded-xl p-3 border"
+                  style={{ background: C.subtle, borderColor: C.border }}
+                >
+                  <div className="text-2xl font-black mb-0.5" style={{ color: m.color, fontFamily: "var(--font-mono)" }}>{m.value}</div>
+                  <div className="text-xs font-semibold mb-0.5" style={{ color: C.text }}>{m.label}</div>
+                  <div className="text-xs" style={{ color: C.muted }}>{m.sub}</div>
+                </motion.div>
+              ))}
+            </div>
+
+            <div className="border-t pt-4" style={{ borderColor: C.border }}>
+              <div className="flex items-center justify-between mb-2">
+                <span className="text-xs font-semibold" style={{ color: C.muted }}>Appointments booked — last 7 days</span>
+                <span className="text-xs font-bold" style={{ color: C.primary }}>49 total this week</span>
+              </div>
+              <div className="flex items-end gap-1.5" style={{ height: 48 }}>
+                {[3, 7, 5, 9, 6, 11, 8].map((h, i) => (
+                  <motion.div
+                    key={i}
+                    className="flex-1 rounded-t-sm"
+                    style={{ background: i === 5 ? C.primary : `${C.primary}35`, height: `${(h / 11) * 100}%` }}
+                    initial={{ scaleY: 0, originY: "100%" }}
+                    animate={inView ? { scaleY: 1 } : {}}
+                    transition={{ delay: 0.55 + i * 0.05, duration: 0.45, ease: "easeOut" }}
+                  />
+                ))}
+              </div>
+              <div className="flex mt-1">
+                {["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"].map((d, i) => (
+                  <div key={i} className="flex-1 text-center text-xs" style={{ color: C.muted }}>{d}</div>
+                ))}
+              </div>
+            </div>
+          </motion.div>
+
+          {/* Lead Intelligence */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="rounded-2xl p-6 border"
+            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(124,58,237,0.07)" }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#F5F3FF", color: C.primary }}>
+                <Brain className="w-4 h-4" aria-hidden="true" />
+              </div>
+              <div>
+                <div className="text-sm font-bold" style={{ color: C.text }}>Lead Intelligence</div>
+                <div className="text-xs" style={{ color: C.muted }}>Built from every conversation</div>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-3 p-3 rounded-xl mb-4" style={{ background: C.subtle }}>
+              <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                   style={{ background: C.primary }}>M</div>
+              <div className="min-w-0">
+                <div className="text-xs font-bold truncate" style={{ color: C.text }}>Mike Johnson</div>
+                <div className="text-xs truncate" style={{ color: C.muted }}>Facebook · AC Repair</div>
+              </div>
+              <span className="ml-auto shrink-0 text-xs px-1.5 py-0.5 rounded-full font-medium"
+                    style={{ background: "#F0FDF4", color: C.success }}>Booked</span>
+            </div>
+
+            <div className="space-y-2.5">
+              {leadProfile.map((f, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -8 }} animate={inView ? { opacity: 1, x: 0 } : {}}
+                  transition={{ delay: 0.3 + i * 0.06 }}
+                  className="flex items-start justify-between gap-3 pb-2 border-b last:border-0 last:pb-0"
+                  style={{ borderColor: C.border }}
+                >
+                  <span className="text-xs shrink-0" style={{ color: C.muted }}>{f.label}</span>
+                  <span className="text-xs font-semibold text-right" style={{ color: C.text }}>{f.value}</span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* AI SMS Agent */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="rounded-2xl p-6 border"
+            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(124,58,237,0.07)" }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#F0F9FF", color: "#0EA5E9" }}>
+                <MessageSquare className="w-4 h-4" aria-hidden="true" />
+              </div>
+              <div>
+                <div className="text-sm font-bold" style={{ color: C.text }}>AI SMS Agent</div>
+                <div className="text-xs" style={{ color: C.muted }}>Responds in seconds, books in minutes</div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {miniConvo.map((m, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 6 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+                  transition={{ delay: 0.4 + i * 0.1 }}
+                  className={`flex ${m.role === "lead" ? "justify-end" : "justify-start"}`}
+                >
+                  <div className="max-w-[85%] px-3 py-2 text-xs leading-snug"
+                       style={{
+                         background: m.role === "ai" ? C.subtle : C.primary,
+                         color:      m.role === "ai" ? C.text : "#fff",
+                         borderRadius: m.role === "ai" ? "4px 14px 14px 14px" : "14px 4px 14px 14px",
+                       }}>
+                    {m.text}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* Lead Pipeline CRM */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.35 }}
+            className="rounded-2xl p-6 border"
+            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(124,58,237,0.07)" }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#F0FDF4", color: C.success }}>
+                <Kanban className="w-4 h-4" aria-hidden="true" />
+              </div>
+              <div>
+                <div className="text-sm font-bold" style={{ color: C.text }}>Lead Pipeline CRM</div>
+                <div className="text-xs" style={{ color: C.muted }}>Every lead at a glance</div>
+              </div>
+            </div>
+
+            <div className="grid grid-cols-4 gap-2 mb-4">
+              {pipeline.map((col, i) => (
+                <div key={i} className="text-center">
+                  <div className="text-xs mb-1 truncate" style={{ color: C.muted }}>{col.label}</div>
+                  <div className="text-2xl font-black" style={{ color: col.color, fontFamily: "var(--font-mono)" }}>{col.count}</div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-1.5">
+              {[
+                { name: "Mike Johnson",   stage: "Booked",    color: C.success },
+                { name: "Sarah Martinez", stage: "Qualified",  color: "#D97706" },
+                { name: "Tom Richards",   stage: "Talking",    color: "#0EA5E9" },
+                { name: "Lisa Chen",      stage: "New",        color: C.primary },
+                { name: "David Park",     stage: "Booked",     color: C.success },
+              ].map((l, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}}
+                  transition={{ delay: 0.45 + i * 0.07 }}
+                  className="flex items-center gap-2 p-2 rounded-lg"
+                  style={{ background: C.subtle }}
+                >
+                  <div className="w-5 h-5 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                       style={{ background: l.color }}>{l.name[0]}</div>
+                  <span className="text-xs font-medium flex-1 truncate" style={{ color: C.text }}>{l.name}</span>
+                  <span className="text-xs shrink-0 font-semibold" style={{ color: l.color }}>{l.stage}</span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* 14-Day Follow-Up Engine */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.4 }}
+            className="rounded-2xl p-6 border"
+            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(124,58,237,0.07)" }}
+          >
+            <div className="flex items-center gap-2 mb-4">
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#FFF7ED", color: "#D97706" }}>
+                <Repeat className="w-4 h-4" aria-hidden="true" />
+              </div>
+              <div>
+                <div className="text-sm font-bold" style={{ color: C.text }}>14-Day Follow-Up Engine</div>
+                <div className="text-xs" style={{ color: C.muted }}>SMS + voice calls, no setup</div>
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              {followUpSteps.map((s, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -6 }} animate={inView ? { opacity: 1, x: 0 } : {}}
+                  transition={{ delay: 0.5 + i * 0.06 }}
+                  className="flex items-center gap-2.5"
+                >
+                  <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
+                       style={{ background: s.type === "voice" ? "#F5F3FF" : "#F0F9FF",
+                                color:      s.type === "voice" ? C.primary : "#0EA5E9" }}>
+                    {s.type === "voice"
+                      ? <PhoneCall className="w-3 h-3" aria-hidden="true" />
+                      : <MessageSquare className="w-3 h-3" aria-hidden="true" />}
+                  </div>
+                  <span className="text-xs w-12 shrink-0" style={{ color: C.muted, fontFamily: "var(--font-mono)" }}>{s.time}</span>
+                  <span className="text-xs" style={{ color: C.text }}>{s.label}</span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // PROBLEM SECTION — "You paid $80 for that lead"
 // ─────────────────────────────────────────────────────────────────────────────
 function ProblemSection() {
@@ -825,13 +1140,13 @@ function HowItWorksSection() {
         >
           <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
                style={{ background: "#F5F3FF", color: C.primary }}>
-            How it works
+            What actually happens
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
             Three things happen when a lead comes in.
             <br />
-            <span style={{ color: C.muted, fontWeight: 400 }}>You&rsquo;re only responsible for the third.</span>
+            <span style={{ color: C.muted, fontWeight: 400 }}>Your front office handles two of them.</span>
           </h2>
         </motion.div>
 
@@ -1327,6 +1642,27 @@ function CRMSection() {
                       style={{ background: "#F0FDF4", color: C.success }}>Live</span>
               </div>
 
+              {/* Analytics strip */}
+              <div className="px-5 py-4 grid grid-cols-4 gap-3 border-b"
+                   style={{ borderColor: C.border, background: C.subtle }}>
+                {[
+                  { label: "Revenue",    value: "$284K", color: C.success },
+                  { label: "Booked",     value: "34",    color: C.primary },
+                  { label: "Contact",    value: "94%",   color: "#0EA5E9" },
+                  { label: "Show rate",  value: "91%",   color: "#D97706" },
+                ].map((m, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 6 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+                    transition={{ delay: 0.15 + i * 0.07 }}
+                    className="text-center"
+                  >
+                    <div className="text-base font-black" style={{ color: m.color, fontFamily: "var(--font-mono)" }}>{m.value}</div>
+                    <div className="text-xs" style={{ color: C.muted }}>{m.label}</div>
+                  </motion.div>
+                ))}
+              </div>
+
               {/* Pipeline columns */}
               <div className="p-4 grid grid-cols-4 gap-2">
                 {pipeline.map((col, i) => (
@@ -1378,17 +1714,19 @@ function CRMSection() {
           >
             <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-5"
                  style={{ background: "#F5F3FF", color: C.primary }}>
-              Built-in CRM
+              Built-in CRM + analytics
             </div>
             <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-4"
                 style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-              See everything. Touch nothing.
+              The command center.
+              <br />
+              <span style={{ color: C.muted, fontWeight: 400 }}>Every lead. Every call. Every dollar.</span>
             </h2>
             <p className="text-base leading-relaxed mb-6" style={{ color: C.muted }}>
-              Every lead flows through a visual pipeline from the moment they arrive to
-              the day they book. Every SMS and every call is logged. Everything the AI
-              learned — what&rsquo;s wrong, system age, address, objections — is saved to the
-              lead profile automatically.
+              Revenue recovered from ad spend. Contact rates. Booking rates. Show rates.
+              Every conversation your AI had — logged, searchable, readable.
+              Every piece of intel it gathered — system age, issue, address, objections —
+              saved automatically to the lead profile.
             </p>
 
             <div className="space-y-4 mb-8">
@@ -1781,7 +2119,7 @@ function Footer() {
             <Zap className="w-3.5 h-3.5 text-white" aria-hidden="true" />
           </div>
           <span className="font-bold" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>LeadCloser</span>
-          <span className="text-sm" style={{ color: C.muted }}>— AI lead follow-up for HVAC contractors</span>
+          <span className="text-sm" style={{ color: C.muted }}>— AI front office for HVAC contractors</span>
         </div>
 
         <div className="flex items-center gap-6 text-sm" style={{ color: C.muted }}>
@@ -1808,6 +2146,7 @@ export default function Page() {
       <Nav />
       <HeroSection />
       <StatStrip />
+      <SystemOverviewSection />
       <ProblemSection />
       <HowItWorksSection />
       <DemoSection />
