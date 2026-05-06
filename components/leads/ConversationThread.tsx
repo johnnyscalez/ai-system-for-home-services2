@@ -12,7 +12,7 @@ import { createClient } from "@/lib/supabase"
 type Message = {
   id: string
   direction: "inbound" | "outbound"
-  sent_by: "ai" | "human"
+  sent_by: "ai" | "human" | "reminder" | string
   body: string
   created_at: string
   twilio_sid?: string | null
@@ -26,6 +26,7 @@ type Props = {
   leadStatus: string
   fromNumber: string | null
   leadPhone: string
+  companyTimezone?: string
 }
 
 export function ConversationThread({
@@ -36,6 +37,7 @@ export function ConversationThread({
   leadStatus,
   fromNumber,
   leadPhone,
+  companyTimezone = "America/New_York",
 }: Props) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [aiPaused, setAiPaused] = useState(initialAiPaused)
@@ -231,8 +233,10 @@ export function ConversationThread({
             {messages.map((msg) => {
               const isOutbound = msg.direction === "outbound"
               const isAi = msg.sent_by === "ai"
+              const isReminder = msg.sent_by === "reminder"
               const ageSeconds = (Date.now() - new Date(msg.created_at).getTime()) / 1000
-              const deliveryFailed = isOutbound && msg.twilio_sid === null && ageSeconds > 15
+              // Only flag delivery failure for AI messages — reminder/confirmation SMS may not have a SID logged yet
+              const deliveryFailed = isOutbound && !isReminder && msg.twilio_sid === null && ageSeconds > 15
               const isInitial = initialMessages.some((m) => m.id === msg.id)
 
               return (
@@ -290,6 +294,7 @@ export function ConversationThread({
                       <span className="text-[10px] text-muted-foreground">
                         {new Date(msg.created_at).toLocaleTimeString("en-US", {
                           hour: "numeric", minute: "2-digit",
+                          timeZone: companyTimezone,
                         })}
                       </span>
                       {deliveryFailed && (

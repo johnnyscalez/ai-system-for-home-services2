@@ -205,11 +205,10 @@ follow up. Use update_lead_status("needs_attention") so a human can call back.
 === END AVAILABLE SLOTS ===`
   }
 
-  const lines = slots.map((s, i) => `  ${i + 1}. ${s.label}`).join("\n")
+  const lines = slots.map((s, i) => `  ${i + 1}. ${s.label}  [ISO: ${s.isoStart}]`).join("\n")
 
   return `=== AVAILABLE BOOKING SLOTS ===
 Offer ONLY slots from this list. Never invent times or say "whenever works for you."
-When the lead confirms a slot, use that slot's start time in book_appointment.
 
 ${lines}
 
@@ -217,6 +216,6 @@ HOW TO OFFER: Pick the 2 soonest slots and offer them as a choice:
 "I've got [slot 1 short label] or [slot 2 short label] — which works better for you?"
 Example: "I've got Thursday morning (8–10am) or Friday afternoon (1–3pm) — which works better?"
 
-When they pick one → call book_appointment with the exact ISO datetime shown above.
+CRITICAL — TIMEZONE RULE: When the lead confirms a slot, copy the EXACT ISO string shown in [ISO: ...] for that slot into book_appointment.scheduled_at. Do NOT convert the time yourself — the ISO is already in the correct UTC timezone. Never write your own ISO timestamp from "8am" or any local time.
 === END AVAILABLE SLOTS ===`
 }

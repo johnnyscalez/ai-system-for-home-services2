@@ -98,9 +98,12 @@ export async function sendConfirmations(appointmentId: string) {
         gmail,
       )
       await supabase.from("appointments").update({ confirmation_email_sent: true }).eq("id", appointmentId)
+      console.log(`[reminders] Confirmation email sent to ${lead.email}`)
     } catch (err) {
-      console.error("[reminders] Confirmation email failed:", err)
+      console.error("[reminders] Confirmation email failed:", JSON.stringify(err))
     }
+  } else {
+    console.log(`[reminders] Confirmation email skipped — lead email: ${lead.email ?? "none"}, template confirmation_enabled: ${emailTpl?.confirmation_enabled}`)
   }
 
   // Send confirmation SMS
@@ -114,14 +117,16 @@ export async function sendConfirmations(appointmentId: string) {
     const smsBody = `${companyName}: Your appointment is confirmed for ${formattedDate} at ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. Reply RESCHEDULE or CANCEL if needed.`
 
     try {
-      await sendSMS(lead.phone, smsBody, phoneNum.phone_number)
-      // Save to conversations so AI has context
+      const twilioMsg = await sendSMS(lead.phone, smsBody, phoneNum.phone_number)
+      // Save to conversations with Twilio SID so UI doesn't show "Not delivered"
       await supabase.from("conversations").insert({
         lead_id: apt.lead_id,
         company_id: apt.company_id,
         direction: "outbound",
         sent_by: "reminder",
         body: smsBody,
+        twilio_sid: twilioMsg.sid,
+        channel: "sms",
       })
       await supabase.from("appointments").update({ confirmation_sms_sent: true }).eq("id", appointmentId)
     } catch (err) {
@@ -234,13 +239,15 @@ export async function processAppointmentReminders() {
     async function sendReminderSMS(body: string, column: string) {
       if (!phoneNum?.phone_number) return
       try {
-        await sendSMS(lead!.phone, body, phoneNum.phone_number)
+        const twilioMsg = await sendSMS(lead!.phone, body, phoneNum.phone_number)
         await supabase.from("conversations").insert({
           lead_id: apt.lead_id,
           company_id: apt.company_id,
           direction: "outbound",
           sent_by: "reminder",
           body,
+          twilio_sid: twilioMsg.sid,
+          channel: "sms",
         })
         await supabase.from("appointments").update({ [column]: true }).eq("id", apt.id)
       } catch (err) {

@@ -68,6 +68,14 @@ export default async function LeadDetailPage({
     .eq("is_active", true)
     .single()
 
+  const { data: agentCfg } = await supabase
+    .from("ai_agent_config")
+    .select("timezone")
+    .eq("company_id", profile.company_id)
+    .single()
+
+  const companyTimezone = agentCfg?.timezone ?? "America/New_York"
+
   return (
     <div className="flex flex-col h-screen">
       {/* Top bar */}
@@ -234,11 +242,13 @@ export default async function LeadDetailPage({
                       <Calendar className="w-3 h-3" />
                       {new Date(apt.scheduled_at).toLocaleDateString("en-US", {
                         weekday: "short", month: "short", day: "numeric",
+                        timeZone: companyTimezone,
                       })}
                     </div>
                     <p className="text-xs text-emerald-400/70">
                       {new Date(apt.scheduled_at).toLocaleTimeString("en-US", {
                         hour: "numeric", minute: "2-digit",
+                        timeZone: companyTimezone,
                       })}
                     </p>
                     {apt.address && (
@@ -266,6 +276,7 @@ export default async function LeadDetailPage({
           leadStatus={lead.status}
           fromNumber={phoneRecord?.phone_number ?? null}
           leadPhone={lead.phone}
+          companyTimezone={companyTimezone}
         />
       </div>
     </div>
