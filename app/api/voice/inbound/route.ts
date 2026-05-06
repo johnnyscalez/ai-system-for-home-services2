@@ -16,13 +16,13 @@ function speakUrl(text: string, appUrl: string): string {
 function gatherTwiML(text: string, appUrl: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Play>${speakUrl(text, appUrl)}</Play>
   <Gather input="speech" action="${appUrl}/api/voice/turn" method="POST"
     speechTimeout="auto" speechModel="phone_call" enhanced="true" timeout="10" language="en-US">
+    <Play>${speakUrl(text, appUrl)}</Play>
   </Gather>
-  <Play>${speakUrl("Sorry, I didn't catch that — are you still there?", appUrl)}</Play>
   <Gather input="speech" action="${appUrl}/api/voice/turn" method="POST"
     speechTimeout="auto" speechModel="phone_call" enhanced="true" timeout="8" language="en-US">
+    <Play>${speakUrl("Sorry, I didn't catch that — are you still there?", appUrl)}</Play>
   </Gather>
   <Hangup/>
 </Response>`

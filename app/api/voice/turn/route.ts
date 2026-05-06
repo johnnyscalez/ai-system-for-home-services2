@@ -17,13 +17,13 @@ function speakUrl(text: string, appUrl: string): string {
 function gatherTwiML(text: string, appUrl: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Play>${speakUrl(text, appUrl)}</Play>
   <Gather input="speech" action="${appUrl}/api/voice/turn" method="POST"
     speechTimeout="auto" speechModel="phone_call" enhanced="true" timeout="10" language="en-US">
+    <Play>${speakUrl(text, appUrl)}</Play>
   </Gather>
-  <Play>${speakUrl("Are you still there?", appUrl)}</Play>
   <Gather input="speech" action="${appUrl}/api/voice/turn" method="POST"
     speechTimeout="auto" speechModel="phone_call" enhanced="true" timeout="8" language="en-US">
+    <Play>${speakUrl("Are you still there?", appUrl)}</Play>
   </Gather>
   <Hangup/>
 </Response>`
@@ -56,9 +56,9 @@ function transferTwiML(text: string, notificationPhone: string | null, appUrl: s
 function retryTwiML(appUrl: string): string {
   return `<?xml version="1.0" encoding="UTF-8"?>
 <Response>
-  <Play>${speakUrl("Sorry, I didn't quite catch that. Could you say that again?", appUrl)}</Play>
   <Gather input="speech" action="${appUrl}/api/voice/turn" method="POST"
     speechTimeout="auto" speechModel="phone_call" enhanced="true" timeout="10" language="en-US">
+    <Play>${speakUrl("Sorry, I didn't quite catch that. Could you say that again?", appUrl)}</Play>
   </Gather>
   <Hangup/>
 </Response>`

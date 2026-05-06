@@ -30,7 +30,10 @@ export async function GET(req: NextRequest) {
       body: JSON.stringify({
         text,
         model_id: "eleven_turbo_v2_5",
-        output_format: "mp3_44100_128",
+        // ulaw_8000 = native phone codec (~8KB/s vs 176KB/s for mp3_44100_128).
+        // Phone calls are 8kHz PSTN — the higher bitrate is downsampled anyway.
+        // This starts playing in Twilio ~20x faster.
+        output_format: "ulaw_8000",
         voice_settings: {
           stability: 0.45,
           similarity_boost: 0.80,
@@ -44,12 +47,17 @@ export async function GET(req: NextRequest) {
   if (!res.ok) {
     const err = await res.text().catch(() => res.status.toString())
     console.error("[voice/speak] ElevenLabs error:", res.status, err)
-    return new Response("TTS error", { status: 502 })
+    // Fall back to Polly so the call doesn't die with Twilio's "application error"
+    return new Response(
+      `<?xml version="1.0" encoding="UTF-8"?><Response><Say voice="Polly.Ruth-Neural">${text.replace(/[<>&'"]/g, "")}</Say></Response>`,
+      { status: 200, headers: { "Content-Type": "text/xml" } }
+    )
   }
 
   return new Response(res.body, {
     headers: {
-      "Content-Type": "audio/mpeg",
+      // audio/basic is the MIME type for μ-law 8kHz — Twilio accepts it natively
+      "Content-Type": "audio/basic",
       "Cache-Control": "no-store",
     },
   })
