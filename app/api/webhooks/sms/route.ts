@@ -4,6 +4,102 @@ import { processAndSave } from "@/lib/ai-engine"
 import { sendSMS, validateTwilioSignature, formatPhone } from "@/lib/twilio"
 import { notifyAppointmentBooked, notifyNeedsAttention } from "@/lib/notifications"
 import { buildRepliedNotBookedSchedule } from "@/lib/sequences"
+import { notifyTechnicianConfirmed } from "@/lib/appointment-reminders"
+
+// ─── Confirmation reply detection ─────────────────────────────────────────────
+
+function isConfirmation(msg: string): boolean {
+  const s = msg.toLowerCase().trim()
+  return /^(yes|y|yeah|yep|yup|confirmed|confirm|ok|okay|sure|sounds good|i.ll be there|will be there|i.m good|good|👍|✅|absolutely|definitely|for sure|i confirm|confirmed|great|perfect|works for me|that works|see you|see you then|i.ll be home|we.ll be there|we.ll be home)/.test(s)
+}
+
+function isCancellation(msg: string): boolean {
+  const s = msg.toLowerCase().trim()
+  return /^(no|cancel|nope|nah|won.t make it|can.t make it|need to cancel|please cancel|cancel my appointment|reschedule|i need to reschedule|need to reschedule|can we reschedule|rescheduling|change)/.test(s)
+}
+
+async function handleConfirmationReply(
+  leadId: string,
+  companyId: string,
+  messageBody: string,
+  leadPhone: string,
+  fromNumber: string,
+  supabase: ReturnType<typeof createServiceRoleClient>
+): Promise<boolean> {
+  // Find the most recent appointment pending confirmation for this lead
+  const { data: apt } = await supabase
+    .from("appointments")
+    .select("id, scheduled_at, technician_name, confirmation_status, confirmation_requested_at, leads(first_name)")
+    .eq("lead_id", leadId)
+    .eq("status", "scheduled")
+    .not("confirmation_requested_at", "is", null)
+    .order("scheduled_at", { ascending: true })
+    .limit(1)
+    .maybeSingle()
+
+  if (!apt) return false  // no pending confirmation — normal AI flow
+
+  const { data: agentCfg } = await supabase
+    .from("ai_agent_config")
+    .select("timezone, agent_name")
+    .eq("company_id", companyId)
+    .single()
+
+  const { data: company } = await supabase
+    .from("companies")
+    .select("name")
+    .eq("id", companyId)
+    .single()
+
+  const timezone  = agentCfg?.timezone  ?? "America/New_York"
+  const agentName = agentCfg?.agent_name ?? company?.name ?? "us"
+  const firstName = (apt.leads as { first_name: string | null } | null)?.first_name ?? null
+  const techName  = apt.technician_name
+  const timeLabel = new Date(apt.scheduled_at).toLocaleString("en-US", {
+    weekday: "short", month: "short", day: "numeric",
+    hour: "numeric", minute: "2-digit", timeZone: timezone,
+  })
+
+  if (isConfirmation(messageBody)) {
+    // Lead confirmed → update status, send follow-up SMS, notify technician
+    await supabase.from("appointments").update({
+      confirmation_status: "confirmed",
+      confirmed_at: new Date().toISOString(),
+    }).eq("id", apt.id)
+
+    const techPart = techName ? ` ${techName}` : " our tech"
+    const reply = `Perfect${firstName ? `, ${firstName}` : ""}! You're confirmed.${techPart} will be there ${timeLabel}. See you then!`
+
+    const msg = await sendSMS(leadPhone, reply, fromNumber)
+    await supabase.from("conversations").insert({
+      lead_id:    leadId,
+      company_id: companyId,
+      direction:  "outbound",
+      sent_by:    "reminder",
+      body:       reply,
+      twilio_sid: msg.sid,
+      channel:    "sms",
+    })
+
+    // Notify technician
+    notifyTechnicianConfirmed(apt.id).catch(() => {})
+    return true
+  }
+
+  if (isCancellation(messageBody)) {
+    // Check if they want to reschedule or fully cancel — let the AI handle this
+    // Just update status to reschedule_requested so owner sees it
+    await supabase.from("appointments").update({
+      confirmation_status: "reschedule_requested",
+    }).eq("id", apt.id)
+
+    // Let AI engine handle the reschedule conversation naturally
+    return false
+  }
+
+  // Response doesn't clearly confirm or cancel — let AI handle
+  return false
+}
 
 // Twilio sends POST with form-encoded body to this endpoint.
 // Configure this URL in Twilio console under the phone number's "A message comes in" webhook.
@@ -90,6 +186,27 @@ export async function POST(req: NextRequest) {
     .from("leads")
     .update({ last_inbound_at: new Date().toISOString(), is_active_conversation: true })
     .eq("id", lead.id)
+
+  // ── Confirmation reply interception ───────────────────────────────────────
+  // If this lead has a pending confirmation AND their message is a clear YES/NO,
+  // handle it directly without burning an AI call.
+  const wasConfirmationReply = await handleConfirmationReply(
+    lead.id, companyId, messageBody, normalizedFrom, to, supabase
+  ).catch(() => false)
+
+  if (wasConfirmationReply) {
+    // Still save the inbound message to conversations for CRM visibility
+    await supabase.from("conversations").insert({
+      lead_id:    lead.id,
+      company_id: companyId,
+      direction:  "inbound",
+      sent_by:    "human",
+      body:       messageBody,
+      twilio_sid: twilioSid ?? null,
+      channel:    "sms",
+    }).catch(() => {})
+    return twimlOk()
+  }
 
   try {
     const result = await processAndSave(lead.id, companyId, messageBody, twilioSid)

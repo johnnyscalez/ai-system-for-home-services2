@@ -46,7 +46,9 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  if (user && isAuthRoute) {
+  // Only redirect logged-in users away from /login — never from /signup,
+  // so they can always create a new account without being forced to log out first.
+  if (user && path === "/login") {
     const url = request.nextUrl.clone()
     url.pathname = "/dashboard"
     return NextResponse.redirect(url)

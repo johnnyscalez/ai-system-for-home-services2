@@ -46,6 +46,7 @@ export default function OnboardingPage() {
     serviceArea: "",
     notificationPhone: "",
     country: "US",
+    avgJobValue: "",
   })
 
   const [intelligence, setIntelligence] = useState<IntelligenceData>({

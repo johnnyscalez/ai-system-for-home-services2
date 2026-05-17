@@ -22,6 +22,13 @@ export type UserRole = "owner" | "admin" | "member"
 export type SequenceType = "no_reply" | "replied_not_booked"
 export type SequenceStatus = "pending" | "sent" | "cancelled"
 export type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "no_show"
+export type ConfirmationStatus =
+  | "pending_confirmation"
+  | "confirmed"
+  | "cancelled_by_lead"
+  | "reschedule_requested"
+  | "no_response"
+  | "completed"
 export type MessageDirection = "inbound" | "outbound"
 export type MessageSender = "ai" | "human"
 export type LeadSource = "facebook" | "webhook" | "manual"
@@ -103,10 +110,63 @@ export interface Appointment {
   id: string
   company_id: string
   lead_id: string
+  technician_id: string | null
+  technician_name: string | null
   scheduled_at: string
   address: string | null
   notes: string | null
   status: AppointmentStatus
+  confirmation_status: ConfirmationStatus
+  confirmation_requested_at: string | null
+  confirmed_at: string | null
+  no_response_call_scheduled: boolean
+  no_response_call_at: string | null
+  created_at: string
+  updated_at: string
+}
+
+export type TechnicianDaySchedule = {
+  enabled: boolean
+  start: string  // "08:00"
+  end: string    // "17:00"
+}
+
+export type TechnicianSchedule = {
+  monday: TechnicianDaySchedule
+  tuesday: TechnicianDaySchedule
+  wednesday: TechnicianDaySchedule
+  thursday: TechnicianDaySchedule
+  friday: TechnicianDaySchedule
+  saturday: TechnicianDaySchedule
+  sunday: TechnicianDaySchedule
+}
+
+export const SPECIALIZATIONS = [
+  "AC Repair",
+  "Furnace Repair",
+  "Heat Pump Installation",
+  "Duct Cleaning",
+  "Commercial HVAC",
+  "Electrical",
+  "Plumbing",
+  "Mini-Split Installation",
+  "Boiler Repair",
+  "Air Quality / Filtration",
+] as const
+
+export type Specialization = typeof SPECIALIZATIONS[number]
+
+export interface Technician {
+  id: string
+  company_id: string
+  name: string
+  phone: string | null
+  photo_url: string | null
+  specializations: string[]
+  zip_codes: string[]
+  schedule: TechnicianSchedule
+  status: "active" | "inactive"
+  notes: string | null
   created_at: string
   updated_at: string
 }

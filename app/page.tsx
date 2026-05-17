@@ -342,7 +342,7 @@ function Nav() {
                 style={{ color: C.muted }}>
             Log in
           </Link>
-          <Link href="/signup"
+          <Link href="/signup?new=1"
                 className="text-sm font-semibold text-white px-5 py-2.5 rounded-full transition-all duration-200 hover:-translate-y-0.5"
                 style={{ background: C.primary, boxShadow: "0 4px 14px rgba(124,58,237,0.40)" }}>
             Start Free Trial
@@ -365,7 +365,7 @@ function Nav() {
               {l.label}
             </a>
           ))}
-          <Link href="/signup" className="block w-full text-center text-sm font-semibold text-white py-3 rounded-full mt-2"
+          <Link href="/signup?new=1" className="block w-full text-center text-sm font-semibold text-white py-3 rounded-full mt-2"
                 style={{ background: C.primary }}>
             Start Free Trial
           </Link>
@@ -561,7 +561,7 @@ function HeroSection() {
               transition={{ delay: 0.75, duration: 0.5 }}
               className="flex flex-col sm:flex-row gap-3 mb-6"
             >
-              <Link href="/signup"
+              <Link href="/signup?new=1"
                     className="inline-flex items-center justify-center gap-2 font-semibold text-white px-7 py-4 rounded-full transition-all duration-200 hover:-translate-y-1"
                     style={{ background: C.primary, boxShadow: "0 8px 24px rgba(124,58,237,0.35)" }}>
                 Start Booking More Jobs
@@ -1954,7 +1954,7 @@ function PricingSection() {
                 ))}
               </div>
 
-              <Link href="/signup"
+              <Link href="/signup?new=1"
                     className="block w-full text-center font-semibold py-3 rounded-full transition-all duration-200"
                     style={{
                       background:   plan.highlight ? "#fff" : C.primary,
@@ -2080,7 +2080,7 @@ function FinalCTASection() {
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
-              <Link href="/signup"
+              <Link href="/signup?new=1"
                     className="inline-flex items-center justify-center gap-2 font-semibold text-base px-8 py-4 rounded-full transition-all duration-200 hover:-translate-y-1"
                     style={{ background: "#fff", color: C.primary,
                              boxShadow: "0 8px 24px rgba(0,0,0,0.15)" }}>

@@ -26,19 +26,33 @@ export default function SignupPage() {
     setError("")
     setLoading(true)
 
-    const { error } = await supabase.auth.signUp({
+    const { error: signUpError } = await supabase.auth.signUp({
       email: form.email,
       password: form.password,
       options: { data: { full_name: form.fullName } },
     })
 
-    if (error) {
-      setError(error.message)
+    if (signUpError) {
+      setError(signUpError.message)
       setLoading(false)
-    } else {
-      router.push("/onboarding")
-      router.refresh()
+      return
     }
+
+    // Explicitly sign in after signup so the session is guaranteed active
+    // regardless of whether email confirmation is enabled in Supabase
+    const { error: signInError } = await supabase.auth.signInWithPassword({
+      email: form.email,
+      password: form.password,
+    })
+
+    if (signInError) {
+      // Account created but can't auto-login — send to login page
+      router.push("/login")
+      return
+    }
+
+    router.push("/onboarding")
+    router.refresh()
   }
 
   const perks = [

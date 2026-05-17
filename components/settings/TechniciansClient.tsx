@@ -1,0 +1,670 @@
+"use client"
+
+import { useState, useCallback, useRef } from "react"
+import { motion, AnimatePresence } from "framer-motion"
+import {
+  Plus, User, Phone, MapPin, Wrench, Clock, Trash2,
+  ChevronDown, ChevronUp, Check, X, Edit2, Power,
+  Calendar, AlertCircle, Loader2, Upload,
+} from "lucide-react"
+import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
+import { Badge } from "@/components/ui/badge"
+import { cn } from "@/lib/utils"
+import type { Technician, TechnicianSchedule, SPECIALIZATIONS } from "@/types/database"
+
+// ─── Constants ─────────────────────────────────────────────────────────────────
+
+const ALL_SPECIALIZATIONS: string[] = [
+  "AC Repair", "Furnace Repair", "Heat Pump Installation",
+  "Duct Cleaning", "Commercial HVAC", "Electrical", "Plumbing",
+  "Mini-Split Installation", "Boiler Repair", "Air Quality / Filtration",
+]
+
+const DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday", "saturday", "sunday"] as const
+const DAY_LABELS: Record<typeof DAYS[number], string> = {
+  monday: "Mon", tuesday: "Tue", wednesday: "Wed", thursday: "Thu",
+  friday: "Fri", saturday: "Sat", sunday: "Sun",
+}
+
+const DEFAULT_SCHEDULE: TechnicianSchedule = {
+  monday:    { enabled: true,  start: "08:00", end: "17:00" },
+  tuesday:   { enabled: true,  start: "08:00", end: "17:00" },
+  wednesday: { enabled: true,  start: "08:00", end: "17:00" },
+  thursday:  { enabled: true,  start: "08:00", end: "17:00" },
+  friday:    { enabled: true,  start: "08:00", end: "17:00" },
+  saturday:  { enabled: false, start: "08:00", end: "17:00" },
+  sunday:    { enabled: false, start: "08:00", end: "17:00" },
+}
+
+// ─── Form state type ─────────────────────────────────────────────────────────
+
+type FormState = {
+  name: string
+  phone: string
+  specializations: string[]
+  customSpecialization: string
+  zipInput: string
+  zip_codes: string[]
+  schedule: TechnicianSchedule
+  status: "active" | "inactive"
+  notes: string
+}
+
+const EMPTY_FORM: FormState = {
+  name: "",
+  phone: "",
+  specializations: [],
+  customSpecialization: "",
+  zipInput: "",
+  zip_codes: [],
+  schedule: DEFAULT_SCHEDULE,
+  status: "active",
+  notes: "",
+}
+
+// ─── Main component ───────────────────────────────────────────────────────────
+
+export function TechniciansClient({ initial }: { initial: Technician[] }) {
+  const [technicians, setTechnicians] = useState<Technician[]>(initial)
+  const [showForm, setShowForm]       = useState(false)
+  const [editId, setEditId]           = useState<string | null>(null)
+  const [form, setForm]               = useState<FormState>(EMPTY_FORM)
+  const [saving, setSaving]           = useState(false)
+  const [deleting, setDeleting]       = useState<string | null>(null)
+  const [toggling, setToggling]       = useState<string | null>(null)
+  const [expandedId, setExpandedId]   = useState<string | null>(null)
+  const [error, setError]             = useState<string | null>(null)
+
+  // ── Form helpers ────────────────────────────────────────────────────────────
+
+  function openNew() {
+    setEditId(null)
+    setForm(EMPTY_FORM)
+    setError(null)
+    setShowForm(true)
+  }
+
+  function openEdit(t: Technician) {
+    setEditId(t.id)
+    setForm({
+      name: t.name,
+      phone: t.phone ?? "",
+      specializations: t.specializations,
+      customSpecialization: "",
+      zipInput: "",
+      zip_codes: t.zip_codes,
+      schedule: t.schedule,
+      status: t.status,
+      notes: t.notes ?? "",
+    })
+    setError(null)
+    setShowForm(true)
+  }
+
+  function cancelForm() {
+    setShowForm(false)
+    setEditId(null)
+    setForm(EMPTY_FORM)
+    setError(null)
+  }
+
+  // ── Zip code helpers ─────────────────────────────────────────────────────────
+
+  function addZip() {
+    const zips = form.zipInput.split(/[\s,]+/).map(z => z.trim()).filter(z => /^\d{5}$/.test(z))
+    const unique = Array.from(new Set([...form.zip_codes, ...zips]))
+    setForm(f => ({ ...f, zip_codes: unique, zipInput: "" }))
+  }
+
+  function removeZip(z: string) {
+    setForm(f => ({ ...f, zip_codes: f.zip_codes.filter(x => x !== z) }))
+  }
+
+  // ── Specialization helpers ───────────────────────────────────────────────────
+
+  function toggleSpec(s: string) {
+    setForm(f => ({
+      ...f,
+      specializations: f.specializations.includes(s)
+        ? f.specializations.filter(x => x !== s)
+        : [...f.specializations, s],
+    }))
+  }
+
+  function addCustomSpec() {
+    const s = form.customSpecialization.trim()
+    if (!s || form.specializations.includes(s)) return
+    setForm(f => ({ ...f, specializations: [...f.specializations, s], customSpecialization: "" }))
+  }
+
+  // ── Schedule helpers ─────────────────────────────────────────────────────────
+
+  function toggleDay(day: typeof DAYS[number]) {
+    setForm(f => ({
+      ...f,
+      schedule: { ...f.schedule, [day]: { ...f.schedule[day], enabled: !f.schedule[day].enabled } },
+    }))
+  }
+
+  function setDayTime(day: typeof DAYS[number], field: "start" | "end", val: string) {
+    setForm(f => ({
+      ...f,
+      schedule: { ...f.schedule, [day]: { ...f.schedule[day], [field]: val } },
+    }))
+  }
+
+  // ── Save ─────────────────────────────────────────────────────────────────────
+
+  async function save() {
+    if (!form.name.trim()) { setError("Name is required."); return }
+    setSaving(true); setError(null)
+
+    const payload = {
+      name:            form.name.trim(),
+      phone:           form.phone.trim() || null,
+      specializations: form.specializations,
+      zip_codes:       form.zip_codes,
+      schedule:        form.schedule,
+      status:          form.status,
+      notes:           form.notes.trim() || null,
+    }
+
+    try {
+      if (editId) {
+        const res = await fetch(`/api/technicians/${editId}`, {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) throw new Error((await res.json()).error ?? "Save failed")
+        const updated: Technician = await res.json()
+        setTechnicians(ts => ts.map(t => t.id === editId ? updated : t))
+      } else {
+        const res = await fetch("/api/technicians", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(payload),
+        })
+        if (!res.ok) throw new Error((await res.json()).error ?? "Save failed")
+        const created: Technician = await res.json()
+        setTechnicians(ts => [...ts, created])
+      }
+      cancelForm()
+    } catch (e) {
+      setError(e instanceof Error ? e.message : "Unknown error")
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── Toggle status ────────────────────────────────────────────────────────────
+
+  async function toggleStatus(t: Technician) {
+    setToggling(t.id)
+    const newStatus = t.status === "active" ? "inactive" : "active"
+    try {
+      const res = await fetch(`/api/technicians/${t.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ status: newStatus }),
+      })
+      if (!res.ok) throw new Error()
+      setTechnicians(ts => ts.map(x => x.id === t.id ? { ...x, status: newStatus } : x))
+    } finally {
+      setToggling(null)
+    }
+  }
+
+  // ── Delete ───────────────────────────────────────────────────────────────────
+
+  async function deleteTech(id: string) {
+    if (!confirm("Delete this technician? They will be unassigned from future appointments.")) return
+    setDeleting(id)
+    try {
+      await fetch(`/api/technicians/${id}`, { method: "DELETE" })
+      setTechnicians(ts => ts.filter(t => t.id !== id))
+    } finally {
+      setDeleting(null)
+    }
+  }
+
+  // ── Render ───────────────────────────────────────────────────────────────────
+
+  return (
+    <div className="space-y-6">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl font-bold" style={{ fontFamily: "var(--font-jakarta, 'Plus Jakarta Sans')" }}>
+            Technicians
+          </h1>
+          <p className="text-sm text-[#78716C] mt-0.5">
+            Your field team — the AI uses this to assign the right tech to every job.
+          </p>
+        </div>
+        <Button
+          onClick={openNew}
+          className="bg-[#7C3AED] hover:bg-[#6d28d9] text-white gap-2 shadow-sm"
+        >
+          <Plus className="w-4 h-4" /> Add Technician
+        </Button>
+      </div>
+
+      {/* Form panel */}
+      <AnimatePresence>
+        {showForm && (
+          <motion.div
+            initial={{ opacity: 0, y: -12 }}
+            animate={{ opacity: 1, y: 0 }}
+            exit={{ opacity: 0, y: -12 }}
+            transition={{ duration: 0.2 }}
+            className="bg-white border border-[#E7E5E4] rounded-2xl shadow-[0_4px_24px_rgba(0,0,0,0.06)] overflow-hidden"
+          >
+            <div className="px-6 py-5 border-b border-[#E7E5E4] flex items-center justify-between">
+              <h2 className="font-semibold text-[#1C1917]">
+                {editId ? "Edit Technician" : "New Technician"}
+              </h2>
+              <button onClick={cancelForm} className="text-[#78716C] hover:text-[#1C1917] transition-colors">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+
+            <div className="px-6 py-5 space-y-6">
+              {error && (
+                <div className="flex items-center gap-2 text-sm text-red-600 bg-red-50 border border-red-200 rounded-lg px-3 py-2.5">
+                  <AlertCircle className="w-4 h-4 shrink-0" /> {error}
+                </div>
+              )}
+
+              {/* Basic info */}
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-[#1C1917]">Full name *</Label>
+                  <Input
+                    value={form.name}
+                    onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
+                    placeholder="James Rivera"
+                    className="border-[#E7E5E4] focus-visible:ring-[#7C3AED]"
+                  />
+                </div>
+                <div className="space-y-1.5">
+                  <Label className="text-sm font-medium text-[#1C1917]">Phone number</Label>
+                  <Input
+                    value={form.phone}
+                    onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                    placeholder="+1 555 000 0000"
+                    type="tel"
+                    className="border-[#E7E5E4] focus-visible:ring-[#7C3AED]"
+                  />
+                </div>
+              </div>
+
+              {/* Status toggle */}
+              <div className="flex items-center gap-3">
+                <Label className="text-sm font-medium text-[#1C1917]">Status</Label>
+                <button
+                  type="button"
+                  onClick={() => setForm(f => ({ ...f, status: f.status === "active" ? "inactive" : "active" }))}
+                  className={cn(
+                    "flex items-center gap-1.5 px-3 py-1.5 rounded-full text-xs font-medium border transition-colors",
+                    form.status === "active"
+                      ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                      : "bg-[#F5F4F2] border-[#E7E5E4] text-[#78716C]"
+                  )}
+                >
+                  <Power className="w-3 h-3" />
+                  {form.status === "active" ? "Active" : "Inactive"}
+                </button>
+                <p className="text-xs text-[#78716C]">Inactive technicians are never booked by the AI.</p>
+              </div>
+
+              {/* Specializations */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-[#1C1917]">Specializations</Label>
+                <div className="flex flex-wrap gap-2">
+                  {ALL_SPECIALIZATIONS.map(s => (
+                    <button
+                      key={s}
+                      type="button"
+                      onClick={() => toggleSpec(s)}
+                      className={cn(
+                        "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                        form.specializations.includes(s)
+                          ? "bg-[#7C3AED] border-[#7C3AED] text-white"
+                          : "bg-white border-[#E7E5E4] text-[#78716C] hover:border-[#7C3AED] hover:text-[#7C3AED]"
+                      )}
+                    >
+                      {form.specializations.includes(s) && <Check className="w-3 h-3 inline mr-1" />}
+                      {s}
+                    </button>
+                  ))}
+                </div>
+                {/* Custom specialization */}
+                <div className="flex gap-2 mt-2">
+                  <Input
+                    value={form.customSpecialization}
+                    onChange={e => setForm(f => ({ ...f, customSpecialization: e.target.value }))}
+                    onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addCustomSpec())}
+                    placeholder="Add custom specialization..."
+                    className="border-[#E7E5E4] focus-visible:ring-[#7C3AED] text-sm h-9"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={addCustomSpec} className="h-9 shrink-0">
+                    Add
+                  </Button>
+                </div>
+                {form.specializations.filter(s => !ALL_SPECIALIZATIONS.includes(s)).map(s => (
+                  <Badge key={s} variant="outline" className="text-xs gap-1 bg-[#7C3AED]/8 border-[#7C3AED]/20 text-[#7C3AED]">
+                    {s}
+                    <button onClick={() => toggleSpec(s)}><X className="w-2.5 h-2.5" /></button>
+                  </Badge>
+                ))}
+              </div>
+
+              {/* Zip codes */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-[#1C1917]">Service zip codes</Label>
+                <p className="text-xs text-[#78716C]">Enter 5-digit zip codes separated by spaces or commas.</p>
+                <div className="flex gap-2">
+                  <Input
+                    value={form.zipInput}
+                    onChange={e => setForm(f => ({ ...f, zipInput: e.target.value }))}
+                    onKeyDown={e => (e.key === "Enter" || e.key === ",") && (e.preventDefault(), addZip())}
+                    placeholder="90210, 90211, 90212"
+                    className="border-[#E7E5E4] focus-visible:ring-[#7C3AED] text-sm h-9"
+                  />
+                  <Button type="button" variant="outline" size="sm" onClick={addZip} className="h-9 shrink-0">
+                    Add
+                  </Button>
+                </div>
+                {form.zip_codes.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5">
+                    {form.zip_codes.map(z => (
+                      <span key={z} className="flex items-center gap-1 bg-[#F5F4F2] border border-[#E7E5E4] text-xs font-mono px-2 py-1 rounded-md text-[#1C1917]">
+                        {z}
+                        <button onClick={() => removeZip(z)} className="text-[#78716C] hover:text-red-500 transition-colors">
+                          <X className="w-2.5 h-2.5" />
+                        </button>
+                      </span>
+                    ))}
+                  </div>
+                )}
+              </div>
+
+              {/* Schedule */}
+              <div className="space-y-2">
+                <Label className="text-sm font-medium text-[#1C1917]">Working schedule</Label>
+                <div className="space-y-2">
+                  {DAYS.map(day => (
+                    <div key={day} className="flex items-center gap-3">
+                      <button
+                        type="button"
+                        onClick={() => toggleDay(day)}
+                        className={cn(
+                          "w-10 h-6 rounded-full transition-colors relative shrink-0",
+                          form.schedule[day].enabled ? "bg-[#7C3AED]" : "bg-[#E7E5E4]"
+                        )}
+                      >
+                        <span className={cn(
+                          "absolute top-1 left-1 w-4 h-4 bg-white rounded-full shadow transition-transform",
+                          form.schedule[day].enabled ? "translate-x-4" : "translate-x-0"
+                        )} />
+                      </button>
+                      <span className={cn(
+                        "text-sm font-medium w-8 shrink-0",
+                        form.schedule[day].enabled ? "text-[#1C1917]" : "text-[#78716C]"
+                      )}>
+                        {DAY_LABELS[day]}
+                      </span>
+                      {form.schedule[day].enabled && (
+                        <div className="flex items-center gap-2 text-sm">
+                          <input
+                            type="time"
+                            value={form.schedule[day].start}
+                            onChange={e => setDayTime(day, "start", e.target.value)}
+                            className="border border-[#E7E5E4] rounded-lg px-2 py-1 text-xs font-mono text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/20"
+                          />
+                          <span className="text-[#78716C] text-xs">to</span>
+                          <input
+                            type="time"
+                            value={form.schedule[day].end}
+                            onChange={e => setDayTime(day, "end", e.target.value)}
+                            className="border border-[#E7E5E4] rounded-lg px-2 py-1 text-xs font-mono text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/20"
+                          />
+                        </div>
+                      )}
+                      {!form.schedule[day].enabled && (
+                        <span className="text-xs text-[#78716C]">Off</span>
+                      )}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Notes */}
+              <div className="space-y-1.5">
+                <Label className="text-sm font-medium text-[#1C1917]">Internal notes</Label>
+                <textarea
+                  value={form.notes}
+                  onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
+                  placeholder="Any notes visible only to your team..."
+                  rows={2}
+                  className="w-full border border-[#E7E5E4] rounded-lg px-3 py-2 text-sm text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/20 resize-none"
+                />
+              </div>
+            </div>
+
+            {/* Actions */}
+            <div className="px-6 py-4 border-t border-[#E7E5E4] flex justify-end gap-3 bg-[#FAFAF8]">
+              <Button variant="outline" onClick={cancelForm} className="border-[#E7E5E4]">
+                Cancel
+              </Button>
+              <Button
+                onClick={save}
+                disabled={saving}
+                className="bg-[#7C3AED] hover:bg-[#6d28d9] text-white gap-2 shadow-sm"
+              >
+                {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+                {editId ? "Save changes" : "Add technician"}
+              </Button>
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* Technician list */}
+      {technicians.length === 0 && !showForm ? (
+        <motion.div
+          initial={{ opacity: 0 }}
+          animate={{ opacity: 1 }}
+          className="bg-white border border-dashed border-[#E7E5E4] rounded-2xl px-8 py-16 text-center"
+        >
+          <div className="w-12 h-12 rounded-2xl bg-[#7C3AED]/10 flex items-center justify-center mx-auto mb-4">
+            <User className="w-6 h-6 text-[#7C3AED]" />
+          </div>
+          <p className="font-semibold text-[#1C1917] mb-1">No technicians yet</p>
+          <p className="text-sm text-[#78716C] max-w-xs mx-auto mb-4">
+            Add your field team. The AI will assign the right tech to every appointment based on specialization, zip code, and availability.
+          </p>
+          <Button
+            onClick={openNew}
+            className="bg-[#7C3AED] hover:bg-[#6d28d9] text-white gap-2"
+          >
+            <Plus className="w-4 h-4" /> Add your first technician
+          </Button>
+        </motion.div>
+      ) : (
+        <div className="space-y-3">
+          {technicians.map((t, i) => (
+            <motion.div
+              key={t.id}
+              initial={{ opacity: 0, y: 8 }}
+              animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: i * 0.04 }}
+              className={cn(
+                "bg-white border border-[#E7E5E4] rounded-2xl shadow-[0_2px_8px_rgba(0,0,0,0.04)] overflow-hidden",
+                t.status === "inactive" && "opacity-60"
+              )}
+            >
+              {/* Card header */}
+              <div className="flex items-center gap-4 px-5 py-4">
+                {/* Avatar */}
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#7C3AED]/20 to-[#4D7C0F]/20 flex items-center justify-center shrink-0 text-[#7C3AED] font-bold text-sm">
+                  {t.name.charAt(0).toUpperCase()}
+                </div>
+
+                {/* Info */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-2">
+                    <p className="font-semibold text-[#1C1917] truncate">{t.name}</p>
+                    <Badge
+                      variant="outline"
+                      className={cn(
+                        "text-xs shrink-0",
+                        t.status === "active"
+                          ? "bg-emerald-50 border-emerald-200 text-emerald-700"
+                          : "bg-[#F5F4F2] border-[#E7E5E4] text-[#78716C]"
+                      )}
+                    >
+                      {t.status}
+                    </Badge>
+                  </div>
+                  <div className="flex items-center gap-3 mt-0.5 text-xs text-[#78716C]">
+                    {t.phone && (
+                      <span className="flex items-center gap-1">
+                        <Phone className="w-3 h-3" />{t.phone}
+                      </span>
+                    )}
+                    {t.zip_codes.length > 0 && (
+                      <span className="flex items-center gap-1">
+                        <MapPin className="w-3 h-3" />{t.zip_codes.slice(0, 3).join(", ")}{t.zip_codes.length > 3 ? ` +${t.zip_codes.length - 3}` : ""}
+                      </span>
+                    )}
+                  </div>
+                  {t.specializations.length > 0 && (
+                    <div className="flex flex-wrap gap-1 mt-1.5">
+                      {t.specializations.slice(0, 3).map(s => (
+                        <span key={s} className="bg-[#7C3AED]/8 text-[#7C3AED] text-xs px-2 py-0.5 rounded-full border border-[#7C3AED]/15">
+                          {s}
+                        </span>
+                      ))}
+                      {t.specializations.length > 3 && (
+                        <span className="text-xs text-[#78716C]">+{t.specializations.length - 3} more</span>
+                      )}
+                    </div>
+                  )}
+                </div>
+
+                {/* Actions */}
+                <div className="flex items-center gap-2 shrink-0">
+                  {/* Schedule summary */}
+                  <div className="hidden sm:flex items-center gap-0.5">
+                    {DAYS.map(day => (
+                      <div
+                        key={day}
+                        title={`${DAY_LABELS[day]}: ${t.schedule[day].enabled ? `${t.schedule[day].start}–${t.schedule[day].end}` : "Off"}`}
+                        className={cn(
+                          "w-5 h-5 rounded text-[9px] font-bold flex items-center justify-center",
+                          t.schedule[day].enabled
+                            ? "bg-[#7C3AED]/10 text-[#7C3AED]"
+                            : "bg-[#F5F4F2] text-[#78716C]/40"
+                        )}
+                      >
+                        {DAY_LABELS[day].charAt(0)}
+                      </div>
+                    ))}
+                  </div>
+
+                  <button
+                    onClick={() => toggleStatus(t)}
+                    disabled={toggling === t.id}
+                    title={t.status === "active" ? "Deactivate" : "Activate"}
+                    className="p-1.5 rounded-lg text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F4F2] transition-colors"
+                  >
+                    {toggling === t.id
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Power className="w-4 h-4" />}
+                  </button>
+                  <button
+                    onClick={() => openEdit(t)}
+                    title="Edit"
+                    className="p-1.5 rounded-lg text-[#78716C] hover:text-[#7C3AED] hover:bg-[#7C3AED]/8 transition-colors"
+                  >
+                    <Edit2 className="w-4 h-4" />
+                  </button>
+                  <button
+                    onClick={() => deleteTech(t.id)}
+                    disabled={deleting === t.id}
+                    title="Delete"
+                    className="p-1.5 rounded-lg text-[#78716C] hover:text-red-500 hover:bg-red-50 transition-colors"
+                  >
+                    {deleting === t.id
+                      ? <Loader2 className="w-4 h-4 animate-spin" />
+                      : <Trash2 className="w-4 h-4" />}
+                  </button>
+                  <button
+                    onClick={() => setExpandedId(expandedId === t.id ? null : t.id)}
+                    className="p-1.5 rounded-lg text-[#78716C] hover:text-[#1C1917] hover:bg-[#F5F4F2] transition-colors"
+                  >
+                    {expandedId === t.id ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+                  </button>
+                </div>
+              </div>
+
+              {/* Expanded detail */}
+              <AnimatePresence>
+                {expandedId === t.id && (
+                  <motion.div
+                    initial={{ height: 0, opacity: 0 }}
+                    animate={{ height: "auto", opacity: 1 }}
+                    exit={{ height: 0, opacity: 0 }}
+                    transition={{ duration: 0.2 }}
+                    className="overflow-hidden border-t border-[#E7E5E4]"
+                  >
+                    <div className="px-5 py-4 bg-[#FAFAF8] grid grid-cols-1 sm:grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mb-2">Working hours</p>
+                        {DAYS.filter(d => t.schedule[d].enabled).map(d => (
+                          <div key={d} className="flex items-center justify-between py-0.5">
+                            <span className="text-[#78716C] capitalize">{d}</span>
+                            <span className="font-mono text-xs text-[#1C1917]">
+                              {t.schedule[d].start} – {t.schedule[d].end}
+                            </span>
+                          </div>
+                        ))}
+                        {DAYS.filter(d => !t.schedule[d].enabled).length > 0 && (
+                          <p className="text-xs text-[#78716C] mt-1">
+                            Off: {DAYS.filter(d => !t.schedule[d].enabled).join(", ")}
+                          </p>
+                        )}
+                      </div>
+                      <div>
+                        <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mb-2">All specializations</p>
+                        {t.specializations.length === 0
+                          ? <p className="text-xs text-[#78716C]">None set</p>
+                          : t.specializations.map(s => (
+                            <p key={s} className="text-xs py-0.5 text-[#1C1917]">• {s}</p>
+                          ))}
+                        <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mt-3 mb-2">All zip codes</p>
+                        {t.zip_codes.length === 0
+                          ? <p className="text-xs text-[#78716C]">None set — tech serves all areas</p>
+                          : <p className="text-xs font-mono text-[#1C1917]">{t.zip_codes.join(", ")}</p>}
+                        {t.notes && (
+                          <>
+                            <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mt-3 mb-1">Notes</p>
+                            <p className="text-xs text-[#78716C]">{t.notes}</p>
+                          </>
+                        )}
+                      </div>
+                    </div>
+                  </motion.div>
+                )}
+              </AnimatePresence>
+            </motion.div>
+          ))}
+        </div>
+      )}
+    </div>
+  )
+}

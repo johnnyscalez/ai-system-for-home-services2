@@ -76,6 +76,7 @@ export type BusinessData = {
   serviceArea: string
   notificationPhone: string
   country: string
+  avgJobValue: string
 }
 
 interface Props {
@@ -171,6 +172,20 @@ export function StepBusiness({ data, onChange, onNext, onBack, error }: Props) {
           />
           <p className="text-xs text-muted-foreground">
             We&apos;ll text this number the moment your AI books an appointment.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="avgJobValue">Average job value ($)</Label>
+          <Input
+            id="avgJobValue"
+            type="number"
+            placeholder="3500"
+            value={data.avgJobValue}
+            onChange={set("avgJobValue")}
+          />
+          <p className="text-xs text-muted-foreground">
+            Used to calculate your projected revenue on the dashboard. You can update this later.
           </p>
         </div>
 

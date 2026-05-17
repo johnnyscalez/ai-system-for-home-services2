@@ -3,8 +3,9 @@ import Link from "next/link"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Zap, Phone, Link2, CreditCard, Database, ArrowRight, Sparkles, FlaskConical } from "lucide-react"
+import { Zap, Phone, Link2, CreditCard, Database, ArrowRight, Sparkles, FlaskConical, Users } from "lucide-react"
 import { TestLeadButton } from "@/components/settings/TestLeadButton"
+import { AvgJobValueEditor } from "@/components/settings/AvgJobValueEditor"
 
 export default async function SettingsPage() {
   const supabase = await createServerSupabaseClient()
@@ -13,13 +14,13 @@ export default async function SettingsPage() {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("company_id, full_name, email, companies(name, service_type, service_area, plan, trial_ends_at, webhook_secret)")
+    .select("company_id, full_name, email, companies(name, service_type, service_area, plan, trial_ends_at, webhook_secret, avg_job_value)")
     .eq("id", user.id)
     .single()
 
   const company = (Array.isArray(profile?.companies) ? profile?.companies[0] : profile?.companies) as {
     name: string; service_type: string | null; service_area: string | null;
-    plan: string; trial_ends_at: string; webhook_secret: string;
+    plan: string; trial_ends_at: string; webhook_secret: string; avg_job_value: number;
   } | null
 
   const { data: phoneData } = await supabase
@@ -45,6 +46,13 @@ export default async function SettingsPage() {
           <Row label="Company name" value={company?.name ?? "—"} />
           <Row label="Service type" value={company?.service_type ?? "—"} />
           <Row label="Service area" value={company?.service_area ?? "—"} />
+          <div className="flex items-center justify-between">
+            <span className="text-sm text-muted-foreground">Average job value</span>
+            <AvgJobValueEditor
+              companyId={profile?.company_id ?? ""}
+              initialValue={company?.avg_job_value ?? 0}
+            />
+          </div>
         </CardContent>
       </Card>
 
@@ -101,6 +109,26 @@ export default async function SettingsPage() {
           </div>
         </CardContent>
       </Card>
+
+      {/* Technicians */}
+      <Link href="/settings/technicians">
+        <Card className="hover:border-primary/40 transition-colors cursor-pointer">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <Users className="w-4 h-4 text-[#4D7C0F]" />
+                <CardTitle className="text-base">Technicians</CardTitle>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Manage your field team — specializations, zip codes, working hours. The AI uses this to book the right technician automatically.
+            </p>
+          </CardContent>
+        </Card>
+      </Link>
 
       {/* Knowledge base */}
       <Link href="/settings/knowledge-base">

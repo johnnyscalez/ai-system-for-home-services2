@@ -85,7 +85,7 @@ export default function LoginPage() {
 
       <p className="text-center text-sm text-muted-foreground mt-6">
         No account?{" "}
-        <Link href="/signup" className="text-primary hover:underline">
+        <Link href="/signup?new=1" className="text-primary hover:underline">
           Start free trial
         </Link>
       </p>

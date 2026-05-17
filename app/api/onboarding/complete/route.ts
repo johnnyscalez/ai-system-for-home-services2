@@ -64,6 +64,7 @@ export async function POST(req: NextRequest) {
         service_type: business.serviceType,
         service_area: business.serviceArea,
         notification_phone: business.notificationPhone,
+        avg_job_value: business.avgJobValue ? parseFloat(business.avgJobValue) : 0,
         onboarding_completed: true,
         webhook_secret: webhookSecret,
       })

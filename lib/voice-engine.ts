@@ -6,6 +6,7 @@ import { determineAgentType, getAgentPrompt } from "@/lib/voice-agents"
 import { getAvailableSlots, formatSlotsForPrompt, DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
 import { updateSession, appendMessages } from "@/lib/voice-session"
 import { JOB_TYPES, JOB_TYPE_TOOL_DESCRIPTION, getJobTypeLabel } from "@/lib/job-types"
+import { selectTechnician, getTechnicianContextForCompany } from "@/lib/technician-booking"
 import type { VoiceSession, VoiceMessage } from "@/lib/voice-session"
 import type { AppointmentWindow } from "@/lib/availability"
 
@@ -182,7 +183,7 @@ export async function runVoiceTurn(
   const db = createServiceRoleClient()
   const horizonMs = 14 * 24 * 60 * 60 * 1000
 
-  const [leadRes, agentRes, kbRes, appointmentsRes, companyAptsRes] = await Promise.all([
+  const [leadRes, agentRes, kbRes, appointmentsRes, companyAptsRes, technicianContext] = await Promise.all([
     db.from("leads").select("*").eq("id", session.lead_id).single(),
     db.from("ai_agent_config")
       .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, disqualifiers")
@@ -200,6 +201,7 @@ export async function runVoiceTurn(
       .eq("status", "scheduled")
       .gte("scheduled_at", new Date().toISOString())
       .lte("scheduled_at", new Date(Date.now() + horizonMs).toISOString()),
+    getTechnicianContextForCompany(session.company_id),
   ])
 
   const lead        = leadRes.data
@@ -249,7 +251,7 @@ ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
 
   const voiceRules = VOICE_RULES.replaceAll("[AgentName]", agentName)
 
-  const systemPrompt = [voiceRules, basePrompt, customKnowledgeBlock, qualificationBlock, agentPrompt, slotsBlock, leadContext]
+  const systemPrompt = [voiceRules, basePrompt, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, slotsBlock, leadContext]
     .filter(Boolean)
     .join("\n\n")
 
@@ -376,12 +378,13 @@ async function executeTool(
       const { scheduled_at, address, notes } = tool.input as { scheduled_at: string; address: string; notes?: string }
 
       const { data: apt } = await db.from("appointments").insert({
-        lead_id:    session.lead_id,
-        company_id: session.company_id,
+        lead_id:             session.lead_id,
+        company_id:          session.company_id,
         scheduled_at,
-        address:    address ?? null,
-        notes:      notes ?? null,
-        status:     "scheduled",
+        address:             address ?? null,
+        notes:               notes ?? null,
+        status:              "scheduled",
+        confirmation_status: "pending_confirmation",
       }).select().single()
 
       await db.from("leads").update({
@@ -394,6 +397,13 @@ async function executeTool(
         stage:     "confirmation",
         collected: { ...session.collected, appointment_booked: "true", address },
       })
+
+      // Smart technician selection — non-blocking
+      if (apt) {
+        const { data: lead } = await db.from("leads").select("job_type").eq("id", session.lead_id).single()
+        const zip = address?.match(/\b(\d{5})\b/)?.[1] ?? null
+        selectTechnician(session.company_id, apt.id, scheduled_at, lead?.job_type as string | null, zip).catch(() => {})
+      }
 
       // Google Calendar sync
       if (apt) {
