@@ -3,7 +3,7 @@ import Link from "next/link"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Zap, Phone, Link2, CreditCard, Database, ArrowRight, Sparkles, FlaskConical, Users } from "lucide-react"
+import { Zap, Phone, Link2, CreditCard, Database, ArrowRight, Sparkles, FlaskConical } from "lucide-react"
 import { TestLeadButton } from "@/components/settings/TestLeadButton"
 import { AvgJobValueEditor } from "@/components/settings/AvgJobValueEditor"
 
@@ -109,26 +109,6 @@ export default async function SettingsPage() {
           </div>
         </CardContent>
       </Card>
-
-      {/* Technicians */}
-      <Link href="/settings/technicians">
-        <Card className="hover:border-primary/40 transition-colors cursor-pointer">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-2">
-                <Users className="w-4 h-4 text-[#4D7C0F]" />
-                <CardTitle className="text-base">Technicians</CardTitle>
-              </div>
-              <ArrowRight className="w-4 h-4 text-muted-foreground" />
-            </div>
-          </CardHeader>
-          <CardContent>
-            <p className="text-sm text-muted-foreground">
-              Manage your field team — specializations, zip codes, working hours. The AI uses this to book the right technician automatically.
-            </p>
-          </CardContent>
-        </Card>
-      </Link>
 
       {/* Knowledge base */}
       <Link href="/settings/knowledge-base">

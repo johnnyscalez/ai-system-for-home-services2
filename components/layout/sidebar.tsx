@@ -6,7 +6,7 @@ import { createClient } from "@/lib/supabase"
 import {
   LayoutDashboard, Users, CalendarDays, Calendar,
   Settings, LogOut, MessageSquare, TrendingUp,
-  Zap, Plug, Mail,
+  Zap, Plug, Mail, HardHat,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -16,6 +16,7 @@ const nav = [
   { href: "/conversations", icon: MessageSquare, label: "Conversations" },
   { href: "/appointments", icon: Calendar, label: "Appointments" },
   { href: "/calendar", icon: CalendarDays, label: "Calendar" },
+  { href: "/technicians", icon: HardHat, label: "Technicians" },
   { href: "/email", icon: Mail, label: "Email & SMS" },
   { href: "/integrations", icon: Plug, label: "Integrations" },
   { href: "/reports", icon: TrendingUp, label: "Reports" },
