@@ -53,7 +53,7 @@ async function handleConfirmationReply(
 
   const timezone  = agentCfg?.timezone  ?? "America/New_York"
   const agentName = agentCfg?.agent_name ?? company?.name ?? "us"
-  const firstName = (apt.leads as { first_name: string | null } | null)?.first_name ?? null
+  const firstName = (apt.leads as unknown as { first_name: string | null } | null)?.first_name ?? null
   const techName  = apt.technician_name
   const timeLabel = new Date(apt.scheduled_at).toLocaleString("en-US", {
     weekday: "short", month: "short", day: "numeric",
@@ -196,15 +196,17 @@ export async function POST(req: NextRequest) {
 
   if (wasConfirmationReply) {
     // Still save the inbound message to conversations for CRM visibility
-    await supabase.from("conversations").insert({
-      lead_id:    lead.id,
-      company_id: companyId,
-      direction:  "inbound",
-      sent_by:    "human",
-      body:       messageBody,
-      twilio_sid: twilioSid ?? null,
-      channel:    "sms",
-    }).catch(() => {})
+    try {
+      await supabase.from("conversations").insert({
+        lead_id:    lead.id,
+        company_id: companyId,
+        direction:  "inbound",
+        sent_by:    "human",
+        body:       messageBody,
+        twilio_sid: twilioSid ?? null,
+        channel:    "sms",
+      })
+    } catch { /* non-critical */ }
     return twimlOk()
   }
 

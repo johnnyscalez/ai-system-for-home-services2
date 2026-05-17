@@ -155,8 +155,8 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
   if (!apt) return
   if (apt.confirmation_requested_at) return  // already sent
 
-  const lead    = apt.leads as { first_name: string | null; phone: string } | null
-  const company = apt.companies as { name: string } | null
+  const lead    = apt.leads as unknown as { first_name: string | null; phone: string } | null
+  const company = apt.companies as unknown as { name: string } | null
   if (!lead || !company) return
 
   const { data: agentCfg } = await supabase
@@ -250,7 +250,7 @@ export async function triggerNoResponseCall(appointmentId: string): Promise<void
   if (apt.confirmation_status !== "pending_confirmation") return
   if (apt.no_response_call_scheduled) return  // already triggered
 
-  const lead = apt.leads as { phone: string } | null
+  const lead = apt.leads as unknown as { phone: string } | null
   if (!lead?.phone) return
 
   const { data: phoneNum } = await supabase
