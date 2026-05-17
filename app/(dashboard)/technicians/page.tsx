@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { TechniciansClient } from "@/components/settings/TechniciansClient"
+import { SmartDispatchBanner } from "@/components/settings/SmartDispatchBanner"
 import type { Technician } from "@/types/database"
 
 export default async function TechniciansPage() {
@@ -32,7 +33,21 @@ export default async function TechniciansPage() {
           style={{ background: "rgba(77,124,15,0.04)", bottom: "-5%", right: "10%" }} />
       </div>
 
-      <div className="relative z-10 p-6 max-w-3xl">
+      <div className="relative z-10 p-6 max-w-3xl space-y-6">
+        {/* Page header */}
+        <div>
+          <h1 className="text-2xl font-bold text-[#1C1917]" style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
+            Technicians
+          </h1>
+          <p className="text-sm text-[#78716C] mt-1">
+            Your field team. The AI uses this to book the right person for every job.
+          </p>
+        </div>
+
+        {/* Smart Dispatch explanation banner */}
+        <SmartDispatchBanner techCount={(technicians ?? []).length} />
+
+        {/* Management UI */}
         <TechniciansClient initial={(technicians ?? []) as Technician[]} />
       </div>
     </div>

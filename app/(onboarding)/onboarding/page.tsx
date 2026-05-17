@@ -9,6 +9,7 @@ import { StepBusiness, type BusinessData } from "@/components/onboarding/StepBus
 import { StepIntelligence, type IntelligenceData } from "@/components/onboarding/StepIntelligence"
 import { StepAIAgent, type AIAgentData } from "@/components/onboarding/StepAIAgent"
 import { StepPhone } from "@/components/onboarding/StepPhone"
+import { StepTechnicians } from "@/components/onboarding/StepTechnicians"
 import { StepGmail } from "@/components/onboarding/StepGmail"
 
 const STEPS = [
@@ -17,10 +18,11 @@ const STEPS = [
   { n: 3, label: "Knowledge base" },
   { n: 4, label: "AI agent" },
   { n: 5, label: "Phone number" },
-  { n: 6, label: "Connect Gmail" },
+  { n: 6, label: "Your team" },
+  { n: 7, label: "Connect Gmail" },
 ]
 
-type Step = 1 | 2 | 3 | 4 | 5 | 6
+type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7
 
 export default function OnboardingPage() {
   const router = useRouter()
@@ -148,7 +150,7 @@ export default function OnboardingPage() {
         return
       }
 
-      // Company is now created — advance to Gmail step instead of going to dashboard
+      // Company is now created — advance to Technicians step
       setStep(6)
     } catch {
       setError("Network error. Please try again.")
@@ -273,6 +275,13 @@ export default function OnboardingPage() {
           )}
 
           {step === 6 && (
+            <StepTechnicians
+              onNext={() => setStep(7)}
+              onSkip={() => setStep(7)}
+            />
+          )}
+
+          {step === 7 && (
             <StepGmail
               onSkip={() => {
                 router.push("/dashboard")
