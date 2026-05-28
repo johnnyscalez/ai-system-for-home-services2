@@ -185,6 +185,8 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
     .single()
   const companyTimezone = agentCfg?.timezone ?? "America/New_York"
 
+  let smsSent = false
+
   try {
     const result = await processAndSave(leadId, company.id, null)
 
@@ -200,37 +202,40 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
         .from("leads")
         .update({ status: "contacted", last_message_at: new Date().toISOString() })
         .eq("id", leadId)
-
-      // Pre-create all 7 no_reply follow-up steps — guard against duplicates
-      // (webhook may be called more than once for the same lead)
-      const { count: existingSteps } = await supabase
-        .from("sequences")
-        .select("*", { count: "exact", head: true })
-        .eq("lead_id", leadId)
-        .eq("sequence_type", "no_reply")
-        .eq("status", "pending")
-
-      if ((existingSteps ?? 0) === 0) {
-        const steps = buildNoReplySchedule(new Date(), companyTimezone)
-        const { error: seqError } = await supabase.from("sequences").insert(
-          steps.map((s) => ({
-            lead_id: leadId,
-            company_id: company.id,
-            sequence_type: "no_reply",
-            step: s.step,
-            scheduled_at: s.scheduledAt.toISOString(),
-            status: "pending",
-          }))
-        )
-        if (seqError) {
-          console.error(`[webhook/lead] Failed to insert sequences for lead ${leadId}:`, seqError)
-        }
-      }
+      smsSent = true
     }
-
-    return NextResponse.json({ success: true, lead_id: leadId, sms_sent: true }, { headers: CORS_HEADERS })
   } catch (err) {
     console.error("AI engine / SMS error:", err)
-    return NextResponse.json({ success: true, lead_id: leadId, sms_sent: false }, { headers: CORS_HEADERS })
   }
+
+  // Always create no_reply sequences — even if SMS failed. Guard against duplicates.
+  try {
+    const { count: existingSteps } = await supabase
+      .from("sequences")
+      .select("*", { count: "exact", head: true })
+      .eq("lead_id", leadId)
+      .eq("sequence_type", "no_reply")
+      .eq("status", "pending")
+
+    if ((existingSteps ?? 0) === 0) {
+      const steps = buildNoReplySchedule(new Date(), companyTimezone)
+      const { error: seqError } = await supabase.from("sequences").insert(
+        steps.map((s) => ({
+          lead_id: leadId,
+          company_id: company.id,
+          sequence_type: "no_reply",
+          step: s.step,
+          scheduled_at: s.scheduledAt.toISOString(),
+          status: "pending",
+        }))
+      )
+      if (seqError) {
+        console.error(`[webhook/lead] Failed to insert sequences for lead ${leadId}:`, seqError)
+      }
+    }
+  } catch (err) {
+    console.error("[webhook/lead] Sequence creation error:", err)
+  }
+
+  return NextResponse.json({ success: true, lead_id: leadId, sms_sent: smsSent }, { headers: CORS_HEADERS })
 }

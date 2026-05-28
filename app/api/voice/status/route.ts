@@ -36,13 +36,17 @@ export async function POST(req: NextRequest) {
     try {
       const { data: pending } = await db
         .from("sequences")
-        .select("id, step")
+        .select("id, step, sequence_type")
         .eq("lead_id", session.lead_id)
-        .eq("sequence_type", "no_reply")
+        .in("sequence_type", ["no_reply", "replied_not_booked"])
         .eq("status", "pending")
-        .order("step", { ascending: true })
-      // Voice steps are 1 and 4 — skip those
-      const next = pending?.find((s) => s.step !== 1 && s.step !== 4)
+        .order("scheduled_at", { ascending: true })
+      // Skip voice steps: no_reply steps 1 & 4 are voice; replied_not_booked step 2 is voice
+      const next = pending?.find((s) => {
+        if (s.sequence_type === "no_reply") return s.step !== 1 && s.step !== 4
+        if (s.sequence_type === "replied_not_booked") return s.step !== 2
+        return true
+      })
       if (next) {
         await db.from("sequences")
           .update({ scheduled_at: new Date(Date.now() + 5 * 60 * 1000).toISOString() })

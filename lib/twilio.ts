@@ -5,12 +5,14 @@ export function getTwilioClient() {
   return twilio(process.env.TWILIO_ACCOUNT_SID!, process.env.TWILIO_AUTH_TOKEN!)
 }
 
-export async function sendSMS(to: string, body: string, from?: string) {
+export async function sendSMS(to: string, body: string, from?: string, statusCallbackUrl?: string) {
   const client = getTwilioClient()
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ""
   return client.messages.create({
     to,
     from: from ?? process.env.TWILIO_PHONE_NUMBER!,
     body,
+    statusCallback: statusCallbackUrl ?? (appUrl ? `${appUrl}/api/webhooks/sms-status` : undefined),
   })
 }
 

@@ -111,7 +111,7 @@ export async function POST(req: NextRequest) {
           .single()
         const { data: apt } = await db
           .from("appointments")
-          .select("scheduled_at, address")
+          .select("id, scheduled_at, address")
           .eq("lead_id", session.lead_id)
           .eq("status", "scheduled")
           .order("created_at", { ascending: false })
@@ -120,6 +120,9 @@ export async function POST(req: NextRequest) {
         if (aptLead && apt) {
           const name = `${aptLead.first_name ?? ""} ${aptLead.last_name ?? ""}`.trim() || aptLead.phone
           notifyAppointmentBooked(session.company_id, name, apt.scheduled_at, apt.address ?? "").catch(() => {})
+          // Send confirmation SMS + email to lead
+          const { sendConfirmations } = await import("@/lib/appointment-reminders")
+          sendConfirmations(apt.id).catch(() => {})
         }
         return twiml(gatherTwiML(result.text, appUrl))
       }

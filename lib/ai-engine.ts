@@ -262,18 +262,31 @@ export async function runConversation(
       content: `Conversation so far:\n${convoLines}\n\nThe lead hasn't booked yet. You're sending a proactive follow-up — a natural, brief check-in. Write one short SMS, under 15 words. Don't repeat what you've already said. Be casual and human, not salesy or pushy.${angleInstruction}`,
     })
   } else {
-    // Normal reply to an inbound message — build full conversation history
+    // Normal reply to an inbound message — build full conversation history.
+    // Sanitize: Anthropic API requires strictly alternating user/assistant turns.
+    // Consecutive same-role messages (can happen if a send failed mid-turn) are
+    // collapsed: keep only the LAST message in each consecutive run so the
+    // history remains valid without losing the most recent context.
+    const sanitized: Array<{ role: "user" | "assistant"; content: string }> = []
     for (const msg of history) {
-      messages.push({
-        role: msg.direction === "inbound" ? "user" : "assistant",
-        content: msg.body,
-      })
+      const role = msg.direction === "inbound" ? "user" : "assistant"
+      if (sanitized.length > 0 && sanitized[sanitized.length - 1].role === role) {
+        // Merge: append the new content to the previous same-role message
+        sanitized[sanitized.length - 1].content += "\n" + msg.body
+      } else {
+        sanitized.push({ role, content: msg.body })
+      }
     }
-    // Add the new incoming message
-    messages.push({
-      role: "user",
-      content: incomingMessage!,
-    })
+    for (const msg of sanitized) {
+      messages.push(msg)
+    }
+    // Ensure the last history message is assistant before appending the new user turn
+    if (messages.length > 0 && messages[messages.length - 1].role === "user") {
+      // Last history entry is user — merge with incoming rather than stacking
+      messages[messages.length - 1].content += "\n" + incomingMessage!
+    } else {
+      messages.push({ role: "user", content: incomingMessage! })
+    }
   }
 
   // Call Claude
@@ -352,6 +365,18 @@ export async function runConversation(
       if (block.type === "text") {
         responseText = block.text.trim()
       }
+    }
+
+    // If follow-up returned only another tool call (no text), generate a minimal fallback
+    // so the conversation history stays valid and the lead gets a response.
+    if (!responseText && action?.type === "book_appointment") {
+      const a = action as { type: "book_appointment"; scheduled_at: string; address?: string }
+      const day = new Date(a.scheduled_at).toLocaleDateString("en-US", {
+        weekday: "long", month: "short", day: "numeric", timeZone: "America/New_York",
+      })
+      responseText = a.address
+        ? `You're on the schedule — ${day} at ${a.address}. Tech will reach out before heading over.`
+        : `You're on the schedule for ${day}. Tech will reach out before heading over.`
     }
   }
 
@@ -618,7 +643,7 @@ export async function processAndSave(
       const legacyMap: Record<string, string> = {
         qualified: "qualified",
         closed_lost: "lost",
-        needs_attention: "active_conversation",
+        needs_attention: "needs_attention",
       }
       await supabase
         .from("leads")

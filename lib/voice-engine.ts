@@ -440,10 +440,51 @@ async function executeTool(
       const { appointment_id, new_scheduled_at, reason } = tool.input as {
         appointment_id: string; new_scheduled_at: string; reason: string
       }
-      await db.from("appointments")
-        .update({ scheduled_at: new_scheduled_at, notes: reason })
+
+      const { data: oldApt } = await db.from("appointments")
+        .select("scheduled_at, google_event_id")
         .eq("id", appointment_id)
-        .eq("company_id", session.company_id)
+        .single()
+
+      await db.from("appointments").update({
+        scheduled_at: new_scheduled_at,
+        notes: reason,
+        rescheduled_from: oldApt?.scheduled_at ?? null,
+        reminder_2d_email_sent: false,
+        reminder_2d_sms_sent: false,
+        reminder_1d_email_sent: false,
+        reminder_1d_sms_sent: false,
+        reminder_2h_email_sent: false,
+        reminder_2h_sms_sent: false,
+      }).eq("id", appointment_id).eq("company_id", session.company_id)
+
+      await db.from("leads")
+        .update({ status: "appointment_booked", last_message_at: new Date().toISOString() })
+        .eq("id", session.lead_id)
+
+      if (oldApt?.google_event_id) {
+        try {
+          const { data: gcal } = await db.from("google_calendar_connections")
+            .select("access_token, refresh_token, calendar_id, is_connected")
+            .eq("company_id", session.company_id).single()
+          if (gcal?.is_connected && gcal.access_token && gcal.refresh_token) {
+            const { deleteCalendarEvent, createCalendarEvent } = await import("@/lib/google-calendar")
+            await deleteCalendarEvent(gcal.access_token, gcal.refresh_token, gcal.calendar_id ?? "primary", oldApt.google_event_id)
+            const { data: lead } = await db.from("leads").select("first_name, last_name").eq("id", session.lead_id).single()
+            const newGcalEvent = await createCalendarEvent(
+              gcal.access_token, gcal.refresh_token, gcal.calendar_id ?? "primary",
+              {
+                summary: `Estimate: ${lead?.first_name ?? ""} ${lead?.last_name ?? ""}`.trim(),
+                description: reason ?? "",
+                startTime: new_scheduled_at,
+                endTime: new Date(new Date(new_scheduled_at).getTime() + 60 * 60000).toISOString(),
+              }
+            )
+            await db.from("appointments").update({ google_event_id: newGcalEvent.id ?? null }).eq("id", appointment_id)
+          }
+        } catch { /* non-blocking */ }
+      }
+
       return { type: "continue" }
     }
 

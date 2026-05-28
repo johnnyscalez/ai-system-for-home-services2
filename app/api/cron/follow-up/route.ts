@@ -89,6 +89,35 @@ export async function GET(req: NextRequest) {
       }
     }
 
+    // ── SMS retry: re-send the exact failed message body (no AI needed) ─────────
+    if (step.sequence_type === "sms_retry") {
+      const meta = step.metadata as { failed_body?: string } | null
+      const retryBody = meta?.failed_body
+      if (!retryBody) {
+        await supabase.from("sequences").update({ status: "cancelled" }).eq("id", step.id)
+        continue
+      }
+      try {
+        const msg = await sendSMS(lead.phone, retryBody, phoneRecord.phone_number)
+        // Save the retried outbound to conversations
+        await supabase.from("conversations").insert({
+          lead_id:       lead.id,
+          company_id:    step.company_id,
+          direction:     "outbound",
+          sent_by:       "ai",
+          body:          retryBody,
+          twilio_sid:    msg.sid,
+          channel:       "sms",
+        })
+        await supabase.from("sequences").update({ status: "sent", sent_at: now.toISOString() }).eq("id", step.id)
+        processed++
+      } catch (err) {
+        console.error(`[cron] SMS retry failed for lead ${lead.id}:`, err)
+        await supabase.from("sequences").update({ status: "cancelled" }).eq("id", step.id)
+      }
+      continue
+    }
+
     const angleKey = `${step.sequence_type}:${step.step}`
     const followUpAngle = FOLLOW_UP_ANGLE[angleKey]
 

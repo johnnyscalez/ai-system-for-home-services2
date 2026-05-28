@@ -133,9 +133,12 @@ export function normalizeLead(raw: Record<string, unknown>): NormalizedLead {
     ...EMAIL_KEYS, ...ADDRESS_KEYS, ...NOTES_KEYS, ...SERVICE_TYPE_KEYS, ...FORM_ID_KEYS,
   ].map(k => k.toLowerCase()))
 
+  // Sensitive fields that must never be stored in lead metadata
+  const sensitiveKeys = new Set(["secret", "webhook_secret", "key", "api_key", "token", "password", "access_token"])
+
   const metadata: Record<string, unknown> = {}
   for (const [k, v] of Object.entries(flat)) {
-    if (!knownKeys.has(k.toLowerCase()) && v !== null && v !== undefined && v !== "") {
+    if (!knownKeys.has(k.toLowerCase()) && !sensitiveKeys.has(k.toLowerCase()) && v !== null && v !== undefined && v !== "") {
       metadata[k] = v
     }
   }
