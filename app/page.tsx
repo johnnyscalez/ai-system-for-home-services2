@@ -33,14 +33,14 @@ const C = {
 const CONVO = [
   { role: "ai",   text: "Hey Mike, saw you reached out about your AC — what's it doing?" },
   { role: "lead", text: "Not cooling. Been going since yesterday." },
-  { role: "ai",   text: "Is it running at all, or completely off?" },
+  { role: "ai",   text: "Is it still running at all, or completely off?" },
   { role: "lead", text: "Runs but blows warm air" },
-  { role: "ai",   text: "Usually refrigerant or airflow — hard to say without a look. How old is the unit?" },
-  { role: "lead", text: "Around 12 years" },
-  { role: "ai",   text: "At 12 years it's worth looking at both options. All part of the free estimate. Thursday morning or Friday afternoon work?" },
-  { role: "lead", text: "Thursday morning" },
-  { role: "ai",   text: "What address should the tech come to?" },
+  { role: "ai",   text: "How long has it been doing that?" },
+  { role: "lead", text: "Started yesterday afternoon" },
+  { role: "ai",   text: "Got it. Our tech will figure out exactly what's going on. What's the address?" },
   { role: "lead", text: "2241 Ridgeline Dr, Frisco TX" },
+  { role: "ai",   text: "Thursday morning or Friday afternoon — which works?" },
+  { role: "lead", text: "Thursday morning works" },
 ] as const
 
 const FOLLOW_UP_STEPS = [
@@ -65,52 +65,62 @@ const GUARDRAILS = [
 
 const TESTIMONIALS = [
   {
-    quote: "We were losing leads left and right — nobody was following up fast enough. First week with LeadCloser, we booked 9 appointments off our ads. Before, we were getting maybe 2 or 3.",
+    quote: "We were losing 70% of our Facebook leads — nobody called back fast enough. LeadCloser installed the system and now we book 3–4 extra jobs a month from the same ad spend. Paid for the install in the first two weeks.",
     name:  "Dave K.",
     role:  "Owner, ProTemp HVAC — Dallas, TX",
     stars: 5,
   },
   {
-    quote: "I was skeptical about AI calling my leads. Then it booked an $8,400 replacement job on a follow-up call while I was on a roof. That closed me.",
+    quote: "I was skeptical about AI handling my leads. Then it booked an $8,400 replacement job on a follow-up call while I was on a roof. Works better than a full-time salesperson and never takes a day off.",
     name:  "James M.",
     role:  "Owner, Arctic Air Services — Phoenix, AZ",
     stars: 5,
   },
   {
-    quote: "Setup took me 20 minutes. I haven't manually followed up with a paid lead since. The CRM shows every conversation and the AI handles all of it.",
+    quote: "They built the whole thing for my business and had it live in two days. The next morning a lead came in and got texted in seconds. Booked by afternoon. I haven't chased a paid lead manually since.",
     name:  "Carlos R.",
     role:  "Owner, Premier Comfort — Miami, FL",
     stars: 5,
   },
 ]
 
-const PLANS = [
+const INSTALL_INCLUDES = [
+  "Custom AI script written for your business — not a template",
+  "Facebook Lead Ads integration",
+  "Local phone number provisioned in your area code",
+  "14-day follow-up sequences pre-loaded and tested",
+  "Appointment confirmation + 3-step reminders activated",
+  "Google Calendar + Gmail connected",
+  "CRM configured with your pipeline stages",
+  "Live test run + hands-on handoff call with your team",
+]
+
+const MONTHLY_INCLUDES = [
+  "AI SMS follow-up on every lead",
+  "AI voice calls — outbound and inbound",
+  "14-day auto follow-up sequences",
+  "Built-in CRM + lead pipeline",
+  "Appointment reminders (4-step automated)",
+  "Google Calendar sync",
+  "Ongoing system monitoring",
+  "Support included",
+]
+
+const ADDONS = [
   {
-    name:      "Starter",
-    price:     297,
-    desc:      "For companies getting started with paid ads.",
-    features:  ["100 leads/month", "AI SMS follow-up", "2-week auto sequences", "Built-in CRM", "Appointment reminders", "1 lead source connection", "Local area code number"],
-    cta:       "Start Free Trial",
-    highlight: false,
-    badge:     null as string | null,
+    name:  "Smart Dispatch",
+    price: 200,
+    desc:  "AI routes every incoming call to the right tech by skill, distance, and availability. No dispatcher needed.",
   },
   {
-    name:      "Growth",
-    price:     497,
-    desc:      "For companies running consistent ad spend and growing fast.",
-    features:  ["300 leads/month", "AI SMS + voice calls", "Custom AI script", "3 lead source connections", "3 team members", "Google Calendar sync", "Gmail for appointment emails"],
-    cta:       "Start Free Trial",
-    highlight: true,
-    badge:     "Most Popular" as string | null,
+    name:  "Monthly Optimization",
+    price: 200,
+    desc:  "We review your AI script, conversion data, and sequences monthly and improve them.",
   },
   {
-    name:      "Scale",
-    price:     997,
-    desc:      "For multi-location operators and high-volume advertisers.",
-    features:  ["Unlimited leads", "Unlimited users", "White-label option", "Multiple locations", "Priority support", "Custom setup call"],
-    cta:       "Talk to Us",
-    highlight: false,
-    badge:     null as string | null,
+    name:  "Seasonal Campaigns",
+    price: 150,
+    desc:  "Pre-season and post-season outreach to your existing customer list — automated.",
   },
 ]
 
@@ -345,7 +355,7 @@ function Nav() {
           <Link href="/signup?new=1"
                 className="text-sm font-semibold text-white px-5 py-2.5 rounded-full transition-all duration-200 hover:-translate-y-0.5"
                 style={{ background: C.primary, boxShadow: "0 4px 14px rgba(124,58,237,0.40)" }}>
-            Start Free Trial
+            Get Installed
           </Link>
         </div>
 
@@ -367,7 +377,7 @@ function Nav() {
           ))}
           <Link href="/signup?new=1" className="block w-full text-center text-sm font-semibold text-white py-3 rounded-full mt-2"
                 style={{ background: C.primary }}>
-            Start Free Trial
+            Get Installed
           </Link>
         </motion.div>
       )}
@@ -519,7 +529,7 @@ function HeroSection() {
               style={{ background: "#F5F3FF", borderColor: "rgba(124,58,237,0.2)", color: C.primary }}
             >
               <span className="w-2 h-2 rounded-full bg-green-500" style={{ animation: "callPulse 2s ease-in-out infinite" }} />
-              207 HVAC companies · 14,000+ appointments booked
+              Installed at 200+ HVAC companies · 14,000+ appointments booked
             </motion.div>
 
             {/* Headline */}
@@ -529,18 +539,18 @@ function HeroSection() {
               className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.05] mb-6 text-balance"
               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}
             >
-              Your HVAC leads go cold
+              Your leads get a text
               {" "}
               <span className="relative inline-block" style={{ color: C.primary }}>
-                in minutes.
+                in 47 seconds.
                 <span className="absolute -bottom-1 left-0 right-0 h-1 rounded-full"
                       style={{ background: `linear-gradient(90deg, ${C.primary}, #8B5CF6)`,
                                transformOrigin: "left", animation: "underlineDraw 0.8s ease forwards 1.2s",
                                transform: "scaleX(0)" }} />
               </span>
               <br />
-              <span style={{ color: C.success }}>LeadCloser texts them</span>{" "}
-              <span style={{ color: C.muted, fontWeight: 400 }}>in seconds.</span>
+              <span style={{ color: C.success }}>Every one.</span>{" "}
+              <span style={{ color: C.muted, fontWeight: 400 }}>While you&rsquo;re on a job.</span>
             </motion.h1>
 
             {/* Subhead */}
@@ -550,9 +560,9 @@ function HeroSection() {
               className="text-lg leading-relaxed mb-8 max-w-lg"
               style={{ color: C.muted }}
             >
-              The moment a lead comes in — from your Facebook ads, Google ads, or website —
-              your AI starts the conversation: qualifying them, handling every objection,
-              and booking the estimate appointment. Nothing on your team has to touch it.
+              We install an AI operating system in your HVAC business — SMS follow-up,
+              voice calls, Smart Dispatch, appointment reminders, and a full CRM.
+              Nothing to manage. No one to hire. You stay in the field. The system books the jobs.
             </motion.p>
 
             {/* CTAs */}
@@ -564,7 +574,7 @@ function HeroSection() {
               <Link href="/signup?new=1"
                     className="inline-flex items-center justify-center gap-2 font-semibold text-white px-7 py-4 rounded-full transition-all duration-200 hover:-translate-y-1"
                     style={{ background: C.primary, boxShadow: "0 8px 24px rgba(124,58,237,0.35)" }}>
-                Start Booking More Jobs
+                Get Your System Installed
                 <ArrowRight className="w-4 h-4" aria-hidden="true" />
               </Link>
               <a href="#demo"
@@ -579,7 +589,7 @@ function HeroSection() {
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               transition={{ delay: 0.9, duration: 0.4 }}
               className="text-sm" style={{ color: C.muted }}>
-              No credit card required · Setup in under 10 minutes
+              Installation call included · Done for you · Live in 48 hours
             </motion.p>
           </div>
 
@@ -634,10 +644,10 @@ function StatStrip() {
   const inView = useInView(ref, { once: true })
 
   const stats = [
-    { value: "<10",  unit: "sec",  label: "Time to first contact",      mono: true },
-    { value: "100",  unit: "%",    label: "No lead left unanswered",     mono: true },
-    { value: "14",   unit: "days", label: "Follow-up runs automatically", mono: true },
-    { value: "$0",   unit: "",     label: "To hire a front office rep",  mono: true },
+    { value: "47",  unit: "sec",  label: "Response time on every lead",          mono: true },
+    { value: "94",  unit: "%",    label: "Contact rate vs. 11% industry average", mono: true },
+    { value: "3–5", unit: "×",    label: "Average ROI within 60 days",           mono: true },
+    { value: "$0",  unit: "",     label: "Hours chasing leads — by you",         mono: true },
   ]
 
   return (
@@ -725,19 +735,19 @@ function SystemOverviewSection() {
         >
           <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
                style={{ background: "#F5F3FF", color: C.primary }}>
-            The complete system
+            The AI operating system
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-            The front office your HVAC company
+            Not a chatbot. Not software.
             <br />
-            <span style={{ color: C.primary }}>never had.</span>{" "}
-            <span style={{ color: C.muted, fontWeight: 400 }}>Now it does.</span>
+            <span style={{ color: C.primary }}>An AI front office,</span>{" "}
+            <span style={{ color: C.muted, fontWeight: 400 }}>installed in your business.</span>
           </h2>
           <p className="text-lg max-w-2xl mx-auto" style={{ color: C.muted }}>
-            Six AI systems running at once. Every lead is followed up. Every call is made.
-            Every appointment is confirmed, reminded, and logged.
-            You watch it happen from one dashboard.
+            Six systems working at once — SMS follow-up, voice calls, Smart Dispatch, CRM,
+            appointment reminders, and ongoing optimization. Every lead touched.
+            Every appointment managed. You watch it from one dashboard.
           </p>
         </motion.div>
 
@@ -1387,6 +1397,150 @@ function FollowUpSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// SMART DISPATCH SECTION
+// ─────────────────────────────────────────────────────────────────────────────
+function SmartDispatchSection() {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: "-80px" })
+
+  const features = [
+    "Routes by technician specialty and job type — AC, heat, commercial",
+    "Dispatches to the nearest available tech by location",
+    "Notifies the tech by SMS: lead name, address, and issue",
+    "Matches call urgency to tech availability in real time",
+    "Logs every dispatch automatically in the CRM",
+    "Works 24/7 — overnight calls and weekends included",
+  ]
+
+  return (
+    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }} id="smart-dispatch">
+      <div className="max-w-7xl mx-auto">
+        <div className="grid md:grid-cols-2 gap-16 items-center">
+
+          {/* Left — copy */}
+          <motion.div
+            initial={{ opacity: 0, x: -32 }} animate={inView ? { opacity: 1, x: 0 } : {}}
+            transition={{ duration: 0.6 }}
+          >
+            <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-5"
+                 style={{ background: "#F0FDF4", color: C.success }}>
+              Smart Dispatch · add-on
+            </div>
+            <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-4"
+                style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
+              Every call. The right tech.
+              <br />
+              <span style={{ color: C.success }}>No dispatcher needed.</span>
+            </h2>
+            <p className="text-base leading-relaxed mb-6" style={{ color: C.muted }}>
+              When a lead calls in, your AI answers, learns their issue, and routes the job
+              to the right technician on your team — by skill, by location, by availability.
+              The right person shows up. You didn&rsquo;t touch it.
+            </p>
+            <div className="space-y-3">
+              {features.map((f, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -12 }} animate={inView ? { opacity: 1, x: 0 } : {}}
+                  transition={{ duration: 0.4, delay: 0.1 + i * 0.07 }}
+                  className="flex items-center gap-3"
+                >
+                  <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: C.success }} aria-hidden="true" />
+                  <span className="text-sm" style={{ color: C.text }}>{f}</span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
+
+          {/* Right — dispatch mockup */}
+          <motion.div
+            initial={{ opacity: 0, x: 32 }} animate={inView ? { opacity: 1, x: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.15 }}
+          >
+            <div className="rounded-2xl overflow-hidden border"
+                 style={{ background: C.surface, borderColor: C.border,
+                          boxShadow: "0 20px 60px rgba(77,124,15,0.10)" }}>
+              {/* Header */}
+              <div className="flex items-center justify-between px-5 py-4 border-b"
+                   style={{ borderColor: C.border, background: "#FAFAF8" }}>
+                <div className="flex items-center gap-2">
+                  <div className="w-3 h-3 rounded-full" style={{ background: C.success }} />
+                  <span className="text-sm font-semibold" style={{ color: C.text }}>Smart Dispatch</span>
+                </div>
+                <span className="text-xs px-2 py-0.5 rounded-full font-medium"
+                      style={{ background: "#F0FDF4", color: C.success }}>Auto</span>
+              </div>
+
+              {/* Incoming lead */}
+              <div className="px-5 py-4 border-b" style={{ borderColor: C.border }}>
+                <div className="text-xs font-semibold mb-2" style={{ color: C.muted }}>Incoming call</div>
+                <div className="flex items-center gap-3 p-3 rounded-xl" style={{ background: C.subtle }}>
+                  <div className="w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold shrink-0"
+                       style={{ background: C.primary }}>M</div>
+                  <div className="flex-1 min-w-0">
+                    <div className="text-sm font-semibold" style={{ color: C.text }}>Mike Johnson</div>
+                    <div className="text-xs" style={{ color: C.muted }}>AC not cooling · Frisco TX · Urgent</div>
+                  </div>
+                  <span className="text-xs px-2 py-0.5 rounded-full font-semibold shrink-0"
+                        style={{ background: "#FEF3C7", color: "#92400E" }}>Urgent</span>
+                </div>
+              </div>
+
+              {/* Tech matching */}
+              <div className="px-5 py-4">
+                <div className="text-xs font-semibold mb-3" style={{ color: C.muted }}>Matched technician</div>
+                {[
+                  { name: "Marcus T.", detail: "AC Repair · 2.3 mi away", avail: "Available now", best: true },
+                  { name: "David R.",  detail: "AC Repair · 5.1 mi away", avail: "Available",    best: false },
+                ].map((tech, i) => (
+                  <motion.div
+                    key={i}
+                    initial={{ opacity: 0, y: 6 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+                    transition={{ delay: 0.35 + i * 0.1 }}
+                    className="flex items-center gap-3 p-3 rounded-xl mb-2 border"
+                    style={{
+                      background:   tech.best ? "#F0FDF4" : C.subtle,
+                      borderColor:  tech.best ? "#BBF7D0" : "transparent",
+                    }}
+                  >
+                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold shrink-0"
+                         style={{ background: tech.best ? C.success : C.muted }}>
+                      {tech.name[0]}
+                    </div>
+                    <div className="flex-1 min-w-0">
+                      <div className="text-sm font-semibold" style={{ color: C.text }}>{tech.name}</div>
+                      <div className="text-xs" style={{ color: C.muted }}>{tech.detail}</div>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-xs font-semibold" style={{ color: tech.best ? C.success : C.muted }}>
+                        {tech.avail}
+                      </div>
+                      {tech.best && (
+                        <div className="text-xs font-bold mt-0.5" style={{ color: C.success }}>Best match</div>
+                      )}
+                    </div>
+                  </motion.div>
+                ))}
+
+                <motion.div
+                  initial={{ opacity: 0, y: 6 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+                  transition={{ delay: 0.6 }}
+                  className="flex items-center gap-2 mt-4 p-3 rounded-xl"
+                  style={{ background: "#F0FDF4", border: "1px solid #BBF7D0" }}
+                >
+                  <CheckCircle2 className="w-4 h-4 text-green-600 shrink-0" aria-hidden="true" />
+                  <span className="text-xs font-semibold text-green-800">Marcus dispatched · SMS sent to tech</span>
+                </motion.div>
+              </div>
+            </div>
+          </motion.div>
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // VOICE CALL SECTION
 // ─────────────────────────────────────────────────────────────────────────────
 function VoiceCallSection() {
@@ -1812,30 +1966,26 @@ function RemindersSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// SETUP SECTION — under 10 minutes
+// WHAT WE INSTALL — done for you
 // ─────────────────────────────────────────────────────────────────────────────
 function SetupSection() {
   const ref = useRef(null)
   const inView = useInView(ref, { once: true, margin: "-80px" })
 
-  const steps = [
-    { num: "1", title: "Paste your website URL",
-      body: "The AI reads your site and pulls your services, service area, certifications, and best reviews automatically." },
-    { num: "2", title: "Add any extra facts",
-      body: "One-click chips: \"We offer 0% financing,\" \"Emergency same-day service,\" \"Spanish-speaking techs.\" Done in 30 seconds." },
-    { num: "3", title: "Connect your lead sources",
-      body: "Facebook ads, Google ads, or paste your website's webhook URL. Takes two clicks. Pull leads from any form, any platform." },
-    { num: "4", title: "Connect Gmail",
-      body: "Appointment emails send from your actual email address. Not noreply@someapp.com — from you." },
-    { num: "5", title: "Get your local phone number",
-      body: "A real number provisioned in your area code. Leads see a familiar local number, not an 800 number." },
-    { num: "6", title: "Your AI is live",
-      body: "The next lead that fills out your form gets a text within seconds. Most contractors are live before their next lead comes in." },
+  const howItWorks = [
+    { num: "1", title: "30-minute kickoff call",
+      body: "Tell us your service area, what you offer, and how your best sales rep talks to leads. That's all we need." },
+    { num: "2", title: "We build your AI system",
+      body: "Custom AI script, follow-up sequences, and CRM configured for your business — not a template copied from someone else." },
+    { num: "3", title: "We connect everything",
+      body: "Facebook Lead Ads, your local phone number, Google Calendar, Gmail. Takes us one day. You do nothing." },
+    { num: "4", title: "Live test → you're live",
+      body: "We run a full test with you on the call. You see it work. Then it's live and handling every lead 24/7." },
   ]
 
   return (
     <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }}>
-      <div className="max-w-5xl mx-auto">
+      <div className="max-w-6xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.6 }}
@@ -1843,37 +1993,76 @@ function SetupSection() {
         >
           <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
                style={{ background: "#F5F3FF", color: C.primary }}>
-            Setup
+            Done for you
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-3"
               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-            Live in under 10 minutes.
+            We install it. You don&rsquo;t touch it.
           </h2>
-          <p className="text-lg" style={{ color: C.muted }}>
-            No developer needed. No IT department. Just you and a browser.
+          <p className="text-lg max-w-xl mx-auto" style={{ color: C.muted }}>
+            One kickoff call. We handle everything else. Most clients are live within 48 hours.
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-2 gap-4">
-          {steps.map((s, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: i * 0.09 }}
-              className="flex items-start gap-4 p-5 rounded-xl border"
-              style={{ background: C.surface, borderColor: C.border }}
-            >
-              <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black shrink-0"
-                   style={{ background: i === 5 ? C.primary : C.subtle,
-                            color: i === 5 ? "#fff" : C.primary }}>
-                {i === 5 ? <Check className="w-4 h-4" aria-hidden="true" /> : s.num}
+        <div className="grid md:grid-cols-2 gap-10 items-start">
+          {/* How we install it */}
+          <div>
+            <p className="text-xs font-semibold uppercase tracking-wider mb-5" style={{ color: C.muted }}>How we install it</p>
+            <div className="space-y-4">
+              {howItWorks.map((s, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 16 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+                  transition={{ duration: 0.5, delay: i * 0.1 }}
+                  className="flex items-start gap-4 p-5 rounded-xl border"
+                  style={{ background: C.surface, borderColor: C.border }}
+                >
+                  <div className="w-8 h-8 rounded-full flex items-center justify-center text-sm font-black shrink-0"
+                       style={{ background: i === 3 ? C.primary : C.subtle,
+                                color: i === 3 ? "#fff" : C.primary }}>
+                    {i === 3 ? <Check className="w-4 h-4" aria-hidden="true" /> : s.num}
+                  </div>
+                  <div>
+                    <div className="text-sm font-bold mb-1" style={{ color: C.text }}>{s.title}</div>
+                    <div className="text-xs leading-relaxed" style={{ color: C.muted }}>{s.body}</div>
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+
+          {/* What's included in the install */}
+          <motion.div
+            initial={{ opacity: 0, x: 24 }} animate={inView ? { opacity: 1, x: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="rounded-2xl p-8 border"
+            style={{ background: C.surface, borderColor: C.border,
+                     boxShadow: "0 8px 32px rgba(124,58,237,0.08)" }}
+          >
+            <div className="flex items-center gap-2 mb-6">
+              <div className="w-9 h-9 rounded-xl flex items-center justify-center"
+                   style={{ background: "#F5F3FF", color: C.primary }}>
+                <Check className="w-4 h-4" aria-hidden="true" />
               </div>
               <div>
-                <div className="text-sm font-bold mb-1" style={{ color: C.text }}>{s.title}</div>
-                <div className="text-xs leading-relaxed" style={{ color: C.muted }}>{s.body}</div>
+                <div className="text-sm font-bold" style={{ color: C.text }}>What&rsquo;s included in the install</div>
+                <div className="text-xs" style={{ color: C.muted }}>Everything. No a la carte surprises.</div>
               </div>
-            </motion.div>
-          ))}
+            </div>
+            <div className="space-y-3">
+              {INSTALL_INCLUDES.map((item, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: -8 }} animate={inView ? { opacity: 1, x: 0 } : {}}
+                  transition={{ delay: 0.3 + i * 0.07 }}
+                  className="flex items-start gap-3"
+                >
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: C.success }} aria-hidden="true" />
+                  <span className="text-sm leading-snug" style={{ color: C.text }}>{item}</span>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
         </div>
       </div>
     </section>
@@ -1889,7 +2078,7 @@ function PricingSection() {
 
   return (
     <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }} id="pricing">
-      <div className="max-w-6xl mx-auto">
+      <div className="max-w-5xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.6 }}
@@ -1901,77 +2090,142 @@ function PricingSection() {
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-3"
               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-            One booked job covers the monthly cost.
+            One booked replacement job covers the install.
           </h2>
-          <p className="text-lg" style={{ color: C.muted }}>
-            A single HVAC replacement job pays for months of LeadCloser.
-            The leads you&rsquo;re currently losing pay for nothing.
+          <p className="text-lg max-w-xl mx-auto" style={{ color: C.muted }}>
+            The monthly fee pays for itself in 1–2 bookings. Most clients recover the
+            install cost within the first 30 days.
           </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {PLANS.map((plan, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 32 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: i * 0.1 }}
-              whileHover={{ y: -4, transition: { duration: 0.2 } }}
-              className="rounded-2xl p-8 border relative"
-              style={{
-                background:   plan.highlight ? C.primary : C.surface,
-                borderColor:  plan.highlight ? "transparent" : C.border,
-                color:        plan.highlight ? "#fff" : C.text,
-                boxShadow:    plan.highlight
-                  ? "0 20px 60px rgba(124,58,237,0.30)"
-                  : "0 4px 20px rgba(0,0,0,0.04)",
-              }}
-            >
-              {plan.badge && (
-                <div className="absolute -top-3 left-1/2 -translate-x-1/2 text-xs font-bold px-3 py-1 rounded-full"
-                     style={{ background: C.success, color: "#fff" }}>
-                  {plan.badge}
-                </div>
-              )}
-
-              <div className="mb-1 font-bold text-lg" style={{ fontFamily: "var(--font-jakarta)" }}>
-                {plan.name}
+        {/* Installation package — full width */}
+        <motion.div
+          initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.6, delay: 0.1 }}
+          className="rounded-2xl p-8 border mb-6 relative overflow-hidden"
+          style={{ background: C.surface, borderColor: C.border,
+                   boxShadow: "0 8px 32px rgba(124,58,237,0.08)" }}
+        >
+          <div className="absolute -top-3 left-8">
+            <span className="text-xs font-bold px-3 py-1 rounded-full"
+                  style={{ background: C.primary, color: "#fff" }}>
+              One-time install
+            </span>
+          </div>
+          <div className="grid md:grid-cols-2 gap-8 items-center pt-2">
+            <div>
+              <div className="text-xl font-bold mb-1" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
+                System Installation
               </div>
-              <div className="text-sm mb-5 opacity-70">{plan.desc}</div>
-
+              <div className="text-sm mb-5" style={{ color: C.muted }}>
+                We build and install the complete system for your business.
+              </div>
               <div className="flex items-end gap-1 mb-6">
-                <span className="text-5xl font-black" style={{ fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-                  ${plan.price}
+                <span className="text-5xl font-black" style={{ color: C.text, fontFamily: "var(--font-mono)" }}>
+                  $2,250
                 </span>
-                <span className="text-sm opacity-60 mb-2">/month</span>
+                <span className="text-sm mb-2" style={{ color: C.muted }}>one-time</span>
               </div>
+              <Link href="/signup?new=1"
+                    className="inline-flex items-center gap-2 font-semibold text-white px-8 py-3.5 rounded-full transition-all duration-200 hover:-translate-y-0.5"
+                    style={{ background: C.primary, boxShadow: "0 6px 20px rgba(124,58,237,0.30)" }}>
+                Get Your System Installed
+                <ArrowRight className="w-4 h-4" aria-hidden="true" />
+              </Link>
+            </div>
+            <div className="space-y-2.5">
+              {INSTALL_INCLUDES.map((item, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, x: 8 }} animate={inView ? { opacity: 1, x: 0 } : {}}
+                  transition={{ delay: 0.25 + i * 0.06 }}
+                  className="flex items-start gap-3"
+                >
+                  <CheckCircle2 className="w-4 h-4 shrink-0 mt-0.5" style={{ color: C.success }} aria-hidden="true" />
+                  <span className="text-sm leading-snug" style={{ color: C.text }}>{item}</span>
+                </motion.div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
 
-              <div className="space-y-3 mb-8">
-                {plan.features.map((f, j) => (
-                  <div key={j} className="flex items-center gap-2.5">
-                    <Check className="w-3.5 h-3.5 shrink-0 opacity-80" aria-hidden="true" />
-                    <span className="text-sm opacity-90">{f}</span>
+        {/* Monthly + Add-ons — two column */}
+        <div className="grid md:grid-cols-2 gap-6">
+          {/* Core System monthly */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.2 }}
+            className="rounded-2xl p-7 border relative overflow-hidden"
+            style={{ background: C.primary, borderColor: "transparent",
+                     boxShadow: "0 16px 48px rgba(124,58,237,0.28)" }}
+          >
+            <div className="absolute -top-3 left-7">
+              <span className="text-xs font-bold px-3 py-1 rounded-full"
+                    style={{ background: C.success, color: "#fff" }}>
+                Monthly retainer
+              </span>
+            </div>
+            <div className="pt-2">
+              <div className="text-lg font-bold text-white mb-1" style={{ fontFamily: "var(--font-jakarta)" }}>
+                Core System
+              </div>
+              <div className="text-sm mb-5 text-purple-200">Everything running, every month.</div>
+              <div className="flex items-end gap-1 mb-6">
+                <span className="text-5xl font-black text-white" style={{ fontFamily: "var(--font-mono)" }}>
+                  $597
+                </span>
+                <span className="text-sm mb-2 text-purple-200">/month</span>
+              </div>
+              <div className="space-y-2.5">
+                {MONTHLY_INCLUDES.map((item, i) => (
+                  <div key={i} className="flex items-center gap-2.5">
+                    <Check className="w-3.5 h-3.5 shrink-0 text-purple-200" aria-hidden="true" />
+                    <span className="text-sm text-purple-100">{item}</span>
                   </div>
                 ))}
               </div>
+            </div>
+          </motion.div>
 
-              <Link href="/signup?new=1"
-                    className="block w-full text-center font-semibold py-3 rounded-full transition-all duration-200"
-                    style={{
-                      background:   plan.highlight ? "#fff" : C.primary,
-                      color:        plan.highlight ? C.primary : "#fff",
-                      boxShadow:    plan.highlight ? "none" : "0 4px 14px rgba(124,58,237,0.30)",
-                    }}>
-                {plan.cta}
-              </Link>
-            </motion.div>
-          ))}
+          {/* Add-ons */}
+          <motion.div
+            initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.3 }}
+            className="rounded-2xl p-7 border"
+            style={{ background: C.surface, borderColor: C.border,
+                     boxShadow: "0 4px 20px rgba(0,0,0,0.04)" }}
+          >
+            <div className="text-lg font-bold mb-1" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
+              Optional add-ons
+            </div>
+            <div className="text-sm mb-6" style={{ color: C.muted }}>Enhance the system as you grow.</div>
+            <div className="space-y-5">
+              {ADDONS.map((addon, i) => (
+                <motion.div
+                  key={i}
+                  initial={{ opacity: 0, y: 8 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+                  transition={{ delay: 0.4 + i * 0.09 }}
+                  className="pb-5 border-b last:border-0 last:pb-0"
+                  style={{ borderColor: C.border }}
+                >
+                  <div className="flex items-center justify-between mb-1">
+                    <span className="text-sm font-bold" style={{ color: C.text }}>{addon.name}</span>
+                    <span className="text-sm font-black" style={{ color: C.primary, fontFamily: "var(--font-mono)" }}>
+                      +${addon.price}/mo
+                    </span>
+                  </div>
+                  <p className="text-xs leading-relaxed" style={{ color: C.muted }}>{addon.desc}</p>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
         </div>
 
         <motion.p
           initial={{ opacity: 0 }} animate={inView ? { opacity: 1 } : {}}
-          transition={{ delay: 0.5 }}
+          transition={{ delay: 0.6 }}
           className="text-center text-sm mt-8" style={{ color: C.muted }}>
-          Overage: $0.05/SMS beyond your plan limit. No long-term contracts. Cancel anytime.
+          No long-term contracts on the monthly retainer. Cancel with 30 days notice.
         </motion.p>
       </div>
     </section>
@@ -2065,7 +2319,7 @@ function FinalCTASection() {
                  style={{ background: "rgba(255,255,255,0.15)", color: "rgba(255,255,255,0.9)" }}>
               <span className="w-1.5 h-1.5 rounded-full bg-green-400"
                     style={{ animation: "callPulse 2s ease-in-out infinite" }} />
-              Start free — no credit card required
+              Installation call · done for you · live in 48 hours
             </div>
 
             <h2 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-4 text-balance"
@@ -2075,8 +2329,8 @@ function FinalCTASection() {
 
             <p className="text-lg mb-10 max-w-xl mx-auto"
                style={{ color: "rgba(216,180,254,0.85)" }}>
-              Setup takes 10 minutes. The next lead that fills out your form gets texted in seconds.
-              Your only job after that is showing up to the estimate.
+              We install the system. You book more jobs.
+              The leads you&rsquo;re paying $80–$150 for get texted in 47 seconds — every one.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
@@ -2084,7 +2338,7 @@ function FinalCTASection() {
                     className="inline-flex items-center justify-center gap-2 font-semibold text-base px-8 py-4 rounded-full transition-all duration-200 hover:-translate-y-1"
                     style={{ background: "#fff", color: C.primary,
                              boxShadow: "0 8px 24px rgba(0,0,0,0.15)" }}>
-                Start Booking More Jobs
+                Get Your System Installed
                 <ArrowRight className="w-4 h-4" aria-hidden="true" />
               </Link>
               <a href="#demo"
@@ -2096,7 +2350,7 @@ function FinalCTASection() {
             </div>
 
             <p className="mt-6 text-sm" style={{ color: "rgba(216,180,254,0.7)" }}>
-              No credit card · Setup in under 10 minutes · Cancel anytime
+              Custom script built for your business · Installation call included · Live in 48 hours
             </p>
           </div>
         </motion.div>
@@ -2117,7 +2371,7 @@ function Footer() {
             <Zap className="w-3.5 h-3.5 text-white" aria-hidden="true" />
           </div>
           <span className="font-bold" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>LeadCloser</span>
-          <span className="text-sm" style={{ color: C.muted }}>— AI front office for HVAC contractors</span>
+          <span className="text-sm" style={{ color: C.muted }}>— AI operating system for HVAC contractors</span>
         </div>
 
         <div className="flex items-center gap-6 text-sm" style={{ color: C.muted }}>
@@ -2149,6 +2403,7 @@ export default function Page() {
       <HowItWorksSection />
       <DemoSection />
       <FollowUpSection />
+      <SmartDispatchSection />
       <VoiceCallSection />
       <GuardrailsSection />
       <CRMSection />
