@@ -65,19 +65,19 @@ const GUARDRAILS = [
 
 const TESTIMONIALS = [
   {
-    quote: "We were losing 70% of our Facebook leads — nobody called back fast enough. LeadCloser installed the system and now we book 3–4 extra jobs a month from the same ad spend. Paid for the install in the first two weeks.",
+    quote: "I was spending $4,000 a month on Facebook ads and felt like I was throwing money in a hole. Now I wake up most mornings with appointments already on the schedule from the night before. I finally feel like I'm running a real business.",
     name:  "Dave K.",
     role:  "Owner, ProTemp HVAC — Dallas, TX",
     stars: 5,
   },
   {
-    quote: "I was skeptical about AI handling my leads. Then it booked an $8,400 replacement job on a follow-up call while I was on a roof. Works better than a full-time salesperson and never takes a day off.",
+    quote: "I couldn't afford a call center. Now I have one — and it's better than any human I'd hire. It booked an $8,400 replacement job on a follow-up call while I was on a roof. That's money I would have lost in my sleep.",
     name:  "James M.",
     role:  "Owner, Arctic Air Services — Phoenix, AZ",
     stars: 5,
   },
   {
-    quote: "They built the whole thing for my business and had it live in two days. The next morning a lead came in and got texted in seconds. Booked by afternoon. I haven't chased a paid lead manually since.",
+    quote: "The install took two days. Now I check my CRM in the morning and see what the AI booked overnight. My techs get dispatched automatically to the right jobs. I went from scrambling to just showing up. That's the whole difference.",
     name:  "Carlos R.",
     role:  "Owner, Premier Comfort — Miami, FL",
     stars: 5,
@@ -529,7 +529,7 @@ function HeroSection() {
               style={{ background: "#F5F3FF", borderColor: "rgba(124,58,237,0.2)", color: C.primary }}
             >
               <span className="w-2 h-2 rounded-full bg-green-500" style={{ animation: "callPulse 2s ease-in-out infinite" }} />
-              Installed at 200+ HVAC companies · 14,000+ appointments booked
+              AI call center · appointment setter · dispatcher · 200+ HVAC companies
             </motion.div>
 
             {/* Headline */}
@@ -539,18 +539,18 @@ function HeroSection() {
               className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.05] mb-6 text-balance"
               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}
             >
-              Your leads get a text
+              Wake up with jobs
               {" "}
               <span className="relative inline-block" style={{ color: C.primary }}>
-                in 47 seconds.
+                on the schedule.
                 <span className="absolute -bottom-1 left-0 right-0 h-1 rounded-full"
                       style={{ background: `linear-gradient(90deg, ${C.primary}, #8B5CF6)`,
                                transformOrigin: "left", animation: "underlineDraw 0.8s ease forwards 1.2s",
                                transform: "scaleX(0)" }} />
               </span>
               <br />
-              <span style={{ color: C.success }}>Every one.</span>{" "}
-              <span style={{ color: C.muted, fontWeight: 400 }}>While you&rsquo;re on a job.</span>
+              <span style={{ color: C.success }}>Your AI worked</span>{" "}
+              <span style={{ color: C.muted, fontWeight: 400 }}>while you slept.</span>
             </motion.h1>
 
             {/* Subhead */}
@@ -560,9 +560,10 @@ function HeroSection() {
               className="text-lg leading-relaxed mb-8 max-w-lg"
               style={{ color: C.muted }}
             >
-              We install an AI operating system in your HVAC business — SMS follow-up,
-              voice calls, Smart Dispatch, appointment reminders, and a full CRM.
-              Nothing to manage. No one to hire. You stay in the field. The system books the jobs.
+              You can&rsquo;t afford a call center. LeadCloser gives you one — plus an appointment setter
+              and dispatcher that runs 24/7. Every Facebook lead gets texted in 47 seconds, qualified,
+              and booked. Your techs get dispatched to the right jobs automatically.
+              You just show up.
             </motion.p>
 
             {/* CTAs */}
@@ -644,10 +645,10 @@ function StatStrip() {
   const inView = useInView(ref, { once: true })
 
   const stats = [
-    { value: "47",  unit: "sec",  label: "Response time on every lead",          mono: true },
+    { value: "47",  unit: "sec",  label: "First contact — day or night",         mono: true },
     { value: "94",  unit: "%",    label: "Contact rate vs. 11% industry average", mono: true },
-    { value: "3–5", unit: "×",    label: "Average ROI within 60 days",           mono: true },
-    { value: "$0",  unit: "",     label: "Hours chasing leads — by you",         mono: true },
+    { value: "3–5", unit: "×",    label: "Average ROI on ad spend in 60 days",   mono: true },
+    { value: "24/7", unit: "",    label: "Your AI call center never clocks out",  mono: true },
   ]
 
   return (
@@ -735,19 +736,19 @@ function SystemOverviewSection() {
         >
           <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
                style={{ background: "#F5F3FF", color: C.primary }}>
-            The AI operating system
+            Your AI office — working 24/7
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-            Not a chatbot. Not software.
+            Three AI employees.
             <br />
-            <span style={{ color: C.primary }}>An AI front office,</span>{" "}
-            <span style={{ color: C.muted, fontWeight: 400 }}>installed in your business.</span>
+            <span style={{ color: C.primary }}>Zero payroll.</span>{" "}
+            <span style={{ color: C.muted, fontWeight: 400 }}>On duty around the clock.</span>
           </h2>
           <p className="text-lg max-w-2xl mx-auto" style={{ color: C.muted }}>
-            Six systems working at once — SMS follow-up, voice calls, Smart Dispatch, CRM,
-            appointment reminders, and ongoing optimization. Every lead touched.
-            Every appointment managed. You watch it from one dashboard.
+            An AI receptionist contacts every lead in 47 seconds. An AI appointment setter
+            qualifies them and books the estimate. An AI dispatcher routes each tech to the right job.
+            Every conversation logged. Every dispatch tracked. You get notified. You just show up.
           </p>
         </motion.div>
 
@@ -998,18 +999,19 @@ function ProblemSection() {
   const inView = useInView(ref, { once: true, margin: "-80px" })
 
   const withoutSteps = [
-    { time: "2:04 PM", text: "Mike submits a form from your ad", bad: false },
-    { time: "2:09 PM", text: "Mike submits 2 competitor forms", bad: true },
-    { time: "4:38 PM", text: "You see the email, call the number", bad: false },
-    { time: "4:39 PM", text: "Voicemail. You leave a message.", bad: true },
-    { time: "Next day", text: "Mike already booked someone else.", bad: true },
+    { time: "9:04 PM", text: "Sarah's AC dies. Fills out your Facebook form.", bad: false },
+    { time: "9:04 PM", text: "She fills out 3 competitor forms. You don't know this.", bad: true },
+    { time: "9:11 PM", text: "Big HVAC company's system texts her back.", bad: true },
+    { time: "9:14 PM", text: "She's booked. $8,400 AC replacement. Gone.", bad: true },
+    { time: "8:30 AM", text: "You call the lead. Voicemail. She's already home with another tech.", bad: true },
   ]
 
   const withSteps = [
-    { time: "2:04 PM", text: "Mike submits a form from your ad", good: false },
-    { time: "2:04 PM", text: "\"Hey Mike, saw you reached out about your AC...\"", good: true },
-    { time: "2:09 PM", text: "Mike replies. AI qualifies him.", good: true },
-    { time: "2:19 PM", text: "Appointment booked. $8,200 job on your calendar.", good: true },
+    { time: "9:04 PM", text: "Sarah's AC dies. Fills out your Facebook form.", good: false },
+    { time: "9:04 PM", text: "\"Hey Sarah, saw you reached out about your AC — what's it doing?\"", good: true },
+    { time: "9:09 PM", text: "She replies. AI qualifies her.", good: true },
+    { time: "9:17 PM", text: "Appointment booked. $8,400 job on your calendar.", good: true },
+    { time: "9:17 PM", text: "You get a push notification. You're already asleep. That's fine.", good: true },
   ]
 
   return (
@@ -1022,16 +1024,17 @@ function ProblemSection() {
         >
           <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
                style={{ background: "#FEF2F2", color: "#DC2626" }}>
-            The $80 problem
+            The invisible money problem
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-            You paid for that lead.<br />Someone else is getting the job.
+            Jobs are leaving your pocket.<br />You&rsquo;ll never know they existed.
           </h2>
           <p className="text-lg max-w-2xl mx-auto" style={{ color: C.muted }}>
-            Speed-to-contact is the whole game in HVAC lead gen.
-            A homeowner whose AC stops working calls whoever texts first.
-            If you don't respond in minutes, you've already lost.
+            A homeowner&rsquo;s AC dies at 9pm. She fills out your form — and three competitor forms.
+            Whoever texts back first gets the job. You find the lead at 8:30am.
+            You call. Voicemail. She booked someone else at 9:14pm. That $8,400 job is gone.
+            You&rsquo;ll never know it existed.
           </p>
         </motion.div>
 
@@ -1063,7 +1066,7 @@ function ProblemSection() {
             </div>
             <div className="mt-6 pt-4 border-t border-red-200">
               <p className="text-sm font-semibold text-red-700">
-                $80–$150 ad spend. $0 return. Lead is gone.
+                $80–$150 in ad spend. $0 back. You&rsquo;ll never know the job existed.
               </p>
             </div>
           </motion.div>
@@ -1094,7 +1097,7 @@ function ProblemSection() {
             </div>
             <div className="mt-6 pt-4 border-t border-green-200">
               <p className="text-sm font-semibold text-green-700">
-                $80 ad spend. Job booked. Tech goes Tuesday.
+                $80 ad spend. $8,400 job booked. You found out at 9:17pm — in a push notification.
               </p>
             </div>
           </motion.div>
@@ -1115,24 +1118,24 @@ function HowItWorksSection() {
     {
       num: "01",
       icon: <MessageSquare className="w-6 h-6" aria-hidden="true" />,
-      title: "A lead comes in from any source",
-      body: "Facebook ads, Google ads, your website — your AI gets the notification in seconds. No delay, no waiting for someone to check email. While you're on a job, it's already handling it.",
+      title: "AI receptionist — texts every lead in 47 seconds",
+      body: "The moment a form hits — at 9pm, 2am, Saturday morning — your AI receptionist reaches out with a trade-specific opener. Not a generic 'we got your message.' A real conversation, before your competitor blinks.",
       color: C.primary,
       bg: "#F5F3FF",
     },
     {
       num: "02",
       icon: <PhoneCall className="w-6 h-6" aria-hidden="true" />,
-      title: "AI texts them and books the appointment",
-      body: "Asks what's wrong, how old the system is, whether they own the home. Handles every objection. Collects the address. Offers two appointment times. Books it.",
+      title: "AI appointment setter — qualifies and books",
+      body: "Asks what's wrong, handles every objection ('just getting prices,' 'already have someone coming'), collects the address, and books the appointment. Your tech is going. You didn't say a word.",
       color: "#0EA5E9",
       bg: "#F0F9FF",
     },
     {
       num: "03",
       icon: <Bell className="w-6 h-6" aria-hidden="true" />,
-      title: "You get the booking notification",
-      body: "A text to your phone: \"Appointment booked — Mike J., Thursday 9am, 2241 Ridgeline Dr, Frisco.\" You show up. That's your whole job.",
+      title: "AI dispatcher — routes the right tech",
+      body: "Job booked. AI dispatcher assigns it to the closest available tech with the right specialty. Tech gets an SMS with the address and issue. You get a push notification. You show up. That's your whole job.",
       color: C.success,
       bg: "#F0FDF4",
     },
@@ -1148,13 +1151,13 @@ function HowItWorksSection() {
         >
           <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
                style={{ background: "#F5F3FF", color: C.primary }}>
-            What actually happens
+            Your AI team — on duty 24/7
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-            Three things happen when a lead comes in.
+            Three AI employees handle your leads.
             <br />
-            <span style={{ color: C.muted, fontWeight: 400 }}>Your front office handles two of them.</span>
+            <span style={{ color: C.muted, fontWeight: 400 }}>You just show up to the job.</span>
           </h2>
         </motion.div>
 
@@ -2090,11 +2093,12 @@ function PricingSection() {
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-3"
               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-            One booked replacement job covers the install.
+            Less than one missed job. Every month.
           </h2>
           <p className="text-lg max-w-xl mx-auto" style={{ color: C.muted }}>
-            The monthly fee pays for itself in 1–2 bookings. Most clients recover the
-            install cost within the first 30 days.
+            One $6,000–$15,000 job was slipping through your fingers every week.
+            The install pays for itself in the first booking. The monthly fee pays for itself in one or two.
+            Every lead after that is money you were already losing.
           </p>
         </motion.div>
 
@@ -2249,7 +2253,7 @@ function TestimonialsSection() {
         >
           <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight"
               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-            HVAC owners who stopped losing leads
+            HVAC owners who wake up with jobs on the schedule
           </h2>
         </motion.div>
 
@@ -2324,13 +2328,16 @@ function FinalCTASection() {
 
             <h2 className="text-4xl md:text-5xl font-extrabold text-white tracking-tight mb-4 text-balance"
                 style={{ fontFamily: "var(--font-jakarta)" }}>
-              Stop losing the leads you already paid for.
+              Wake up with jobs on the schedule.
+              <br />
+              Every morning.
             </h2>
 
             <p className="text-lg mb-10 max-w-xl mx-auto"
                style={{ color: "rgba(216,180,254,0.85)" }}>
-              We install the system. You book more jobs.
-              The leads you&rsquo;re paying $80–$150 for get texted in 47 seconds — every one.
+              Your AI call center, appointment setter, and dispatcher — installed and running 24/7.
+              Every Facebook lead texted in 47 seconds. Every tech dispatched automatically.
+              You find out in a push notification. You just show up.
             </p>
 
             <div className="flex flex-col sm:flex-row gap-3 justify-center">
