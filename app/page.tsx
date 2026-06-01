@@ -147,28 +147,6 @@ function Background() {
           from { transform: scaleX(0); }
           to   { transform: scaleX(1); }
         }
-        @keyframes airflowDrift {
-          from { stroke-dashoffset: 0; }
-          to   { stroke-dashoffset: -400; }
-        }
-        @keyframes particleDrift {
-          0%   { transform: translateX(0px); opacity: 0; }
-          5%   { opacity: 0.85; }
-          92%  { opacity: 0.8; }
-          100% { transform: translateX(1900px); opacity: 0; }
-        }
-        @keyframes hvSpin {
-          from { transform: rotate(0deg); }
-          to   { transform: rotate(360deg); }
-        }
-        @keyframes hvFloat {
-          0%, 100% { transform: translateY(0px); }
-          50%       { transform: translateY(-14px); }
-        }
-        @keyframes hvDrift {
-          0%, 100% { transform: translate(0, 0); }
-          50%       { transform: translate(20px, -15px); }
-        }
         @keyframes callPulse {
           0%, 100% { opacity: 1; transform: scale(1); }
           50%       { opacity: 0.6; transform: scale(1.08); }
@@ -223,83 +201,6 @@ function Background() {
 // ─────────────────────────────────────────────────────────────────────────────
 // HVAC DECORATIVE SVGs
 // ─────────────────────────────────────────────────────────────────────────────
-function HvacCondenserFan({ size = 120, spin = 8 }: { size?: number; spin?: number }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 120 120" fill="none">
-      <rect x="6" y="6" width="108" height="108" rx="10" stroke="currentColor" strokeWidth="1.2" opacity="0.45" />
-      <rect x="14" y="14" width="92" height="92" rx="6" stroke="currentColor" strokeWidth="0.8" opacity="0.25" />
-      <circle cx="60" cy="60" r="40" stroke="currentColor" strokeWidth="0.8" opacity="0.25" />
-      <circle cx="60" cy="60" r="32" stroke="currentColor" strokeWidth="0.8" opacity="0.25" />
-      <circle cx="60" cy="60" r="24" stroke="currentColor" strokeWidth="0.8" opacity="0.25" />
-      <circle cx="60" cy="60" r="16" stroke="currentColor" strokeWidth="0.8" opacity="0.25" />
-      <g style={{ transformOrigin: "60px 60px", animation: `hvSpin ${spin}s linear infinite` }}>
-        <path d="M60 60 C 60 35, 50 28, 38 30 C 48 38, 55 48, 60 60 Z" fill="currentColor" opacity="0.18" />
-        <path d="M60 60 C 85 60, 92 50, 90 38 C 82 48, 72 55, 60 60 Z" fill="currentColor" opacity="0.18" />
-        <path d="M60 60 C 60 85, 70 92, 82 90 C 72 82, 65 72, 60 60 Z" fill="currentColor" opacity="0.18" />
-        <path d="M60 60 C 35 60, 28 70, 30 82 C 38 72, 48 65, 60 60 Z" fill="currentColor" opacity="0.18" />
-        <circle cx="60" cy="60" r="6" fill="currentColor" opacity="0.5" />
-      </g>
-    </svg>
-  )
-}
-
-function HvacVent({ size = 120 }: { size?: number }) {
-  return (
-    <svg width={size} height={size * 0.6} viewBox="0 0 120 72" fill="none">
-      <rect x="2" y="2" width="116" height="68" rx="4" stroke="currentColor" strokeWidth="1" opacity="0.4" />
-      {Array.from({ length: 7 }, (_, i) => (
-        <line key={i} x1="10" y1={12 + i * 8} x2="110" y2={12 + i * 8}
-              stroke="currentColor" strokeWidth="0.9" opacity="0.32" />
-      ))}
-    </svg>
-  )
-}
-
-function HvacThermostat({ size = 100 }: { size?: number }) {
-  const ticks = Array.from({ length: 24 }, (_, i) => {
-    const a = (i / 24) * Math.PI * 2 - Math.PI / 2
-    const x1 = 50 + Math.cos(a) * 36, y1 = 50 + Math.sin(a) * 36
-    const x2 = 50 + Math.cos(a) * (i % 6 === 0 ? 30 : 33)
-    const y2 = 50 + Math.sin(a) * (i % 6 === 0 ? 30 : 33)
-    return <line key={i} x1={x1} y1={y1} x2={x2} y2={y2} stroke="currentColor" strokeWidth="0.8" opacity="0.4" />
-  })
-  return (
-    <svg width={size} height={size} viewBox="0 0 100 100" fill="none">
-      <circle cx="50" cy="50" r="44" stroke="currentColor" strokeWidth="1.2" opacity="0.45" />
-      <circle cx="50" cy="50" r="36" stroke="currentColor" strokeWidth="0.8" opacity="0.3" />
-      {ticks}
-      <text x="50" y="56" textAnchor="middle" fontSize="18"
-            fontFamily="'JetBrains Mono', monospace" fontWeight="600"
-            fill="currentColor" opacity="0.55">72°</text>
-    </svg>
-  )
-}
-
-function AirflowParticles({ count = 14, color = "#60A5FA" }: { count?: number; color?: string }) {
-  const particles = Array.from({ length: count }, (_, i) => ({
-    id: i,
-    top: (i * 7.14) % 100,
-    duration: 14 + (i * 1.37) % 10,
-    delay: -((i * 1.9) % 22),
-    size: 2 + (i * 0.71) % 3,
-    opacity: 0.2 + (i * 0.043) % 0.35,
-  }))
-  return (
-    <div className="absolute inset-0 overflow-hidden pointer-events-none">
-      {particles.map(p => (
-        <span key={p.id} className="absolute rounded-full" style={{
-          top: `${p.top}%`, left: -20,
-          width: p.size, height: p.size,
-          background: color, opacity: p.opacity,
-          boxShadow: `0 0 ${p.size * 3}px ${color}`,
-          animation: `particleDrift ${p.duration}s linear infinite`,
-          animationDelay: `${p.delay}s`,
-        }} />
-      ))}
-    </div>
-  )
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 // NAV
 // ─────────────────────────────────────────────────────────────────────────────
@@ -342,7 +243,7 @@ function Nav() {
               <rect x="42" y="12" width="7"  height="11" rx="1.5" fill="#EA580C" />
             </svg>
           </div>
-          <span className="font-extrabold text-xl tracking-tight" style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+          <span className="font-extrabold text-xl tracking-tight" style={{ color: scrolled ? C.text : "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
             FIELDBUILT
             <span className="inline-flex items-center justify-center text-white font-bold rounded ml-1"
                   style={{ fontSize: "0.42em", background: "#F97316", padding: "0.22em 0.45em", borderRadius: 5, letterSpacing: "0.04em", verticalAlign: "super" }}>
@@ -354,15 +255,15 @@ function Nav() {
         <div className="hidden md:flex items-center gap-8">
           {links.map(l => (
             <a key={l.label} href={l.href} className="text-sm transition-colors duration-200 hover:text-[#F97316]"
-               style={{ color: C.muted }}>
+               style={{ color: scrolled ? C.muted : "rgba(250,250,248,0.65)" }}>
               {l.label}
             </a>
           ))}
         </div>
 
         <div className="hidden md:flex items-center gap-3">
-          <Link href="/login" className="text-sm font-medium px-4 py-2 rounded-lg transition-colors duration-200 hover:bg-gray-100"
-                style={{ color: C.muted }}>
+          <Link href="/login" className="text-sm font-medium px-4 py-2 rounded-lg transition-all duration-200 hover:text-[#F97316]"
+                style={{ color: scrolled ? C.muted : "rgba(250,250,248,0.55)" }}>
             Log in
           </Link>
           <Link href="/signup?new=1"
@@ -523,133 +424,187 @@ function LiveConversation() {
 // ─────────────────────────────────────────────────────────────────────────────
 function HeroSection() {
   return (
-    <section className="relative min-h-screen flex flex-col justify-center pt-28 pb-16 px-6 overflow-hidden" style={{ zIndex: 10 }}>
-      {/* HVAC atmosphere */}
-      <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
-        <div className="absolute top-16 left-8 opacity-10" style={{ color: C.primary }}>
-          <HvacCondenserFan size={160} spin={12} />
-        </div>
-        <div className="absolute bottom-24 right-8 opacity-8" style={{ color: C.muted }}>
-          <HvacThermostat size={110} />
-        </div>
-        <AirflowParticles count={10} color="#F97316" />
-      </div>
+    <section
+      className="relative min-h-screen flex flex-col justify-center pt-28 pb-20 px-6 overflow-hidden"
+      style={{ background: "#1A1614", zIndex: 10 }}
+    >
+      {/* Blueprint crosshatch texture — center-fade masked */}
+      <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
+           style={{
+             backgroundImage: "linear-gradient(rgba(249,115,22,1) 1px, transparent 1px), linear-gradient(90deg, rgba(249,115,22,1) 1px, transparent 1px)",
+             backgroundSize: "44px 44px",
+             opacity: 0.07,
+             WebkitMaskImage: "radial-gradient(ellipse 85% 80% at 50% 40%, #000 25%, transparent 75%)",
+             maskImage: "radial-gradient(ellipse 85% 80% at 50% 40%, #000 25%, transparent 75%)",
+           }} />
+
+      {/* Glow orbs */}
+      <motion.div
+        animate={{ y: [0, -22, 0], x: [0, 12, 0] }}
+        transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute rounded-full blur-3xl pointer-events-none"
+        style={{ width: 650, height: 650, background: "rgba(249,115,22,0.10)", top: "-15%", left: "-8%" }}
+      />
+      <motion.div
+        animate={{ y: [0, 18, 0] }}
+        transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 2 }}
+        className="absolute rounded-full blur-3xl pointer-events-none"
+        style={{ width: 450, height: 450, background: "rgba(251,191,36,0.07)", bottom: "-5%", right: "5%" }}
+      />
 
       <div className="relative max-w-7xl mx-auto w-full">
-        <div className="grid md:grid-cols-2 gap-12 items-center">
+        <div className="grid md:grid-cols-2 gap-16 items-center">
 
           {/* LEFT — Copy */}
           <div>
-            {/* Social proof badge */}
+            {/* Eyebrow */}
             <motion.div
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3, duration: 0.5 }}
-              className="inline-flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border mb-6"
-              style={{ background: "#FFF3EC", borderColor: "rgba(249,115,22,0.2)", color: C.primary }}
+              transition={{ delay: 0.25, duration: 0.5 }}
+              className="flex items-center gap-3 mb-7"
             >
-              <span className="w-2 h-2 rounded-full bg-green-500" style={{ animation: "callPulse 2s ease-in-out infinite" }} />
-              AI call center · appointment setter · dispatcher · 200+ HVAC companies
+              <span className="block w-6 h-px" style={{ background: "#F97316" }} />
+              <span className="text-xs font-semibold uppercase tracking-[0.18em]"
+                    style={{ color: "#F97316", fontFamily: "var(--font-jetbrains)" }}>
+                AI operations · installed for you
+              </span>
             </motion.div>
 
             {/* Headline */}
             <motion.h1
               initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.45, duration: 0.6 }}
-              className="text-4xl sm:text-5xl md:text-6xl font-extrabold tracking-tight leading-[1.05] mb-6 text-balance"
-              style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}
+              transition={{ delay: 0.4, duration: 0.65 }}
+              className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-[1.02] mb-7"
+              style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em" }}
             >
-              Wake up with jobs
-              {" "}
-              <span className="relative inline-block" style={{ color: C.primary }}>
-                on the schedule.
-                <span className="absolute -bottom-1 left-0 right-0 h-1 rounded-full"
-                      style={{ background: `linear-gradient(90deg, ${C.primary}, #EA580C)`,
-                               transformOrigin: "left", animation: "underlineDraw 0.8s ease forwards 1.2s",
+              Wake up with<br />
+              jobs on the<br />
+              <span className="relative inline-block" style={{ color: "#F97316" }}>
+                schedule.
+                <span className="absolute -bottom-1 left-0 right-0 h-[3px] rounded-full"
+                      style={{ background: "linear-gradient(90deg, #F97316, #EA580C)",
+                               transformOrigin: "left", animation: "underlineDraw 0.7s ease forwards 1.4s",
                                transform: "scaleX(0)" }} />
               </span>
-              <br />
-              <span style={{ color: C.success }}>Your AI worked</span>{" "}
-              <span style={{ color: C.muted, fontWeight: 400 }}>while you slept.</span>
             </motion.h1>
 
-            {/* Subhead */}
+            {/* Subhead — short, direct, contractor language */}
             <motion.p
-              initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.6, duration: 0.5 }}
-              className="text-lg leading-relaxed mb-8 max-w-lg"
-              style={{ color: C.muted }}
+              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.55, duration: 0.5 }}
+              className="text-lg leading-relaxed mb-9 max-w-md"
+              style={{ color: "rgba(250,250,248,0.60)" }}
             >
-              You can&rsquo;t afford a call center. FieldBuilt AI gives you one — plus an appointment setter
-              and dispatcher that runs 24/7. Every Facebook lead gets texted in 3.7 seconds, qualified,
-              and booked. Your techs get dispatched to the right jobs automatically.
-              You just show up.
+              Every Facebook lead texted in 3.7 seconds. AI qualifies them, handles every objection,
+              and books the appointment. Your tech shows up. You find out in a push notification.
             </motion.p>
 
             {/* CTAs */}
             <motion.div
-              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.75, duration: 0.5 }}
-              className="flex flex-col sm:flex-row gap-3 mb-6"
+              initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
+              transition={{ delay: 0.7, duration: 0.5 }}
+              className="flex flex-col sm:flex-row gap-3 mb-9"
             >
               <Link href="/signup?new=1"
-                    className="inline-flex items-center justify-center gap-2 font-semibold text-white px-7 py-4 rounded-full transition-all duration-200 hover:-translate-y-1"
-                    style={{ background: C.primary, boxShadow: "0 8px 24px rgba(249,115,22,0.35)" }}>
+                    className="inline-flex items-center justify-center gap-2 font-semibold text-white px-7 py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5"
+                    style={{ background: "#F97316", boxShadow: "0 8px 28px rgba(249,115,22,0.38)" }}>
                 Get Your System Installed
                 <ArrowRight className="w-4 h-4" aria-hidden="true" />
               </Link>
-              <a href="#demo"
-                 className="inline-flex items-center justify-center gap-2 font-medium px-7 py-4 rounded-full border transition-all duration-200 hover:border-[#F97316] hover:text-[#F97316]"
-                 style={{ borderColor: C.border, background: C.surface, color: C.text }}>
+              <a href="#how-it-works"
+                 className="inline-flex items-center justify-center gap-2 font-medium px-7 py-4 rounded-xl border transition-all duration-200 hover:border-white/30"
+                 style={{ borderColor: "rgba(255,255,255,0.12)", color: "rgba(250,250,248,0.65)" }}>
                 <Play className="w-4 h-4" aria-hidden="true" />
-                Watch It Work
+                See How It Works
               </a>
             </motion.div>
 
-            <motion.p
+            {/* Proof row */}
+            <motion.div
               initial={{ opacity: 0 }} animate={{ opacity: 1 }}
               transition={{ delay: 0.9, duration: 0.4 }}
-              className="text-sm" style={{ color: C.muted }}>
-              Installation call included · Done for you · Live in 48 hours
-            </motion.p>
+              className="flex flex-wrap items-center gap-x-6 gap-y-2"
+            >
+              {[
+                "200+ home service companies",
+                "Live in 48 hours",
+                "Done for you — zero setup",
+              ].map(item => (
+                <div key={item} className="flex items-center gap-1.5">
+                  <Check className="w-3.5 h-3.5 shrink-0" style={{ color: "#F97316" }} aria-hidden="true" />
+                  <span className="text-sm" style={{ color: "rgba(250,250,248,0.45)" }}>{item}</span>
+                </div>
+              ))}
+            </motion.div>
           </div>
 
-          {/* RIGHT — Live chat demo */}
+          {/* RIGHT — Live conversation demo */}
           <motion.div
             initial={{ opacity: 0, x: 40, scale: 0.97 }}
             animate={{ opacity: 1, x: 0, scale: 1 }}
-            transition={{ delay: 0.5, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
+            transition={{ delay: 0.45, duration: 0.75, ease: [0.22, 1, 0.36, 1] }}
             className="relative"
           >
-            {/* Browser chrome */}
+            {/* Blueprint corner brackets */}
+            <div className="absolute -top-3 -left-3 w-6 h-6 pointer-events-none z-20"
+                 style={{ borderTop: "2px solid rgba(249,115,22,0.6)", borderLeft: "2px solid rgba(249,115,22,0.6)" }} />
+            <div className="absolute -top-3 -right-3 w-6 h-6 pointer-events-none z-20"
+                 style={{ borderTop: "2px solid rgba(249,115,22,0.6)", borderRight: "2px solid rgba(249,115,22,0.6)" }} />
+            <div className="absolute -bottom-3 -left-3 w-6 h-6 pointer-events-none z-20"
+                 style={{ borderBottom: "2px solid rgba(249,115,22,0.6)", borderLeft: "2px solid rgba(249,115,22,0.6)" }} />
+            <div className="absolute -bottom-3 -right-3 w-6 h-6 pointer-events-none z-20"
+                 style={{ borderBottom: "2px solid rgba(249,115,22,0.6)", borderRight: "2px solid rgba(249,115,22,0.6)" }} />
+
+            {/* Demo card */}
             <div className="rounded-2xl overflow-hidden"
-                 style={{ boxShadow: "0 24px 64px rgba(249,115,22,0.15), 0 4px 16px rgba(0,0,0,0.08)" }}>
+                 style={{ boxShadow: "0 32px 80px rgba(0,0,0,0.5), 0 4px 16px rgba(249,115,22,0.12)" }}>
+              {/* Dark browser chrome */}
               <div className="flex items-center gap-1.5 px-4 py-3 border-b"
-                   style={{ background: "#F8F7F5", borderColor: C.border }}>
-                <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400" />
-                <span className="w-2.5 h-2.5 rounded-full bg-green-400" />
-                <div className="flex-1 mx-4 h-5 rounded-md px-2 flex items-center"
-                     style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-                  <span className="text-xs" style={{ color: C.muted }}>AI conversation · Mike Johnson</span>
+                   style={{ background: "#141210", borderColor: "rgba(255,255,255,0.06)" }}>
+                <span className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
+                <span className="w-2.5 h-2.5 rounded-full bg-amber-400/70" />
+                <span className="w-2.5 h-2.5 rounded-full bg-green-400/70" />
+                <div className="flex-1 mx-4 h-5 rounded px-2 flex items-center"
+                     style={{ background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.06)" }}>
+                  <span className="text-xs" style={{ color: "rgba(250,250,248,0.35)", fontFamily: "var(--font-jetbrains)" }}>
+                    FieldBuilt AI · Mike Johnson · AC Repair
+                  </span>
                 </div>
               </div>
               <LiveConversation />
             </div>
 
-            {/* Floating notification */}
+            {/* Floating appointment badge */}
             <motion.div
-              initial={{ opacity: 0, x: 20, y: 10 }} animate={{ opacity: 1, x: 0, y: 0 }}
-              transition={{ delay: 1.4, duration: 0.5 }}
-              className="absolute -right-4 top-6 px-3 py-2 rounded-xl text-xs font-medium shadow-lg"
+              initial={{ opacity: 0, x: 16, y: 8 }} animate={{ opacity: 1, x: 0, y: 0 }}
+              transition={{ delay: 1.5, duration: 0.5 }}
+              className="absolute -right-5 top-8 px-3.5 py-2.5 rounded-xl text-xs font-medium"
               style={{ background: C.surface, border: `1px solid ${C.border}`,
-                       boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}>
-              <div className="flex items-center gap-1.5">
-                <Bell className="w-3 h-3" style={{ color: C.success }} aria-hidden="true" />
-                <span style={{ color: C.text }}>Appt booked — Thu 9am</span>
+                       boxShadow: "0 12px 32px rgba(0,0,0,0.20), 0 2px 8px rgba(249,115,22,0.08)" }}>
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-lg flex items-center justify-center shrink-0"
+                     style={{ background: "#F0FDF4" }}>
+                  <CheckCircle2 className="w-3.5 h-3.5 text-green-600" aria-hidden="true" />
+                </div>
+                <div>
+                  <div className="font-semibold" style={{ color: C.text }}>Appointment booked</div>
+                  <div style={{ color: C.muted }}>Thu 9am · Frisco TX</div>
+                </div>
               </div>
             </motion.div>
 
+            {/* Live indicator */}
+            <motion.div
+              initial={{ opacity: 0, x: -16, y: 8 }} animate={{ opacity: 1, x: 0, y: 0 }}
+              transition={{ delay: 1.7, duration: 0.5 }}
+              className="absolute -left-5 bottom-12 px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5"
+              style={{ background: "#1A1614", border: "1px solid rgba(249,115,22,0.25)",
+                       color: "#F97316", fontFamily: "var(--font-jetbrains)", boxShadow: "0 4px 16px rgba(0,0,0,0.3)" }}>
+              <span className="w-1.5 h-1.5 rounded-full bg-green-400" style={{ animation: "callPulse 2s ease-in-out infinite" }} />
+              3.7s response
+            </motion.div>
           </motion.div>
+
         </div>
       </div>
     </section>
@@ -2269,16 +2224,32 @@ function TestimonialsSection() {
   const inView = useInView(ref, { once: true, margin: "-80px" })
 
   return (
-    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }}>
-      <div className="max-w-6xl mx-auto">
+    <section ref={ref} className="relative py-24 px-6 overflow-hidden"
+             style={{ background: "#1A1614", zIndex: 10 }}>
+      {/* Blueprint crosshatch */}
+      <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
+           style={{
+             backgroundImage: "linear-gradient(rgba(249,115,22,1) 1px, transparent 1px), linear-gradient(90deg, rgba(249,115,22,1) 1px, transparent 1px)",
+             backgroundSize: "44px 44px", opacity: 0.05,
+           }} />
+
+      <div className="relative max-w-6xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.6 }}
-          className="text-center mb-12"
+          className="text-center mb-14"
         >
+          <div className="flex items-center justify-center gap-3 mb-5">
+            <span className="block w-6 h-px" style={{ background: "#F97316" }} />
+            <span className="text-xs font-semibold uppercase tracking-[0.18em]"
+                  style={{ color: "#F97316", fontFamily: "var(--font-jetbrains)" }}>
+              What contractors say
+            </span>
+            <span className="block w-6 h-px" style={{ background: "#F97316" }} />
+          </div>
           <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight"
-              style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-            HVAC owners who wake up with jobs on the schedule
+              style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+            Contractors who wake up with jobs on the schedule
           </h2>
         </motion.div>
 
@@ -2287,23 +2258,27 @@ function TestimonialsSection() {
             <motion.div
               key={i}
               initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.5, delay: i * 0.1 }}
+              transition={{ duration: 0.5, delay: i * 0.12 }}
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
-              className="rounded-2xl p-6 border"
-              style={{ background: C.surface, borderColor: C.border,
-                       boxShadow: "0 4px 20px rgba(249,115,22,0.06)" }}
+              className="rounded-2xl p-7 relative"
+              style={{ background: "#221D1A", border: "1px solid rgba(255,255,255,0.07)",
+                       boxShadow: "0 4px 24px rgba(0,0,0,0.25)" }}
             >
-              <div className="flex gap-0.5 mb-4">
+              {/* Orange quote mark accent */}
+              <div className="text-5xl font-black leading-none mb-3 select-none"
+                   style={{ color: "#F97316", opacity: 0.25, fontFamily: "Georgia, serif" }}
+                   aria-hidden="true">&ldquo;</div>
+              <div className="flex gap-0.5 mb-4 -mt-3">
                 {Array.from({ length: t.stars }).map((_, j) => (
-                  <Star key={j} className="w-4 h-4 fill-amber-400 text-amber-400" aria-hidden="true" />
+                  <Star key={j} className="w-3.5 h-3.5 fill-amber-400 text-amber-400" aria-hidden="true" />
                 ))}
               </div>
-              <p className="text-sm leading-relaxed mb-5" style={{ color: C.text }}>
+              <p className="text-sm leading-relaxed mb-6" style={{ color: "rgba(250,250,248,0.72)" }}>
                 &ldquo;{t.quote}&rdquo;
               </p>
-              <div>
-                <div className="text-sm font-bold" style={{ color: C.text }}>{t.name}</div>
-                <div className="text-xs" style={{ color: C.muted }}>{t.role}</div>
+              <div className="pt-4 border-t" style={{ borderColor: "rgba(255,255,255,0.07)" }}>
+                <div className="text-sm font-bold" style={{ color: "#F5F3F0" }}>{t.name}</div>
+                <div className="text-xs mt-0.5" style={{ color: "rgba(250,250,248,0.40)" }}>{t.role}</div>
               </div>
             </motion.div>
           ))}
@@ -2441,19 +2416,15 @@ export default function Page() {
       <Nav />
       <HeroSection />
       <StatStrip />
-      <SystemOverviewSection />
       <ProblemSection />
       <HowItWorksSection />
-      <DemoSection />
+      <SystemOverviewSection />
       <FollowUpSection />
-      <SmartDispatchSection />
-      <VoiceCallSection />
-      <GuardrailsSection />
       <CRMSection />
-      <RemindersSection />
+      <TestimonialsSection />
+      <SmartDispatchSection />
       <SetupSection />
       <PricingSection />
-      <TestimonialsSection />
       <FinalCTASection />
       <Footer />
     </main>
