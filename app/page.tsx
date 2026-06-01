@@ -605,47 +605,37 @@ function HeroSection() {
             </motion.div>
           </motion.div>
 
-        </div>
-      </div>
-    </section>
-  )
-}
+        </div>{/* end 2-col grid */}
 
-// ─────────────────────────────────────────────────────────────────────────────
-// STAT STRIP
-// ─────────────────────────────────────────────────────────────────────────────
-function StatStrip() {
-  const ref = useRef(null)
-  const inView = useInView(ref, { once: true })
-
-  const stats = [
-    { value: "3.7",  unit: "sec",  label: "First contact — day or night",         mono: true },
-    { value: "94",  unit: "%",    label: "Contact rate vs. 11% industry average", mono: true },
-    { value: "3–5", unit: "×",    label: "Average ROI on ad spend in 60 days",   mono: true },
-    { value: "24/7", unit: "",    label: "Your AI call center never clocks out",  mono: true },
-  ]
-
-  return (
-    <section ref={ref} className="relative pt-12 pb-0 px-6" style={{ zIndex: 10 }}>
-      <div className="max-w-7xl mx-auto">
+        {/* Stats row — anchored to bottom of dark hero, no separate section */}
         <motion.div
-          initial={{ opacity: 0, y: 16 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.5 }}
-          className="grid grid-cols-2 md:grid-cols-4 gap-0 rounded-2xl overflow-hidden border"
-          style={{ background: C.surface, borderColor: C.border,
-                   boxShadow: "0 4px 24px rgba(249,115,22,0.06)" }}
+          initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 1.0, duration: 0.6 }}
+          className="mt-20 pt-8 border-t"
+          style={{ borderColor: "rgba(255,255,255,0.07)" }}
         >
-          {stats.map((s, i) => (
-            <div key={i} className={`px-6 py-6 ${i < 3 ? "border-r border-b md:border-b-0" : "border-b md:border-b-0"}`}
-                 style={{ borderColor: C.border }}>
-              <div className="text-3xl font-black mb-1"
-                   style={{ color: C.primary, fontFamily: "var(--font-mono)", fontVariantNumeric: "tabular-nums" }}>
-                {s.value}<span className="text-lg font-bold" style={{ color: C.muted }}>{s.unit}</span>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-0">
+            {[
+              { value: "3.7",  unit: "s",   label: "First contact — day or night" },
+              { value: "94",   unit: "%",   label: "Contact rate vs. 11% industry avg" },
+              { value: "3–5",  unit: "×",   label: "Average ROI on ad spend in 60 days" },
+              { value: "24/7", unit: "",    label: "Your AI back office never clocks out" },
+            ].map((s, i) => (
+              <div
+                key={i}
+                className={`${i > 0 ? "md:border-l" : ""} md:pl-8`}
+                style={{ borderColor: "rgba(255,255,255,0.07)" }}
+              >
+                <div className="text-3xl font-black mb-1 tabular-nums"
+                     style={{ color: "#F97316", fontFamily: "var(--font-jetbrains)" }}>
+                  {s.value}<span className="text-base font-semibold ml-0.5" style={{ color: "rgba(249,115,22,0.65)" }}>{s.unit}</span>
+                </div>
+                <div className="text-xs leading-snug" style={{ color: "rgba(250,250,248,0.40)" }}>{s.label}</div>
               </div>
-              <div className="text-xs" style={{ color: C.muted }}>{s.label}</div>
-            </div>
-          ))}
+            ))}
+          </div>
         </motion.div>
+
       </div>
     </section>
   )
@@ -797,16 +787,13 @@ function AIOfficeSection() {
                 </div>
               </div>
 
-              {/* The animation iframe */}
-              <div className="relative w-full" style={{ paddingBottom: "56.25%" /* 16:9 */ }}>
-                <iframe
-                  src="/ai-office-loop.html"
-                  className="absolute inset-0 w-full h-full"
-                  style={{ border: "none", background: "#14110F" }}
-                  title="FieldBuilt AI — Live operation loop"
-                  loading="lazy"
-                />
-              </div>
+              {/* The animation iframe — fills container via aspect-ratio, no black bars */}
+              <iframe
+                src="/ai-office-loop.html"
+                style={{ width: "100%", aspectRatio: "16/9", border: "none", display: "block", background: "#14110F" }}
+                title="FieldBuilt AI — Live operation loop"
+                loading="lazy"
+              />
             </div>
           </motion.div>
 
@@ -3011,7 +2998,6 @@ export default function Page() {
       <Background />
       <Nav />
       <HeroSection />
-      <StatStrip />
       <AIOfficeSection />
       <ProblemSection />
       <HowItWorksSection />
