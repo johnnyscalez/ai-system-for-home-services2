@@ -488,22 +488,23 @@ function HeroSection() {
               </span>
             </motion.h1>
 
-            {/* Subhead — short, direct, contractor language */}
+            {/* Subhead */}
             <motion.p
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.55, duration: 0.5 }}
               className="text-lg leading-relaxed mb-9 max-w-md"
-              style={{ color: "rgba(250,250,248,0.60)" }}
+              style={{ color: "rgba(250,250,248,0.58)" }}
             >
-              Every Facebook lead texted in 3.7 seconds. AI qualifies them, handles every objection,
-              and books the appointment. Your tech shows up. You find out in a push notification.
+              Your AI contacts every Facebook lead in 3.7 seconds — qualifies them,
+              handles every objection, and books the estimate.
+              You wake up to a full schedule.
             </motion.p>
 
             {/* CTAs */}
             <motion.div
               initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.7, duration: 0.5 }}
-              className="flex flex-col sm:flex-row gap-3 mb-9"
+              className="flex flex-col sm:flex-row gap-3"
             >
               <Link href="/signup?new=1"
                     className="inline-flex items-center justify-center gap-2 font-semibold text-white px-7 py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5"
@@ -517,24 +518,6 @@ function HeroSection() {
                 <Play className="w-4 h-4" aria-hidden="true" />
                 See How It Works
               </a>
-            </motion.div>
-
-            {/* Proof row */}
-            <motion.div
-              initial={{ opacity: 0 }} animate={{ opacity: 1 }}
-              transition={{ delay: 0.9, duration: 0.4 }}
-              className="flex flex-wrap items-center gap-x-6 gap-y-2"
-            >
-              {[
-                "200+ home service companies",
-                "Live in 48 hours",
-                "Done for you — zero setup",
-              ].map(item => (
-                <div key={item} className="flex items-center gap-1.5">
-                  <Check className="w-3.5 h-3.5 shrink-0" style={{ color: "#F97316" }} aria-hidden="true" />
-                  <span className="text-sm" style={{ color: "rgba(250,250,248,0.45)" }}>{item}</span>
-                </div>
-              ))}
             </motion.div>
           </div>
 
@@ -607,33 +590,41 @@ function HeroSection() {
 
         </div>{/* end 2-col grid */}
 
-        {/* Stats row — anchored to bottom of dark hero, no separate section */}
+        {/* Stats — neon glow cards */}
         <motion.div
           initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
           transition={{ delay: 1.0, duration: 0.6 }}
-          className="mt-20 pt-8 border-t"
-          style={{ borderColor: "rgba(255,255,255,0.07)" }}
+          className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-3"
         >
-          <div className="grid grid-cols-2 md:grid-cols-4 gap-8 md:gap-0">
-            {[
-              { value: "3.7",  unit: "s",   label: "First contact — day or night" },
-              { value: "94",   unit: "%",   label: "Contact rate vs. 11% industry avg" },
-              { value: "3–5",  unit: "×",   label: "Average ROI on ad spend in 60 days" },
-              { value: "24/7", unit: "",    label: "Your AI back office never clocks out" },
-            ].map((s, i) => (
-              <div
-                key={i}
-                className={`${i > 0 ? "md:border-l" : ""} md:pl-8`}
-                style={{ borderColor: "rgba(255,255,255,0.07)" }}
-              >
-                <div className="text-3xl font-black mb-1 tabular-nums"
-                     style={{ color: "#F97316", fontFamily: "var(--font-jetbrains)" }}>
-                  {s.value}<span className="text-base font-semibold ml-0.5" style={{ color: "rgba(249,115,22,0.65)" }}>{s.unit}</span>
-                </div>
-                <div className="text-xs leading-snug" style={{ color: "rgba(250,250,248,0.40)" }}>{s.label}</div>
+          {[
+            { value: "3.7",  unit: "s",  label: "First contact — day or night",          accent: "#F97316" },
+            { value: "94",   unit: "%",  label: "Contact rate vs. 11% industry average",  accent: "#F97316" },
+            { value: "3–5",  unit: "×",  label: "Average ROI on ad spend in 60 days",     accent: "#FBBF24" },
+            { value: "24/7", unit: "",   label: "Your AI back office never clocks out",    accent: "#F97316" },
+          ].map((s, i) => (
+            <motion.div
+              key={i}
+              whileHover={{
+                y: -4,
+                boxShadow: `0 0 32px ${s.accent}55, 0 0 80px ${s.accent}22, 0 8px 32px rgba(0,0,0,0.5)`,
+                borderColor: `${s.accent}50`,
+              }}
+              transition={{ duration: 0.2 }}
+              className="rounded-xl p-5 cursor-default"
+              style={{
+                background: "#1E1915",
+                border: "1px solid rgba(249,115,22,0.12)",
+                boxShadow: `0 0 16px ${s.accent}18, 0 2px 12px rgba(0,0,0,0.4)`,
+              }}
+            >
+              <div className="text-3xl font-black mb-1.5 tabular-nums leading-none"
+                   style={{ color: s.accent, fontFamily: "var(--font-jetbrains)" }}>
+                {s.value}
+                <span className="text-lg font-semibold" style={{ color: `${s.accent}90` }}>{s.unit}</span>
               </div>
-            ))}
-          </div>
+              <div className="text-xs leading-snug" style={{ color: "rgba(250,250,248,0.40)" }}>{s.label}</div>
+            </motion.div>
+          ))}
         </motion.div>
 
       </div>
@@ -742,9 +733,9 @@ function AIOfficeSection() {
 
             <p className="text-lg max-w-2xl mx-auto leading-relaxed"
                style={{ color: "rgba(250,250,248,0.58)" }}>
-              Not a chatbot. Not a text bot. A fully connected AI operating system —
-              where every agent is aware of every lead, every detail, every next step.
-              Watch it work.
+              Every lead has its own file. Every agent reads it and writes to it.
+              Nothing falls through. Nothing gets repeated. Your whole operation
+              runs on one connected, always-aware back office.
             </p>
           </motion.div>
         </div>
@@ -838,13 +829,14 @@ function AIOfficeSection() {
             </div>
             <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
                 style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
-              Every lead. A complete file.
+              Stop losing track of leads.
               <br />
-              <span style={{ color: C.primary }}>Logged automatically. Nothing missed.</span>
+              <span style={{ color: C.primary }}>Know exactly where every job stands.</span>
             </h2>
             <p className="text-lg max-w-2xl mx-auto leading-relaxed" style={{ color: C.muted }}>
-              No manual entry. Every conversation, every qualification detail, every appointment —
-              written automatically to the lead&rsquo;s file. You open your CRM and know exactly where everything stands.
+              No spreadsheets. No sticky notes. No guessing.
+              Every lead gets its own file — every call, every text, every detail your AI learned —
+              written automatically. You open your CRM and your whole business is right there.
             </p>
           </motion.div>
 
@@ -1082,26 +1074,6 @@ function AIOfficeSection() {
 
           </div>
 
-          {/* Bottom anchor line */}
-          <motion.div
-            initial={{ opacity: 0, y: 16 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-            transition={{ duration: 0.6, delay: 0.5 }}
-            className="rounded-2xl p-8 text-center border"
-            style={{ background: "#1A1614", borderColor: "rgba(249,115,22,0.15)",
-                     boxShadow: "0 4px 32px rgba(0,0,0,0.25)" }}
-          >
-            <h3 className="text-2xl md:text-3xl font-extrabold mb-3"
-                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
-              There is no other product like this
-              <br />
-              <span style={{ color: "#F97316" }}>in the home services market.</span>
-            </h3>
-            <p className="text-base max-w-2xl mx-auto" style={{ color: "rgba(250,250,248,0.55)" }}>
-              Other tools have a text bot. FieldBuilt AI is a complete AI operating system —
-              every agent connected, every lead tracked, every detail logged, your whole operation
-              running on one aware, intelligent back office.
-            </p>
-          </motion.div>
 
         </div>
       </div>
