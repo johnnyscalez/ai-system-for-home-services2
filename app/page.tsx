@@ -626,8 +626,8 @@ function StatStrip() {
   ]
 
   return (
-    <section ref={ref} className="relative" style={{ zIndex: 10 }}>
-      <div className="max-w-7xl mx-auto px-6">
+    <section ref={ref} className="relative pt-12 pb-0 px-6" style={{ zIndex: 10 }}>
+      <div className="max-w-7xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 16 }} animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.5 }}
@@ -708,21 +708,23 @@ function SystemOverviewSection() {
           transition={{ duration: 0.6 }}
           className="text-center mb-14"
         >
-          <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
-               style={{ background: "#FFF3EC", color: C.primary }}>
-            Your AI office — working 24/7
+          <div className="flex items-center justify-center gap-3 mb-5">
+            <span className="block w-6 h-px" style={{ background: C.primary }} />
+            <span className="text-xs font-semibold uppercase tracking-[0.18em]"
+                  style={{ color: C.primary, fontFamily: "var(--font-jetbrains)" }}>
+              What you get
+            </span>
+            <span className="block w-6 h-px" style={{ background: C.primary }} />
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
-              style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-            Three AI employees.
+              style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+            Everything your back office does.
             <br />
-            <span style={{ color: C.primary }}>Zero payroll.</span>{" "}
-            <span style={{ color: C.muted, fontWeight: 400 }}>On duty around the clock.</span>
+            <span style={{ color: C.primary }}>Done by AI.</span>
           </h2>
           <p className="text-lg max-w-2xl mx-auto" style={{ color: C.muted }}>
-            An AI receptionist contacts every lead in 3.7 seconds. An AI appointment setter
-            qualifies them and books the estimate. An AI dispatcher routes each tech to the right job.
-            Every conversation logged. Every dispatch tracked. You get notified. You just show up.
+            Lead qualification, appointment booking, tech dispatch, follow-up sequences, revenue tracking —
+            all connected, all automated. Here&rsquo;s what you see every morning.
           </p>
         </motion.div>
 
@@ -1082,85 +1084,267 @@ function ProblemSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// HOW IT WORKS — 3 steps
+// HOW IT WORKS — Connected OS differentiator
 // ─────────────────────────────────────────────────────────────────────────────
 function HowItWorksSection() {
   const ref = useRef(null)
-  const inView = useInView(ref, { once: true, margin: "-80px" })
+  const inView = useInView(ref, { once: true, margin: "-60px" })
 
-  const steps = [
+  const timelineSteps = [
     {
-      num: "01",
-      icon: <MessageSquare className="w-6 h-6" aria-hidden="true" />,
-      title: "AI receptionist — texts every lead in 3.7 seconds",
-      body: "The moment a form hits — at 9pm, 2am, Saturday morning — your AI receptionist reaches out with a trade-specific opener. Not a generic 'we got your message.' A real conversation, before your competitor blinks.",
-      color: C.primary,
-      bg: "#FFF3EC",
+      agent: "Lead submits form",
+      time: "9:04 PM",
+      nodeColor: "#78716C",
+      nodeBg: "#F5F4F2",
+      action: "Mike fills out your Facebook Lead Ad. Lead instantly enters FieldBuilt AI.",
+      learned: [],
+      trigger: null,
     },
     {
-      num: "02",
-      icon: <PhoneCall className="w-6 h-6" aria-hidden="true" />,
-      title: "AI appointment setter — qualifies and books",
-      body: "Asks what's wrong, handles every objection ('just getting prices,' 'already have someone coming'), collects the address, and books the appointment. Your tech is going. You didn't say a word.",
-      color: "#0EA5E9",
-      bg: "#F0F9FF",
+      agent: "SMS Agent",
+      time: "9:04:03 PM — 3.7 seconds later",
+      nodeColor: "#0EA5E9",
+      nodeBg: "#F0F9FF",
+      action: "\"Hey Mike, saw you reached out about your AC — what's it doing?\" Qualifies with trade-specific questions. Logs everything.",
+      learned: ["System: Central AC, 12yr", "Issue: Blows warm air", "Duration: 2 days down"],
+      trigger: null,
     },
     {
-      num: "03",
-      icon: <Bell className="w-6 h-6" aria-hidden="true" />,
-      title: "AI dispatcher — routes the right tech",
-      body: "Job booked. AI dispatcher assigns it to the closest available tech with the right specialty. Tech gets an SMS with the address and issue. You get a push notification. You show up. That's your whole job.",
-      color: C.success,
-      bg: "#F0FDF4",
+      agent: "SMS Agent",
+      time: "9:06 PM",
+      nodeColor: "#0EA5E9",
+      nodeBg: "#F0F9FF",
+      action: "Mike says: \"Can someone call me?\" — FieldBuilt AI reads the intent and triggers the voice agent automatically. No human involved.",
+      learned: ["Call preference detected", "Urgency: High"],
+      trigger: { label: "Voice Agent triggered automatically →", color: "#F97316" },
+    },
+    {
+      agent: "Voice Agent",
+      time: "9:07 PM",
+      nodeColor: "#F97316",
+      nodeBg: "#FFF3EC",
+      action: "Calls Mike with the full SMS context already loaded. Opens: \"You mentioned the AC's been blowing warm air — is that right?\" Mike doesn't repeat a single thing. Appointment booked.",
+      learned: ["Homeowner: Yes — confirmed", "Address: 2241 Ridgeline, Frisco TX", "Appointment: Thu 9am"],
+      trigger: { label: "Dispatcher notified instantly →", color: "#16A34A" },
+    },
+    {
+      agent: "AI Dispatcher",
+      time: "9:07 PM",
+      nodeColor: "#16A34A",
+      nodeBg: "#F0FDF4",
+      action: "Routes Marcus T. (AC Repair, closest available). Sends full brief: \"Central AC, 12yr, blowing warm air, urgent — 2241 Ridgeline, Frisco TX.\" Your tech arrives knowing the job.",
+      learned: ["Marcus T. assigned — AC Repair, 2.3mi", "Tech brief sent with full context"],
+      trigger: { label: "Push notification sent to you →", color: "#78716C" },
     },
   ]
 
+  const fileEntries = [
+    { section: "ON FORM SUBMIT", color: "#78716C", items: ["Mike Johnson · Facebook Lead Ad", "Phone: +1 (214) 555-0192"] },
+    { section: "SMS AGENT LEARNED", color: "#0EA5E9", items: ["System: Central AC · Split", "Unit age: 12 years", "Issue: Blows warm air · 2 days", "Prefers a phone call"] },
+    { section: "VOICE AGENT CONFIRMED", color: "#F97316", items: ["Homeowner: Yes — confirmed", "2241 Ridgeline Dr, Frisco TX", "Appointment: Thu 9am booked"] },
+    { section: "DISPATCHER BRIEFED", color: "#16A34A", items: ["Marcus T. — AC Repair — 2.3mi", "\"12yr Central AC, warm air, urgent\""] },
+  ]
+
   return (
-    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }} id="how-it-works">
+    <section ref={ref} className="relative py-24 px-6 overflow-hidden" style={{ zIndex: 10 }} id="how-it-works">
       <div className="max-w-7xl mx-auto">
+
+        {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.6 }}
-          className="text-center mb-16"
+          className="mb-14"
         >
-          <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
-               style={{ background: "#FFF3EC", color: C.primary }}>
-            Your AI team — on duty 24/7
+          <div className="flex items-center gap-3 mb-5">
+            <span className="block w-6 h-px" style={{ background: C.primary }} />
+            <span className="text-xs font-semibold uppercase tracking-[0.18em]"
+                  style={{ color: C.primary, fontFamily: "var(--font-jetbrains)" }}>
+              Why it&rsquo;s different
+            </span>
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
-              style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-            Three AI employees handle your leads.
+              style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+            Not a chatbot.
             <br />
-            <span style={{ color: C.muted, fontWeight: 400 }}>You just show up to the job.</span>
+            <span style={{ color: C.primary }}>A connected operating system.</span>
           </h2>
+          <p className="text-lg max-w-2xl" style={{ color: C.muted }}>
+            Other AI tools send a text and the information dies there. FieldBuilt AI builds a live file
+            on every lead — and every agent picks up exactly where the last one left off.
+            Nothing repeated. Nothing lost. Nothing cold.
+          </p>
         </motion.div>
 
-        <div className="grid md:grid-cols-3 gap-6">
-          {steps.map((s, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 32 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ duration: 0.6, delay: i * 0.12 }}
-              whileHover={{ y: -4, transition: { duration: 0.2 } }}
-              className="rounded-2xl p-7 border relative"
-              style={{ background: C.surface, borderColor: C.border,
-                       boxShadow: "0 4px 20px rgba(0,0,0,0.04)" }}
-            >
-              <div className="flex items-start justify-between mb-5">
-                <div className="w-12 h-12 rounded-xl flex items-center justify-center"
-                     style={{ background: s.bg, color: s.color }}>
-                  {s.icon}
+        <div className="grid md:grid-cols-2 gap-10 items-start">
+
+          {/* LEFT — Connected flow timeline */}
+          <div className="relative">
+            {/* Connecting vertical line */}
+            <div className="absolute left-[9px] top-4 bottom-4 w-px"
+                 style={{ background: `linear-gradient(to bottom, ${C.primary}50, transparent)` }}
+                 aria-hidden="true" />
+
+            {timelineSteps.map((step, i) => (
+              <motion.div
+                key={i}
+                initial={{ opacity: 0, x: -18 }} animate={inView ? { opacity: 1, x: 0 } : {}}
+                transition={{ duration: 0.5, delay: 0.1 + i * 0.1 }}
+                className="relative pl-8 pb-8 last:pb-0"
+              >
+                {/* Node */}
+                <div className="absolute left-0 top-0.5 w-[18px] h-[18px] rounded-full border-2 flex items-center justify-center"
+                     style={{ background: step.nodeBg, borderColor: step.nodeColor }}>
+                  <div className="w-[6px] h-[6px] rounded-full" style={{ background: step.nodeColor }} />
                 </div>
-                <span className="text-4xl font-black opacity-10"
-                      style={{ color: s.color, fontFamily: "var(--font-mono)" }}>{s.num}</span>
+
+                {/* Agent + time */}
+                <div className="flex flex-wrap items-center gap-2 mb-1.5">
+                  <span className="text-xs font-bold px-2 py-0.5 rounded-full"
+                        style={{ background: step.nodeBg, color: step.nodeColor }}>
+                    {step.agent}
+                  </span>
+                  <span className="text-xs" style={{ color: C.muted, fontFamily: "var(--font-jetbrains)" }}>
+                    {step.time}
+                  </span>
+                </div>
+
+                {/* Action */}
+                <p className="text-sm leading-relaxed mb-2" style={{ color: C.text }}>
+                  {step.action}
+                </p>
+
+                {/* What was learned */}
+                {step.learned.length > 0 && (
+                  <div className="flex flex-wrap gap-1.5 mb-2">
+                    {step.learned.map((item, j) => (
+                      <span key={j} className="text-xs px-2 py-0.5 rounded-md"
+                            style={{ background: C.subtle, color: C.muted, fontFamily: "var(--font-jetbrains)" }}>
+                        ✓ {item}
+                      </span>
+                    ))}
+                  </div>
+                )}
+
+                {/* Trigger to next agent */}
+                {step.trigger && (
+                  <div className="flex items-center gap-1.5 mt-1.5">
+                    <span className="w-4 h-px block" style={{ background: step.trigger.color }} aria-hidden="true" />
+                    <span className="text-xs font-semibold" style={{ color: step.trigger.color }}>
+                      {step.trigger.label}
+                    </span>
+                  </div>
+                )}
+              </motion.div>
+            ))}
+          </div>
+
+          {/* RIGHT — Live lead file (shared context visual) */}
+          <motion.div
+            initial={{ opacity: 0, x: 24 }} animate={inView ? { opacity: 1, x: 0 } : {}}
+            transition={{ duration: 0.6, delay: 0.25 }}
+            className="rounded-2xl overflow-hidden border sticky top-24"
+            style={{ background: C.surface, borderColor: C.border,
+                     boxShadow: "0 8px 32px rgba(249,115,22,0.08)" }}
+          >
+            {/* File header */}
+            <div className="px-5 py-4 border-b"
+                 style={{ borderColor: C.border, background: C.subtle }}>
+              <div className="flex items-center justify-between">
+                <div>
+                  <div className="text-xs font-semibold uppercase tracking-[0.12em] mb-0.5"
+                       style={{ color: C.muted, fontFamily: "var(--font-jetbrains)" }}>
+                    Shared Lead File
+                  </div>
+                  <div className="text-sm font-bold" style={{ color: C.text }}>Mike Johnson</div>
+                </div>
+                <div className="flex items-center gap-1.5 px-2.5 py-1 rounded-full text-xs font-semibold"
+                     style={{ background: "#F0FDF4", color: C.success }}>
+                  <span className="w-1.5 h-1.5 rounded-full bg-green-500" aria-hidden="true" />
+                  Booked · Thu 9am
+                </div>
               </div>
-              <h3 className="text-lg font-bold mb-2" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-                {s.title}
-              </h3>
-              <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{s.body}</p>
-            </motion.div>
-          ))}
+              <p className="text-xs mt-2" style={{ color: C.muted }}>
+                Every agent reads and writes to this file in real time.
+              </p>
+            </div>
+
+            {/* Sections */}
+            <div className="divide-y" style={{ borderColor: C.border }}>
+              {fileEntries.map((section, si) => (
+                <motion.div
+                  key={si}
+                  initial={{ opacity: 0, y: 6 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+                  transition={{ delay: 0.35 + si * 0.15 }}
+                  className="px-5 py-4"
+                >
+                  <div className="flex items-center gap-2 mb-3">
+                    <div className="w-2 h-2 rounded-full shrink-0" style={{ background: section.color }} aria-hidden="true" />
+                    <span className="text-xs font-bold uppercase tracking-[0.1em]"
+                          style={{ color: section.color, fontFamily: "var(--font-jetbrains)" }}>
+                      {section.section}
+                    </span>
+                  </div>
+                  <div className="space-y-1.5 pl-4">
+                    {section.items.map((item, ii) => (
+                      <div key={ii} className="flex items-center gap-2">
+                        <CheckCircle2 className="w-3 h-3 shrink-0" style={{ color: section.color }} aria-hidden="true" />
+                        <span className="text-xs" style={{ color: C.text }}>{item}</span>
+                      </div>
+                    ))}
+                  </div>
+                </motion.div>
+              ))}
+            </div>
+          </motion.div>
         </div>
+
+        {/* Bottom contrast callout */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ duration: 0.6, delay: 0.5 }}
+          className="mt-10 grid md:grid-cols-2 gap-4"
+        >
+          <div className="rounded-xl p-5 border" style={{ background: "#FFF8F8", borderColor: "#FECACA" }}>
+            <div className="flex items-center gap-2 mb-3">
+              <X className="w-4 h-4 text-red-500 shrink-0" aria-hidden="true" />
+              <span className="text-sm font-bold text-red-700">Other AI tools</span>
+            </div>
+            <div className="space-y-1.5">
+              {[
+                "Text bot sends a message — context ends there",
+                "Each agent has no idea what the others did",
+                "Lead says \"call me\" — nothing happens",
+                "Tech shows up cold with no job context",
+              ].map((item, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className="text-red-400 text-sm shrink-0 leading-none mt-0.5" aria-hidden="true">✗</span>
+                  <span className="text-xs leading-snug" style={{ color: "#78716C" }}>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          <div className="rounded-xl p-5 border" style={{ background: "#FFF3EC", borderColor: "rgba(249,115,22,0.3)" }}>
+            <div className="flex items-center gap-2 mb-3">
+              <CheckCircle2 className="w-4 h-4 shrink-0" style={{ color: C.primary }} aria-hidden="true" />
+              <span className="text-sm font-bold" style={{ color: C.primaryDark }}>FieldBuilt AI</span>
+            </div>
+            <div className="space-y-1.5">
+              {[
+                "Every agent shares one live lead file",
+                "SMS agent triggers a voice call when lead asks",
+                "Voice agent calls with full SMS context — no repeating",
+                "Tech arrives briefed with the exact issue and address",
+              ].map((item, i) => (
+                <div key={i} className="flex items-start gap-2">
+                  <span className="text-sm shrink-0 leading-none mt-0.5" style={{ color: C.primary }} aria-hidden="true">✓</span>
+                  <span className="text-xs leading-snug" style={{ color: C.text }}>{item}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </motion.div>
+
       </div>
     </section>
   )
