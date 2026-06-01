@@ -83,7 +83,7 @@ function StatCard({
       animate={{ opacity: 1, y: 0 }}
       transition={{ duration: 0.4, delay: delay / 1000 }}
       className="bg-white rounded-2xl p-5 border border-border/60"
-      style={{ boxShadow: "0 4px 24px rgba(124,58,237,0.06)" }}
+      style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.06)" }}
     >
       <div className="flex items-start justify-between mb-4">
         <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center", iconColor)}>
@@ -150,7 +150,7 @@ const STAGE_LABELS: Record<string, string> = {
 const STAGE_COLORS: Record<string, string> = {
   new: "bg-sky-400",
   contacted: "bg-blue-500",
-  qualified: "bg-violet-500",
+  qualified: "bg-[#F97316]",
   appointment_booked: "bg-emerald-500",
   closed_lost: "bg-red-400",
 }
@@ -188,10 +188,10 @@ export function ReportsClient({
       {/* Visual background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <div className="absolute inset-0 opacity-40"
-          style={{ backgroundImage: "radial-gradient(rgba(124,58,237,0.12) 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
+          style={{ backgroundImage: "radial-gradient(rgba(249,115,22,0.12) 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
         <motion.div animate={{ y: [0, -20, 0] }} transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
           className="absolute w-[500px] h-[500px] rounded-full blur-3xl"
-          style={{ background: "rgba(124,58,237,0.06)", top: "-5%", left: "-5%" }} />
+          style={{ background: "rgba(249,115,22,0.06)", top: "-5%", left: "-5%" }} />
         <motion.div animate={{ y: [0, 18, 0] }} transition={{ duration: 13, repeat: Infinity, ease: "easeInOut" }}
           className="absolute w-[400px] h-[400px] rounded-full blur-3xl"
           style={{ background: "rgba(77,124,15,0.05)", bottom: "0", right: "0" }} />
@@ -213,7 +213,7 @@ export function ReportsClient({
             value={leadsThisMonth}
             delta={monthOverMonthDelta}
             icon={Users}
-            iconColor="bg-violet-100 text-violet-600"
+            iconColor="bg-[#FFF3EC] text-[#EA580C]"
             delay={0}
           />
           <StatCard
@@ -247,7 +247,7 @@ export function ReportsClient({
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.4, delay: 0.2 }}
           className="bg-white rounded-2xl p-6 border border-border/60 mb-6"
-          style={{ boxShadow: "0 4px 24px rgba(124,58,237,0.06)" }}
+          style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.06)" }}
         >
           <div className="flex items-center gap-2 mb-1">
             <BarChart3 className="w-4 h-4 text-muted-foreground" />
@@ -269,7 +269,7 @@ export function ReportsClient({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.3 }}
             className="bg-white rounded-2xl p-6 border border-border/60"
-            style={{ boxShadow: "0 4px 24px rgba(124,58,237,0.06)" }}
+            style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.06)" }}
           >
             <div className="flex items-center gap-2 mb-4">
               <GitMerge className="w-4 h-4 text-muted-foreground" />
@@ -308,7 +308,7 @@ export function ReportsClient({
             animate={{ opacity: 1, y: 0 }}
             transition={{ duration: 0.4, delay: 0.35 }}
             className="bg-white rounded-2xl p-6 border border-border/60"
-            style={{ boxShadow: "0 4px 24px rgba(124,58,237,0.06)" }}
+            style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.06)" }}
           >
             <div className="flex items-center gap-2 mb-4">
               <PieChart className="w-4 h-4 text-muted-foreground" />

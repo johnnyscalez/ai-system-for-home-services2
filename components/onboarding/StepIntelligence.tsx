@@ -242,17 +242,17 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
       {/* ── AI Custom Knowledge — critical section ────────────────────────── */}
       <div className="relative mb-8">
         {/* Bold gradient border wrapper */}
-        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-violet-500 via-purple-500 to-fuchsia-500 p-[2px] pointer-events-none" />
+        <div className="absolute inset-0 rounded-2xl bg-gradient-to-br from-[#F97316] via-[#EA580C] to-[#D97706] p-[2px] pointer-events-none" />
         <div className="relative rounded-2xl bg-white dark:bg-background p-5 space-y-4">
           {/* Header */}
           <div className="flex items-start gap-3">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-violet-500 to-fuchsia-500 flex items-center justify-center shrink-0 shadow-lg shadow-purple-500/25">
+            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#F97316] to-[#EA580C] flex items-center justify-center shrink-0 shadow-lg shadow-orange-500/25">
               <Sparkles className="w-5 h-5 text-white" />
             </div>
             <div className="flex-1">
               <div className="flex items-center gap-2 flex-wrap">
                 <h3 className="font-bold text-base text-foreground">What your AI should always know</h3>
-                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-violet-500 to-fuchsia-500 text-white uppercase tracking-wide">
+                <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-gradient-to-r from-[#F97316] to-[#EA580C] text-white uppercase tracking-wide">
                   Most important
                 </span>
               </div>
@@ -273,7 +273,7 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
                   key={chip.label}
                   type="button"
                   onClick={() => appendChip(chip.text)}
-                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-purple-50 border border-purple-200 text-purple-700 hover:bg-purple-100 hover:border-purple-400 transition-colors font-medium"
+                  className="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs bg-[#FFF3EC] border border-[#F97316]/20 text-[#EA580C] hover:bg-[#FFF3EC] hover:border-[#F97316] transition-colors font-medium"
                 >
                   <Plus className="w-3 h-3" />
                   {chip.label}
@@ -301,7 +301,7 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
               value={data.customAiKnowledge}
               onChange={set("customAiKnowledge")}
               rows={8}
-              className="resize-none bg-purple-50/50 border-purple-200 focus:border-purple-400 font-mono text-xs leading-relaxed placeholder:text-muted-foreground/60"
+              className="resize-none bg-[#FFF3EC]/50 border-[#F97316]/20 focus:border-[#F97316] font-mono text-xs leading-relaxed placeholder:text-muted-foreground/60"
             />
             <p className="text-[11px] text-muted-foreground">
               One fact per line. Mention brand names, what you don&apos;t do, common questions leads ask, local area specifics, and financing details. Your AI treats everything here as ground truth.

@@ -21,8 +21,8 @@ const jetbrains = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "LeadReply — AI Lead Follow-Up for Contractors",
-  description: "Every lead gets a response in 60 seconds. Automatically.",
+  title: "FieldBuilt AI — AI Operations Installed for Home Service Companies",
+  description: "Your AI operation installed in a day. Every lead gets a response in 3.7 seconds. Automatically.",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

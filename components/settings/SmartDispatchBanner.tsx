@@ -29,14 +29,14 @@ export function SmartDispatchBanner({ techCount }: { techCount: number }) {
   return (
     <div className={cn(
       "rounded-xl border overflow-hidden transition-all duration-200",
-      "bg-gradient-to-br from-[#7C3AED]/5 via-white to-[#4D7C0F]/5 border-[#7C3AED]/20"
+      "bg-gradient-to-br from-[#F97316]/5 via-white to-[#4D7C0F]/5 border-[#F97316]/20"
     )}>
       {/* Header row — always visible */}
       <button
         onClick={() => setExpanded(v => !v)}
         className="w-full flex items-center gap-3 px-5 py-4 text-left"
       >
-        <div className="w-8 h-8 rounded-lg bg-[#7C3AED] flex items-center justify-center shadow-sm shrink-0">
+        <div className="w-8 h-8 rounded-lg bg-[#F97316] flex items-center justify-center shadow-sm shrink-0">
           <BrainCircuit className="w-4 h-4 text-white" />
         </div>
         <div className="flex-1">
@@ -44,7 +44,7 @@ export function SmartDispatchBanner({ techCount }: { techCount: number }) {
             <span className="text-sm font-bold text-[#1C1917]" style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
               Smart Dispatch — powered by your AI agent
             </span>
-            <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[#7C3AED] text-white">
+            <span className="text-[10px] font-semibold uppercase tracking-wider px-1.5 py-0.5 rounded-full bg-[#F97316] text-white">
               Active
             </span>
           </div>
@@ -68,7 +68,7 @@ export function SmartDispatchBanner({ techCount }: { techCount: number }) {
             exit={{ height: 0, opacity: 0 }}
             transition={{ duration: 0.22, ease: "easeInOut" }}
           >
-            <div className="px-5 pb-5 border-t border-[#7C3AED]/10">
+            <div className="px-5 pb-5 border-t border-[#F97316]/10">
               <p className="text-sm text-[#78716C] mt-4 mb-4 leading-relaxed">
                 Every time your AI books an appointment, it doesn't just pick any slot.
                 It looks at your technicians' specializations, real-time schedule, and service zip codes —
@@ -79,8 +79,8 @@ export function SmartDispatchBanner({ techCount }: { techCount: number }) {
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 {FEATURES.map(({ icon: Icon, title, desc }) => (
                   <div key={title} className="bg-white rounded-lg border border-[#E7E5E4] p-3.5 shadow-sm">
-                    <div className="w-6 h-6 rounded-md bg-[#7C3AED]/10 flex items-center justify-center mb-2">
-                      <Icon className="w-3 h-3 text-[#7C3AED]" />
+                    <div className="w-6 h-6 rounded-md bg-[#F97316]/10 flex items-center justify-center mb-2">
+                      <Icon className="w-3 h-3 text-[#F97316]" />
                     </div>
                     <p className="text-xs font-semibold text-[#1C1917]">{title}</p>
                     <p className="text-[11px] text-[#78716C] mt-0.5 leading-relaxed">{desc}</p>

@@ -313,13 +313,13 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
               key={d.toISOString()}
               className={cn(
                 "px-3 py-3 text-center border-l border-[#E7E5E4]",
-                isToday(d) ? "bg-[#7C3AED]/5" : "bg-[#FAFAF8]"
+                isToday(d) ? "bg-[#F97316]/5" : "bg-[#FAFAF8]"
               )}
             >
-              <p className={cn("text-xs font-medium", isToday(d) ? "text-[#7C3AED]" : "text-[#78716C]")}>
+              <p className={cn("text-xs font-medium", isToday(d) ? "text-[#F97316]" : "text-[#78716C]")}>
                 {DAY_SHORT[d.getDay()]}
               </p>
-              <p className={cn("text-lg font-bold leading-tight", isToday(d) ? "text-[#7C3AED]" : "text-[#1C1917]")}>
+              <p className={cn("text-lg font-bold leading-tight", isToday(d) ? "text-[#F97316]" : "text-[#1C1917]")}>
                 {d.getDate()}
               </p>
             </div>
@@ -356,7 +356,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                     className={cn(
                       "border-l border-[#E7E5E4] px-2 py-2 min-h-[80px] flex items-center justify-center transition-colors",
                       apt ? "cursor-pointer hover:bg-[#FAFAF8]" : past ? "bg-[#FAFAF8]/50" : "hover:bg-[#FAFAF8]/60",
-                      isToday(d) && !apt && "bg-[#7C3AED]/2"
+                      isToday(d) && !apt && "bg-[#F97316]/2"
                     )}
                     onClick={() => apt && setSelected(apt)}
                   >
@@ -476,8 +476,8 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
               <div className="flex-1 px-6 py-5 space-y-5">
                 {/* Lead */}
                 <div className="flex items-center gap-3">
-                  <div className="w-10 h-10 rounded-full bg-[#7C3AED]/10 flex items-center justify-center shrink-0">
-                    <User className="w-5 h-5 text-[#7C3AED]" />
+                  <div className="w-10 h-10 rounded-full bg-[#F97316]/10 flex items-center justify-center shrink-0">
+                    <User className="w-5 h-5 text-[#F97316]" />
                   </div>
                   <div>
                     <p className="font-semibold text-[#1C1917]">{selected.leads?.first_name} {selected.leads?.last_name}</p>

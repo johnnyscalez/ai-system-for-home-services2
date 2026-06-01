@@ -14,7 +14,7 @@ import { getJobTypeLabel, getJobTypeColor } from "@/lib/job-types"
 
 const STATUS_STYLES: Record<string, string> = {
   new: "bg-sky-500/15 text-sky-400 border-sky-500/20",
-  contacted: "bg-violet-500/15 text-violet-400 border-violet-500/20",
+  contacted: "bg-[#FFF3EC] text-[#F97316] border-[#F97316]/20",
   qualified: "bg-amber-500/15 text-amber-400 border-amber-500/20",
   followed_up: "bg-orange-500/15 text-orange-400 border-orange-500/20",
   appointment_booked: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",

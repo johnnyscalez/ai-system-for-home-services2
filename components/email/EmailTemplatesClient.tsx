@@ -16,13 +16,13 @@ type TemplateKey = "confirmation" | "reminder_2d" | "reminder_1d" | "reminder_2h
 
 const TABS: { key: TemplateKey; label: string; sublabel: string; icon: typeof Mail; color: string }[] = [
   { key: "confirmation", label: "Confirmation", sublabel: "Sent immediately", icon: CheckCircle2, color: "text-emerald-500" },
-  { key: "reminder_2d", label: "2-Day Reminder", sublabel: "2 days before", icon: Clock, color: "text-purple-500" },
+  { key: "reminder_2d", label: "2-Day Reminder", sublabel: "2 days before", icon: Clock, color: "text-[#F97316]" },
   { key: "reminder_1d", label: "1-Day Reminder", sublabel: "Day before", icon: Clock, color: "text-amber-500" },
   { key: "reminder_2h", label: "2-Hour Reminder", sublabel: "2 hrs before", icon: Clock, color: "text-red-500" },
 ]
 
 const BANNER_PRESETS = [
-  { color: "#7C3AED", label: "Purple" },
+  { color: "#F97316", label: "Purple" },
   { color: "#2563EB", label: "Blue" },
   { color: "#059669", label: "Green" },
   { color: "#DC2626", label: "Red" },
@@ -86,7 +86,7 @@ export function EmailTemplatesClient({
   const isFirstRender = useRef(true)
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const activeBannerColor = templates.banner_color ?? "#7C3AED"
+  const activeBannerColor = templates.banner_color ?? "#F97316"
 
   const previewData = {
     leadName: "Michael",
@@ -161,9 +161,9 @@ export function EmailTemplatesClient({
       {/* Fixed visual background */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <div className="absolute inset-0 opacity-30"
-          style={{ backgroundImage: "radial-gradient(rgba(124,58,237,0.12) 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
+          style={{ backgroundImage: "radial-gradient(rgba(249,115,22,0.12) 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
         <div className="absolute w-[500px] h-[500px] rounded-full blur-3xl"
-          style={{ background: "rgba(124,58,237,0.06)", top: "-10%", left: "-5%" }} />
+          style={{ background: "rgba(249,115,22,0.06)", top: "-10%", left: "-5%" }} />
         <div className="absolute w-[400px] h-[400px] rounded-full blur-3xl"
           style={{ background: "rgba(77,124,15,0.05)", bottom: "-5%", right: "-5%" }} />
       </div>
@@ -216,7 +216,7 @@ export function EmailTemplatesClient({
               <span>Emails sent from <strong>{connectedGmailEmail}</strong> via your Gmail account.</span>
             ) : (
               <span>
-                No Gmail connected — emails sent via LeadReply.{" "}
+                No Gmail connected — emails sent via FieldBuilt AI.{" "}
                 <a href="/api/auth/gmail?return_to=settings" className="underline font-medium hover:opacity-80">
                   Connect Gmail <ExternalLink className="w-3 h-3 inline ml-0.5" />
                 </a>
@@ -238,21 +238,21 @@ export function EmailTemplatesClient({
                   className={cn(
                     "relative text-left p-4 rounded-xl border transition-all duration-150",
                     isActive
-                      ? "bg-white border-[#7C3AED]/30 shadow-[0_4px_20px_rgba(124,58,237,0.12)]"
-                      : "bg-white border-[#E7E5E4] shadow-sm hover:border-[#7C3AED]/20 hover:shadow-md"
+                      ? "bg-white border-[#F97316]/30 shadow-[0_4px_20px_rgba(249,115,22,0.12)]"
+                      : "bg-white border-[#E7E5E4] shadow-sm hover:border-[#F97316]/20 hover:shadow-md"
                   )}
                 >
                   {isActive && (
-                    <div className="absolute inset-x-0 top-0 h-0.5 bg-[#7C3AED] rounded-t-xl" />
+                    <div className="absolute inset-x-0 top-0 h-0.5 bg-[#F97316] rounded-t-xl" />
                   )}
                   <div className="flex items-center justify-between mb-2">
-                    <tab.icon className={cn("w-4 h-4", isActive ? "text-[#7C3AED]" : tab.color)} />
+                    <tab.icon className={cn("w-4 h-4", isActive ? "text-[#F97316]" : tab.color)} />
                     <div className={cn(
                       "w-2 h-2 rounded-full",
                       isEnabled ? "bg-emerald-400" : "bg-[#E7E5E4]"
                     )} />
                   </div>
-                  <div className={cn("text-sm font-semibold", isActive ? "text-[#7C3AED]" : "text-[#1C1917]")}>{tab.label}</div>
+                  <div className={cn("text-sm font-semibold", isActive ? "text-[#F97316]" : "text-[#1C1917]")}>{tab.label}</div>
                   <div className="text-xs text-[#78716C] mt-0.5">{tab.sublabel}</div>
                 </motion.button>
               )
@@ -309,7 +309,7 @@ export function EmailTemplatesClient({
                         className="flex items-center gap-2"
                       >
                         {enabled
-                          ? <ToggleRight className="w-8 h-8 text-[#7C3AED]" />
+                          ? <ToggleRight className="w-8 h-8 text-[#F97316]" />
                           : <ToggleLeft className="w-8 h-8 text-[#78716C]" />
                         }
                         <span className={cn("text-xs font-medium", enabled ? "text-emerald-500" : "text-[#78716C]")}>
@@ -420,7 +420,7 @@ export function EmailTemplatesClient({
                       <div key={key} className="flex items-start gap-3 p-4 rounded-xl bg-[#FAFAF8] border border-[#E7E5E4]">
                         <button onClick={() => update(key, !(templates[key] !== false))}>
                           {templates[key] !== false
-                            ? <ToggleRight className="w-7 h-7 text-[#7C3AED] mt-0.5" />
+                            ? <ToggleRight className="w-7 h-7 text-[#F97316] mt-0.5" />
                             : <ToggleLeft className="w-7 h-7 text-[#78716C] mt-0.5" />
                           }
                         </button>
@@ -432,10 +432,10 @@ export function EmailTemplatesClient({
                       </div>
                     ))}
 
-                    <div className="p-4 rounded-xl bg-[#7C3AED]/5 border border-[#7C3AED]/15">
+                    <div className="p-4 rounded-xl bg-[#F97316]/5 border border-[#F97316]/15">
                       <div className="flex items-center gap-2 mb-2">
-                        <MessageSquare className="w-4 h-4 text-[#7C3AED]" />
-                        <span className="text-xs font-semibold text-[#7C3AED]">AI-powered replies</span>
+                        <MessageSquare className="w-4 h-4 text-[#F97316]" />
+                        <span className="text-xs font-semibold text-[#F97316]">AI-powered replies</span>
                       </div>
                       <p className="text-xs text-[#78716C] leading-relaxed">
                         If a lead replies to any reminder SMS, your AI agent automatically picks up the conversation. It can reschedule or cancel appointments, answer questions, and keep the lead engaged — all without any manual work.
@@ -471,7 +471,7 @@ export function EmailTemplatesClient({
                       />
                     ))}
                     {/* Custom color picker */}
-                    <label className="relative w-7 h-7 rounded-full border-2 border-dashed border-[#E7E5E4] hover:border-[#7C3AED] cursor-pointer flex items-center justify-center overflow-hidden transition-colors" title="Custom color">
+                    <label className="relative w-7 h-7 rounded-full border-2 border-dashed border-[#E7E5E4] hover:border-[#F97316] cursor-pointer flex items-center justify-center overflow-hidden transition-colors" title="Custom color">
                       <span className="text-[10px] text-[#78716C] font-bold select-none">+</span>
                       <input
                         type="color"

@@ -31,7 +31,7 @@ export default async function ConversationsPage() {
 
   const statusBadge: Record<string, string> = {
     new: "bg-sky-500/15 text-sky-400 border-sky-500/20",
-    contacted: "bg-violet-500/15 text-violet-400 border-violet-500/20",
+    contacted: "bg-[#FFF3EC] text-[#F97316] border-[#F97316]/20",
     qualified: "bg-amber-500/15 text-amber-400 border-amber-500/20",
     appointment_booked: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
     needs_attention: "bg-red-500/15 text-red-400 border-red-500/20",

@@ -32,11 +32,11 @@ export default async function AppointmentsPage() {
       <div className="fixed inset-0 pointer-events-none overflow-hidden z-0">
         <div
           className="absolute inset-0 opacity-30"
-          style={{ backgroundImage: "radial-gradient(rgba(124,58,237,0.12) 1px, transparent 1px)", backgroundSize: "28px 28px" }}
+          style={{ backgroundImage: "radial-gradient(rgba(249,115,22,0.12) 1px, transparent 1px)", backgroundSize: "28px 28px" }}
         />
         <div
           className="absolute w-[500px] h-[500px] rounded-full blur-3xl"
-          style={{ background: "rgba(124,58,237,0.05)", top: "-10%", left: "-5%" }}
+          style={{ background: "rgba(249,115,22,0.05)", top: "-10%", left: "-5%" }}
         />
         <div
           className="absolute w-[400px] h-[400px] rounded-full blur-3xl"

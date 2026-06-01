@@ -102,7 +102,7 @@ export function StepLeadSources({ sources, onChange, onNext }: Props) {
           icon={<Share2 className={cn("w-5 h-5", sources.facebook ? "text-primary" : "text-muted-foreground")} />}
           title="Facebook Lead Ads"
           badge={<Badge variant="outline" className="text-xs bg-blue-500/10 text-blue-500 border-blue-200">Most popular</Badge>}
-          description="Connect your Facebook ad account. Every lead that submits your lead form gets an AI text within 60 seconds."
+          description="Connect your Facebook ad account. Every lead that submits your lead form gets an AI text within 3.7 seconds."
           selected={sources.facebook}
           onToggle={() => onChange({ ...sources, facebook: !sources.facebook })}
           howItWorks="After completing setup, you'll connect your Facebook account in the Integrations tab — takes about 2 minutes. You'll pick exactly which Facebook Page, ad account, and lead form to sync."

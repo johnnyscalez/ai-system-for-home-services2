@@ -246,7 +246,7 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
         </div>
         <Button
           onClick={openNew}
-          className="bg-[#7C3AED] hover:bg-[#6d28d9] text-white gap-2 shadow-sm"
+          className="bg-[#F97316] hover:bg-[#6d28d9] text-white gap-2 shadow-sm"
         >
           <Plus className="w-4 h-4" /> Add Technician
         </Button>
@@ -286,7 +286,7 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
                     value={form.name}
                     onChange={e => setForm(f => ({ ...f, name: e.target.value }))}
                     placeholder="James Rivera"
-                    className="border-[#E7E5E4] focus-visible:ring-[#7C3AED]"
+                    className="border-[#E7E5E4] focus-visible:ring-[#F97316]"
                   />
                 </div>
                 <div className="space-y-1.5">
@@ -296,7 +296,7 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
                     onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
                     placeholder="+1 555 000 0000"
                     type="tel"
-                    className="border-[#E7E5E4] focus-visible:ring-[#7C3AED]"
+                    className="border-[#E7E5E4] focus-visible:ring-[#F97316]"
                   />
                 </div>
               </div>
@@ -332,8 +332,8 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
                       className={cn(
                         "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
                         form.specializations.includes(s)
-                          ? "bg-[#7C3AED] border-[#7C3AED] text-white"
-                          : "bg-white border-[#E7E5E4] text-[#78716C] hover:border-[#7C3AED] hover:text-[#7C3AED]"
+                          ? "bg-[#F97316] border-[#F97316] text-white"
+                          : "bg-white border-[#E7E5E4] text-[#78716C] hover:border-[#F97316] hover:text-[#F97316]"
                       )}
                     >
                       {form.specializations.includes(s) && <Check className="w-3 h-3 inline mr-1" />}
@@ -348,14 +348,14 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
                     onChange={e => setForm(f => ({ ...f, customSpecialization: e.target.value }))}
                     onKeyDown={e => e.key === "Enter" && (e.preventDefault(), addCustomSpec())}
                     placeholder="Add custom specialization..."
-                    className="border-[#E7E5E4] focus-visible:ring-[#7C3AED] text-sm h-9"
+                    className="border-[#E7E5E4] focus-visible:ring-[#F97316] text-sm h-9"
                   />
                   <Button type="button" variant="outline" size="sm" onClick={addCustomSpec} className="h-9 shrink-0">
                     Add
                   </Button>
                 </div>
                 {form.specializations.filter(s => !ALL_SPECIALIZATIONS.includes(s)).map(s => (
-                  <Badge key={s} variant="outline" className="text-xs gap-1 bg-[#7C3AED]/8 border-[#7C3AED]/20 text-[#7C3AED]">
+                  <Badge key={s} variant="outline" className="text-xs gap-1 bg-[#F97316]/8 border-[#F97316]/20 text-[#F97316]">
                     {s}
                     <button onClick={() => toggleSpec(s)}><X className="w-2.5 h-2.5" /></button>
                   </Badge>
@@ -372,7 +372,7 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
                     onChange={e => setForm(f => ({ ...f, zipInput: e.target.value }))}
                     onKeyDown={e => (e.key === "Enter" || e.key === ",") && (e.preventDefault(), addZip())}
                     placeholder="90210, 90211, 90212"
-                    className="border-[#E7E5E4] focus-visible:ring-[#7C3AED] text-sm h-9"
+                    className="border-[#E7E5E4] focus-visible:ring-[#F97316] text-sm h-9"
                   />
                   <Button type="button" variant="outline" size="sm" onClick={addZip} className="h-9 shrink-0">
                     Add
@@ -403,7 +403,7 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
                         onClick={() => toggleDay(day)}
                         className={cn(
                           "w-10 h-6 rounded-full transition-colors relative shrink-0",
-                          form.schedule[day].enabled ? "bg-[#7C3AED]" : "bg-[#E7E5E4]"
+                          form.schedule[day].enabled ? "bg-[#F97316]" : "bg-[#E7E5E4]"
                         )}
                       >
                         <span className={cn(
@@ -423,14 +423,14 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
                             type="time"
                             value={form.schedule[day].start}
                             onChange={e => setDayTime(day, "start", e.target.value)}
-                            className="border border-[#E7E5E4] rounded-lg px-2 py-1 text-xs font-mono text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/20"
+                            className="border border-[#E7E5E4] rounded-lg px-2 py-1 text-xs font-mono text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#F97316]/20"
                           />
                           <span className="text-[#78716C] text-xs">to</span>
                           <input
                             type="time"
                             value={form.schedule[day].end}
                             onChange={e => setDayTime(day, "end", e.target.value)}
-                            className="border border-[#E7E5E4] rounded-lg px-2 py-1 text-xs font-mono text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/20"
+                            className="border border-[#E7E5E4] rounded-lg px-2 py-1 text-xs font-mono text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#F97316]/20"
                           />
                         </div>
                       )}
@@ -450,7 +450,7 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
                   onChange={e => setForm(f => ({ ...f, notes: e.target.value }))}
                   placeholder="Any notes visible only to your team..."
                   rows={2}
-                  className="w-full border border-[#E7E5E4] rounded-lg px-3 py-2 text-sm text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#7C3AED]/20 resize-none"
+                  className="w-full border border-[#E7E5E4] rounded-lg px-3 py-2 text-sm text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 resize-none"
                 />
               </div>
             </div>
@@ -463,7 +463,7 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
               <Button
                 onClick={save}
                 disabled={saving}
-                className="bg-[#7C3AED] hover:bg-[#6d28d9] text-white gap-2 shadow-sm"
+                className="bg-[#F97316] hover:bg-[#6d28d9] text-white gap-2 shadow-sm"
               >
                 {saving ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
                 {editId ? "Save changes" : "Add technician"}
@@ -480,8 +480,8 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
           animate={{ opacity: 1 }}
           className="bg-white border border-dashed border-[#E7E5E4] rounded-2xl px-8 py-16 text-center"
         >
-          <div className="w-12 h-12 rounded-2xl bg-[#7C3AED]/10 flex items-center justify-center mx-auto mb-4">
-            <User className="w-6 h-6 text-[#7C3AED]" />
+          <div className="w-12 h-12 rounded-2xl bg-[#F97316]/10 flex items-center justify-center mx-auto mb-4">
+            <User className="w-6 h-6 text-[#F97316]" />
           </div>
           <p className="font-semibold text-[#1C1917] mb-1">No technicians yet</p>
           <p className="text-sm text-[#78716C] max-w-xs mx-auto mb-4">
@@ -489,7 +489,7 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
           </p>
           <Button
             onClick={openNew}
-            className="bg-[#7C3AED] hover:bg-[#6d28d9] text-white gap-2"
+            className="bg-[#F97316] hover:bg-[#6d28d9] text-white gap-2"
           >
             <Plus className="w-4 h-4" /> Add your first technician
           </Button>
@@ -510,7 +510,7 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
               {/* Card header */}
               <div className="flex items-center gap-4 px-5 py-4">
                 {/* Avatar */}
-                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#7C3AED]/20 to-[#4D7C0F]/20 flex items-center justify-center shrink-0 text-[#7C3AED] font-bold text-sm">
+                <div className="w-10 h-10 rounded-full bg-gradient-to-br from-[#F97316]/20 to-[#4D7C0F]/20 flex items-center justify-center shrink-0 text-[#F97316] font-bold text-sm">
                   {t.name.charAt(0).toUpperCase()}
                 </div>
 
@@ -545,7 +545,7 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
                   {t.specializations.length > 0 && (
                     <div className="flex flex-wrap gap-1 mt-1.5">
                       {t.specializations.slice(0, 3).map(s => (
-                        <span key={s} className="bg-[#7C3AED]/8 text-[#7C3AED] text-xs px-2 py-0.5 rounded-full border border-[#7C3AED]/15">
+                        <span key={s} className="bg-[#F97316]/8 text-[#F97316] text-xs px-2 py-0.5 rounded-full border border-[#F97316]/15">
                           {s}
                         </span>
                       ))}
@@ -567,7 +567,7 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
                         className={cn(
                           "w-5 h-5 rounded text-[9px] font-bold flex items-center justify-center",
                           t.schedule[day].enabled
-                            ? "bg-[#7C3AED]/10 text-[#7C3AED]"
+                            ? "bg-[#F97316]/10 text-[#F97316]"
                             : "bg-[#F5F4F2] text-[#78716C]/40"
                         )}
                       >
@@ -589,7 +589,7 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
                   <button
                     onClick={() => openEdit(t)}
                     title="Edit"
-                    className="p-1.5 rounded-lg text-[#78716C] hover:text-[#7C3AED] hover:bg-[#7C3AED]/8 transition-colors"
+                    className="p-1.5 rounded-lg text-[#78716C] hover:text-[#F97316] hover:bg-[#F97316]/8 transition-colors"
                   >
                     <Edit2 className="w-4 h-4" />
                   </button>

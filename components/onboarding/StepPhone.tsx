@@ -35,7 +35,7 @@ export function StepPhone({ provisioning, provisionedNumber, loading, error, onB
               <p className="text-sm font-semibold text-blue-800">About your dedicated phone number</p>
               <ul className="text-xs text-blue-700 space-y-1">
                 <li className="flex items-start gap-1.5"><span className="shrink-0 mt-0.5">•</span>A local US phone number will be reserved in your state via Twilio (~$1.15/month)</li>
-                <li className="flex items-start gap-1.5"><span className="shrink-0 mt-0.5">•</span>SMS usage is charged per message and is included in your LeadReply plan</li>
+                <li className="flex items-start gap-1.5"><span className="shrink-0 mt-0.5">•</span>SMS usage is charged per message and is included in your FieldBuilt AI plan</li>
                 <li className="flex items-start gap-1.5"><span className="shrink-0 mt-0.5">•</span>The number is yours for as long as your account is active</li>
                 <li className="flex items-start gap-1.5"><span className="shrink-0 mt-0.5">•</span>No separate Twilio account needed — we handle everything</li>
               </ul>
@@ -54,7 +54,7 @@ export function StepPhone({ provisioning, provisionedNumber, loading, error, onB
             </div>
             <span className="text-sm text-foreground leading-relaxed" onClick={() => setAcknowledged(!acknowledged)}>
               I understand a dedicated phone number will be provisioned for my account.
-              The ~$1.15/month Twilio cost is covered by my LeadReply subscription.
+              The ~$1.15/month Twilio cost is covered by my FieldBuilt AI subscription.
             </span>
           </label>
 
@@ -131,7 +131,7 @@ export function StepPhone({ provisioning, provisionedNumber, loading, error, onB
 
           <div className="space-y-2 mb-8">
             {[
-              "AI will text every new lead within 60 seconds",
+              "AI will text every new lead within 3.7 seconds",
               "Follow-up sequences run automatically — no setup needed",
               "Appointments log directly to your CRM pipeline",
             ].map((item) => (

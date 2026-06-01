@@ -45,7 +45,7 @@
   --radius-xl: calc(var(--radius) * 1.4);
 }
 
-/* Light theme — warm cream/white with purple primary */
+/* FieldBuilt AI — warm cream + construction orange */
 :root {
   /* Backgrounds */
   --background: #FAFAF8;
@@ -57,8 +57,8 @@
   --popover: #FFFFFF;
   --popover-foreground: #1C1917;
 
-  /* Primary — rich purple #7C3AED */
-  --primary: #7C3AED;
+  /* Primary — construction orange #F97316 */
+  --primary: #F97316;
   --primary-foreground: #FFFFFF;
 
   /* Secondary */
@@ -79,14 +79,14 @@
   /* Borders + inputs */
   --border: #E7E5E4;
   --input: #E7E5E4;
-  --ring: #7C3AED;
+  --ring: #F97316;
 
   /* Radius */
   --radius: 0.625rem;
 
   /* Charts */
-  --chart-1: #7C3AED;
-  --chart-2: #4D7C0F;
+  --chart-1: #F97316;
+  --chart-2: #16A34A;
   --chart-3: #D97706;
   --chart-4: #DC2626;
   --chart-5: #0891B2;
@@ -94,12 +94,12 @@
   /* Sidebar — white with subtle border */
   --sidebar: #FFFFFF;
   --sidebar-foreground: #1C1917;
-  --sidebar-primary: #7C3AED;
+  --sidebar-primary: #F97316;
   --sidebar-primary-foreground: #FFFFFF;
-  --sidebar-accent: #F5F4F2;
+  --sidebar-accent: #FFF3EC;
   --sidebar-accent-foreground: #1C1917;
   --sidebar-border: #E7E5E4;
-  --sidebar-ring: #7C3AED;
+  --sidebar-ring: #F97316;
 }
 
 @layer base {
@@ -115,15 +115,15 @@
   }
 }
 
-/* Floating card shadow utility */
+/* Floating card shadow utility — orange-tinted per brand */
 .card-float {
-  box-shadow: 0 4px 24px rgba(0, 0, 0, 0.06);
+  box-shadow: 0 4px 24px rgba(249, 115, 22, 0.08), 0 1px 3px rgba(28, 25, 23, 0.04);
 }
 
 .card-float-hover {
   transition: box-shadow 0.2s ease, transform 0.2s ease;
 }
 .card-float-hover:hover {
-  box-shadow: 0 8px 32px rgba(0, 0, 0, 0.1);
-  transform: translateY(-1px);
+  box-shadow: 0 12px 40px rgba(249, 115, 22, 0.12), 0 2px 8px rgba(28, 25, 23, 0.06);
+  transform: translateY(-1px) scale(1.01);
 }

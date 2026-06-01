@@ -183,7 +183,7 @@ export default function OnboardingPage() {
           <div className="w-7 h-7 rounded-md bg-primary flex items-center justify-center">
             <Zap className="w-3.5 h-3.5 text-primary-foreground" />
           </div>
-          <span className="font-semibold tracking-tight">LeadReply</span>
+          <span className="font-semibold tracking-tight">FieldBuilt AI</span>
         </div>
         <span className="text-sm text-muted-foreground hidden sm:block">Setup — takes under 10 minutes</span>
       </header>

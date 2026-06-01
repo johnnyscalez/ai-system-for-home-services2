@@ -33,7 +33,7 @@ function DotGrid() {
     <div
       className="fixed inset-0 pointer-events-none z-0 opacity-40"
       style={{
-        backgroundImage: "radial-gradient(rgba(124,58,237,0.15) 1px, transparent 1px)",
+        backgroundImage: "radial-gradient(rgba(249,115,22,0.15) 1px, transparent 1px)",
         backgroundSize: "28px 28px",
       }}
     />
@@ -49,7 +49,7 @@ function GlowOrbs() {
         className="absolute rounded-full"
         style={{
           width: 600, height: 600,
-          background: "rgba(124,58,237,0.06)",
+          background: "rgba(249,115,22,0.06)",
           filter: "blur(80px)",
           top: "-10%", left: "-5%",
         }}
@@ -135,7 +135,7 @@ function FacebookCard({ integration, errorCode }: { integration: Integration | u
       transition={{ delay: 0.1 }}
       whileHover={{ y: -3, transition: { type: "spring", stiffness: 300 } }}
       className="bg-white rounded-2xl border border-[#E7E5E4] overflow-hidden"
-      style={{ boxShadow: "0 4px 24px rgba(124,58,237,0.06), 0 1px 3px rgba(0,0,0,0.04)" }}
+      style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.06), 0 1px 3px rgba(0,0,0,0.04)" }}
     >
       {/* Header */}
       <div className="p-6 pb-4 flex items-start justify-between">
@@ -246,10 +246,10 @@ function FacebookCard({ integration, errorCode }: { integration: Integration | u
             {[
               "Click Connect below and authorize with your Facebook account",
               "Choose which page and lead form to track",
-              "Every new Facebook Lead Ad lead gets an AI SMS within 60 seconds",
+              "Every new Facebook Lead Ad lead gets an AI SMS within 3.7 seconds",
             ].map((step, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-[#78716C]">
-                <span className="w-4 h-4 rounded-full bg-[#7C3AED]/10 text-[#7C3AED] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
+                <span className="w-4 h-4 rounded-full bg-[#F97316]/10 text-[#F97316] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
                   {i + 1}
                 </span>
                 {step}
@@ -318,7 +318,7 @@ function GoogleAdsCard({ webhookUrl }: { webhookUrl: string }) {
       transition={{ delay: 0.18 }}
       whileHover={{ y: -3, transition: { type: "spring", stiffness: 300 } }}
       className="bg-white rounded-2xl border border-[#E7E5E4] overflow-hidden"
-      style={{ boxShadow: "0 4px 24px rgba(124,58,237,0.06), 0 1px 3px rgba(0,0,0,0.04)" }}
+      style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.06), 0 1px 3px rgba(0,0,0,0.04)" }}
     >
       <div className="p-6 pb-4 flex items-start justify-between">
         <div className="flex items-center gap-4">
@@ -355,7 +355,7 @@ function GoogleAdsCard({ webhookUrl }: { webhookUrl: string }) {
       {/* Webhook URL */}
       <div className="mx-6 mb-4">
         <div className="flex items-center gap-2 bg-[#FAFAF8] rounded-xl p-3 border border-[#E7E5E4]">
-          <code className="text-xs text-[#7C3AED] flex-1 break-all font-mono">
+          <code className="text-xs text-[#F97316] flex-1 break-all font-mono">
             {webhookUrl}
           </code>
           <CopyButton text={webhookUrl} />
@@ -366,7 +366,7 @@ function GoogleAdsCard({ webhookUrl }: { webhookUrl: string }) {
       <div className="px-6 pb-6">
         <button
           onClick={() => setShowInstructions(!showInstructions)}
-          className="flex items-center gap-2 text-sm font-medium text-[#7C3AED] hover:text-[#6D28D9] transition-colors"
+          className="flex items-center gap-2 text-sm font-medium text-[#F97316] hover:text-[#EA580C] transition-colors"
         >
           <ChevronRight className={`w-4 h-4 transition-transform ${showInstructions ? "rotate-90" : ""}`} />
           {showInstructions ? "Hide" : "Show"} setup instructions
@@ -400,7 +400,7 @@ function GoogleAdsCard({ webhookUrl }: { webhookUrl: string }) {
                 href="https://support.google.com/google-ads/answer/9423255"
                 target="_blank"
                 rel="noopener noreferrer"
-                className="mt-3 flex items-center gap-1.5 text-xs text-[#7C3AED] hover:underline"
+                className="mt-3 flex items-center gap-1.5 text-xs text-[#F97316] hover:underline"
               >
                 <ExternalLink className="w-3 h-3" />
                 Google Ads lead form docs
@@ -458,7 +458,7 @@ function WebsiteFormCard({ webhookUrl, secret }: { webhookUrl: string; secret: s
       transition={{ delay: 0.26 }}
       whileHover={{ y: -3, transition: { type: "spring", stiffness: 300 } }}
       className="bg-white rounded-2xl border border-[#E7E5E4] overflow-hidden"
-      style={{ boxShadow: "0 4px 24px rgba(124,58,237,0.06), 0 1px 3px rgba(0,0,0,0.04)" }}
+      style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.06), 0 1px 3px rgba(0,0,0,0.04)" }}
     >
       <div className="p-6 pb-4 flex items-start justify-between">
         <div className="flex items-center gap-4">
@@ -511,13 +511,13 @@ function WebsiteFormCard({ webhookUrl, secret }: { webhookUrl: string; secret: s
         {tab === "url" && (
           <div className="space-y-3">
             <div className="flex items-center gap-2 bg-[#FAFAF8] rounded-xl p-3 border border-[#E7E5E4]">
-              <code className="text-xs text-[#7C3AED] flex-1 break-all font-mono">
+              <code className="text-xs text-[#F97316] flex-1 break-all font-mono">
                 {webhookUrl}
               </code>
               <CopyButton text={webhookUrl} />
             </div>
             <div className="flex items-start gap-2 text-xs text-[#78716C]">
-              <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[#7C3AED]" />
+              <Info className="w-3.5 h-3.5 shrink-0 mt-0.5 text-[#F97316]" />
               <p>
                 POST JSON to this URL with <code className="bg-[#F5F4F2] px-1 rounded">phone</code>,{" "}
                 <code className="bg-[#F5F4F2] px-1 rounded">first_name</code>, and optionally{" "}
@@ -626,8 +626,8 @@ export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast,
           className="mb-8"
         >
           <div className="flex items-center gap-3 mb-1">
-            <div className="w-9 h-9 rounded-xl bg-[#7C3AED]/10 flex items-center justify-center">
-              <Zap className="w-4.5 h-4.5 text-[#7C3AED]" />
+            <div className="w-9 h-9 rounded-xl bg-[#F97316]/10 flex items-center justify-center">
+              <Zap className="w-4.5 h-4.5 text-[#F97316]" />
             </div>
             <h1
               className="text-3xl font-bold text-[#1C1917]"
@@ -637,7 +637,7 @@ export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast,
             </h1>
           </div>
           <p className="text-[#78716C] mt-2 ml-12">
-            Connect your lead sources. Every lead gets an AI SMS within 60 seconds.
+            Connect your lead sources. Every lead gets an AI SMS within 3.7 seconds.
           </p>
 
           {connectedCount > 0 && (

@@ -113,10 +113,10 @@ export function StepTechnicians({ onNext, onSkip }: { onNext: () => void; onSkip
       {/* ── Smart Dispatch Hero ─────────────────────────────────────────── */}
       <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.4 }}>
         <div className="flex items-center gap-2 mb-1">
-          <div className="w-8 h-8 rounded-lg bg-[#7C3AED] flex items-center justify-center shadow-sm">
+          <div className="w-8 h-8 rounded-lg bg-[#F97316] flex items-center justify-center shadow-sm">
             <BrainCircuit className="w-4 h-4 text-white" />
           </div>
-          <span className="text-xs font-semibold uppercase tracking-widest text-[#7C3AED]">Smart Dispatch</span>
+          <span className="text-xs font-semibold uppercase tracking-widest text-[#F97316]">Smart Dispatch</span>
         </div>
 
         <h2 className="text-2xl font-bold text-[#1C1917] mt-3" style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
@@ -148,8 +148,8 @@ export function StepTechnicians({ onNext, onSkip }: { onNext: () => void; onSkip
             },
           ].map(({ icon: Icon, title, desc }) => (
             <div key={title} className="bg-white border border-[#E7E5E4] rounded-xl p-4 shadow-sm">
-              <div className="w-7 h-7 rounded-lg bg-[#7C3AED]/10 flex items-center justify-center mb-2">
-                <Icon className="w-3.5 h-3.5 text-[#7C3AED]" />
+              <div className="w-7 h-7 rounded-lg bg-[#F97316]/10 flex items-center justify-center mb-2">
+                <Icon className="w-3.5 h-3.5 text-[#F97316]" />
               </div>
               <p className="text-sm font-semibold text-[#1C1917]">{title}</p>
               <p className="text-xs text-[#78716C] mt-0.5 leading-relaxed">{desc}</p>
@@ -177,7 +177,7 @@ export function StepTechnicians({ onNext, onSkip }: { onNext: () => void; onSkip
                   <p className="text-sm font-semibold text-[#1C1917]">{t.name}</p>
                   <div className="flex flex-wrap gap-1 mt-0.5">
                     {t.specializations.map(s => (
-                      <span key={s} className="text-[10px] bg-[#7C3AED]/8 text-[#7C3AED] px-1.5 py-0.5 rounded-full font-medium">{s}</span>
+                      <span key={s} className="text-[10px] bg-[#F97316]/8 text-[#F97316] px-1.5 py-0.5 rounded-full font-medium">{s}</span>
                     ))}
                     {t.specializations.length === 0 && (
                       <span className="text-[10px] text-[#78716C]">General (all jobs)</span>
@@ -203,7 +203,7 @@ export function StepTechnicians({ onNext, onSkip }: { onNext: () => void; onSkip
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             onClick={() => setShowForm(true)}
-            className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-[#E7E5E4] rounded-xl py-4 text-sm font-medium text-[#78716C] hover:border-[#7C3AED]/40 hover:text-[#7C3AED] hover:bg-[#7C3AED]/4 transition-all duration-200"
+            className="w-full flex items-center justify-center gap-2 border-2 border-dashed border-[#E7E5E4] rounded-xl py-4 text-sm font-medium text-[#78716C] hover:border-[#F97316]/40 hover:text-[#F97316] hover:bg-[#F97316]/4 transition-all duration-200"
           >
             <Plus className="w-4 h-4" />
             {techs.length === 0 ? "Add your first technician" : "Add another technician"}
@@ -269,8 +269,8 @@ export function StepTechnicians({ onNext, onSkip }: { onNext: () => void; onSkip
                       className={cn(
                         "px-2.5 py-1 rounded-full text-xs font-medium border transition-all duration-150",
                         active
-                          ? "bg-[#7C3AED] text-white border-[#7C3AED] shadow-sm"
-                          : "bg-white text-[#78716C] border-[#E7E5E4] hover:border-[#7C3AED]/40 hover:text-[#7C3AED]"
+                          ? "bg-[#F97316] text-white border-[#F97316] shadow-sm"
+                          : "bg-white text-[#78716C] border-[#E7E5E4] hover:border-[#F97316]/40 hover:text-[#F97316]"
                       )}
                     >
                       {s}
@@ -317,7 +317,7 @@ export function StepTechnicians({ onNext, onSkip }: { onNext: () => void; onSkip
                 onClick={handleSave}
                 disabled={saving}
                 size="sm"
-                className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white"
+                className="bg-[#F97316] hover:bg-[#EA580C] text-white"
               >
                 {saving ? <Loader2 className="w-3.5 h-3.5 animate-spin mr-1" /> : <Check className="w-3.5 h-3.5 mr-1" />}
                 {saving ? "Saving…" : "Add technician"}
@@ -339,7 +339,7 @@ export function StepTechnicians({ onNext, onSkip }: { onNext: () => void; onSkip
       >
         <p className="text-xs text-[#78716C] text-center sm:text-left">
           You can add, edit, and remove technicians anytime from the{" "}
-          <span className="font-medium text-[#7C3AED]">Technicians</span> section.
+          <span className="font-medium text-[#F97316]">Technicians</span> section.
         </p>
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={onSkip} className="text-[#78716C] hover:text-[#1C1917]">
@@ -348,7 +348,7 @@ export function StepTechnicians({ onNext, onSkip }: { onNext: () => void; onSkip
           <Button
             size="sm"
             onClick={onNext}
-            className="bg-[#7C3AED] hover:bg-[#6D28D9] text-white px-5"
+            className="bg-[#F97316] hover:bg-[#EA580C] text-white px-5"
           >
             {techs.length === 0 ? "Continue without team" : `Continue with ${techs.length} tech${techs.length > 1 ? "s" : ""}`}
             <ArrowRight className="w-3.5 h-3.5 ml-1.5" />

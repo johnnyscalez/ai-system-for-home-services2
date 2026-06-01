@@ -28,8 +28,8 @@ export function StepGmail({ onSkip }: Props) {
     >
       {/* Header */}
       <div>
-        <div className="w-12 h-12 rounded-2xl bg-[#7C3AED]/10 flex items-center justify-center mb-4">
-          <Mail className="w-6 h-6 text-[#7C3AED]" />
+        <div className="w-12 h-12 rounded-2xl bg-[#F97316]/10 flex items-center justify-center mb-4">
+          <Mail className="w-6 h-6 text-[#F97316]" />
         </div>
         <h1 className="text-2xl font-bold text-[#1C1917]">Connect your Gmail</h1>
         <p className="text-[#78716C] mt-2 leading-relaxed">
@@ -70,7 +70,7 @@ export function StepGmail({ onSkip }: Props) {
       <a href="/api/auth/gmail?return_to=onboarding" className="block">
         <button className={cn(
           "w-full flex items-center justify-center gap-3 px-6 py-4 rounded-xl font-semibold text-[#1C1917]",
-          "bg-white border-2 border-[#E7E5E4] hover:border-[#7C3AED]/40 hover:shadow-md transition-all duration-150",
+          "bg-white border-2 border-[#E7E5E4] hover:border-[#F97316]/40 hover:shadow-md transition-all duration-150",
           "shadow-sm"
         )}>
           {/* Google logo SVG */}

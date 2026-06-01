@@ -7,13 +7,50 @@ import { createClient } from "@/lib/supabase"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Label } from "@/components/ui/label"
-import { Zap, Check } from "lucide-react"
+import { Check } from "lucide-react"
+
+function FieldFMark({ size = 20, onDark = false }: { size?: number; onDark?: boolean }) {
+  const base = onDark ? "#fff" : "#1C1917"
+  return (
+    <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true">
+      <rect x="18" y="12" width="11" height="40" rx="1.5" fill={base} />
+      <rect x="18" y="28" width="20" height="10" rx="1.5" fill={base} />
+      <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316" />
+      <rect x="42" y="12" width="7"  height="11" rx="1.5" fill="#EA580C" />
+    </svg>
+  )
+}
+
+function LogoLockup({ onDark = false }: { onDark?: boolean }) {
+  return (
+    <div className="flex items-center gap-2.5">
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shadow-sm ${onDark ? "bg-white/10" : "bg-[#1A1614]"}`}>
+        <FieldFMark size={20} onDark={!onDark} />
+      </div>
+      <span
+        className="font-extrabold tracking-tight"
+        style={{
+          fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em",
+          color: onDark ? "#F5F3F0" : "#1C1917",
+        }}
+      >
+        FIELDBUILT
+        <span
+          className="inline-flex items-center justify-center text-white font-bold rounded ml-1"
+          style={{ fontSize: "0.42em", background: "#F97316", padding: "0.22em 0.45em", borderRadius: 5, letterSpacing: "0.04em", verticalAlign: "super" }}
+        >
+          AI
+        </span>
+      </span>
+    </div>
+  )
+}
 
 export default function SignupPage() {
-  const router = useRouter()
+  const router   = useRouter()
   const supabase = createClient()
   const [form, setForm] = useState({ fullName: "", email: "", password: "" })
-  const [error, setError] = useState("")
+  const [error, setError]   = useState("")
   const [loading, setLoading] = useState(false)
 
   function set(field: string) {
@@ -38,15 +75,12 @@ export default function SignupPage() {
       return
     }
 
-    // Explicitly sign in after signup so the session is guaranteed active
-    // regardless of whether email confirmation is enabled in Supabase
     const { error: signInError } = await supabase.auth.signInWithPassword({
       email: form.email,
       password: form.password,
     })
 
     if (signInError) {
-      // Account created but can't auto-login — send to login page
       router.push("/login")
       return
     }
@@ -56,36 +90,42 @@ export default function SignupPage() {
   }
 
   const perks = [
-    "Every lead texted in under 60 seconds",
-    "AI books estimate appointments automatically",
-    "No credit card required for 14 days",
+    "Every lead texted in 3.7 seconds — day or night",
+    "AI qualifies and books estimate appointments automatically",
+    "Your AI operation installed and running in one day",
+    "No credit card required for the install call",
   ]
 
   return (
     <div className="w-full max-w-4xl grid md:grid-cols-2 gap-12 items-center">
+
       {/* Left — value prop */}
       <div className="hidden md:block">
-        <div className="flex items-center gap-2 mb-8">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <Zap className="w-4 h-4 text-primary-foreground" />
-          </div>
-          <span className="text-lg font-semibold tracking-tight">LeadReply</span>
+        <div className="mb-8">
+          <LogoLockup />
         </div>
-        <h2 className="text-3xl font-bold leading-tight mb-4">
-          Every lead gets a response in{" "}
-          <span className="text-primary">60 seconds.</span>{" "}
-          Automatically.
+        <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-5"
+             style={{ background: "#FFF3EC", color: "#EA580C", fontFamily: "var(--font-mono)" }}>
+          AI operations · installed for you
+        </div>
+        <h2 className="text-3xl font-extrabold leading-tight mb-4"
+            style={{ fontFamily: "var(--font-jakarta)", color: "#1C1917", letterSpacing: "-0.02em" }}>
+          Your AI operation.{" "}
+          <span style={{ color: "#F97316" }}>Installed in a day.</span>{" "}
+          You just show up.
         </h2>
-        <p className="text-muted-foreground mb-8">
-          Stop losing jobs to contractors who respond faster. Our AI texts every lead the moment they fill out your form — 24/7, even at 11pm on a Sunday.
+        <p className="text-[#78716C] mb-8 leading-relaxed">
+          Stop losing jobs to contractors who respond faster. Your AI texts every lead in 3.7 seconds,
+          qualifies them, handles objections, and books the appointment — 24/7.
         </p>
         <ul className="space-y-3">
           {perks.map((perk) => (
             <li key={perk} className="flex items-center gap-3 text-sm">
-              <div className="w-5 h-5 rounded-full bg-primary/15 flex items-center justify-center shrink-0">
-                <Check className="w-3 h-3 text-primary" />
+              <div className="w-5 h-5 rounded-full flex items-center justify-center shrink-0"
+                   style={{ background: "#FFF3EC" }}>
+                <Check className="w-3 h-3" style={{ color: "#F97316" }} aria-hidden="true" />
               </div>
-              {perk}
+              <span style={{ color: "#1C1917" }}>{perk}</span>
             </li>
           ))}
         </ul>
@@ -94,16 +134,18 @@ export default function SignupPage() {
       {/* Right — form */}
       <div>
         <div className="flex items-center gap-2 mb-8 md:hidden justify-center">
-          <div className="w-8 h-8 rounded-lg bg-primary flex items-center justify-center">
-            <Zap className="w-4 h-4 text-primary-foreground" />
-          </div>
-          <span className="text-lg font-semibold tracking-tight">LeadReply</span>
+          <LogoLockup />
         </div>
 
-        <div className="bg-card border border-border rounded-xl p-8">
+        <div className="bg-card border border-border rounded-xl p-8"
+             style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.08), 0 1px 3px rgba(28,25,23,0.04)" }}>
           <div className="mb-6">
-            <h1 className="text-xl font-semibold">Start your free trial</h1>
-            <p className="text-sm text-muted-foreground mt-1">14 days free. No credit card needed.</p>
+            <h1 className="text-xl font-semibold" style={{ fontFamily: "var(--font-jakarta)" }}>
+              Book your install call
+            </h1>
+            <p className="text-sm text-muted-foreground mt-1">
+              We set up your AI operation. You approve it. It runs forever.
+            </p>
           </div>
 
           <form onSubmit={handleSubmit} className="space-y-4">
@@ -149,7 +191,7 @@ export default function SignupPage() {
             {error && <p className="text-sm text-destructive">{error}</p>}
 
             <Button type="submit" className="w-full" disabled={loading}>
-              {loading ? "Creating account..." : "Create free account →"}
+              {loading ? "Creating account..." : "Get started →"}
             </Button>
 
             <p className="text-xs text-muted-foreground text-center">
@@ -160,7 +202,7 @@ export default function SignupPage() {
 
         <p className="text-center text-sm text-muted-foreground mt-6">
           Already have an account?{" "}
-          <Link href="/login" className="text-primary hover:underline">
+          <Link href="/login" className="text-primary hover:underline font-medium">
             Sign in
           </Link>
         </p>

@@ -17,9 +17,9 @@ import {
 const C = {
   bg:          "#FAFAF8",
   surface:     "#FFFFFF",
-  primary:     "#7C3AED",
-  primaryDark: "#6D28D9",
-  success:     "#4D7C0F",
+  primary:     "#F97316",
+  primaryDark: "#EA580C",
+  success:     "#16A34A",
   text:        "#1C1917",
   muted:       "#78716C",
   border:      "#E7E5E4",
@@ -182,34 +182,38 @@ function Background() {
         }
       `}</style>
 
+      {/* Glow orbs — orange/amber brand palette, low opacity */}
       <div className="fixed inset-0 pointer-events-none overflow-hidden" style={{ zIndex: 0 }}>
         <div style={{
           position: "absolute", top: "-5%", right: "-5%",
-          width: 500, height: 500, borderRadius: "50%",
-          background: "#7C3AED", filter: "blur(100px)",
-          animation: "orbPulse 5s ease-in-out infinite",
+          width: 600, height: 600, borderRadius: "50%",
+          background: "#F97316", filter: "blur(120px)", opacity: 0.07,
+          animation: "orbPulse 8s ease-in-out infinite",
         }} />
         <div style={{
           position: "absolute", bottom: "-5%", left: "-5%",
-          width: 380, height: 380, borderRadius: "50%",
-          background: "#4D7C0F", filter: "blur(80px)", opacity: 0.13,
-          animation: "orbPulse2 5s ease-in-out infinite",
+          width: 500, height: 500, borderRadius: "50%",
+          background: "#FBBF24", filter: "blur(100px)", opacity: 0.06,
+          animation: "orbPulse2 11s ease-in-out infinite",
         }} />
         <div style={{
           position: "absolute", top: "40%", right: "20%",
-          width: 200, height: 200, borderRadius: "50%",
-          background: "#D97706", filter: "blur(60px)", opacity: 0.06,
+          width: 400, height: 400, borderRadius: "50%",
+          background: "#F97316", filter: "blur(80px)", opacity: 0.04,
           animation: "orbDrift 9s ease-in-out infinite",
         }} />
       </div>
 
+      {/* Dot grid — orange radial dots, masked to fade */}
       <div
         className="fixed inset-0 pointer-events-none"
         style={{
           zIndex: 1,
-          backgroundImage: "radial-gradient(circle, #D4D0CC 1px, transparent 1px)",
-          backgroundSize: "28px 28px",
-          opacity: 0.5,
+          backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.18) 1.4px, transparent 1.4px)",
+          backgroundSize: "26px 26px",
+          opacity: 0.8,
+          WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 80%)",
+          maskImage: "radial-gradient(ellipse 80% 70% at 50% 40%, #000 30%, transparent 80%)",
         }}
       />
     </>
@@ -330,17 +334,26 @@ function Nav() {
     >
       <div className="max-w-7xl mx-auto px-6 py-4 flex items-center justify-between">
         <div className="flex items-center gap-2.5">
-          <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.primary }}>
-            <Zap className="w-4 h-4 text-white" aria-hidden="true" />
+          <div className="w-8 h-8 rounded-lg bg-[#1A1614] flex items-center justify-center shadow-sm">
+            <svg width="18" height="18" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+              <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#fff" />
+              <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#fff" />
+              <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316" />
+              <rect x="42" y="12" width="7"  height="11" rx="1.5" fill="#EA580C" />
+            </svg>
           </div>
-          <span className="font-bold text-xl tracking-tight" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-            LeadCloser
+          <span className="font-extrabold text-xl tracking-tight" style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+            FIELDBUILT
+            <span className="inline-flex items-center justify-center text-white font-bold rounded ml-1"
+                  style={{ fontSize: "0.42em", background: "#F97316", padding: "0.22em 0.45em", borderRadius: 5, letterSpacing: "0.04em", verticalAlign: "super" }}>
+              AI
+            </span>
           </span>
         </div>
 
         <div className="hidden md:flex items-center gap-8">
           {links.map(l => (
-            <a key={l.label} href={l.href} className="text-sm transition-colors duration-200 hover:text-purple-600"
+            <a key={l.label} href={l.href} className="text-sm transition-colors duration-200 hover:text-[#F97316]"
                style={{ color: C.muted }}>
               {l.label}
             </a>
@@ -354,7 +367,7 @@ function Nav() {
           </Link>
           <Link href="/signup?new=1"
                 className="text-sm font-semibold text-white px-5 py-2.5 rounded-full transition-all duration-200 hover:-translate-y-0.5"
-                style={{ background: C.primary, boxShadow: "0 4px 14px rgba(124,58,237,0.40)" }}>
+                style={{ background: C.primary, boxShadow: "0 4px 14px rgba(249,115,22,0.40)" }}>
             Get Installed
           </Link>
         </div>
@@ -426,16 +439,22 @@ function LiveConversation() {
   return (
     <div className="flex flex-col rounded-xl overflow-hidden"
          style={{ background: C.surface, height: 420, border: `1px solid ${C.border}`,
-                  boxShadow: "0 8px 32px rgba(124,58,237,0.10)" }}>
+                  boxShadow: "0 8px 32px rgba(249,115,22,0.10)" }}>
       {/* Header */}
       <div className="shrink-0 flex items-center gap-2 px-4 py-3 border-b" style={{ borderColor: C.border }}>
-        <div className="w-8 h-8 rounded-full flex items-center justify-center text-white text-xs font-bold"
-             style={{ background: C.primary }}>LC</div>
+        <div className="w-8 h-8 rounded-lg bg-[#1A1614] flex items-center justify-center shrink-0">
+          <svg width="16" height="16" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+            <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#fff" />
+            <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#fff" />
+            <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316" />
+            <rect x="42" y="12" width="7"  height="11" rx="1.5" fill="#EA580C" />
+          </svg>
+        </div>
         <div>
-          <div className="text-xs font-semibold" style={{ color: C.text }}>LeadCloser AI</div>
+          <div className="text-xs font-semibold" style={{ color: C.text }}>FieldBuilt AI</div>
           <div className="flex items-center gap-1">
             <span className="w-1.5 h-1.5 rounded-full bg-green-500" />
-            <span className="text-xs" style={{ color: C.muted }}>Responding in seconds</span>
+            <span className="text-xs" style={{ color: C.muted }}>Responding in 3.7 seconds</span>
           </div>
         </div>
         <div className="ml-auto text-xs px-2 py-0.5 rounded-full" style={{ background: "#F0FDF4", color: C.success }}>
@@ -513,7 +532,7 @@ function HeroSection() {
         <div className="absolute bottom-24 right-8 opacity-8" style={{ color: C.muted }}>
           <HvacThermostat size={110} />
         </div>
-        <AirflowParticles count={10} color="#7C3AED" />
+        <AirflowParticles count={10} color="#F97316" />
       </div>
 
       <div className="relative max-w-7xl mx-auto w-full">
@@ -526,7 +545,7 @@ function HeroSection() {
               initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.3, duration: 0.5 }}
               className="inline-flex items-center gap-2 text-xs font-medium px-3 py-1.5 rounded-full border mb-6"
-              style={{ background: "#F5F3FF", borderColor: "rgba(124,58,237,0.2)", color: C.primary }}
+              style={{ background: "#FFF3EC", borderColor: "rgba(249,115,22,0.2)", color: C.primary }}
             >
               <span className="w-2 h-2 rounded-full bg-green-500" style={{ animation: "callPulse 2s ease-in-out infinite" }} />
               AI call center · appointment setter · dispatcher · 200+ HVAC companies
@@ -544,7 +563,7 @@ function HeroSection() {
               <span className="relative inline-block" style={{ color: C.primary }}>
                 on the schedule.
                 <span className="absolute -bottom-1 left-0 right-0 h-1 rounded-full"
-                      style={{ background: `linear-gradient(90deg, ${C.primary}, #8B5CF6)`,
+                      style={{ background: `linear-gradient(90deg, ${C.primary}, #EA580C)`,
                                transformOrigin: "left", animation: "underlineDraw 0.8s ease forwards 1.2s",
                                transform: "scaleX(0)" }} />
               </span>
@@ -560,8 +579,8 @@ function HeroSection() {
               className="text-lg leading-relaxed mb-8 max-w-lg"
               style={{ color: C.muted }}
             >
-              You can&rsquo;t afford a call center. LeadCloser gives you one — plus an appointment setter
-              and dispatcher that runs 24/7. Every Facebook lead gets texted in 47 seconds, qualified,
+              You can&rsquo;t afford a call center. FieldBuilt AI gives you one — plus an appointment setter
+              and dispatcher that runs 24/7. Every Facebook lead gets texted in 3.7 seconds, qualified,
               and booked. Your techs get dispatched to the right jobs automatically.
               You just show up.
             </motion.p>
@@ -574,12 +593,12 @@ function HeroSection() {
             >
               <Link href="/signup?new=1"
                     className="inline-flex items-center justify-center gap-2 font-semibold text-white px-7 py-4 rounded-full transition-all duration-200 hover:-translate-y-1"
-                    style={{ background: C.primary, boxShadow: "0 8px 24px rgba(124,58,237,0.35)" }}>
+                    style={{ background: C.primary, boxShadow: "0 8px 24px rgba(249,115,22,0.35)" }}>
                 Get Your System Installed
                 <ArrowRight className="w-4 h-4" aria-hidden="true" />
               </Link>
               <a href="#demo"
-                 className="inline-flex items-center justify-center gap-2 font-medium px-7 py-4 rounded-full border transition-all duration-200 hover:border-purple-300 hover:text-purple-600"
+                 className="inline-flex items-center justify-center gap-2 font-medium px-7 py-4 rounded-full border transition-all duration-200 hover:border-[#F97316] hover:text-[#F97316]"
                  style={{ borderColor: C.border, background: C.surface, color: C.text }}>
                 <Play className="w-4 h-4" aria-hidden="true" />
                 Watch It Work
@@ -603,7 +622,7 @@ function HeroSection() {
           >
             {/* Browser chrome */}
             <div className="rounded-2xl overflow-hidden"
-                 style={{ boxShadow: "0 24px 64px rgba(124,58,237,0.15), 0 4px 16px rgba(0,0,0,0.08)" }}>
+                 style={{ boxShadow: "0 24px 64px rgba(249,115,22,0.15), 0 4px 16px rgba(0,0,0,0.08)" }}>
               <div className="flex items-center gap-1.5 px-4 py-3 border-b"
                    style={{ background: "#F8F7F5", borderColor: C.border }}>
                 <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
@@ -645,7 +664,7 @@ function StatStrip() {
   const inView = useInView(ref, { once: true })
 
   const stats = [
-    { value: "47",  unit: "sec",  label: "First contact — day or night",         mono: true },
+    { value: "3.7",  unit: "sec",  label: "First contact — day or night",         mono: true },
     { value: "94",  unit: "%",    label: "Contact rate vs. 11% industry average", mono: true },
     { value: "3–5", unit: "×",    label: "Average ROI on ad spend in 60 days",   mono: true },
     { value: "24/7", unit: "",    label: "Your AI call center never clocks out",  mono: true },
@@ -659,7 +678,7 @@ function StatStrip() {
           transition={{ duration: 0.5 }}
           className="grid grid-cols-2 md:grid-cols-4 gap-0 rounded-2xl overflow-hidden border"
           style={{ background: C.surface, borderColor: C.border,
-                   boxShadow: "0 4px 24px rgba(124,58,237,0.06)" }}
+                   boxShadow: "0 4px 24px rgba(249,115,22,0.06)" }}
         >
           {stats.map((s, i) => (
             <div key={i} className={`px-6 py-6 ${i < 3 ? "border-r border-b md:border-b-0" : "border-b md:border-b-0"}`}
@@ -735,7 +754,7 @@ function SystemOverviewSection() {
           className="text-center mb-14"
         >
           <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
-               style={{ background: "#F5F3FF", color: C.primary }}>
+               style={{ background: "#FFF3EC", color: C.primary }}>
             Your AI office — working 24/7
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
@@ -746,7 +765,7 @@ function SystemOverviewSection() {
             <span style={{ color: C.muted, fontWeight: 400 }}>On duty around the clock.</span>
           </h2>
           <p className="text-lg max-w-2xl mx-auto" style={{ color: C.muted }}>
-            An AI receptionist contacts every lead in 47 seconds. An AI appointment setter
+            An AI receptionist contacts every lead in 3.7 seconds. An AI appointment setter
             qualifies them and books the estimate. An AI dispatcher routes each tech to the right job.
             Every conversation logged. Every dispatch tracked. You get notified. You just show up.
           </p>
@@ -760,10 +779,10 @@ function SystemOverviewSection() {
             initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6, delay: 0.1 }}
             className="md:col-span-2 rounded-2xl p-6 border"
-            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(124,58,237,0.07)" }}
+            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(249,115,22,0.07)" }}
           >
             <div className="flex items-center gap-2 mb-5">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#F5F3FF", color: C.primary }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#FFF3EC", color: C.primary }}>
                 <BarChart3 className="w-4 h-4" aria-hidden="true" />
               </div>
               <div>
@@ -819,10 +838,10 @@ function SystemOverviewSection() {
             initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6, delay: 0.2 }}
             className="rounded-2xl p-6 border"
-            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(124,58,237,0.07)" }}
+            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(249,115,22,0.07)" }}
           >
             <div className="flex items-center gap-2 mb-4">
-              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#F5F3FF", color: C.primary }}>
+              <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#FFF3EC", color: C.primary }}>
                 <Brain className="w-4 h-4" aria-hidden="true" />
               </div>
               <div>
@@ -863,7 +882,7 @@ function SystemOverviewSection() {
             initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6, delay: 0.3 }}
             className="rounded-2xl p-6 border"
-            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(124,58,237,0.07)" }}
+            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(249,115,22,0.07)" }}
           >
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#F0F9FF", color: "#0EA5E9" }}>
@@ -901,7 +920,7 @@ function SystemOverviewSection() {
             initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6, delay: 0.35 }}
             className="rounded-2xl p-6 border"
-            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(124,58,237,0.07)" }}
+            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(249,115,22,0.07)" }}
           >
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#F0FDF4", color: C.success }}>
@@ -951,7 +970,7 @@ function SystemOverviewSection() {
             initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6, delay: 0.4 }}
             className="rounded-2xl p-6 border"
-            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(124,58,237,0.07)" }}
+            style={{ background: C.surface, borderColor: C.border, boxShadow: "0 4px 24px rgba(249,115,22,0.07)" }}
           >
             <div className="flex items-center gap-2 mb-4">
               <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: "#FFF7ED", color: "#D97706" }}>
@@ -972,7 +991,7 @@ function SystemOverviewSection() {
                   className="flex items-center gap-2.5"
                 >
                   <div className="w-6 h-6 rounded-md flex items-center justify-center shrink-0"
-                       style={{ background: s.type === "voice" ? "#F5F3FF" : "#F0F9FF",
+                       style={{ background: s.type === "voice" ? "#FFF3EC" : "#F0F9FF",
                                 color:      s.type === "voice" ? C.primary : "#0EA5E9" }}>
                     {s.type === "voice"
                       ? <PhoneCall className="w-3 h-3" aria-hidden="true" />
@@ -1051,7 +1070,7 @@ function ProblemSection() {
               <div className="w-6 h-6 rounded-full bg-red-100 flex items-center justify-center">
                 <X className="w-3.5 h-3.5 text-red-500" aria-hidden="true" />
               </div>
-              <span className="font-bold text-sm text-red-700">Without LeadCloser</span>
+              <span className="font-bold text-sm text-red-700">Without FieldBuilt AI</span>
             </div>
             <div className="space-y-4">
               {withoutSteps.map((s, i) => (
@@ -1082,7 +1101,7 @@ function ProblemSection() {
               <div className="w-6 h-6 rounded-full bg-green-100 flex items-center justify-center">
                 <Check className="w-3.5 h-3.5 text-green-600" aria-hidden="true" />
               </div>
-              <span className="font-bold text-sm text-green-700">With LeadCloser</span>
+              <span className="font-bold text-sm text-green-700">With FieldBuilt AI</span>
             </div>
             <div className="space-y-4">
               {withSteps.map((s, i) => (
@@ -1118,10 +1137,10 @@ function HowItWorksSection() {
     {
       num: "01",
       icon: <MessageSquare className="w-6 h-6" aria-hidden="true" />,
-      title: "AI receptionist — texts every lead in 47 seconds",
+      title: "AI receptionist — texts every lead in 3.7 seconds",
       body: "The moment a form hits — at 9pm, 2am, Saturday morning — your AI receptionist reaches out with a trade-specific opener. Not a generic 'we got your message.' A real conversation, before your competitor blinks.",
       color: C.primary,
-      bg: "#F5F3FF",
+      bg: "#FFF3EC",
     },
     {
       num: "02",
@@ -1150,7 +1169,7 @@ function HowItWorksSection() {
           className="text-center mb-16"
         >
           <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
-               style={{ background: "#F5F3FF", color: C.primary }}>
+               style={{ background: "#FFF3EC", color: C.primary }}>
             Your AI team — on duty 24/7
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
@@ -1210,7 +1229,7 @@ function DemoSection() {
             transition={{ duration: 0.6 }}
           >
             <div className="rounded-2xl overflow-hidden"
-                 style={{ boxShadow: "0 20px 60px rgba(124,58,237,0.12)" }}>
+                 style={{ boxShadow: "0 20px 60px rgba(249,115,22,0.12)" }}>
               <div className="flex items-center gap-1.5 px-4 py-3 border-b"
                    style={{ background: "#F8F7F5", borderColor: C.border }}>
                 <span className="w-2.5 h-2.5 rounded-full bg-red-400" />
@@ -1230,7 +1249,7 @@ function DemoSection() {
             transition={{ duration: 0.6, delay: 0.1 }}
           >
             <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-5"
-                 style={{ background: "#F5F3FF", color: C.primary }}>
+                 style={{ background: "#FFF3EC", color: C.primary }}>
               HVAC qualification in real time
             </div>
             <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-4"
@@ -1238,7 +1257,7 @@ function DemoSection() {
               The AI knows HVAC. Not just texting — qualifying.
             </h2>
             <p className="text-base leading-relaxed mb-6" style={{ color: C.muted }}>
-              LeadCloser doesn&rsquo;t send a generic "We got your request" message. It opens
+              FieldBuilt AI doesn&rsquo;t send a generic "We got your request" message. It opens
               with a trade-specific question, learns what&rsquo;s wrong, figures out urgency,
               checks homeownership, collects the address, and books the appointment — all
               in one conversation.
@@ -1287,7 +1306,7 @@ function FollowUpSection() {
           className="text-center mb-4"
         >
           <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
-               style={{ background: "#F5F3FF", color: C.primary }}>
+               style={{ background: "#FFF3EC", color: C.primary }}>
             Automatic follow-up
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-3"
@@ -1315,7 +1334,7 @@ function FollowUpSection() {
               >
                 <div className="shrink-0 flex flex-col items-center gap-1">
                   <div className="w-9 h-9 rounded-lg flex items-center justify-center"
-                       style={{ background: s.type === "voice" ? "#F5F3FF" : "#F0F9FF",
+                       style={{ background: s.type === "voice" ? "#FFF3EC" : "#F0F9FF",
                                 color:      s.type === "voice" ? C.primary : "#0EA5E9" }}>
                     {s.type === "voice"
                       ? <PhoneCall className="w-4 h-4" aria-hidden="true" />
@@ -1329,7 +1348,7 @@ function FollowUpSection() {
                       {s.time}
                     </span>
                     <span className="text-xs px-1.5 py-0.5 rounded-full"
-                          style={{ background: s.type === "voice" ? "#F5F3FF" : "#F0F9FF",
+                          style={{ background: s.type === "voice" ? "#FFF3EC" : "#F0F9FF",
                                    color:      s.type === "voice" ? C.primary : "#0EA5E9" }}>
                       {s.label}
                     </span>
@@ -1386,7 +1405,7 @@ function FollowUpSection() {
             </div>
 
             <div className="rounded-2xl p-5 border"
-                 style={{ background: "#F5F3FF", borderColor: "rgba(124,58,237,0.2)" }}>
+                 style={{ background: "#FFF3EC", borderColor: "rgba(249,115,22,0.2)" }}>
               <p className="text-sm font-medium" style={{ color: C.primary }}>
                 Calls are gated to your working hours. Your AI never texts at 2 AM or
                 calls someone during dinner.
@@ -1578,7 +1597,7 @@ function VoiceCallSection() {
             transition={{ duration: 0.6 }}
           >
             <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-5"
-                 style={{ background: "#F5F3FF", color: C.primary }}>
+                 style={{ background: "#FFF3EC", color: C.primary }}>
               AI voice calls
             </div>
             <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-4"
@@ -1646,7 +1665,7 @@ function VoiceCallSection() {
                         className={`flex ${t.who === "lead" ? "justify-end" : "justify-start"}`}
                       >
                         <div className={`max-w-[85%] px-2.5 py-1.5 rounded-xl text-[10px] leading-snug ${
-                          t.who === "ai" ? "bg-gray-700 text-gray-100" : "bg-purple-600 text-white"
+                          t.who === "ai" ? "bg-gray-700 text-gray-100" : "bg-[#F97316] text-white"
                         }`}>
                           {t.text}
                         </div>
@@ -1712,7 +1731,7 @@ function GuardrailsSection() {
           <div className="grid md:grid-cols-2 gap-10 items-center">
             <div>
               <div className="w-12 h-12 rounded-xl flex items-center justify-center mb-5"
-                   style={{ background: "#F5F3FF", color: C.primary }}>
+                   style={{ background: "#FFF3EC", color: C.primary }}>
                 <Shield className="w-6 h-6" aria-hidden="true" />
               </div>
               <h2 className="text-3xl font-extrabold tracking-tight mb-3"
@@ -1720,7 +1739,7 @@ function GuardrailsSection() {
                 Your AI knows where the line is.
               </h2>
               <p className="text-base leading-relaxed" style={{ color: C.muted }}>
-                LeadCloser never goes rogue. It has hard rules baked in — the same ones
+                FieldBuilt AI never goes rogue. It has hard rules baked in — the same ones
                 your best sales rep would follow without being told.
               </p>
             </div>
@@ -1760,7 +1779,7 @@ function CRMSection() {
   const inView = useInView(ref, { once: true, margin: "-80px" })
 
   const pipeline = [
-    { label: "Just Came In",       count: 12, color: C.primary,  bg: "#F5F3FF" },
+    { label: "Just Came In",       count: 12, color: C.primary,  bg: "#FFF3EC" },
     { label: "Following Up",       count: 8,  color: "#D97706",  bg: "#FFF7ED" },
     { label: "Active Convo",       count: 5,  color: "#2563EB",  bg: "#EFF6FF" },
     { label: "Appt Booked",        count: 19, color: C.success,  bg: "#F0FDF4" },
@@ -1785,13 +1804,13 @@ function CRMSection() {
           >
             <div className="rounded-2xl overflow-hidden border"
                  style={{ background: C.surface, borderColor: C.border,
-                          boxShadow: "0 20px 60px rgba(124,58,237,0.10)" }}>
+                          boxShadow: "0 20px 60px rgba(249,115,22,0.10)" }}>
               {/* CRM header */}
               <div className="flex items-center justify-between px-5 py-4 border-b"
                    style={{ borderColor: C.border, background: "#FAFAF8" }}>
                 <div className="flex items-center gap-2">
                   <div className="w-3 h-3 rounded-full" style={{ background: C.primary }} />
-                  <span className="text-sm font-semibold" style={{ color: C.text }}>LeadCloser CRM</span>
+                  <span className="text-sm font-semibold" style={{ color: C.text }}>FieldBuilt AI CRM</span>
                 </div>
                 <span className="text-xs px-2 py-0.5 rounded-full"
                       style={{ background: "#F0FDF4", color: C.success }}>Live</span>
@@ -1868,7 +1887,7 @@ function CRMSection() {
             transition={{ duration: 0.6, delay: 0.1 }}
           >
             <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-5"
-                 style={{ background: "#F5F3FF", color: C.primary }}>
+                 style={{ background: "#FFF3EC", color: C.primary }}>
               Built-in CRM + analytics
             </div>
             <h2 className="text-3xl md:text-4xl font-extrabold tracking-tight mb-4"
@@ -1895,7 +1914,7 @@ function CRMSection() {
               ].map((f, i) => (
                 <div key={i} className="flex items-start gap-3">
                   <div className="w-8 h-8 rounded-lg flex items-center justify-center shrink-0"
-                       style={{ background: "#F5F3FF", color: C.primary }}>
+                       style={{ background: "#FFF3EC", color: C.primary }}>
                     {f.icon}
                   </div>
                   <div>
@@ -1923,7 +1942,7 @@ function RemindersSection() {
     { icon: <CheckCircle2 className="w-4 h-4" aria-hidden="true" />, label: "Booking confirmed", time: "Immediately", color: C.success, bg: "#F0FDF4", desc: "SMS + email the moment they book" },
     { icon: <CalendarCheck className="w-4 h-4" aria-hidden="true" />, label: "2-day reminder",   time: "48 hours before", color: "#2563EB", bg: "#EFF6FF", desc: "SMS + email with date, time, address" },
     { icon: <Bell className="w-4 h-4" aria-hidden="true" />,          label: "1-day reminder",   time: "24 hours before", color: "#D97706", bg: "#FFF7ED", desc: "Final confirmation before the visit" },
-    { icon: <Clock className="w-4 h-4" aria-hidden="true" />,          label: "2-hour reminder",  time: "2 hours before",  color: C.primary,  bg: "#F5F3FF", desc: "\"Tech is on his way\" level urgency" },
+    { icon: <Clock className="w-4 h-4" aria-hidden="true" />,          label: "2-hour reminder",  time: "2 hours before",  color: C.primary,  bg: "#FFF3EC", desc: "\"Tech is on his way\" level urgency" },
   ]
 
   return (
@@ -1995,7 +2014,7 @@ function SetupSection() {
           className="text-center mb-14"
         >
           <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
-               style={{ background: "#F5F3FF", color: C.primary }}>
+               style={{ background: "#FFF3EC", color: C.primary }}>
             Done for you
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-3"
@@ -2040,11 +2059,11 @@ function SetupSection() {
             transition={{ duration: 0.6, delay: 0.2 }}
             className="rounded-2xl p-8 border"
             style={{ background: C.surface, borderColor: C.border,
-                     boxShadow: "0 8px 32px rgba(124,58,237,0.08)" }}
+                     boxShadow: "0 8px 32px rgba(249,115,22,0.08)" }}
           >
             <div className="flex items-center gap-2 mb-6">
               <div className="w-9 h-9 rounded-xl flex items-center justify-center"
-                   style={{ background: "#F5F3FF", color: C.primary }}>
+                   style={{ background: "#FFF3EC", color: C.primary }}>
                 <Check className="w-4 h-4" aria-hidden="true" />
               </div>
               <div>
@@ -2088,7 +2107,7 @@ function PricingSection() {
           className="text-center mb-14"
         >
           <div className="inline-flex items-center gap-2 text-xs font-semibold px-3 py-1.5 rounded-full mb-4"
-               style={{ background: "#F5F3FF", color: C.primary }}>
+               style={{ background: "#FFF3EC", color: C.primary }}>
             Pricing
           </div>
           <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-3"
@@ -2108,7 +2127,7 @@ function PricingSection() {
           transition={{ duration: 0.6, delay: 0.1 }}
           className="rounded-2xl p-8 border mb-6 relative overflow-hidden"
           style={{ background: C.surface, borderColor: C.border,
-                   boxShadow: "0 8px 32px rgba(124,58,237,0.08)" }}
+                   boxShadow: "0 8px 32px rgba(249,115,22,0.08)" }}
         >
           <div className="absolute -top-3 left-8">
             <span className="text-xs font-bold px-3 py-1 rounded-full"
@@ -2132,7 +2151,7 @@ function PricingSection() {
               </div>
               <Link href="/signup?new=1"
                     className="inline-flex items-center gap-2 font-semibold text-white px-8 py-3.5 rounded-full transition-all duration-200 hover:-translate-y-0.5"
-                    style={{ background: C.primary, boxShadow: "0 6px 20px rgba(124,58,237,0.30)" }}>
+                    style={{ background: C.primary, boxShadow: "0 6px 20px rgba(249,115,22,0.30)" }}>
                 Get Your System Installed
                 <ArrowRight className="w-4 h-4" aria-hidden="true" />
               </Link>
@@ -2160,31 +2179,37 @@ function PricingSection() {
             initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6, delay: 0.2 }}
             className="rounded-2xl p-7 border relative overflow-hidden"
-            style={{ background: C.primary, borderColor: "transparent",
-                     boxShadow: "0 16px 48px rgba(124,58,237,0.28)" }}
+            style={{ background: "#1A1614", borderColor: "transparent",
+                     boxShadow: "0 16px 48px rgba(249,115,22,0.22)" }}
           >
-            <div className="absolute -top-3 left-7">
+            {/* Blueprint crosshatch texture */}
+            <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
+                 style={{
+                   backgroundImage: "linear-gradient(rgba(249,115,22,1) 1px, transparent 1px), linear-gradient(90deg, rgba(249,115,22,1) 1px, transparent 1px)",
+                   backgroundSize: "44px 44px", opacity: 0.06,
+                 }} />
+            <div className="absolute -top-3 left-7 relative z-10">
               <span className="text-xs font-bold px-3 py-1 rounded-full"
                     style={{ background: C.success, color: "#fff" }}>
                 Monthly retainer
               </span>
             </div>
-            <div className="pt-2">
+            <div className="pt-2 relative z-10">
               <div className="text-lg font-bold text-white mb-1" style={{ fontFamily: "var(--font-jakarta)" }}>
                 Core System
               </div>
-              <div className="text-sm mb-5 text-purple-200">Everything running, every month.</div>
+              <div className="text-sm mb-5" style={{ color: "rgba(250,250,248,0.65)" }}>Everything running, every month.</div>
               <div className="flex items-end gap-1 mb-6">
                 <span className="text-5xl font-black text-white" style={{ fontFamily: "var(--font-mono)" }}>
                   $597
                 </span>
-                <span className="text-sm mb-2 text-purple-200">/month</span>
+                <span className="text-sm mb-2" style={{ color: "rgba(250,250,248,0.65)" }}>/month</span>
               </div>
               <div className="space-y-2.5">
                 {MONTHLY_INCLUDES.map((item, i) => (
                   <div key={i} className="flex items-center gap-2.5">
-                    <Check className="w-3.5 h-3.5 shrink-0 text-purple-200" aria-hidden="true" />
-                    <span className="text-sm text-purple-100">{item}</span>
+                    <Check className="w-3.5 h-3.5 shrink-0" style={{ color: "#F97316" }} aria-hidden="true" />
+                    <span className="text-sm" style={{ color: "rgba(250,250,248,0.85)" }}>{item}</span>
                   </div>
                 ))}
               </div>
@@ -2266,7 +2291,7 @@ function TestimonialsSection() {
               whileHover={{ y: -4, transition: { duration: 0.2 } }}
               className="rounded-2xl p-6 border"
               style={{ background: C.surface, borderColor: C.border,
-                       boxShadow: "0 4px 20px rgba(124,58,237,0.06)" }}
+                       boxShadow: "0 4px 20px rgba(249,115,22,0.06)" }}
             >
               <div className="flex gap-0.5 mb-4">
                 {Array.from({ length: t.stars }).map((_, j) => (
@@ -2302,8 +2327,8 @@ function FinalCTASection() {
           initial={{ opacity: 0, y: 32 }} animate={inView ? { opacity: 1, y: 0 } : {}}
           transition={{ duration: 0.7 }}
           className="rounded-3xl px-8 py-16 text-center relative overflow-hidden"
-          style={{ background: `linear-gradient(135deg, ${C.primary} 0%, #6D28D9 100%)`,
-                   boxShadow: "0 32px 80px rgba(124,58,237,0.35)" }}
+          style={{ background: "linear-gradient(135deg, #1A1614 0%, #0F0E0D 100%)",
+                   boxShadow: "0 32px 80px rgba(249,115,22,0.20)", border: "1px solid rgba(249,115,22,0.15)" }}
         >
           {/* Decorative background elements */}
           <div className="absolute inset-0 pointer-events-none overflow-hidden" aria-hidden="true">
@@ -2334,9 +2359,9 @@ function FinalCTASection() {
             </h2>
 
             <p className="text-lg mb-10 max-w-xl mx-auto"
-               style={{ color: "rgba(216,180,254,0.85)" }}>
+               style={{ color: "rgba(250,250,248,0.70)" }}>
               Your AI call center, appointment setter, and dispatcher — installed and running 24/7.
-              Every Facebook lead texted in 47 seconds. Every tech dispatched automatically.
+              Every Facebook lead texted in 3.7 seconds. Every tech dispatched automatically.
               You find out in a push notification. You just show up.
             </p>
 
@@ -2356,7 +2381,7 @@ function FinalCTASection() {
               </a>
             </div>
 
-            <p className="mt-6 text-sm" style={{ color: "rgba(216,180,254,0.7)" }}>
+            <p className="mt-6 text-sm" style={{ color: "rgba(250,250,248,0.45)" }}>
               Custom script built for your business · Installation call included · Live in 48 hours
             </p>
           </div>
@@ -2374,21 +2399,32 @@ function Footer() {
     <footer className="relative max-w-7xl mx-auto px-8 py-10 border-t" style={{ zIndex: 10, borderColor: C.border }}>
       <div className="flex flex-col md:flex-row items-center justify-between gap-6">
         <div className="flex items-center gap-2.5">
-          <div className="w-7 h-7 rounded-lg flex items-center justify-center" style={{ background: C.primary }}>
-            <Zap className="w-3.5 h-3.5 text-white" aria-hidden="true" />
+          <div className="w-7 h-7 rounded-lg bg-[#1A1614] flex items-center justify-center">
+            <svg width="14" height="14" viewBox="0 0 64 64" fill="none" aria-hidden="true">
+              <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#fff" />
+              <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#fff" />
+              <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316" />
+              <rect x="42" y="12" width="7"  height="11" rx="1.5" fill="#EA580C" />
+            </svg>
           </div>
-          <span className="font-bold" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>LeadCloser</span>
-          <span className="text-sm" style={{ color: C.muted }}>— AI operating system for HVAC contractors</span>
+          <span className="font-extrabold" style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+            FIELDBUILT
+            <span className="inline-flex items-center justify-center text-white font-bold rounded ml-1"
+                  style={{ fontSize: "0.42em", background: "#F97316", padding: "0.22em 0.45em", borderRadius: 5, letterSpacing: "0.04em", verticalAlign: "super" }}>
+              AI
+            </span>
+          </span>
+          <span className="text-sm" style={{ color: C.muted }}>— AI operations installed for home service companies</span>
         </div>
 
         <div className="flex items-center gap-6 text-sm" style={{ color: C.muted }}>
           {["Privacy", "Terms", "Support"].map(l => (
-            <a key={l} href="#" className="hover:text-purple-600 transition-colors">{l}</a>
+            <a key={l} href="#" className="hover:text-[#F97316] transition-colors">{l}</a>
           ))}
         </div>
 
         <p className="text-xs" style={{ color: C.muted }}>
-          © {new Date().getFullYear()} LeadCloser. All rights reserved.
+          © {new Date().getFullYear()} FieldBuilt AI. All rights reserved.
         </p>
       </div>
     </footer>

@@ -33,7 +33,7 @@ function DotGrid() {
     <div
       className="fixed inset-0 pointer-events-none z-0 opacity-40"
       style={{
-        backgroundImage: "radial-gradient(rgba(124,58,237,0.15) 1px, transparent 1px)",
+        backgroundImage: "radial-gradient(rgba(249,115,22,0.15) 1px, transparent 1px)",
         backgroundSize: "28px 28px",
       }}
     />
@@ -60,7 +60,7 @@ function GlowOrbs() {
         className="absolute rounded-full"
         style={{
           width: 500, height: 500,
-          background: "rgba(124,58,237,0.05)",
+          background: "rgba(249,115,22,0.05)",
           filter: "blur(70px)",
           bottom: "-5%", right: "-5%",
         }}
@@ -77,16 +77,16 @@ function StepIndicator({ current, total }: { current: number; total: number }) {
           <div
             className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
               i < current
-                ? "bg-[#7C3AED] text-white"
+                ? "bg-[#F97316] text-white"
                 : i === current
-                ? "bg-[#7C3AED]/10 text-[#7C3AED] ring-2 ring-[#7C3AED]"
+                ? "bg-[#F97316]/10 text-[#F97316] ring-2 ring-[#F97316]"
                 : "bg-[#F5F4F2] text-[#78716C]"
             }`}
           >
             {i < current ? <Check className="w-4 h-4" /> : i + 1}
           </div>
           {i < total - 1 && (
-            <div className={`w-12 h-0.5 transition-all duration-300 ${i < current ? "bg-[#7C3AED]" : "bg-[#E7E5E4]"}`} />
+            <div className={`w-12 h-0.5 transition-all duration-300 ${i < current ? "bg-[#F97316]" : "bg-[#E7E5E4]"}`} />
           )}
         </div>
       ))}
@@ -206,7 +206,7 @@ export function FacebookSetup({ pages }: Props) {
               <span
                 key={i}
                 className={`text-xs font-medium transition-colors ${
-                  i === step ? "text-[#7C3AED]" : i < step ? "text-[#1C1917]" : "text-[#D1D5DB]"
+                  i === step ? "text-[#F97316]" : i < step ? "text-[#1C1917]" : "text-[#D1D5DB]"
                 }`}
               >
                 {label}
@@ -217,7 +217,7 @@ export function FacebookSetup({ pages }: Props) {
           {/* Card */}
           <div
             className="bg-white rounded-2xl border border-[#E7E5E4] overflow-hidden"
-            style={{ boxShadow: "0 8px 40px rgba(124,58,237,0.08), 0 1px 3px rgba(0,0,0,0.04)" }}
+            style={{ boxShadow: "0 8px 40px rgba(249,115,22,0.08), 0 1px 3px rgba(0,0,0,0.04)" }}
           >
             <AnimatePresence mode="wait">
               {/* ── Step 0: Page Selection ──────────────────────────────── */}
@@ -231,7 +231,7 @@ export function FacebookSetup({ pages }: Props) {
                 >
                   <div className="p-6 border-b border-[#E7E5E4]">
                     <div className="flex items-center gap-2 text-sm text-[#78716C]">
-                      <Users className="w-4 h-4 text-[#7C3AED]" />
+                      <Users className="w-4 h-4 text-[#F97316]" />
                       <span>{pages.length} Facebook {pages.length === 1 ? "Page" : "Pages"} found on your account</span>
                     </div>
                   </div>
@@ -245,7 +245,7 @@ export function FacebookSetup({ pages }: Props) {
                         whileTap={{ scale: 0.99 }}
                         className={`w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all ${
                           selectedPageId === page.id
-                            ? "border-[#7C3AED] bg-[#7C3AED]/5"
+                            ? "border-[#F97316] bg-[#F97316]/5"
                             : "border-[#E7E5E4] bg-white hover:border-[#C4B5FD] hover:bg-[#FAFAF8]"
                         }`}
                       >
@@ -266,7 +266,7 @@ export function FacebookSetup({ pages }: Props) {
                         <div
                           className={`w-5 h-5 rounded-full border-2 flex items-center justify-center shrink-0 transition-all ${
                             selectedPageId === page.id
-                              ? "border-[#7C3AED] bg-[#7C3AED]"
+                              ? "border-[#F97316] bg-[#F97316]"
                               : "border-[#D1D5DB] bg-white"
                           }`}
                         >
@@ -286,8 +286,8 @@ export function FacebookSetup({ pages }: Props) {
                           : "opacity-50 cursor-not-allowed"
                       }`}
                       style={{
-                        background: "linear-gradient(135deg, #7C3AED, #6D28D9)",
-                        boxShadow: selectedPageId ? "0 4px 14px rgba(124,58,237,0.35)" : "none",
+                        background: "linear-gradient(135deg, #F97316, #EA580C)",
+                        boxShadow: selectedPageId ? "0 4px 14px rgba(249,115,22,0.35)" : "none",
                       }}
                     >
                       {formsLoading ? (
@@ -318,7 +318,7 @@ export function FacebookSetup({ pages }: Props) {
                 >
                   <div className="p-6 border-b border-[#E7E5E4]">
                     <div className="flex items-center gap-2 text-sm text-[#78716C]">
-                      <FileText className="w-4 h-4 text-[#7C3AED]" />
+                      <FileText className="w-4 h-4 text-[#F97316]" />
                       <span>
                         Lead forms on <span className="font-semibold text-[#1C1917]">{selectedPage?.name}</span>
                         {" — "}select all that are running now
@@ -345,7 +345,7 @@ export function FacebookSetup({ pages }: Props) {
                             whileTap={{ scale: 0.99 }}
                             className={`w-full flex items-center gap-4 p-4 rounded-xl border text-left transition-all ${
                               selected
-                                ? "border-[#7C3AED] bg-[#7C3AED]/5"
+                                ? "border-[#F97316] bg-[#F97316]/5"
                                 : "border-[#E7E5E4] bg-white hover:border-[#C4B5FD] hover:bg-[#FAFAF8]"
                             }`}
                           >
@@ -372,7 +372,7 @@ export function FacebookSetup({ pages }: Props) {
                             <div
                               className={`w-5 h-5 rounded border-2 flex items-center justify-center shrink-0 transition-all ${
                                 selected
-                                  ? "border-[#7C3AED] bg-[#7C3AED]"
+                                  ? "border-[#F97316] bg-[#F97316]"
                                   : "border-[#D1D5DB] bg-white"
                               }`}
                             >
@@ -401,8 +401,8 @@ export function FacebookSetup({ pages }: Props) {
                           : "opacity-50 cursor-not-allowed"
                       }`}
                       style={{
-                        background: "linear-gradient(135deg, #7C3AED, #6D28D9)",
-                        boxShadow: selectedFormIds.length > 0 ? "0 4px 14px rgba(124,58,237,0.35)" : "none",
+                        background: "linear-gradient(135deg, #F97316, #EA580C)",
+                        boxShadow: selectedFormIds.length > 0 ? "0 4px 14px rgba(249,115,22,0.35)" : "none",
                       }}
                     >
                       {forms.length === 0 ? (
@@ -459,7 +459,7 @@ export function FacebookSetup({ pages }: Props) {
                               .filter((f) => selectedFormIds.includes(f.id))
                               .map((f) => (
                                 <li key={f.id} className="flex items-center gap-2 text-sm text-[#1C1917]">
-                                  <Check className="w-3.5 h-3.5 text-[#7C3AED] shrink-0" />
+                                  <Check className="w-3.5 h-3.5 text-[#F97316] shrink-0" />
                                   {f.name}
                                 </li>
                               ))}
@@ -469,16 +469,16 @@ export function FacebookSetup({ pages }: Props) {
                     </div>
 
                     {/* What happens next */}
-                    <div className="bg-[#7C3AED]/5 rounded-xl border border-[#7C3AED]/10 p-4">
-                      <p className="text-xs font-semibold text-[#7C3AED] uppercase tracking-wider mb-2">What happens next</p>
+                    <div className="bg-[#F97316]/5 rounded-xl border border-[#F97316]/10 p-4">
+                      <p className="text-xs font-semibold text-[#F97316] uppercase tracking-wider mb-2">What happens next</p>
                       <ul className="space-y-1.5">
                         {[
                           "Your page will be subscribed to receive lead notifications",
-                          "Every new lead gets an AI SMS within 60 seconds",
+                          "Every new lead gets an AI SMS within 3.7 seconds",
                           "Leads appear instantly in your CRM pipeline",
                         ].map((item, i) => (
                           <li key={i} className="flex items-start gap-2 text-sm text-[#78716C]">
-                            <Check className="w-3.5 h-3.5 text-[#7C3AED] shrink-0 mt-0.5" />
+                            <Check className="w-3.5 h-3.5 text-[#F97316] shrink-0 mt-0.5" />
                             {item}
                           </li>
                         ))}
@@ -508,8 +508,8 @@ export function FacebookSetup({ pages }: Props) {
                         !saving ? "hover:scale-[1.02] active:scale-[0.98]" : "opacity-70 cursor-not-allowed"
                       }`}
                       style={{
-                        background: "linear-gradient(135deg, #7C3AED, #6D28D9)",
-                        boxShadow: "0 4px 14px rgba(124,58,237,0.35)",
+                        background: "linear-gradient(135deg, #F97316, #EA580C)",
+                        boxShadow: "0 4px 14px rgba(249,115,22,0.35)",
                       }}
                     >
                       {saving ? (

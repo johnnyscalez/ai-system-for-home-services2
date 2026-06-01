@@ -42,7 +42,7 @@ function DotGrid() {
     <div
       className="absolute inset-0 opacity-50"
       style={{
-        backgroundImage: "radial-gradient(rgba(124,58,237,0.18) 1px, transparent 1px)",
+        backgroundImage: "radial-gradient(rgba(249,115,22,0.18) 1px, transparent 1px)",
         backgroundSize: "28px 28px",
       }}
     />
@@ -57,7 +57,7 @@ function GlowOrbs() {
         animate={{ y: [0, -28, 0], x: [0, 14, 0] }}
         transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
         className="absolute rounded-full blur-3xl pointer-events-none"
-        style={{ width: 700, height: 700, background: "radial-gradient(circle, rgba(124,58,237,0.10) 0%, transparent 70%)", top: "-15%", left: "-8%" }}
+        style={{ width: 700, height: 700, background: "radial-gradient(circle, rgba(249,115,22,0.10) 0%, transparent 70%)", top: "-15%", left: "-8%" }}
       />
       <motion.div
         animate={{ y: [0, 22, 0], x: [0, -18, 0] }}
@@ -69,7 +69,7 @@ function GlowOrbs() {
         animate={{ y: [0, -16, 0] }}
         transition={{ duration: 10, repeat: Infinity, ease: "easeInOut", delay: 3 }}
         className="absolute rounded-full blur-3xl pointer-events-none"
-        style={{ width: 450, height: 450, background: "radial-gradient(circle, rgba(99,102,241,0.07) 0%, transparent 70%)", top: "35%", right: "10%" }}
+        style={{ width: 450, height: 450, background: "radial-gradient(circle, rgba(249,115,22,0.04) 0%, transparent 70%)", top: "35%", right: "10%" }}
       />
     </>
   )
@@ -78,7 +78,7 @@ function GlowOrbs() {
 // ── Stat card ──────────────────────────────────────────────────────────────────
 function StatCard({
   label, subLabel, value, icon: Icon, iconBg, iconColor, valueColor, suffix = "", prefix = "",
-  shadowColor = "rgba(124,58,237,0.10)", delay = 0,
+  shadowColor = "rgba(249,115,22,0.10)", delay = 0,
 }: {
   label: string; subLabel?: string; value: number; icon: React.ElementType
   iconBg: string; iconColor: string; valueColor?: string
@@ -94,7 +94,7 @@ function StatCard({
       style={{ boxShadow: `0 4px 24px ${shadowColor}, 0 1px 3px rgba(0,0,0,0.03)` }}
     >
       <div className="absolute inset-0 opacity-40 pointer-events-none"
-        style={{ background: "linear-gradient(135deg, rgba(124,58,237,0.02) 0%, transparent 60%)" }} />
+        style={{ background: "linear-gradient(135deg, rgba(249,115,22,0.02) 0%, transparent 60%)" }} />
       <div className="relative">
         <div className={cn("w-10 h-10 rounded-xl flex items-center justify-center mb-4", iconBg)}>
           <Icon className={cn("w-5 h-5", iconColor)} />
@@ -118,9 +118,9 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   just_came_in:        { label: "Just came in", cls: "bg-sky-50 text-sky-700 border border-sky-100" },
   new:                 { label: "Just came in", cls: "bg-sky-50 text-sky-700 border border-sky-100" },
   contacted:           { label: "Just came in", cls: "bg-sky-50 text-sky-700 border border-sky-100" },
-  active_conversation: { label: "Active",       cls: "bg-violet-50 text-violet-700 border border-violet-100" },
-  followed_up:         { label: "Active",       cls: "bg-violet-50 text-violet-700 border border-violet-100" },
-  nurturing:           { label: "Active",       cls: "bg-violet-50 text-violet-700 border border-violet-100" },
+  active_conversation: { label: "Active",       cls: "bg-[#FFF3EC] text-[#EA580C] border border-[#F97316]/20" },
+  followed_up:         { label: "Active",       cls: "bg-[#FFF3EC] text-[#EA580C] border border-[#F97316]/20" },
+  nurturing:           { label: "Active",       cls: "bg-[#FFF3EC] text-[#EA580C] border border-[#F97316]/20" },
   qualified:           { label: "Qualified",    cls: "bg-amber-50 text-amber-700 border border-amber-100" },
   unqualified:         { label: "Unqualified",  cls: "bg-red-50 text-red-600 border border-red-100" },
   appointment_booked:  { label: "Booked",       cls: "bg-green-50 text-green-700 border border-green-100" },
@@ -222,9 +222,9 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                 animate={{ rotate: [0, 10, -10, 0] }}
                 transition={{ duration: 2, delay: 0.8, repeat: Infinity, repeatDelay: 5 }}
               >
-                <Sparkles className="w-5 h-5 text-[#7C3AED]" />
+                <Sparkles className="w-5 h-5 text-[#F97316]" />
               </motion.div>
-              <span className="text-xs font-semibold text-[#7C3AED] uppercase tracking-widest">Dashboard</span>
+              <span className="text-xs font-semibold text-[#F97316] uppercase tracking-widest">Dashboard</span>
             </div>
             <h1
               className="text-3xl font-bold text-[#1C1917]"
@@ -267,18 +267,18 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
             whileHover={{ scale: 1.005 }}
             className="relative overflow-hidden rounded-2xl p-7 text-white"
             style={{
-              background: "linear-gradient(135deg, #7C3AED 0%, #6D28D9 50%, #5B21B6 100%)",
-              boxShadow: "0 8px 40px rgba(124,58,237,0.30), 0 2px 8px rgba(124,58,237,0.15)",
+              background: "linear-gradient(135deg, #1A1614 0%, #0F0E0D 60%, #1A1614 100%)",
+              boxShadow: "0 8px 40px rgba(249,115,22,0.30), 0 2px 8px rgba(249,115,22,0.15)",
             }}
           >
             <div className="absolute inset-0 opacity-10"
               style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
             <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-white/10 blur-2xl" />
-            <div className="absolute right-32 -bottom-8 w-40 h-40 rounded-full bg-purple-300/20 blur-2xl" />
+            <div className="absolute right-32 -bottom-8 w-40 h-40 rounded-full bg-[#F97316]/10 blur-2xl" />
 
             <div className="relative flex items-center justify-between">
               <div>
-                <p className="text-purple-200 text-sm font-medium tracking-wide">
+                <p className="text-orange-200 text-sm font-medium tracking-wide">
                   Projected revenue
                   {period !== "all" ? ` · last ${PERIODS.find((p2) => p2.key === period)?.label}` : " · all time"}
                 </p>
@@ -292,7 +292,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                 >
                   ${stats.revenueProjected.toLocaleString()}
                 </motion.p>
-                <p className="text-purple-200 text-sm mt-2">
+                <p className="text-orange-200 text-sm mt-2">
                   {stats.booked} appointment{stats.booked !== 1 ? "s" : ""} ×{" "}
                   ${stats.avgJobValue.toLocaleString()} avg
                 </p>
@@ -334,7 +334,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
 
           {/* Stripe-style gradient band */}
           <div className="absolute left-0 right-0 h-64 pointer-events-none"
-            style={{ background: "linear-gradient(180deg, rgba(124,58,237,0.03) 0%, rgba(77,124,15,0.02) 100%)" }} />
+            style={{ background: "linear-gradient(180deg, rgba(249,115,22,0.03) 0%, rgba(77,124,15,0.02) 100%)" }} />
 
           <motion.div
             key={period}
@@ -363,8 +363,8 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
             <StatCard
               label="Follow-ups sent by AI"
               subLabel="Proactive check-ins only"
-              value={stats.followUpsSent} icon={Zap} iconBg="bg-violet-50" iconColor="text-violet-600"
-              shadowColor="rgba(124,58,237,0.10)" delay={240}
+              value={stats.followUpsSent} icon={Zap} iconBg="bg-[#FFF3EC]" iconColor="text-[#EA580C]"
+              shadowColor="rgba(249,115,22,0.10)" delay={240}
             />
             <StatCard
               label="Hot leads"
@@ -392,7 +392,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
           <motion.div
             variants={{ hidden: { opacity: 0, y: 24 }, show: { opacity: 1, y: 0 } }}
             className="bg-white rounded-2xl overflow-hidden border border-[#E7E5E4]/60"
-            style={{ boxShadow: "0 4px 24px rgba(124,58,237,0.08), 0 1px 3px rgba(0,0,0,0.03)" }}
+            style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.08), 0 1px 3px rgba(0,0,0,0.03)" }}
           >
             <div className="px-6 py-4 border-b border-[#F5F4F2] flex items-center justify-between">
               <h2 className="font-semibold text-[#1C1917]"
@@ -400,7 +400,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                 Recent Leads
               </h2>
               <Link href="/leads"
-                className="text-xs text-[#7C3AED] font-medium hover:underline flex items-center gap-1 transition-colors">
+                className="text-xs text-[#F97316] font-medium hover:underline flex items-center gap-1 transition-colors">
                 View all <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
@@ -427,11 +427,11 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                       <Link href={`/leads/${lead.id}`}
                         className="flex items-center justify-between px-6 py-3.5 hover:bg-[#FAFAF8] transition-colors group">
                         <div className="flex items-center gap-3">
-                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#7C3AED]/10 to-[#7C3AED]/5 flex items-center justify-center text-xs font-bold text-[#7C3AED] border border-[#7C3AED]/10">
+                          <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-[#F97316]/10 to-[#F97316]/5 flex items-center justify-center text-xs font-bold text-[#F97316] border border-[#F97316]/10">
                             {lead.first_name?.[0] ?? "?"}{lead.last_name?.[0] ?? ""}
                           </div>
                           <div>
-                            <p className="text-sm font-medium text-[#1C1917] group-hover:text-[#7C3AED] transition-colors">
+                            <p className="text-sm font-medium text-[#1C1917] group-hover:text-[#F97316] transition-colors">
                               {lead.first_name ?? "Unknown"} {lead.last_name ?? ""}
                             </p>
                             <p className="text-xs text-[#78716C]"
@@ -463,7 +463,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                 Upcoming Appointments
               </h2>
               <Link href="/appointments"
-                className="text-xs text-[#7C3AED] font-medium hover:underline flex items-center gap-1 transition-colors">
+                className="text-xs text-[#F97316] font-medium hover:underline flex items-center gap-1 transition-colors">
                 View all <ArrowRight className="w-3 h-3" />
               </Link>
             </div>
@@ -489,8 +489,8 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                       transition={{ delay: 0.4 + i * 0.07, ease: "easeOut" }}
                       className="flex items-center gap-4 px-6 py-4 hover:bg-[#FAFAF8] transition-colors"
                     >
-                      <div className="w-12 shrink-0 text-center bg-gradient-to-b from-[#7C3AED]/5 to-transparent rounded-xl py-1.5 border border-[#7C3AED]/10">
-                        <p className="text-[10px] font-bold text-[#7C3AED] uppercase tracking-wider">
+                      <div className="w-12 shrink-0 text-center bg-gradient-to-b from-[#F97316]/5 to-transparent rounded-xl py-1.5 border border-[#F97316]/10">
+                        <p className="text-[10px] font-bold text-[#F97316] uppercase tracking-wider">
                           {date.toLocaleDateString("en-US", { month: "short" })}
                         </p>
                         <p className="text-2xl font-bold text-[#1C1917] leading-none mt-0.5"
@@ -526,7 +526,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
           animate={{ scaleX: 1, opacity: 1 }}
           transition={{ delay: 1, duration: 0.8, ease: "easeOut" }}
           className="h-px w-full origin-left"
-          style={{ background: "linear-gradient(90deg, #7C3AED, rgba(77,124,15,0.5), transparent)" }}
+          style={{ background: "linear-gradient(90deg, #F97316, rgba(77,124,15,0.5), transparent)" }}
         />
 
       </div>

@@ -225,7 +225,7 @@ export function ConversationThread({
             <Bot className="w-10 h-10 text-muted-foreground/30 mb-3" />
             <p className="text-sm text-muted-foreground">No messages yet</p>
             <p className="text-xs text-muted-foreground mt-1">
-              The AI will text this lead within 60 seconds of them submitting a form.
+              The AI will text this lead within 3.7 seconds of them submitting a form.
             </p>
           </div>
         ) : (

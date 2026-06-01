@@ -142,7 +142,7 @@ export function WeekCalendar() {
         </div>
         <div className="flex items-center gap-3 text-xs text-muted-foreground">
           <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-sky-500" />Our appointments</div>
-          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-violet-500" />Google Calendar</div>
+          <div className="flex items-center gap-1.5"><div className="w-3 h-3 rounded bg-[#F97316]" />Google Calendar</div>
         </div>
       </div>
 
@@ -233,18 +233,18 @@ export function WeekCalendar() {
                         height: Math.max(height, 24),
                         background: "rgba(109,40,217,0.12)",
                         borderLeft: "3px solid #7c3aed",
-                        borderTop: "1px solid rgba(124,58,237,0.25)",
-                        borderRight: "1px solid rgba(124,58,237,0.25)",
-                        borderBottom: "1px solid rgba(124,58,237,0.25)",
+                        borderTop: "1px solid rgba(249,115,22,0.25)",
+                        borderRight: "1px solid rgba(249,115,22,0.25)",
+                        borderBottom: "1px solid rgba(249,115,22,0.25)",
                       }}
                     >
                       <div className="px-1.5 py-1 h-full">
-                        <p className="text-[11px] font-semibold text-violet-800 truncate leading-tight">{ev.summary}</p>
+                        <p className="text-[11px] font-semibold text-[#EA580C] truncate leading-tight">{ev.summary}</p>
                         {ev.location && height > 42 && (
-                          <p className="text-[10px] text-violet-600 truncate mt-0.5">{ev.location}</p>
+                          <p className="text-[10px] text-[#EA580C] truncate mt-0.5">{ev.location}</p>
                         )}
                         {height > 54 && ev.start?.dateTime && (
-                          <p className="text-[9px] text-violet-500 mt-0.5">
+                          <p className="text-[9px] text-[#F97316] mt-0.5">
                             {new Date(ev.start.dateTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                             {ev.end?.dateTime && ` – ${new Date(ev.end.dateTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`}
                           </p>
@@ -338,8 +338,8 @@ export function WeekCalendar() {
             )}
 
             {selectedEvent.google_event_id && (
-              <div className="flex items-center gap-1.5 text-xs text-violet-400">
-                <div className="w-2 h-2 rounded-full bg-violet-400" />
+              <div className="flex items-center gap-1.5 text-xs text-[#F97316]">
+                <div className="w-2 h-2 rounded-full bg-[#F97316]" />
                 Synced to Google Calendar
               </div>
             )}
