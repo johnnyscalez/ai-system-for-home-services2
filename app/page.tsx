@@ -717,12 +717,11 @@ function AIOfficeSection() {
                style={{ background: "rgba(249,115,22,0.06)" }} />
         </div>
 
-        <div className="relative max-w-5xl mx-auto">
-          {/* Headline */}
+        {/* Headline — contained width */}
+        <div className="relative max-w-4xl mx-auto text-center mb-14">
           <motion.div
             initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
             transition={{ duration: 0.6 }}
-            className="text-center mb-12"
           >
             <div className="flex items-center justify-center gap-3 mb-6">
               <span className="block w-8 h-px" style={{ background: "#F97316" }} />
@@ -748,8 +747,10 @@ function AIOfficeSection() {
               Watch it work.
             </p>
           </motion.div>
+        </div>
 
-          {/* Loop video iframe */}
+        {/* Video — full section width, no extra chrome wrapper */}
+        <div className="relative max-w-7xl mx-auto">
           <motion.div
             initial={{ opacity: 0, y: 32, scale: 0.98 }}
             animate={inView ? { opacity: 1, y: 0, scale: 1 } : {}}
@@ -758,43 +759,28 @@ function AIOfficeSection() {
           >
             {/* Blueprint corner brackets */}
             <div className="absolute -top-3 -left-3 w-7 h-7 pointer-events-none z-10"
-                 style={{ borderTop: "2px solid rgba(249,115,22,0.5)", borderLeft: "2px solid rgba(249,115,22,0.5)" }} />
+                 style={{ borderTop: "2px solid rgba(249,115,22,0.45)", borderLeft: "2px solid rgba(249,115,22,0.45)" }} />
             <div className="absolute -top-3 -right-3 w-7 h-7 pointer-events-none z-10"
-                 style={{ borderTop: "2px solid rgba(249,115,22,0.5)", borderRight: "2px solid rgba(249,115,22,0.5)" }} />
+                 style={{ borderTop: "2px solid rgba(249,115,22,0.45)", borderRight: "2px solid rgba(249,115,22,0.45)" }} />
             <div className="absolute -bottom-3 -left-3 w-7 h-7 pointer-events-none z-10"
-                 style={{ borderBottom: "2px solid rgba(249,115,22,0.5)", borderLeft: "2px solid rgba(249,115,22,0.5)" }} />
+                 style={{ borderBottom: "2px solid rgba(249,115,22,0.45)", borderLeft: "2px solid rgba(249,115,22,0.45)" }} />
             <div className="absolute -bottom-3 -right-3 w-7 h-7 pointer-events-none z-10"
-                 style={{ borderBottom: "2px solid rgba(249,115,22,0.5)", borderRight: "2px solid rgba(249,115,22,0.5)" }} />
+                 style={{ borderBottom: "2px solid rgba(249,115,22,0.45)", borderRight: "2px solid rgba(249,115,22,0.45)" }} />
 
-            <div className="rounded-2xl overflow-hidden"
-                 style={{ boxShadow: "0 40px 100px rgba(0,0,0,0.6), 0 4px 24px rgba(249,115,22,0.15)", border: "1px solid rgba(249,115,22,0.12)" }}>
-              {/* Dark browser chrome */}
-              <div className="flex items-center gap-1.5 px-4 py-3"
-                   style={{ background: "#0F0E0D", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-                <span className="w-2.5 h-2.5 rounded-full bg-red-500/60" />
-                <span className="w-2.5 h-2.5 rounded-full bg-amber-400/60" />
-                <span className="w-2.5 h-2.5 rounded-full bg-green-400/60" />
-                <div className="flex-1 mx-4 h-5 rounded px-3 flex items-center justify-center"
-                     style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <span className="text-xs" style={{ color: "rgba(250,250,248,0.3)", fontFamily: "var(--font-jetbrains)" }}>
-                    FieldBuilt AI — Live Operation
-                  </span>
-                </div>
-                <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-full"
-                     style={{ background: "rgba(249,115,22,0.15)", border: "1px solid rgba(249,115,22,0.2)" }}>
-                  <span className="w-1.5 h-1.5 rounded-full bg-green-400" style={{ animation: "callPulse 2s ease-in-out infinite" }} />
-                  <span className="text-xs font-semibold" style={{ color: "#F97316", fontFamily: "var(--font-jetbrains)" }}>Live</span>
-                </div>
-              </div>
-
-              {/* The animation iframe — fills container via aspect-ratio, no black bars */}
-              <iframe
-                src="/ai-office-loop.html"
-                style={{ width: "100%", aspectRatio: "16/9", border: "none", display: "block", background: "#14110F" }}
-                title="FieldBuilt AI — Live operation loop"
-                loading="lazy"
-              />
-            </div>
+            {/* iframe — no outer chrome, animation has its own UI */}
+            <iframe
+              src="/ai-office-loop.html"
+              style={{
+                width: "100%",
+                aspectRatio: "16/9",
+                border: "none",
+                display: "block",
+                borderRadius: 16,
+                boxShadow: "0 40px 120px rgba(0,0,0,0.7), 0 4px 32px rgba(249,115,22,0.12)",
+              }}
+              title="FieldBuilt AI — Live operation loop"
+              loading="lazy"
+            />
           </motion.div>
 
           {/* Agent flow labels below video */}
@@ -804,15 +790,15 @@ function AIOfficeSection() {
             className="flex items-center justify-center gap-2 flex-wrap mt-8"
           >
             {[
-              { label: "SMS Agent",      color: "#0EA5E9" },
-              { label: "→",             color: "rgba(250,250,248,0.2)" },
-              { label: "Voice Agent",    color: "#F97316" },
-              { label: "→",             color: "rgba(250,250,248,0.2)" },
+              { label: "SMS Agent",         color: "#0EA5E9" },
+              { label: "→",                color: "rgba(250,250,248,0.2)" },
+              { label: "Voice Agent",       color: "#F97316" },
+              { label: "→",                color: "rgba(250,250,248,0.2)" },
               { label: "Lead Intelligence", color: "#D97706" },
-              { label: "→",             color: "rgba(250,250,248,0.2)" },
-              { label: "AI Dispatcher", color: "#16A34A" },
-              { label: "→",             color: "rgba(250,250,248,0.2)" },
-              { label: "CRM",           color: "#F97316" },
+              { label: "→",                color: "rgba(250,250,248,0.2)" },
+              { label: "AI Dispatcher",     color: "#16A34A" },
+              { label: "→",                color: "rgba(250,250,248,0.2)" },
+              { label: "CRM",               color: "#F97316" },
             ].map((item, i) => (
               <span key={i} className="text-xs font-semibold"
                     style={{ color: item.color, fontFamily: item.label === "→" ? undefined : "var(--font-jetbrains)" }}>
