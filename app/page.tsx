@@ -598,7 +598,7 @@ function HeroSection() {
         >
           {[
             { value: "3.7",  unit: "s",  label: "First contact — day or night",          accent: "#F97316" },
-            { value: "94",   unit: "%",  label: "Contact rate vs. 11% industry average",  accent: "#F97316" },
+            { value: "100",  unit: "%",  label: "Contact rate — every lead gets a response",  accent: "#F97316" },
             { value: "3–5",  unit: "×",  label: "Average ROI on ad spend in 60 days",     accent: "#FBBF24" },
             { value: "24/7", unit: "",   label: "Your AI back office never clocks out",    accent: "#F97316" },
           ].map((s, i) => (
@@ -863,7 +863,7 @@ function AIOfficeSection() {
               <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-5">
                 {[
                   { label: "Revenue this month",  value: "$284K", sub: "recovered from ad spend", color: C.success },
-                  { label: "Leads reached",       value: "94%",   sub: "within 3.7 seconds",      color: C.primary },
+                  { label: "Leads reached",       value: "100%",  sub: "every lead gets a response",      color: C.primary },
                   { label: "Avg response time",   value: "3.7s",  sub: "while you were on a job", color: "#0EA5E9" },
                   { label: "Show rate",           value: "91%",   sub: "of booked appointments",  color: "#D97706" },
                 ].map((m, i) => (
@@ -1091,7 +1091,7 @@ function SystemOverviewSection() {
 
   const dashMetrics = [
     { label: "Revenue this month",  value: "$284K", sub: "recovered from ad spend", color: C.success },
-    { label: "Leads reached",       value: "94%",   sub: "within 60 seconds",       color: C.primary },
+    { label: "Leads reached",       value: "100%",  sub: "every lead gets a response",       color: C.primary },
     { label: "Avg response time",   value: "14s",   sub: "while you were on a job", color: "#0EA5E9" },
     { label: "Show rate",           value: "91%",   sub: "of booked appointments",  color: "#D97706" },
   ]
@@ -2392,7 +2392,7 @@ function CRMSection() {
                 {[
                   { label: "Revenue",    value: "$284K", color: C.success },
                   { label: "Booked",     value: "34",    color: C.primary },
-                  { label: "Contact",    value: "94%",   color: "#0EA5E9" },
+                  { label: "Contact",    value: "100%",  color: "#0EA5E9" },
                   { label: "Show rate",  value: "91%",   color: "#D97706" },
                 ].map((m, i) => (
                   <motion.div
