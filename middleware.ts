@@ -37,7 +37,8 @@ export async function middleware(request: NextRequest) {
     path === "/api/health" ||
     path.startsWith("/api/webhooks") ||
     path.startsWith("/api/voice") ||
-    path.startsWith("/api/cron")
+    path.startsWith("/api/cron") ||
+    path.endsWith(".html")
   const isProtected = !isAuthRoute && !isPublicRoute
 
   if (!user && isProtected) {
