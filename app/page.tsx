@@ -577,15 +577,6 @@ function HeroSection() {
             </motion.div>
 
             {/* Live indicator */}
-            <motion.div
-              initial={{ opacity: 0, x: -16, y: 8 }} animate={{ opacity: 1, x: 0, y: 0 }}
-              transition={{ delay: 1.7, duration: 0.5 }}
-              className="absolute -left-5 bottom-12 px-3 py-1.5 rounded-full text-xs font-semibold flex items-center gap-1.5"
-              style={{ background: "#1A1614", border: "1px solid rgba(249,115,22,0.25)",
-                       color: "#F97316", fontFamily: "var(--font-jetbrains)", boxShadow: "0 4px 16px rgba(0,0,0,0.3)" }}>
-              <span className="w-1.5 h-1.5 rounded-full bg-green-400" style={{ animation: "callPulse 2s ease-in-out infinite" }} />
-              3.7s response
-            </motion.div>
           </motion.div>
 
         </div>{/* end 2-col grid */}
