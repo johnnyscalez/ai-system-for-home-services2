@@ -495,9 +495,9 @@ function HeroSection() {
               className="text-lg leading-relaxed mb-9 max-w-md"
               style={{ color: "rgba(250,250,248,0.58)" }}
             >
-              Your AI contacts every Facebook lead in 3.7 seconds — qualifies them,
-              handles every objection, and books the estimate.
-              You wake up to a full schedule.
+              This isn&rsquo;t a chatbot. It&rsquo;s a full back office — receptionist, dispatcher, CRM,
+              and follow-up team — installed in one call and running 24/7.
+              Every lead gets a text in 3.7 seconds. Your schedule fills itself.
             </motion.p>
 
             {/* CTAs */}
