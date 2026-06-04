@@ -18,9 +18,21 @@ export async function GET(req: NextRequest) {
     Array.isArray(profile.companies) ? profile.companies[0] : profile.companies
   ) as { avg_job_value: number } | null
 
-  // `since` is a Unix timestamp in milliseconds from the client
+  // `since`/`until` can be Unix ms timestamps OR YYYY-MM-DD strings
   const sinceParam = req.nextUrl.searchParams.get("since")
-  const since = sinceParam ? new Date(parseInt(sinceParam)).toISOString() : null
+  const untilParam = req.nextUrl.searchParams.get("until")
+
+  function parseDate(p: string | null): string | null {
+    if (!p) return null
+    if (/^\d{4}-\d{2}-\d{2}$/.test(p)) return new Date(p + "T00:00:00.000Z").toISOString()
+    const ms = parseInt(p)
+    return isNaN(ms) ? null : new Date(ms).toISOString()
+  }
+
+  const since = parseDate(sinceParam)
+  // until: end of day
+  const untilRaw = parseDate(untilParam)
+  const until = untilRaw ? untilRaw.replace("T00:00:00.000Z", "T23:59:59.999Z") : null
 
   const [
     { count: newLeads },
@@ -33,60 +45,36 @@ export async function GET(req: NextRequest) {
   ] = await Promise.all([
     // Leads that arrived in the period
     (() => {
-      let q = supabase
-        .from("leads")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", companyId)
+      let q = supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", companyId)
       if (since) q = q.gte("created_at", since)
+      if (until) q = q.lte("created_at", until)
       return q
     })(),
     // Appointments booked in the period
     (() => {
-      let q = supabase
-        .from("appointments")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", companyId)
-        .eq("status", "scheduled")
+      let q = supabase.from("appointments").select("*", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "scheduled")
       if (since) q = q.gte("created_at", since)
+      if (until) q = q.lte("created_at", until)
       return q
     })(),
-    // Actual follow-up sequence steps sent (not AI replies)
+    // Follow-up sequences fired in the period
     (() => {
-      let q = supabase
-        .from("sequences")
-        .select("*", { count: "exact", head: true })
-        .eq("company_id", companyId)
-        .eq("status", "sent")
+      let q = supabase.from("sequences").select("*", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "sent")
       if (since) q = q.gte("sent_at", since)
+      if (until) q = q.lte("sent_at", until)
       return q
     })(),
-    // Current hot leads (qualified, replied but not booked)
-    supabase
-      .from("leads")
-      .select("*", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .eq("status", "qualified"),
-    // Current cold / lost leads
-    supabase
-      .from("leads")
-      .select("*", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .in("status", ["cold", "lost"]),
-    // Current needs-attention leads
-    supabase
-      .from("leads")
-      .select("*", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .eq("status", "needs_attention"),
+    // Current hot leads (point-in-time, no date filter)
+    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "qualified"),
+    // Current cold / lost
+    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["cold", "lost"]),
+    // Current needs-attention
+    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "needs_attention"),
     // Closed deals with revenue in the period
     (() => {
-      let q = supabase
-        .from("leads")
-        .select("deal_value")
-        .eq("company_id", companyId)
-        .in("status", ["closed", "closed_won"])
-        .not("deal_value", "is", null)
+      let q = supabase.from("leads").select("deal_value").eq("company_id", companyId).in("status", ["closed", "closed_won"]).not("deal_value", "is", null)
       if (since) q = q.gte("closed_at", since)
+      if (until) q = q.lte("closed_at", until)
       return q
     })(),
   ])

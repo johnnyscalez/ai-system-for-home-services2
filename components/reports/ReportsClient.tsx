@@ -1,14 +1,15 @@
 "use client"
 
 import { motion, useInView } from "framer-motion"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useRef, useState, useCallback } from "react"
 import {
   Users, CalendarCheck, TrendingUp, DollarSign,
   ArrowUpRight, ArrowDownRight, Minus,
   BarChart3, PieChart, GitMerge, HardHat,
-  CheckCircle2, Briefcase,
+  RefreshCw,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { DateRangePicker, type DateRange, PRESETS } from "@/components/ui/DateRangePicker"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
 
@@ -176,23 +177,78 @@ const SOURCE_LABELS: Record<string, string> = {
 
 // ── Main component ────────────────────────────────────────────────────────────
 
+function defaultRange(): DateRange {
+  const today = new Date().toISOString().slice(0, 10)
+  const from = new Date()
+  from.setDate(1)
+  return { from: from.toISOString().slice(0, 10), until: today, label: "This month" }
+}
+
 export function ReportsClient({
-  leadsThisMonth,
+  leadsThisMonth: initialLeadsInPeriod,
   monthOverMonthDelta,
-  totalLeads,
-  appointmentsThisMonth,
-  totalAppointments,
-  bookingRate,
-  revenueAtRisk,
-  revenueClosed,
-  closedCount,
+  totalLeads: initialTotalLeads,
+  appointmentsThisMonth: initialAptInPeriod,
+  totalAppointments: initialTotalApts,
+  bookingRate: initialBookingRate,
+  revenueAtRisk: initialRevenueAtRisk,
+  revenueClosed: initialRevenueClosed,
+  closedCount: initialClosedCount,
   avgJobValue,
-  dailyLeads,
-  statusCounts,
-  sourceCounts,
-  funnel,
-  techPerformance,
+  dailyLeads: initialDailyLeads,
+  statusCounts: initialStatusCounts,
+  sourceCounts: initialSourceCounts,
+  funnel: initialFunnel,
+  techPerformance: initialTechPerf,
 }: Props) {
+  const [range, setRange]       = useState<DateRange>(defaultRange())
+  const [fetching, setFetching] = useState(false)
+
+  // Live data — starts from server-rendered props, updates on range change
+  const [leadsInPeriod, setLeadsInPeriod]   = useState(initialLeadsInPeriod)
+  const [totalLeads, setTotalLeads]         = useState(initialTotalLeads)
+  const [aptInPeriod, setAptInPeriod]       = useState(initialAptInPeriod)
+  const [totalApts, setTotalApts]           = useState(initialTotalApts)
+  const [bookingRate, setBookingRate]       = useState(initialBookingRate)
+  const [revenueAtRisk, setRevenueAtRisk]   = useState(initialRevenueAtRisk)
+  const [revenueClosed, setRevenueClosed]   = useState(initialRevenueClosed)
+  const [closedCount, setClosedCount]       = useState(initialClosedCount)
+  const [dailyLeads, setDailyLeads]         = useState(initialDailyLeads)
+  const [statusCounts, setStatusCounts]     = useState(initialStatusCounts)
+  const [sourceCounts, setSourceCounts]     = useState(initialSourceCounts)
+  const [funnel, setFunnel]                 = useState(initialFunnel)
+  const [techPerformance, setTechPerf]      = useState(initialTechPerf)
+
+  const fetchReports = useCallback(async (r: DateRange) => {
+    setFetching(true)
+    try {
+      const params = new URLSearchParams({ since: r.from, until: r.until })
+      const res = await fetch(`/api/reports/stats?${params}`)
+      if (!res.ok) return
+      const d = await res.json()
+      setLeadsInPeriod(d.leadsInPeriod)
+      setTotalLeads(d.totalLeads)
+      setAptInPeriod(d.appointmentsInPeriod)
+      setTotalApts(d.totalAppointments)
+      setBookingRate(d.bookingRate)
+      setRevenueAtRisk(d.revenueAtRisk)
+      setRevenueClosed(d.revenueClosed)
+      setClosedCount(d.closedCount)
+      setDailyLeads(d.dailyLeads)
+      setStatusCounts(d.statusCounts)
+      setSourceCounts(d.sourceCounts)
+      setFunnel(d.funnel)
+      setTechPerf(d.techPerformance)
+    } catch { /* non-fatal */ }
+    finally { setFetching(false) }
+  }, [])
+
+  const mounted = useRef(false)
+  useEffect(() => {
+    if (!mounted.current) { mounted.current = true; return }
+    fetchReports(range)
+  }, [range, fetchReports])
+
   const maxFunnel = Math.max(...funnel.map((f) => f.count), 1)
 
   return (
@@ -212,10 +268,18 @@ export function ReportsClient({
       <div className="relative z-10 p-8 max-w-6xl">
         {/* Header */}
         <motion.div initial={{ opacity: 0, y: -10 }} animate={{ opacity: 1, y: 0 }} className="mb-8">
-          <h1 className="text-3xl font-bold text-foreground">Reports</h1>
-          <p className="text-muted-foreground mt-1">
-            Performance overview — all time and this month
-          </p>
+          <div className="flex items-start justify-between flex-wrap gap-4">
+            <div>
+              <h1 className="text-3xl font-bold text-foreground">Reports</h1>
+              <p className="text-muted-foreground mt-1">
+                Performance analytics · {range.label}
+              </p>
+            </div>
+            <div className="flex items-center gap-3">
+              {fetching && <RefreshCw className="w-4 h-4 text-muted-foreground animate-spin" />}
+              <DateRangePicker value={range} onChange={r => setRange(r)} />
+            </div>
+          </div>
         </motion.div>
 
         {/* Revenue spotlight — closed deals */}
@@ -244,7 +308,7 @@ export function ReportsClient({
                 ${revenueClosed.toLocaleString()}
               </p>
               <p className="text-green-200 text-sm mt-2">
-                {closedCount} deal{closedCount !== 1 ? "s" : ""} closed all time
+                {closedCount} deal{closedCount !== 1 ? "s" : ""} · {range.label}
                 {closedCount > 0 && ` · avg $${Math.round(revenueClosed / closedCount).toLocaleString()} per deal`}
               </p>
             </div>
@@ -264,22 +328,21 @@ export function ReportsClient({
         {/* KPI grid */}
         <div className="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
           <StatCard
-            label="Leads this month"
-            value={leadsThisMonth}
-            delta={monthOverMonthDelta}
+            label={`Leads · ${range.label}`}
+            value={leadsInPeriod}
             icon={Users}
             iconColor="bg-[#FFF3EC] text-[#EA580C]"
             delay={0}
           />
           <StatCard
-            label="Appointments booked this month"
-            value={appointmentsThisMonth}
+            label={`Appointments · ${range.label}`}
+            value={aptInPeriod}
             icon={CalendarCheck}
             iconColor="bg-emerald-100 text-emerald-600"
             delay={100}
           />
           <StatCard
-            label="Booking rate (all time)"
+            label="Booking rate (period)"
             value={bookingRate}
             suffix="%"
             icon={TrendingUp}
@@ -308,7 +371,7 @@ export function ReportsClient({
             <BarChart3 className="w-4 h-4 text-muted-foreground" />
             <h2 className="font-semibold text-sm">Lead volume — last 30 days</h2>
           </div>
-          <p className="text-xs text-muted-foreground mb-4">{totalLeads} leads all time</p>
+          <p className="text-xs text-muted-foreground mb-4">{leadsInPeriod} leads · {range.label}</p>
           <SparkBar dailyLeads={dailyLeads} />
           <div className="flex justify-between mt-2">
             <span className="text-[10px] text-muted-foreground">30 days ago</span>
@@ -376,7 +439,7 @@ export function ReportsClient({
                 {Object.entries(sourceCounts)
                   .sort(([, a], [, b]) => b - a)
                   .map(([src, count]) => {
-                    const pct = totalLeads > 0 ? Math.round((count / totalLeads) * 100) : 0
+                    const pct = leadsInPeriod > 0 ? Math.round((count / leadsInPeriod) * 100) : 0
                     return (
                       <div key={src}>
                         <div className="flex justify-between items-center mb-1">
@@ -525,10 +588,10 @@ export function ReportsClient({
           transition={{ duration: 0.4, delay: 0.45 }}
           className="bg-gradient-to-r from-primary/10 via-primary/5 to-transparent rounded-2xl p-6 border border-primary/20"
         >
-          <h2 className="font-semibold text-sm mb-4">All-time summary</h2>
+          <h2 className="font-semibold text-sm mb-4">All-time totals</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
             <AllTimeStat label="Total leads" value={totalLeads} />
-            <AllTimeStat label="Appointments booked" value={totalAppointments} />
+            <AllTimeStat label="Appointments booked" value={totalApts} />
             <AllTimeStat
               label="Avg. job value"
               value={avgJobValue}
@@ -536,7 +599,7 @@ export function ReportsClient({
             />
             <AllTimeStat
               label="Revenue potential booked"
-              value={totalAppointments * avgJobValue}
+              value={totalApts * avgJobValue}
               format={(v) => `$${v.toLocaleString()}`}
               green
             />

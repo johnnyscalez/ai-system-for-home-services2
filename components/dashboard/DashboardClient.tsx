@@ -9,6 +9,7 @@ import {
   DollarSign, BarChart3, Clock, Sparkles, Flame, RefreshCw,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { DateRangePicker, type DateRange, PRESETS } from "@/components/ui/DateRangePicker"
 
 // ── Count-up hook ──────────────────────────────────────────────────────────────
 function useCountUp(target: number, duration = 1400, delay = 0) {
@@ -132,14 +133,12 @@ const STATUS: Record<string, { label: string; cls: string }> = {
   needs_attention:     { label: "Attention",    cls: "bg-red-50 text-red-600 border border-red-100" },
 }
 
-// ── Period picker ──────────────────────────────────────────────────────────────
-type Period = "7d" | "30d" | "90d" | "all"
-const PERIODS: { key: Period; label: string; days: number | null }[] = [
-  { key: "7d",  label: "7d",   days: 7   },
-  { key: "30d", label: "30d",  days: 30  },
-  { key: "90d", label: "3mo",  days: 90  },
-  { key: "all", label: "All",  days: null },
-]
+// Default range: last 30 days
+function defaultRange(): DateRange {
+  const today = new Date().toISOString().slice(0, 10)
+  const from30 = new Date(Date.now() - 29 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10)
+  return { from: from30, until: today, label: "Last 30 days" }
+}
 
 type DashboardStats = {
   newLeads: number; booked: number; qualified: number; cold: number
@@ -168,32 +167,26 @@ const stagger = {
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 export function DashboardClient({ greeting, firstName, companyName, initialStats, recentLeads, upcomingApts }: Props) {
-  const [period, setPeriod] = useState<Period>("30d")
-  const [stats, setStats] = useState<DashboardStats>(initialStats)
+  const [range, setRange]   = useState<DateRange>(defaultRange())
+  const [stats, setStats]   = useState<DashboardStats>(initialStats)
   const [fetching, setFetching] = useState(false)
 
-  const fetchStats = useCallback(async (p: Period) => {
+  const fetchStats = useCallback(async (r: DateRange) => {
     setFetching(true)
     try {
-      const periodDef = PERIODS.find((x) => x.key === p)
-      const since = periodDef?.days
-        ? Date.now() - periodDef.days * 24 * 60 * 60 * 1000
-        : null
-      const url = `/api/dashboard/stats${since ? `?since=${since}` : ""}`
-      const res = await fetch(url)
-      if (res.ok) {
-        const data = await res.json()
-        setStats(data)
-      }
+      const params = new URLSearchParams({ since: r.from, until: r.until })
+      const res = await fetch(`/api/dashboard/stats?${params}`)
+      if (res.ok) setStats(await res.json())
     } catch { /* non-fatal */ }
     finally { setFetching(false) }
   }, [])
 
-  // Re-fetch whenever period changes (skip the initial "30d" since server already fetched it)
+  // Skip the initial fetch since server already loaded Last 30 days
+  const mounted = useRef(false)
   useEffect(() => {
-    if (period === "30d") return
-    fetchStats(period)
-  }, [period, fetchStats])
+    if (!mounted.current) { mounted.current = true; return }
+    fetchStats(range)
+  }, [range, fetchStats])
 
   const needsAttn = stats.needsAttention
 
@@ -298,8 +291,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                 ${stats.revenueClosed.toLocaleString()}
               </motion.p>
               <p className="text-green-200 text-sm mt-1.5">
-                {stats.closedCount} deal{stats.closedCount !== 1 ? "s" : ""} closed
-                {period !== "all" ? ` · last ${PERIODS.find((p2) => p2.key === period)?.label}` : " · all time"}
+                {stats.closedCount} deal{stats.closedCount !== 1 ? "s" : ""} closed · {range.label}
               </p>
               {stats.closedCount === 0 && (
                 <p className="text-green-300/60 text-xs mt-2">
@@ -350,32 +342,14 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
           )}
         </motion.div>
 
-        {/* Stats section header with period picker */}
+        {/* Stats section header with date range picker */}
         <div>
-          <div className="flex items-center justify-between mb-4">
-            <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wider">Performance</p>
-
+          <div className="flex items-center justify-between mb-4 flex-wrap gap-3">
             <div className="flex items-center gap-2">
-              {fetching && (
-                <RefreshCw className="w-3.5 h-3.5 text-[#78716C] animate-spin" />
-              )}
-              <div className="flex items-center gap-0.5 bg-[#F5F4F2] rounded-xl p-1 border border-[#E7E5E4]/60">
-                {PERIODS.map(({ key, label }) => (
-                  <button
-                    key={key}
-                    onClick={() => setPeriod(key)}
-                    className={cn(
-                      "px-3 py-1.5 rounded-lg text-xs font-semibold transition-all",
-                      period === key
-                        ? "bg-white text-[#1C1917] shadow-sm border border-[#E7E5E4]/80"
-                        : "text-[#78716C] hover:text-[#1C1917]"
-                    )}
-                  >
-                    {label}
-                  </button>
-                ))}
-              </div>
+              <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wider">Performance</p>
+              {fetching && <RefreshCw className="w-3 h-3 text-[#78716C] animate-spin" />}
             </div>
+            <DateRangePicker value={range} onChange={r => setRange(r)} />
           </div>
 
           {/* Stripe-style gradient band */}
@@ -383,7 +357,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
             style={{ background: "linear-gradient(180deg, rgba(249,115,22,0.03) 0%, rgba(77,124,15,0.02) 100%)" }} />
 
           <motion.div
-            key={period}
+            key={range.label}
             variants={stagger}
             initial="hidden"
             animate="show"
@@ -391,12 +365,12 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
           >
             <StatCard
               label="New leads"
-              subLabel={period === "all" ? "All time" : `Last ${PERIODS.find((p2) => p2.key === period)?.label}`}
+              subLabel={range.label}
               value={stats.newLeads} icon={Users} iconBg="bg-blue-50" iconColor="text-blue-600" delay={0}
             />
             <StatCard
               label="Appointments booked"
-              subLabel={period === "all" ? "All time" : `Last ${PERIODS.find((p2) => p2.key === period)?.label}`}
+              subLabel={range.label}
               value={stats.booked} icon={CalendarCheck} iconBg="bg-green-50" iconColor="text-green-600"
               valueColor="text-[#4D7C0F]" shadowColor="rgba(77,124,15,0.12)" delay={80}
             />
