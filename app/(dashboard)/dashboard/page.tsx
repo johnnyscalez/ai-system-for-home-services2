@@ -50,10 +50,11 @@ export default async function DashboardPage() {
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)
       .in("status", ["active_conversation", "qualified", "nurturing"]),
-    // Current cold/lost leads
+    // Cold leads: no inbound reply in 7+ days (regardless of exact status label)
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)
-      .in("status", ["cold", "lost"]),
+      .not("status", "in", '("closed","closed_won","closed_lost","unqualified","appointment_booked","needs_attention")')
+      .lt("last_inbound_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
     // Current needs-attention leads
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)

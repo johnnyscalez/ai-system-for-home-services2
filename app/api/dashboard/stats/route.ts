@@ -66,8 +66,11 @@ export async function GET(req: NextRequest) {
     })(),
     // Current hot leads (point-in-time, no date filter)
     supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "qualified"),
-    // Current cold / lost
-    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", companyId).in("status", ["cold", "lost"]),
+    // Cold leads: no inbound reply in 7+ days, not closed/booked/unqualified
+    supabase.from("leads").select("*", { count: "exact", head: true })
+      .eq("company_id", companyId)
+      .not("status", "in", '("closed","closed_won","closed_lost","unqualified","appointment_booked","needs_attention")')
+      .lt("last_inbound_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
     // Current needs-attention
     supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "needs_attention"),
     // Closed deals with revenue in the period

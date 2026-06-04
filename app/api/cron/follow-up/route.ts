@@ -28,6 +28,7 @@ export async function GET(req: NextRequest) {
     .select("*, leads(id, phone, status, ai_paused, first_name, last_name, service_type)")
     .eq("status", "pending")
     .lte("scheduled_at", now.toISOString())
+    .order("scheduled_at", { ascending: true })  // oldest-first so no step is skipped
     .limit(50)
 
   let processed = 0
@@ -156,7 +157,6 @@ export async function GET(req: NextRequest) {
         .update({ status: "sent", sent_at: now.toISOString() })
         .eq("id", step.id)
 
-      // Steps are pre-created at lead arrival — no next-step scheduling needed.
       const lastStep = LAST_STEP[step.sequence_type] ?? 0
       if (step.step >= lastStep) {
         // Last step exhausted — mark lead as lost
@@ -166,12 +166,35 @@ export async function GET(req: NextRequest) {
           .eq("id", lead.id)
           .in("status", ["just_came_in", "new", "contacted", "following_up", "active_conversation", "nurturing", "followed_up", "cold"])
       } else if (step.sequence_type === "no_reply") {
-        // Mid-sequence, still no reply — move lead into the "following up" pipeline column
-        await supabase
-          .from("leads")
-          .update({ status: "following_up" })
-          .eq("id", lead.id)
-          .in("status", ["just_came_in", "new", "contacted", "following_up"])
+        // Mid no-reply sequence: mark cold after first step fires (7+ days silent)
+        // "following_up" stays for steps before the 7-day threshold
+        const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
+        const coldStatuses = ["just_came_in", "new", "contacted", "following_up", "active_conversation", "nurturing", "followed_up"]
+        if (step.step >= 1) {
+          // After the first follow-up fires, the lead is definitively cold
+          await supabase
+            .from("leads")
+            .update({ status: "cold" })
+            .eq("id", lead.id)
+            .in("status", coldStatuses)
+            .lt("last_inbound_at", sevenDaysAgo)
+            // If they never replied at all, also mark cold
+        } else {
+          await supabase
+            .from("leads")
+            .update({ status: "following_up" })
+            .eq("id", lead.id)
+            .in("status", ["just_came_in", "new", "contacted"])
+        }
+      } else if (step.sequence_type === "replied_not_booked") {
+        // Replied but didn't book — mark cold after all nurture steps are sent
+        if (step.step >= lastStep - 1) {
+          await supabase
+            .from("leads")
+            .update({ status: "cold" })
+            .eq("id", lead.id)
+            .in("status", ["qualified", "active_conversation", "nurturing"])
+        }
       }
 
       processed++
