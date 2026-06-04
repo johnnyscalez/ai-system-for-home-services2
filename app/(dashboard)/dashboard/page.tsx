@@ -46,10 +46,11 @@ export default async function DashboardPage() {
       .eq("company_id", profile.company_id)
       .eq("status", "scheduled")
       .gte("created_at", sinceIso),
-    // Hot leads: replied but haven't booked yet
+    // Hot leads: replied within last 7 days AND haven't booked
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)
-      .in("status", ["active_conversation", "qualified", "nurturing"]),
+      .in("status", ["active_conversation", "qualified", "nurturing"])
+      .gte("last_inbound_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
     // Cold leads: no inbound reply in 7+ days (regardless of exact status label)
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)

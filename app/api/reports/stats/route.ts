@@ -142,7 +142,10 @@ export async function GET(req: NextRequest) {
     ? Math.round((appointmentsInPeriod.length / leadsInPeriod.length) * 100)
     : 0
 
-  const activeLeads = allLeads.filter(l => !["closed_lost", "closed_won", "closed"].includes(l.status)).length
+  // Active leads in the period: replied (not cold/closed) — these represent pipeline value at risk
+  const activeLeads = leadsInPeriod.filter(l =>
+    !["closed", "closed_won", "closed_lost", "lost", "unqualified", "cold"].includes(l.status)
+  ).length
   const avgJobValue = company?.avg_job_value ?? 0
   const revenueAtRisk = activeLeads * avgJobValue
 

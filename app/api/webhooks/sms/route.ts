@@ -232,8 +232,14 @@ export async function POST(req: NextRequest) {
       .eq("status", "pending")
 
     // Schedule replied-not-booked follow-up if not already booked.
+    // Skip for leads that are already terminal (closed, lost, booked, needs attention).
     // Reset ALL steps on EVERY reply so timers always count from the latest message.
-    if (result.action?.type !== "book_appointment") {
+    const skipSequenceStatuses = ["closed", "closed_won", "closed_lost", "appointment_booked", "lost", "unqualified", "needs_attention", "cold"]
+    const shouldScheduleRepliedNotBooked =
+      result.action?.type !== "book_appointment" &&
+      !skipSequenceStatuses.includes(lead.status)
+
+    if (shouldScheduleRepliedNotBooked) {
       // Cancel all existing pending replied_not_booked steps, then pre-create all 3 fresh
       await supabase
         .from("sequences")

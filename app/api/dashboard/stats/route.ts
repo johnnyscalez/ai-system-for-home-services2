@@ -64,8 +64,11 @@ export async function GET(req: NextRequest) {
       if (until) q = q.lte("sent_at", until)
       return q
     })(),
-    // Current hot leads (point-in-time, no date filter)
-    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "qualified"),
+    // Hot leads: replied within last 7 days, not yet booked
+    supabase.from("leads").select("*", { count: "exact", head: true })
+      .eq("company_id", companyId)
+      .in("status", ["active_conversation", "qualified", "nurturing"])
+      .gte("last_inbound_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
     // Cold leads: no inbound reply in 7+ days, not closed/booked/unqualified
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", companyId)

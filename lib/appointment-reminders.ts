@@ -211,12 +211,17 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
 
     // Schedule the no-response voice call for 2 hours after this SMS
     const callAt = new Date(Date.now() + 2 * 60 * 60 * 1000)
-    // If callAt is after 7pm, reschedule to 9am day-of-appointment
-    const callHour = parseInt(callAt.toLocaleTimeString("en-US", { hour: "2-digit", hour12: false, timeZone: timezone }))
+    // If callAt is after 7pm local time, reschedule to 9am day-of-appointment in company timezone
+    const callHour = parseInt(callAt.toLocaleString("en-US", { hour: "2-digit", hour12: false, timeZone: timezone }))
     let finalCallAt = callAt
     if (callHour >= 19) {
-      finalCallAt = new Date(scheduledAt)
-      finalCallAt.setHours(9, 0, 0, 0)
+      // Build 9am on the appointment day in the company's timezone
+      const aptDateStr = scheduledAt.toLocaleDateString("en-CA", { timeZone: timezone }) // "YYYY-MM-DD"
+      // Find UTC offset: compare noon UTC → local hour
+      const noonRef = new Date(aptDateStr + "T12:00:00.000Z")
+      const localNoonHour = parseInt(noonRef.toLocaleString("en-US", { hour: "2-digit", hour12: false, timeZone: timezone }))
+      const utcHour9am = 9 - localNoonHour + 12  // e.g. for UTC-5: 9 - 7 + 12 = 14 UTC
+      finalCallAt = new Date(`${aptDateStr}T${String(Math.max(0, utcHour9am)).padStart(2, "0")}:00:00.000Z`)
     }
 
     await supabase.from("appointments").update({
@@ -343,6 +348,17 @@ export async function processAppointmentReminders() {
   const supabase = createServiceRoleClient()
   const now = new Date()
 
+  // ── 0. Auto-complete past appointments ───────────────────────────────────────
+  // Appointments that were scheduled in the past and still show as "scheduled" or
+  // confirmation_status not "completed" — mark them complete so the calendar is clean.
+  const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
+  await supabase
+    .from("appointments")
+    .update({ confirmation_status: "completed" })
+    .eq("status", "scheduled")
+    .in("confirmation_status", ["confirmed", "pending_confirmation", "no_response"])
+    .lt("scheduled_at", oneHourAgo.toISOString())
+
   // ── 1. Send 24h confirmation requests ────────────────────────────────────────
   // Find appointments 23–25 hours from now that haven't had a confirmation request yet
   const confirmWindow24hStart = new Date(now.getTime() + 23 * 60 * 60 * 1000)
@@ -383,6 +399,7 @@ export async function processAppointmentReminders() {
       reminder_2d_email_sent, reminder_2d_sms_sent,
       reminder_1d_email_sent, reminder_1d_sms_sent,
       reminder_2h_email_sent, reminder_2h_sms_sent,
+      confirmation_requested_at,
       leads(first_name, last_name, phone, email),
       companies(name, service_type)
     `)
@@ -506,13 +523,17 @@ export async function processAppointmentReminders() {
     }
 
     // 1-day reminder: between 23-25 hours before
+    // Skip the SMS reminder if we already sent a confirmation REQUEST in this same window
+    // (both fire at 23-25h — sending both would double-text the lead)
+    const confirmationAlreadySent = !!(apt as { confirmation_requested_at?: string | null }).confirmation_requested_at
     if (hoursDiff >= 23 && hoursDiff <= 25) {
       if (!apt.reminder_1d_email_sent && emailTpl?.reminder_1d_enabled !== false) {
         await sendReminderEmail("reminder_1d", emailTpl?.reminder_1d_subject, emailTpl?.reminder_1d_custom_message)
         await supabase.from("appointments").update({ reminder_1d_email_sent: true }).eq("id", apt.id)
         processed++
       }
-      if (!apt.reminder_1d_sms_sent && emailTpl?.sms_reminder_1d_enabled !== false) {
+      // Only send 1d SMS if NO confirmation request was sent (avoid double-texting)
+      if (!apt.reminder_1d_sms_sent && !confirmationAlreadySent && emailTpl?.sms_reminder_1d_enabled !== false) {
         const body = `${companyName}: Reminder — your appointment is tomorrow at ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. Reply to reschedule or cancel.`
         await sendReminderSMS(body, "reminder_1d_sms_sent")
         processed++
