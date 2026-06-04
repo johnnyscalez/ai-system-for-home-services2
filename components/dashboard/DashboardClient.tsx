@@ -90,7 +90,7 @@ function StatCard({
     <motion.div
       variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
       whileHover={{ scale: 1.02, y: -3, transition: { type: "spring", stiffness: 400, damping: 20 } }}
-      className="relative bg-white rounded-2xl p-6 overflow-hidden cursor-default border border-[#E7E5E4]/60"
+      className="relative bg-white rounded-2xl p-4 md:p-6 overflow-hidden cursor-default border border-[#E7E5E4]/60"
       style={{ boxShadow: `0 4px 24px ${shadowColor}, 0 1px 3px rgba(0,0,0,0.03)` }}
     >
       <div className="absolute inset-0 opacity-40 pointer-events-none"
@@ -207,14 +207,14 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
       </div>
 
       {/* ── Content layer ── */}
-      <div className="relative z-10 max-w-7xl mx-auto px-8 py-8 space-y-8">
+      <div className="relative z-10 max-w-7xl mx-auto px-4 sm:px-6 md:px-8 py-5 md:py-8 space-y-6 md:space-y-8">
 
         {/* Header */}
         <motion.div
           initial={{ opacity: 0, y: -16 }}
           animate={{ opacity: 1, y: 0 }}
           transition={{ duration: 0.5, ease: "easeOut" }}
-          className="flex items-start justify-between"
+          className="flex flex-col gap-3 sm:flex-row sm:items-start sm:justify-between"
         >
           <div>
             <div className="flex items-center gap-2 mb-1">
@@ -276,7 +276,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
             <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-white/10 blur-2xl" />
             <div className="absolute right-32 -bottom-8 w-40 h-40 rounded-full bg-[#F97316]/10 blur-2xl" />
 
-            <div className="relative flex items-center justify-between">
+            <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
               <div>
                 <p className="text-orange-200 text-sm font-medium tracking-wide">
                   Projected revenue
@@ -287,7 +287,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                   initial={{ opacity: 0, scale: 0.8 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ type: "spring", stiffness: 200 }}
-                  className="text-5xl font-bold mt-1"
+                  className="text-3xl sm:text-5xl font-bold mt-1"
                   style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}
                 >
                   ${stats.revenueProjected.toLocaleString()}
@@ -341,7 +341,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
             variants={stagger}
             initial="hidden"
             animate="show"
-            className="relative grid grid-cols-3 gap-4"
+            className="relative grid grid-cols-2 md:grid-cols-3 gap-3 md:gap-4"
           >
             <StatCard
               label="New leads"
@@ -386,7 +386,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
           initial="hidden"
           animate="show"
           variants={stagger}
-          className="grid grid-cols-2 gap-6"
+          className="grid grid-cols-1 md:grid-cols-2 gap-4 md:gap-6"
         >
           {/* Recent leads */}
           <motion.div

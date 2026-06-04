@@ -79,7 +79,7 @@ export default async function LeadDetailPage({
   return (
     <div className="flex flex-col h-screen">
       {/* Top bar */}
-      <div className="px-6 py-4 border-b border-border flex items-center justify-between shrink-0">
+      <div className="px-4 md:px-6 py-3 md:py-4 border-b border-border flex items-center justify-between shrink-0 flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <Link
             href="/leads"
@@ -115,9 +115,9 @@ export default async function LeadDetailPage({
         </div>
       </div>
 
-      <div className="flex flex-1 overflow-hidden">
-        {/* Left panel — lead info */}
-        <div className="w-72 shrink-0 border-r border-border overflow-y-auto p-5 space-y-6">
+      <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
+        {/* Left panel — lead info (full width on mobile, 288px sidebar on desktop) */}
+        <div className="md:w-72 md:shrink-0 border-b md:border-b-0 md:border-r border-border overflow-y-auto p-4 md:p-5 space-y-4 md:space-y-6 max-h-[40vh] md:max-h-none">
           {/* Avatar + name */}
           <div className="flex flex-col items-center text-center gap-2 pt-2">
             <div className="w-14 h-14 rounded-full bg-primary/10 flex items-center justify-center text-xl font-bold text-primary">

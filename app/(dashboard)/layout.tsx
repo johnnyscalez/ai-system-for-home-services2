@@ -23,7 +23,8 @@ export default async function DashboardLayout({ children }: { children: React.Re
   return (
     <div className="flex h-screen overflow-hidden">
       <Sidebar />
-      <main className="flex-1 overflow-y-auto bg-background">
+      {/* pt-14 on mobile offsets the fixed top bar; desktop needs none */}
+      <main className="flex-1 overflow-y-auto bg-background pt-14 md:pt-0">
         {children}
       </main>
     </div>

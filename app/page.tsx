@@ -1122,7 +1122,7 @@ function SystemOverviewSection() {
   ]
 
   return (
-    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }}>
+    <section ref={ref} className="relative py-14 md:py-24 px-4 md:px-6" style={{ zIndex: 10 }}>
       <div className="max-w-7xl mx-auto">
 
         <motion.div
@@ -1413,7 +1413,7 @@ function ProblemSection() {
   ]
 
   return (
-    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }} id="features">
+    <section ref={ref} className="relative py-14 md:py-24 px-4 md:px-6" style={{ zIndex: 10 }} id="features">
       <div className="max-w-7xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -1780,7 +1780,7 @@ function DemoSection() {
   const inView = useInView(ref, { once: true, margin: "-80px" })
 
   return (
-    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }} id="demo">
+    <section ref={ref} className="relative py-14 md:py-24 px-4 md:px-6" style={{ zIndex: 10 }} id="demo">
       <div className="max-w-7xl mx-auto">
         <div className="grid md:grid-cols-2 gap-16 items-center">
 
@@ -1859,7 +1859,7 @@ function FollowUpSection() {
   const inView = useInView(ref, { once: true, margin: "-80px" })
 
   return (
-    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }}>
+    <section ref={ref} className="relative py-14 md:py-24 px-4 md:px-6" style={{ zIndex: 10 }}>
       <div className="max-w-6xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -1996,7 +1996,7 @@ function SmartDispatchSection() {
   ]
 
   return (
-    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }} id="smart-dispatch">
+    <section ref={ref} className="relative py-14 md:py-24 px-4 md:px-6" style={{ zIndex: 10 }} id="smart-dispatch">
       <div className="max-w-7xl mx-auto">
         <div className="grid md:grid-cols-2 gap-16 items-center">
 
@@ -2148,7 +2148,7 @@ function VoiceCallSection() {
   ]
 
   return (
-    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }}>
+    <section ref={ref} className="relative py-14 md:py-24 px-4 md:px-6" style={{ zIndex: 10 }}>
       <div className="max-w-7xl mx-auto">
         <div className="grid md:grid-cols-2 gap-16 items-center">
 
@@ -2254,7 +2254,7 @@ function VoiceCallSection() {
               <motion.div
                 initial={{ opacity: 0, scale: 0.8 }} animate={inView ? { opacity: 1, scale: 1 } : {}}
                 transition={{ delay: 0.9 }}
-                className="absolute -right-6 top-1/2 -translate-y-1/2 px-3 py-2 rounded-xl text-xs font-medium"
+                className="hidden sm:block absolute -right-6 top-1/2 -translate-y-1/2 px-3 py-2 rounded-xl text-xs font-medium"
                 style={{ background: C.surface, border: `1px solid ${C.border}`,
                          boxShadow: "0 8px 24px rgba(0,0,0,0.10)" }}
               >
@@ -2280,7 +2280,7 @@ function GuardrailsSection() {
   const inView = useInView(ref, { once: true, margin: "-80px" })
 
   return (
-    <section ref={ref} className="relative py-20 px-6" style={{ zIndex: 10 }}>
+    <section ref={ref} className="relative py-12 md:py-20 px-4 md:px-6" style={{ zIndex: 10 }}>
       <div className="max-w-5xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -2354,7 +2354,7 @@ function CRMSection() {
   ]
 
   return (
-    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }} id="results">
+    <section ref={ref} className="relative py-14 md:py-24 px-4 md:px-6" style={{ zIndex: 10 }} id="results">
       <div className="max-w-7xl mx-auto">
         <div className="grid md:grid-cols-2 gap-16 items-center">
 
@@ -2507,7 +2507,7 @@ function RemindersSection() {
   ]
 
   return (
-    <section ref={ref} className="relative py-20 px-6" style={{ zIndex: 10 }}>
+    <section ref={ref} className="relative py-12 md:py-20 px-4 md:px-6" style={{ zIndex: 10 }}>
       <div className="max-w-5xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -2567,7 +2567,7 @@ function SetupSection() {
   ]
 
   return (
-    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }}>
+    <section ref={ref} className="relative py-14 md:py-24 px-4 md:px-6" style={{ zIndex: 10 }}>
       <div className="max-w-6xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -2660,7 +2660,7 @@ function PricingSection() {
   const inView = useInView(ref, { once: true, margin: "-80px" })
 
   return (
-    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }} id="pricing">
+    <section ref={ref} className="relative py-14 md:py-24 px-4 md:px-6" style={{ zIndex: 10 }} id="pricing">
       <div className="max-w-5xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
@@ -2902,7 +2902,7 @@ function FinalCTASection() {
   const inView = useInView(ref, { once: true, margin: "-80px" })
 
   return (
-    <section ref={ref} className="relative py-24 px-6" style={{ zIndex: 10 }}>
+    <section ref={ref} className="relative py-14 md:py-24 px-4 md:px-6" style={{ zIndex: 10 }}>
       <div className="max-w-4xl mx-auto">
         <motion.div
           initial={{ opacity: 0, y: 32 }} animate={inView ? { opacity: 1, y: 0 } : {}}
