@@ -34,6 +34,10 @@ export default async function ReportsPage() {
     appointmentsThisMonthRes,
     allAppointmentsRes,
     dailyLeadsRes,
+    closedDealsRes,
+    technicianApptsRes,
+    closedByTechRes,
+    techniciansRes,
   ] = await Promise.all([
     supabase
       .from("leads")
@@ -65,6 +69,32 @@ export default async function ReportsPage() {
       .eq("company_id", companyId)
       .gte("created_at", thirtyDaysAgo)
       .order("created_at", { ascending: true }),
+    // All closed deals with revenue
+    supabase
+      .from("leads")
+      .select("deal_value, closed_job_type, closed_technician_id, closed_technician_name, closed_at")
+      .eq("company_id", companyId)
+      .in("status", ["closed", "closed_won"])
+      .not("deal_value", "is", null),
+    // Appointments per technician
+    supabase
+      .from("appointments")
+      .select("technician_id, technician_name")
+      .eq("company_id", companyId)
+      .not("technician_id", "is", null),
+    // Closed jobs per technician
+    supabase
+      .from("leads")
+      .select("closed_technician_id, closed_technician_name, deal_value")
+      .eq("company_id", companyId)
+      .in("status", ["closed", "closed_won"])
+      .not("closed_technician_id", "is", null),
+    // All technicians
+    supabase
+      .from("technicians")
+      .select("id, name, status")
+      .eq("company_id", companyId)
+      .order("name"),
   ])
 
   const leadsThisMonth = leadsThisMonthRes.data ?? []
@@ -73,6 +103,10 @@ export default async function ReportsPage() {
   const appointmentsThisMonth = appointmentsThisMonthRes.data ?? []
   const allAppointments = allAppointmentsRes.data ?? []
   const dailyLeadsRaw = dailyLeadsRes.data ?? []
+  const closedDeals = closedDealsRes.data ?? []
+  const technicianApts = technicianApptsRes.data ?? []
+  const closedByTech = closedByTechRes.data ?? []
+  const allTechnicians = techniciansRes.data ?? []
 
   // Build daily lead counts for last 30 days
   const dailyMap: Record<string, number> = {}
@@ -121,6 +155,42 @@ export default async function ReportsPage() {
     ? Math.round(((leadsThisMonth.length - leadsLastMonth.length) / leadsLastMonth.length) * 100)
     : null
 
+  // Revenue closed (all time)
+  const revenueClosed = closedDeals.reduce((sum, d) => sum + (Number(d.deal_value) || 0), 0)
+  const closedCount = closedDeals.length
+
+  // Build technician performance rows
+  // Appointments count per tech
+  const aptsByTech: Record<string, number> = {}
+  for (const a of technicianApts) {
+    if (a.technician_id) aptsByTech[a.technician_id] = (aptsByTech[a.technician_id] ?? 0) + 1
+  }
+  // Closed jobs + revenue per tech
+  const closedByTechMap: Record<string, { count: number; revenue: number; name: string }> = {}
+  for (const c of closedByTech) {
+    const id = c.closed_technician_id ?? "unknown"
+    if (!closedByTechMap[id]) closedByTechMap[id] = { count: 0, revenue: 0, name: c.closed_technician_name ?? "Unknown" }
+    closedByTechMap[id].count++
+    closedByTechMap[id].revenue += Number(c.deal_value) || 0
+  }
+  // Merge into final rows — include all known technicians + any from closed jobs
+  const techIds = new Set([
+    ...allTechnicians.map(t => t.id),
+    ...Object.keys(closedByTechMap),
+  ])
+  const techPerformance = Array.from(techIds).map(id => {
+    const tech = allTechnicians.find(t => t.id === id)
+    const closed = closedByTechMap[id] ?? { count: 0, revenue: 0, name: tech?.name ?? "Unknown" }
+    return {
+      id,
+      name: tech?.name ?? closed.name,
+      status: tech?.status ?? "active",
+      appointments: aptsByTech[id] ?? 0,
+      closedJobs: closed.count,
+      revenue: closed.revenue,
+    }
+  }).sort((a, b) => b.revenue - a.revenue)
+
   return (
     <ReportsClient
       leadsThisMonth={leadsThisMonth.length}
@@ -131,11 +201,14 @@ export default async function ReportsPage() {
       totalAppointments={allAppointments.length}
       bookingRate={bookingRate}
       revenueAtRisk={revenueAtRisk}
+      revenueClosed={revenueClosed}
+      closedCount={closedCount}
       avgJobValue={company?.avg_job_value ?? 0}
       dailyLeads={dailyLeads}
       statusCounts={statusCounts}
       sourceCounts={sourceCounts}
       funnel={funnel}
+      techPerformance={techPerformance}
     />
   )
 }

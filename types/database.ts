@@ -91,6 +91,11 @@ export interface Lead {
   last_inbound_at: string | null
   is_active_conversation: boolean
   ai_paused: boolean
+  deal_value: number | null
+  closed_job_type: string | null
+  closed_technician_id: string | null
+  closed_technician_name: string | null
+  closed_at: string | null
   created_at: string
   updated_at: string
 }

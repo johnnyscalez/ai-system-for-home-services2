@@ -35,6 +35,7 @@ export default async function DashboardPage() {
     { count: followUpsSent },
     { data: recentLeads },
     { data: upcomingApts },
+    closedLeadsRes,
   ] = await Promise.all([
     // Leads that came in during the last 30 days
     supabase.from("leads").select("*", { count: "exact", head: true })
@@ -76,6 +77,13 @@ export default async function DashboardPage() {
       .gte("scheduled_at", now.toISOString())
       .order("scheduled_at")
       .limit(4),
+    // Closed deals revenue (last 30 days)
+    supabase.from("leads")
+      .select("deal_value")
+      .eq("company_id", profile.company_id)
+      .in("status", ["closed", "closed_won"])
+      .not("deal_value", "is", null)
+      .gte("closed_at", sinceIso),
   ])
 
   const leads = newLeads ?? 0
@@ -83,6 +91,9 @@ export default async function DashboardPage() {
   const bookingRate = leads > 0 ? Math.round((aptBooked / leads) * 100) : 0
   const avgJobValue = company?.avg_job_value ?? 0
   const revenueProjected = aptBooked * avgJobValue
+  const closedDeals = closedLeadsRes.data ?? []
+  const revenueClosed = closedDeals.reduce((sum, l) => sum + (Number(l.deal_value) || 0), 0)
+  const closedCount = closedDeals.length
 
   const hour = now.getHours()
   const greeting = hour < 12 ? "Good morning" : hour < 17 ? "Good afternoon" : "Good evening"
@@ -102,6 +113,8 @@ export default async function DashboardPage() {
         followUpsSent: followUpsSent ?? 0,
         bookingRate,
         revenueProjected,
+        revenueClosed,
+        closedCount,
         avgJobValue,
       }}
       recentLeads={(recentLeads ?? []) as {

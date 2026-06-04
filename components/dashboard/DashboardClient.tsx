@@ -144,7 +144,7 @@ const PERIODS: { key: Period; label: string; days: number | null }[] = [
 type DashboardStats = {
   newLeads: number; booked: number; qualified: number; cold: number
   needsAttention: number; followUpsSent: number; bookingRate: number
-  revenueProjected: number; avgJobValue: number
+  revenueProjected: number; revenueClosed: number; closedCount: number; avgJobValue: number
 }
 
 // ── Props ──────────────────────────────────────────────────────────────────────
@@ -259,50 +259,96 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
         </motion.div>
 
         {/* Revenue spotlight */}
-        {stats.booked > 0 && stats.avgJobValue > 0 && (
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.2, duration: 0.5 }}
+          className="grid grid-cols-1 sm:grid-cols-2 gap-4"
+        >
+          {/* REAL closed revenue — primary card */}
           <motion.div
-            initial={{ opacity: 0, y: 16 }}
-            animate={{ opacity: 1, y: 0 }}
-            transition={{ delay: 0.2, duration: 0.5 }}
             whileHover={{ scale: 1.005 }}
-            className="relative overflow-hidden rounded-2xl p-7 text-white"
+            className="relative overflow-hidden rounded-2xl p-6 text-white"
             style={{
-              background: "linear-gradient(135deg, #1A1614 0%, #0F0E0D 60%, #1A1614 100%)",
-              boxShadow: "0 8px 40px rgba(249,115,22,0.30), 0 2px 8px rgba(249,115,22,0.15)",
+              background: "linear-gradient(135deg, #14532d 0%, #166534 60%, #14532d 100%)",
+              boxShadow: "0 8px 40px rgba(21,128,61,0.30), 0 2px 8px rgba(21,128,61,0.15)",
             }}
           >
             <div className="absolute inset-0 opacity-10"
               style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
-            <div className="absolute -right-16 -top-16 w-64 h-64 rounded-full bg-white/10 blur-2xl" />
-            <div className="absolute right-32 -bottom-8 w-40 h-40 rounded-full bg-[#F97316]/10 blur-2xl" />
+            <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-white/10 blur-2xl" />
 
-            <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
-              <div>
-                <p className="text-orange-200 text-sm font-medium tracking-wide">
-                  Projected revenue
-                  {period !== "all" ? ` · last ${PERIODS.find((p2) => p2.key === period)?.label}` : " · all time"}
+            <div className="relative">
+              <div className="flex items-center gap-2 mb-1">
+                <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4 text-white" />
+                </div>
+                <p className="text-green-200 text-xs font-semibold uppercase tracking-widest">
+                  Revenue Closed
                 </p>
+              </div>
+              <motion.p
+                key={stats.revenueClosed}
+                initial={{ opacity: 0, scale: 0.85 }}
+                animate={{ opacity: 1, scale: 1 }}
+                transition={{ type: "spring", stiffness: 200 }}
+                className="text-4xl font-bold mt-2"
+                style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}
+              >
+                ${stats.revenueClosed.toLocaleString()}
+              </motion.p>
+              <p className="text-green-200 text-sm mt-1.5">
+                {stats.closedCount} deal{stats.closedCount !== 1 ? "s" : ""} closed
+                {period !== "all" ? ` · last ${PERIODS.find((p2) => p2.key === period)?.label}` : " · all time"}
+              </p>
+              {stats.closedCount === 0 && (
+                <p className="text-green-300/60 text-xs mt-2">
+                  Drag a lead to the Closed column to log revenue
+                </p>
+              )}
+            </div>
+          </motion.div>
+
+          {/* Projected pipeline revenue — secondary card */}
+          {stats.booked > 0 && stats.avgJobValue > 0 && (
+            <motion.div
+              whileHover={{ scale: 1.005 }}
+              className="relative overflow-hidden rounded-2xl p-6 text-white"
+              style={{
+                background: "linear-gradient(135deg, #1A1614 0%, #0F0E0D 60%, #1A1614 100%)",
+                boxShadow: "0 8px 40px rgba(249,115,22,0.20), 0 2px 8px rgba(249,115,22,0.10)",
+              }}
+            >
+              <div className="absolute inset-0 opacity-10"
+                style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+              <div className="absolute -right-12 -top-12 w-48 h-48 rounded-full bg-[#F97316]/10 blur-2xl" />
+
+              <div className="relative">
+                <div className="flex items-center gap-2 mb-1">
+                  <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+                    <TrendingUp className="w-4 h-4 text-white" />
+                  </div>
+                  <p className="text-orange-200 text-xs font-semibold uppercase tracking-widest">
+                    Pipeline Value
+                  </p>
+                </div>
                 <motion.p
                   key={stats.revenueProjected}
-                  initial={{ opacity: 0, scale: 0.8 }}
+                  initial={{ opacity: 0, scale: 0.85 }}
                   animate={{ opacity: 1, scale: 1 }}
                   transition={{ type: "spring", stiffness: 200 }}
-                  className="text-3xl sm:text-5xl font-bold mt-1"
+                  className="text-4xl font-bold mt-2"
                   style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}
                 >
                   ${stats.revenueProjected.toLocaleString()}
                 </motion.p>
-                <p className="text-orange-200 text-sm mt-2">
-                  {stats.booked} appointment{stats.booked !== 1 ? "s" : ""} ×{" "}
-                  ${stats.avgJobValue.toLocaleString()} avg
+                <p className="text-orange-200 text-sm mt-1.5">
+                  {stats.booked} apt{stats.booked !== 1 ? "s" : ""} × ${stats.avgJobValue.toLocaleString()} avg
                 </p>
               </div>
-              <div className="w-20 h-20 rounded-2xl bg-white/15 flex items-center justify-center backdrop-blur-sm border border-white/20">
-                <DollarSign className="w-9 h-9 text-white" />
-              </div>
-            </div>
-          </motion.div>
-        )}
+            </motion.div>
+          )}
+        </motion.div>
 
         {/* Stats section header with period picker */}
         <div>

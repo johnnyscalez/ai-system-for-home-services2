@@ -29,6 +29,7 @@ export async function GET(req: NextRequest) {
     { count: qualified },
     { count: cold },
     { count: needsAttention },
+    closedLeadsRes,
   ] = await Promise.all([
     // Leads that arrived in the period
     (() => {
@@ -77,6 +78,17 @@ export async function GET(req: NextRequest) {
       .select("*", { count: "exact", head: true })
       .eq("company_id", companyId)
       .eq("status", "needs_attention"),
+    // Closed deals with revenue in the period
+    (() => {
+      let q = supabase
+        .from("leads")
+        .select("deal_value")
+        .eq("company_id", companyId)
+        .in("status", ["closed", "closed_won"])
+        .not("deal_value", "is", null)
+      if (since) q = q.gte("closed_at", since)
+      return q
+    })(),
   ])
 
   const leads = newLeads ?? 0
@@ -84,6 +96,9 @@ export async function GET(req: NextRequest) {
   const bookingRate = leads > 0 ? Math.round((aptBooked / leads) * 100) : 0
   const avgJobValue = company?.avg_job_value ?? 0
   const revenueProjected = aptBooked * avgJobValue
+  const closedLeads = closedLeadsRes.data ?? []
+  const revenueClosed = closedLeads.reduce((sum, l) => sum + (Number(l.deal_value) || 0), 0)
+  const closedCount = closedLeads.length
 
   return NextResponse.json({
     newLeads: leads,
@@ -94,6 +109,8 @@ export async function GET(req: NextRequest) {
     needsAttention: needsAttention ?? 0,
     bookingRate,
     revenueProjected,
+    revenueClosed,
+    closedCount,
     avgJobValue,
   })
 }

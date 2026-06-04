@@ -5,11 +5,17 @@ import { useEffect, useRef, useState } from "react"
 import {
   Users, CalendarCheck, TrendingUp, DollarSign,
   ArrowUpRight, ArrowDownRight, Minus,
-  BarChart3, PieChart, GitMerge,
+  BarChart3, PieChart, GitMerge, HardHat,
+  CheckCircle2, Briefcase,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
+
+type TechRow = {
+  id: string; name: string; status: string
+  appointments: number; closedJobs: number; revenue: number
+}
 
 type Props = {
   leadsThisMonth: number
@@ -20,11 +26,14 @@ type Props = {
   totalAppointments: number
   bookingRate: number
   revenueAtRisk: number
+  revenueClosed: number
+  closedCount: number
   avgJobValue: number
   dailyLeads: { date: string; count: number }[]
   statusCounts: Record<string, number>
   sourceCounts: Record<string, number>
   funnel: { stage: string; count: number }[]
+  techPerformance: TechRow[]
 }
 
 // ── Count-up ──────────────────────────────────────────────────────────────────
@@ -175,11 +184,14 @@ export function ReportsClient({
   totalAppointments,
   bookingRate,
   revenueAtRisk,
+  revenueClosed,
+  closedCount,
   avgJobValue,
   dailyLeads,
   statusCounts,
   sourceCounts,
   funnel,
+  techPerformance,
 }: Props) {
   const maxFunnel = Math.max(...funnel.map((f) => f.count), 1)
 
@@ -204,6 +216,49 @@ export function ReportsClient({
           <p className="text-muted-foreground mt-1">
             Performance overview — all time and this month
           </p>
+        </motion.div>
+
+        {/* Revenue spotlight — closed deals */}
+        <motion.div
+          initial={{ opacity: 0, y: 16 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ delay: 0.1 }}
+          className="relative overflow-hidden rounded-2xl p-6 text-white mb-6"
+          style={{
+            background: "linear-gradient(135deg, #14532d 0%, #166534 60%, #14532d 100%)",
+            boxShadow: "0 8px 40px rgba(21,128,61,0.25), 0 2px 8px rgba(21,128,61,0.12)",
+          }}
+        >
+          <div className="absolute inset-0 opacity-10"
+            style={{ backgroundImage: "linear-gradient(rgba(255,255,255,0.3) 1px, transparent 1px), linear-gradient(90deg, rgba(255,255,255,0.3) 1px, transparent 1px)", backgroundSize: "40px 40px" }} />
+          <div className="absolute -right-16 -top-16 w-56 h-56 rounded-full bg-white/10 blur-2xl" />
+          <div className="relative flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+            <div>
+              <div className="flex items-center gap-2 mb-2">
+                <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
+                  <DollarSign className="w-4 h-4 text-white" />
+                </div>
+                <p className="text-green-200 text-xs font-bold uppercase tracking-widest">Total Revenue Closed</p>
+              </div>
+              <p className="text-5xl font-bold" style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
+                ${revenueClosed.toLocaleString()}
+              </p>
+              <p className="text-green-200 text-sm mt-2">
+                {closedCount} deal{closedCount !== 1 ? "s" : ""} closed all time
+                {closedCount > 0 && ` · avg $${Math.round(revenueClosed / closedCount).toLocaleString()} per deal`}
+              </p>
+            </div>
+            <div className="flex gap-4 sm:flex-col sm:items-end">
+              <div className="text-center sm:text-right">
+                <p className="text-2xl font-bold">{closedCount}</p>
+                <p className="text-green-200 text-xs">Deals closed</p>
+              </div>
+              <div className="text-center sm:text-right">
+                <p className="text-2xl font-bold">${avgJobValue.toLocaleString()}</p>
+                <p className="text-green-200 text-xs">Avg job value</p>
+              </div>
+            </div>
+          </div>
         </motion.div>
 
         {/* KPI grid */}
@@ -345,6 +400,123 @@ export function ReportsClient({
             )}
           </motion.div>
         </div>
+
+        {/* Technician Performance */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.45 }}
+          className="bg-white rounded-2xl border border-border/60 overflow-hidden mb-6"
+          style={{ boxShadow: "0 4px 24px rgba(77,124,15,0.06)" }}
+        >
+          <div className="px-6 py-4 border-b border-border/60 flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-[#4D7C0F]/10 flex items-center justify-center">
+              <HardHat className="w-3.5 h-3.5 text-[#4D7C0F]" />
+            </div>
+            <h2 className="font-semibold text-sm">Technician Performance</h2>
+            <span className="text-xs text-muted-foreground ml-1">— AI-booked appointments & closed deals per tech</span>
+          </div>
+
+          {techPerformance.length === 0 ? (
+            <div className="px-6 py-10 text-center">
+              <HardHat className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">No technicians added yet.</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Add your team in <a href="/technicians" className="text-[#4D7C0F] underline">Technicians</a> to track performance here.
+              </p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-[#F5F4F2] text-[11px] font-semibold text-[#78716C] uppercase tracking-wider">
+                    <th className="text-left px-6 py-3">Technician</th>
+                    <th className="text-center px-4 py-3">Appointments booked</th>
+                    <th className="text-center px-4 py-3">Jobs closed</th>
+                    <th className="text-right px-6 py-3">Revenue generated</th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {techPerformance.map((tech, i) => (
+                    <motion.tr
+                      key={tech.id}
+                      initial={{ opacity: 0, x: -10 }}
+                      animate={{ opacity: 1, x: 0 }}
+                      transition={{ delay: 0.5 + i * 0.05 }}
+                      className="hover:bg-[#F5F4F2]/50 transition-colors"
+                    >
+                      <td className="px-6 py-4">
+                        <div className="flex items-center gap-3">
+                          <div className="w-8 h-8 rounded-full bg-[#4D7C0F]/10 flex items-center justify-center shrink-0">
+                            <HardHat className="w-3.5 h-3.5 text-[#4D7C0F]" />
+                          </div>
+                          <div>
+                            <p className="text-sm font-semibold text-[#1C1917]">{tech.name}</p>
+                            <span className={cn(
+                              "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
+                              tech.status === "active"
+                                ? "bg-green-100 text-green-700"
+                                : "bg-slate-100 text-slate-500"
+                            )}>
+                              {tech.status}
+                            </span>
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <div className="flex flex-col items-center">
+                          <span className="text-lg font-bold text-[#1C1917] font-mono">{tech.appointments}</span>
+                          <span className="text-[10px] text-[#78716C]">booked by AI</span>
+                        </div>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        <div className="flex flex-col items-center">
+                          <span className="text-lg font-bold text-[#1C1917] font-mono">{tech.closedJobs}</span>
+                          <div className="flex items-center gap-1 mt-0.5">
+                            {tech.appointments > 0 && (
+                              <span className="text-[10px] text-[#78716C]">
+                                {Math.round((tech.closedJobs / tech.appointments) * 100)}% close rate
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      </td>
+                      <td className="px-6 py-4 text-right">
+                        <span className={cn(
+                          "text-lg font-bold font-mono",
+                          tech.revenue > 0 ? "text-[#4D7C0F]" : "text-[#78716C]"
+                        )}>
+                          ${tech.revenue.toLocaleString()}
+                        </span>
+                        {tech.closedJobs > 0 && (
+                          <p className="text-[10px] text-[#78716C] mt-0.5">
+                            avg ${Math.round(tech.revenue / tech.closedJobs).toLocaleString()}/job
+                          </p>
+                        )}
+                      </td>
+                    </motion.tr>
+                  ))}
+                </tbody>
+                {techPerformance.length > 1 && (
+                  <tfoot>
+                    <tr className="bg-[#4D7C0F]/5 border-t-2 border-[#4D7C0F]/20">
+                      <td className="px-6 py-3 text-xs font-bold text-[#1C1917]">Total</td>
+                      <td className="px-4 py-3 text-center text-sm font-bold text-[#1C1917] font-mono">
+                        {techPerformance.reduce((s, t) => s + t.appointments, 0)}
+                      </td>
+                      <td className="px-4 py-3 text-center text-sm font-bold text-[#1C1917] font-mono">
+                        {techPerformance.reduce((s, t) => s + t.closedJobs, 0)}
+                      </td>
+                      <td className="px-6 py-3 text-right text-sm font-bold text-[#4D7C0F] font-mono">
+                        ${techPerformance.reduce((s, t) => s + t.revenue, 0).toLocaleString()}
+                      </td>
+                    </tr>
+                  </tfoot>
+                )}
+              </table>
+            </div>
+          )}
+        </motion.div>
 
         {/* All-time summary strip */}
         <motion.div
