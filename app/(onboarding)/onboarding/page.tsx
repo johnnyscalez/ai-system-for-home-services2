@@ -59,6 +59,7 @@ export default function OnboardingPage() {
     servicesOffered: "",
     serviceAreas: "",
     pricingInfo: "",
+    financingOptions: "",
     teamInfo: "",
     uniqueSellingPoints: "",
     yearsInBusiness: "",
@@ -78,9 +79,18 @@ export default function OnboardingPage() {
     objectionResponses: {},
     workingHoursStart: 8,
     workingHoursEnd: 20,
+    // Auto-detect browser timezone — overridden in useEffect below
     timezone: "America/New_York",
     generatedPrompt: "",
   })
+
+  // Detect browser timezone on mount and apply to AI agent config
+  useEffect(() => {
+    try {
+      const tz = Intl.DateTimeFormat().resolvedOptions().timeZone
+      if (tz) setAiAgent(a => ({ ...a, timezone: tz }))
+    } catch { /* fallback to New York */ }
+  }, [])
 
   // Scroll to top whenever step changes
   useEffect(() => {

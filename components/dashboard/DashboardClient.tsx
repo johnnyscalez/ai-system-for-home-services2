@@ -6,7 +6,7 @@ import Link from "next/link"
 import {
   Users, CalendarCheck, TrendingUp,
   Snowflake, AlertTriangle, Zap, ArrowRight,
-  DollarSign, BarChart3, Clock, Sparkles, Flame, RefreshCw,
+  DollarSign, BarChart3, Clock, Sparkles, Flame, RefreshCw, Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DateRangePicker, type DateRange, PRESETS } from "@/components/ui/DateRangePicker"
@@ -231,6 +231,25 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
               is performing
             </p>
           </div>
+
+          {/* avg_job_value = $0 warning — revenue projections will be wrong */}
+          {stats.avgJobValue === 0 && (
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95 }}
+              animate={{ opacity: 1, scale: 1 }}
+              transition={{ delay: 0.3 }}
+            >
+              <Link
+                href="/settings"
+                className="flex items-center gap-2 bg-amber-50 border border-amber-200 text-amber-700 text-sm font-medium px-4 py-2.5 rounded-xl hover:bg-amber-100 transition-colors"
+                style={{ boxShadow: "0 4px 16px rgba(217,119,6,0.10)" }}
+              >
+                <Settings className="w-4 h-4" />
+                Set your average job value to unlock revenue tracking
+                <ArrowRight className="w-3.5 h-3.5" />
+              </Link>
+            </motion.div>
+          )}
 
           {needsAttn > 0 && (
             <motion.div

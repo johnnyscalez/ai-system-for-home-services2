@@ -26,6 +26,7 @@ export async function POST(req: NextRequest) {
         businessDescription: intelligence.businessDescription,
         servicesOffered: intelligence.servicesOffered,
         pricingInfo: intelligence.pricingInfo,
+        financingOptions: intelligence.financingOptions,
         teamInfo: intelligence.teamInfo,
         uniqueSellingPoints: intelligence.uniqueSellingPoints,
         yearsInBusiness: intelligence.yearsInBusiness,
@@ -55,6 +56,20 @@ export async function POST(req: NextRequest) {
       .map((b) => b.toString(16).padStart(2, "0"))
       .join("")
 
+    // Normalize notification phone to E.164 format
+    function normalizePhone(raw: string): string {
+      const digits = raw.replace(/\D/g, "")
+      if (digits.startsWith("972") && digits.length === 12) return `+${digits}`
+      if (digits.startsWith("1") && digits.length === 11) return `+${digits}`
+      if (digits.length === 10) return `+1${digits}`
+      if (digits.length > 7) return `+${digits}`
+      return raw // return as-is if we can't normalize
+    }
+
+    // Sanitize avg_job_value — reject NaN
+    const rawAvg = parseFloat(business.avgJobValue)
+    const avgJobValue = isNaN(rawAvg) ? 0 : rawAvg
+
     // 1. Create company
     const { data: company, error: companyError } = await supabase
       .from("companies")
@@ -63,8 +78,8 @@ export async function POST(req: NextRequest) {
         owner_id: user.id,
         service_type: business.serviceType,
         service_area: business.serviceArea,
-        notification_phone: business.notificationPhone,
-        avg_job_value: business.avgJobValue ? parseFloat(business.avgJobValue) : 0,
+        notification_phone: business.notificationPhone ? normalizePhone(business.notificationPhone) : null,
+        avg_job_value: avgJobValue,
         onboarding_completed: true,
         webhook_secret: webhookSecret,
       })
@@ -91,6 +106,7 @@ export async function POST(req: NextRequest) {
         services_offered: intelligence.servicesOffered || null,
         service_areas: intelligence.serviceAreas || null,
         pricing_info: intelligence.pricingInfo || null,
+        financing_options: intelligence.financingOptions || null,
         team_info: intelligence.teamInfo || null,
         unique_selling_points: intelligence.uniqueSellingPoints || null,
         years_in_business: intelligence.yearsInBusiness || null,
