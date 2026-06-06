@@ -11,6 +11,7 @@ export type KnowledgeBaseData = {
   businessDescription?: string
   servicesOffered?: string
   pricingInfo?: string
+  financingOptions?: string
   teamInfo?: string
   uniqueSellingPoints?: string
   yearsInBusiness?: string
@@ -84,7 +85,8 @@ Extract and return a JSON object with these fields (use null for anything not fo
   "businessDescription": "2-3 sentence description of what the company does and who they serve",
   "servicesOffered": "bullet list of specific services they offer",
   "serviceAreas": "cities, counties, or zip codes they serve",
-  "pricingInfo": "any pricing info, free estimates, financing options mentioned",
+  "pricingInfo": "pricing info and free estimate offers — exclude financing (that goes in financingOptions)",
+  "financingOptions": "ALL financing details: lenders (GreenSky, Wells Fargo, etc.), interest rates, term lengths (0% for 12 months, etc.), monthly payment examples, approval process, promotions. Extract every detail available. If nothing found, return null.",
   "teamInfo": "owner name, team size, anything about the people",
   "uniqueSellingPoints": "what makes them different - warranties, response time, guarantees, awards",
   "yearsInBusiness": "how long they've been in business",
@@ -171,6 +173,7 @@ ${kb.businessDescription ? `Overview: ${kb.businessDescription}` : ""}
 ${kb.servicesOffered ? `Services offered: ${kb.servicesOffered}` : ""}
 ${kb.uniqueSellingPoints ? `Why customers choose us: ${kb.uniqueSellingPoints}` : ""}
 ${kb.pricingInfo ? `Pricing / offers: ${kb.pricingInfo}` : ""}
+${kb.financingOptions ? `FINANCING OPTIONS (agent must know this precisely): ${kb.financingOptions}` : ""}
 ${kb.teamInfo ? `Team: ${kb.teamInfo}` : ""}
 ${kb.yearsInBusiness ? `Years in business: ${kb.yearsInBusiness}` : ""}
 ${kb.certifications ? `Certifications: ${kb.certifications}` : ""}

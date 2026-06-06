@@ -111,7 +111,7 @@ export async function runConversation(
       .single(),
     supabase
       .from("knowledge_base")
-      .select("business_description, services_offered, service_areas, custom_ai_knowledge")
+      .select("business_description, services_offered, service_areas, custom_ai_knowledge, financing_options")
       .eq("company_id", companyId)
       .single(),
     // Lead's own appointment history (past + upcoming) — include id for cancel/reschedule tools
@@ -223,9 +223,13 @@ export async function runConversation(
     ? `=== YOUR COMPANY-SPECIFIC KNOWLEDGE ===\n${kb.custom_ai_knowledge}\n=== END COMPANY-SPECIFIC KNOWLEDGE ===`
     : ""
 
+  const financingBlock = kb?.financing_options
+    ? `=== FINANCING OPTIONS (know this precisely — leads ask about this) ===\n${kb.financing_options}\n=== END FINANCING ===`
+    : ""
+
   const qualificationBlock = buildQualificationBlock(agent?.disqualifiers ?? null)
 
-  const systemPrompt = [baseSystemPrompt, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext, slotsBlock, leadContext]
+  const systemPrompt = [baseSystemPrompt, financingBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext, slotsBlock, leadContext]
     .filter(Boolean)
     .join("\n\n")
 

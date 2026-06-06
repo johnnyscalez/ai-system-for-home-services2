@@ -16,6 +16,7 @@ export type IntelligenceData = {
   servicesOffered: string
   serviceAreas: string
   pricingInfo: string
+  financingOptions: string
   teamInfo: string
   uniqueSellingPoints: string
   yearsInBusiness: string
@@ -53,7 +54,7 @@ const FIELDS: { key: keyof IntelligenceData; label: string; placeholder: string;
     placeholder: "Carrier Factory Authorized, 24/7 emergency, family-owned, 15-year warranty...",
     long: true,
   },
-  { key: "pricingInfo", label: "Pricing & offers", placeholder: "Free estimates, 0% financing, seasonal tune-up specials..." },
+  { key: "pricingInfo", label: "Pricing & offers", placeholder: "Free estimates, seasonal tune-up specials, $89 diagnostic fee..." },
   { key: "teamInfo", label: "Team & owner", placeholder: "Family-owned, 12 techs, owner Mike Smith — 20 years experience..." },
   { key: "yearsInBusiness", label: "Years in business", placeholder: "18 years, founded 2006..." },
   { key: "certifications", label: "Certifications & credentials", placeholder: "NATE-certified, EPA 608, Carrier Factory Authorized, licensed & insured..." },
@@ -122,6 +123,7 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
         servicesOffered:     extracted.servicesOffered     || data.servicesOffered,
         serviceAreas:        extracted.serviceAreas        || data.serviceAreas,
         pricingInfo:         extracted.pricingInfo         || data.pricingInfo,
+        financingOptions:    extracted.financingOptions    || data.financingOptions,
         teamInfo:            extracted.teamInfo             || data.teamInfo,
         uniqueSellingPoints: extracted.uniqueSellingPoints || data.uniqueSellingPoints,
         yearsInBusiness:     extracted.yearsInBusiness     || data.yearsInBusiness,
@@ -137,6 +139,7 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
   }
 
   const hasAnyData = FIELDS.some((f) => data[f.key])
+  const canProceed = !!data.financingOptions.trim()
 
   return (
     <div>
@@ -239,6 +242,68 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
         ))}
       </div>
 
+      {/* ── Financing — required section ────────────────────────────────── */}
+      <div className="relative mb-8">
+        <div className={cn(
+          "absolute inset-0 rounded-2xl p-[2px] pointer-events-none",
+          !canProceed
+            ? "bg-gradient-to-br from-red-500 via-red-400 to-orange-400"
+            : "bg-gradient-to-br from-emerald-500 via-emerald-400 to-teal-400"
+        )} />
+        <div className="relative rounded-2xl bg-white dark:bg-background p-5 space-y-3">
+          <div className="flex items-start gap-3">
+            <div className={cn(
+              "w-9 h-9 rounded-xl flex items-center justify-center shrink-0 shadow-lg text-white font-bold text-base",
+              !canProceed ? "bg-gradient-to-br from-red-500 to-orange-400 shadow-red-500/25" : "bg-gradient-to-br from-emerald-500 to-teal-400 shadow-emerald-500/25"
+            )}>
+              $
+            </div>
+            <div className="flex-1">
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="font-bold text-base text-foreground">Financing options</h3>
+                {!canProceed ? (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-red-500 text-white uppercase tracking-wide">
+                    Required — can&apos;t continue without this
+                  </span>
+                ) : (
+                  <span className="inline-flex items-center px-2 py-0.5 rounded-full text-[10px] font-bold bg-emerald-500 text-white uppercase tracking-wide">
+                    ✓ Filled
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-muted-foreground mt-1 leading-relaxed">
+                Your AI needs to know <strong className="text-foreground">exactly</strong> how financing works so it can answer leads confidently.
+                Include the lender name, interest rate, term length, and any current promotions.
+                If you don&apos;t offer financing, write &quot;We do not offer financing.&quot;
+              </p>
+            </div>
+          </div>
+          <Textarea
+            id="financingOptions"
+            placeholder={
+              "Examples:\n" +
+              "We offer 0% financing for 18 months through GreenSky — no payments, no interest if paid in full.\n" +
+              "We also have a 60-month option at 9.99% APR for larger system replacements.\n" +
+              "Approval takes about 2 minutes online or over the phone.\n\n" +
+              "— OR —\n\n" +
+              "We do not currently offer in-house financing. We accept cash, check, and all major credit cards."
+            }
+            value={data.financingOptions}
+            onChange={set("financingOptions")}
+            rows={5}
+            className={cn(
+              "resize-none font-mono text-xs leading-relaxed",
+              !canProceed && "border-red-400 focus:border-red-500"
+            )}
+          />
+          {!canProceed && (
+            <p className="text-xs text-red-500 font-medium">
+              This field is required. Fill it in to continue — even if it&apos;s just &quot;We do not offer financing.&quot;
+            </p>
+          )}
+        </div>
+      </div>
+
       {/* ── AI Custom Knowledge — critical section ────────────────────────── */}
       <div className="relative mb-8">
         {/* Bold gradient border wrapper */}
@@ -312,11 +377,14 @@ export function StepIntelligence({ data, companyName, onChange, onNext, onBack }
 
       <div className="flex gap-3">
         <Button variant="outline" onClick={onBack}>Back</Button>
-        <Button onClick={onNext} className="gap-2">
-          {hasAnyData ? "Continue with this knowledge base" : "Skip, I'll add this later"}
+        <Button onClick={onNext} disabled={!canProceed} className="gap-2">
+          {hasAnyData ? "Continue with this knowledge base" : "Continue"}
           <ChevronRight className="w-4 h-4" />
         </Button>
       </div>
+      {!canProceed && (
+        <p className="text-xs text-red-500 mt-2">Fill in the Financing options section above to continue.</p>
+      )}
     </div>
   )
 }
