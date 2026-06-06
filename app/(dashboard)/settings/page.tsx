@@ -3,9 +3,9 @@ import Link from "next/link"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Zap, Phone, Link2, CreditCard, Database, ArrowRight, Sparkles, FlaskConical } from "lucide-react"
+import { Phone, Link2, CreditCard, Database, ArrowRight, Sparkles, FlaskConical } from "lucide-react"
 import { TestLeadButton } from "@/components/settings/TestLeadButton"
-import { AvgJobValueEditor } from "@/components/settings/AvgJobValueEditor"
+import { CompanyInfoEditor } from "@/components/settings/CompanyInfoEditor"
 
 export default async function SettingsPage() {
   const supabase = await createServerSupabaseClient()
@@ -14,12 +14,13 @@ export default async function SettingsPage() {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("company_id, full_name, email, companies(name, service_type, service_area, plan, trial_ends_at, webhook_secret, avg_job_value)")
+    .select("company_id, full_name, email, companies(name, service_type, service_area, notification_phone, plan, trial_ends_at, webhook_secret, avg_job_value)")
     .eq("id", user.id)
     .single()
 
   const company = (Array.isArray(profile?.companies) ? profile?.companies[0] : profile?.companies) as {
     name: string; service_type: string | null; service_area: string | null;
+    notification_phone: string | null;
     plan: string; trial_ends_at: string; webhook_secret: string; avg_job_value: number;
   } | null
 
@@ -42,17 +43,15 @@ export default async function SettingsPage() {
         <CardHeader className="pb-3">
           <CardTitle className="text-base">Company</CardTitle>
         </CardHeader>
-        <CardContent className="space-y-3">
-          <Row label="Company name" value={company?.name ?? "—"} />
-          <Row label="Service type" value={company?.service_type ?? "—"} />
-          <Row label="Service area" value={company?.service_area ?? "—"} />
-          <div className="flex items-center justify-between">
-            <span className="text-sm text-muted-foreground">Average job value</span>
-            <AvgJobValueEditor
-              companyId={profile?.company_id ?? ""}
-              initialValue={company?.avg_job_value ?? 0}
-            />
-          </div>
+        <CardContent>
+          <CompanyInfoEditor
+            companyId={profile?.company_id ?? ""}
+            initialName={company?.name ?? ""}
+            initialServiceType={company?.service_type ?? ""}
+            initialServiceArea={company?.service_area ?? ""}
+            initialNotificationPhone={company?.notification_phone ?? ""}
+            avgJobValue={company?.avg_job_value ?? 0}
+          />
         </CardContent>
       </Card>
 
@@ -173,15 +172,6 @@ export default async function SettingsPage() {
           <p className="text-xs text-muted-foreground">Stripe billing integration coming soon.</p>
         </CardContent>
       </Card>
-    </div>
-  )
-}
-
-function Row({ label, value }: { label: string; value: string }) {
-  return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium capitalize">{value}</span>
     </div>
   )
 }
