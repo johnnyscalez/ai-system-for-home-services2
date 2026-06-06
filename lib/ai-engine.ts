@@ -651,9 +651,21 @@ export async function processAndSave(
         const jobType = inferredJobType ?? (freshLead?.job_type as string | null)
         const zip     = extractZip(address ?? freshLead?.address ?? "")
         const techResult = await selectTechnician(companyId, apt.id, scheduled_at, jobType, zip)
-        if (!techResult.found) {
+        if (techResult.found) {
+          await notifyTechnician(supabase, companyId, leadId, scheduled_at, address, notes,
+            techResult.technician.id, techResult.technician.name, techResult.technician.phone)
+        } else {
           await flagNoTechAvailable(apt.id, techResult.reason)
         }
+      } else if (preSelected && apt) {
+        // Pre-selected path — look up tech phone for notification
+        const { data: tech } = await supabase
+          .from("technicians")
+          .select("phone")
+          .eq("id", preSelected.tech_id)
+          .single()
+        await notifyTechnician(supabase, companyId, leadId, scheduled_at, address, notes,
+          preSelected.tech_id, preSelected.tech_name, tech?.phone ?? null)
       }
 
       // Try to create Google Calendar event
@@ -1183,6 +1195,55 @@ TOOLS
 - update_lead_status "needs_attention" → renter without auth, commercial, frustrated, no-zip-match.
 
 The service-specific conversation playbook follows below.`
+}
+
+async function notifyTechnician(
+  db: ReturnType<typeof createServiceRoleClient>,
+  companyId: string,
+  leadId: string,
+  scheduledAt: string,
+  address: string | undefined | null,
+  notes: string | undefined | null,
+  techId: string,
+  techName: string,
+  techPhone: string | null | undefined,
+): Promise<void> {
+  if (!techPhone) return
+  try {
+    const [leadRes, phoneRes, companyRes] = await Promise.all([
+      db.from("leads").select("first_name, last_name, phone").eq("id", leadId).single(),
+      db.from("phone_numbers").select("phone_number").eq("company_id", companyId).eq("is_active", true).limit(1).maybeSingle(),
+      db.from("companies").select("name").eq("id", companyId).single(),
+    ])
+
+    const fromPhone = phoneRes.data?.phone_number
+    if (!fromPhone) return
+
+    const lead = leadRes.data
+    const leadName = `${lead?.first_name ?? ""} ${lead?.last_name ?? ""}`.trim() || "New lead"
+    const companyName = companyRes.data?.name ?? "your company"
+
+    const dateLabel = new Date(scheduledAt).toLocaleString("en-US", {
+      timeZone: "America/New_York",
+      weekday: "short", month: "short", day: "numeric",
+      hour: "numeric", minute: "2-digit",
+    })
+
+    const body = [
+      `📋 New appointment — ${companyName}`,
+      `Lead: ${leadName}`,
+      lead?.phone ? `Phone: ${lead.phone}` : null,
+      address ? `Address: ${address}` : null,
+      `When: ${dateLabel}`,
+      notes ? `Notes: ${notes}` : null,
+      `Text this number to reach the lead.`,
+    ].filter(Boolean).join("\n")
+
+    const twilio = getTwilioClient()
+    await twilio.messages.create({ to: techPhone, from: fromPhone, body })
+  } catch (err) {
+    console.error("[ai-engine] Technician SMS notification failed:", err)
+  }
 }
 
 function extractZip(address: string): string | null {
