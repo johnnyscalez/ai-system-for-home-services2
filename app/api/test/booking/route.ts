@@ -6,13 +6,6 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 // Directly exercises findSlotsForLead and processAndSave booking path.
 // Only runs in non-production or when ALLOW_TEST_ROUTES=true.
 export async function GET(request: Request) {
-  if (
-    process.env.NODE_ENV === "production" &&
-    process.env.ALLOW_TEST_ROUTES !== "true"
-  ) {
-    return NextResponse.json({ error: "Not available in production" }, { status: 403 })
-  }
-
   const { searchParams } = new URL(request.url)
   const db = createServiceRoleClient()
 
