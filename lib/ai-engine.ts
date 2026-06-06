@@ -4,7 +4,7 @@ import { createCalendarEvent, getCalendarEvents } from "@/lib/google-calendar"
 import { getConversationFlow } from "@/lib/conversation-flows"
 import { getAvailableSlots, formatSlotsForPrompt, DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
 import { getTwilioClient } from "@/lib/twilio"
-import { selectTechnician, getTechnicianContextForCompany } from "@/lib/technician-booking"
+import { selectTechnician, flagNoTechAvailable, getTechnicianContextForCompany } from "@/lib/technician-booking"
 import type { AppointmentWindow, PerDaySlots } from "@/lib/availability"
 
 export type ConversationAction =
@@ -351,7 +351,7 @@ export async function runConversation(
               ? "Appointment rescheduled. Confirm the new date and time to the lead in a short, friendly text."
               : action?.type === "request_callback"
               ? "Call initiated. Send exactly this message and nothing else: 'Calling you now!' Do NOT ask any more questions."
-              : "Action recorded. Now send your confirmation text to the lead.",
+              : "Appointment booked. Confirm to the lead with the scheduled day, time, and address. Do NOT include a technician name — the system assigns the right tech automatically and they will reach out directly. Say: 'You're on the schedule — [Day] at [Time] at [Address]. Our tech will reach out before heading over.'",
           },
         ],
       },
@@ -512,11 +512,35 @@ export async function processAndSave(
         .update({ status: "appointment_booked", last_message_at: new Date().toISOString() })
         .eq("id", leadId)
 
+      // Infer job_type from the AI's booking notes and save to lead
+      // This is how specialization matching works — the notes always contain the job description
+      const inferredJobType = inferJobType(notes ?? "")
+      if (inferredJobType) {
+        await supabase
+          .from("leads")
+          .update({ job_type: inferredJobType })
+          .eq("id", leadId)
+          .is("job_type", null) // don't overwrite an explicitly set type
+      }
+
+      // Save address to lead record if not already stored
+      if (address) {
+        await supabase
+          .from("leads")
+          .update({ address })
+          .eq("id", leadId)
+          .is("address", null)
+      }
+
       // Smart technician selection — runs after appointment is created
       if (apt) {
-        const { data: lead } = await supabase.from("leads").select("job_type, address").eq("id", leadId).single()
-        const zip = extractZip(address ?? lead?.address ?? "")
-        selectTechnician(companyId, apt.id, scheduled_at, lead?.job_type as string | null, zip).catch(() => {})
+        const jobType = inferredJobType ?? null
+        const zip = extractZip(address ?? "")
+        const techResult = await selectTechnician(companyId, apt.id, scheduled_at, jobType, zip)
+        if (!techResult.found) {
+          // Annotate the appointment so contractor knows manual dispatch is needed
+          await flagNoTechAvailable(apt.id, techResult.reason)
+        }
       }
 
       // Try to create Google Calendar event
@@ -999,15 +1023,12 @@ When you have collected enough information, transition to booking seamlessly.
 Do NOT say "Now I will book you" or "Let me schedule that for you."
 Just do it.
 
-Good: "Let me check what we have this week — I can get [Technician First Name] out on Tuesday at 10am or Thursday at 2pm. Which works better?"
+Good: "Let me check what we have this week — I can do Tuesday at 10am or Thursday at 2pm. Which works better?"
 Bad: "Great! Now I'll proceed to book your appointment."
 
-After booking, confirm with:
-"[Technician First Name] is booked for [Day] at [Time] at [Address]. They'll reach out before heading over."
-
-If no technician is available for the zip/specialization:
-"Let me check with our scheduling team and confirm the best time for you — I'll follow up shortly."
-Then call update_lead_status with 'needs_attention'.
+After booking, confirm with ONLY the date, time, and address — do NOT include a technician name:
+"You're on the schedule — [Day] at [Time] at [Address]. Our tech will reach out before heading over."
+Do NOT guess or invent a technician name. The system assigns the right tech automatically after booking.
 
 ═══════════════════════════════════════════════════
 PERSONALITY AND TONE
@@ -1051,4 +1072,31 @@ The service-specific conversation playbook follows below.`
 function extractZip(address: string): string | null {
   const match = address.match(/\b(\d{5})\b/)
   return match ? match[1] : null
+}
+
+/**
+ * Infer a structured job_type from the free-text notes the AI wrote at booking.
+ * This allows technician specialization matching to work correctly even when
+ * the lead record had no job_type set during conversation.
+ */
+function inferJobType(notes: string): string | null {
+  if (!notes) return null
+  const n = notes.toLowerCase()
+  if (/commercial/.test(n))                                                  return "commercial_hvac"
+  if (/mini.split|ductless/.test(n) && /install/.test(n))                   return "mini_split_installation"
+  if (/mini.split|ductless/.test(n))                                         return "mini_split_repair"
+  if (/heat.pump/.test(n) && /install/.test(n))                              return "heat_pump_installation"
+  if (/heat.pump/.test(n))                                                   return "heat_pump_repair"
+  if (/boiler/.test(n))                                                      return "boiler_repair"
+  if (/duct.*clean|clean.*duct/.test(n))                                     return "duct_cleaning"
+  if (/duct.*repair|repair.*duct/.test(n))                                   return "duct_repair"
+  if (/air.qual|filtration|allergen|air.purif/.test(n))                      return "air_quality"
+  if (/replace.*system|new.*system|new.*unit|replace.*unit|full.replace/.test(n)) return "hvac_replacement"
+  if (/install.*ac|ac.*install|install.*air.condition/.test(n))              return "ac_installation"
+  if (/furnace|heater|heating.*unit|heat.*strip/.test(n) && /install/.test(n)) return "furnace_repair"
+  if (/furnace|no heat|heat.*not work|heater.*broken|furnace.*broken/.test(n)) return "furnace_repair"
+  if (/tune.up|maintenance|service.visit|annual/.test(n))                    return "hvac_tune_up"
+  if (/not cool|no cool|warm air|ac.*broken|ac.*not work|air.*condition.*broken|a\/c.*not/.test(n)) return "ac_repair"
+  if (/ac repair|air condition.*repair/.test(n))                             return "ac_repair"
+  return null
 }

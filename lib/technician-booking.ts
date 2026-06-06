@@ -152,6 +152,28 @@ export async function selectTechnician(
 }
 
 /**
+ * Called when selectTechnician returns found:false — annotates the appointment
+ * so the contractor can see it needs manual dispatch in the appointments view.
+ */
+export async function flagNoTechAvailable(
+  appointmentId: string,
+  reason: "no_technicians" | "no_specialization_match" | "no_zip_match" | "no_availability"
+): Promise<void> {
+  const db = createServiceRoleClient()
+  const reasonLabels: Record<string, string> = {
+    no_technicians:        "No technicians configured",
+    no_specialization_match: "No tech with the required specialization",
+    no_zip_match:          "No tech covers the lead's zip code",
+    no_availability:       "No tech available at the booked time",
+  }
+  const label = reasonLabels[reason] ?? reason
+  const { data: apt } = await db.from("appointments").select("notes").eq("id", appointmentId).single()
+  const updatedNotes = [apt?.notes, `⚠️ Auto-dispatch failed: ${label}. Manual dispatch required.`]
+    .filter(Boolean).join(" | ")
+  await db.from("appointments").update({ notes: updatedNotes }).eq("id", appointmentId)
+}
+
+/**
  * Build the technician context block to inject into the AI system prompt,
  * so the AI knows WHO it just booked when confirming.
  */
@@ -178,16 +200,14 @@ No active technicians available right now.
   })
 
   return `=== TECHNICIANS ===
-When you book an appointment, the system will automatically assign the best-matched technician.
-Your job: after booking, confirm to the lead with the technician's first name.
-Example: "I've got James booked for your AC repair on Tuesday at 10am."
+When you book an appointment, the system automatically assigns the best-matched technician based on the job type, zip code, and their schedule. You do NOT know who gets assigned at the time of booking.
 
-Active technicians:
+After calling book_appointment, confirm with ONLY the date, time, and address:
+"You're on the schedule — [Day] at [Time] at [Address]. Our tech will reach out before heading over."
+Do NOT mention a technician name in the booking confirmation — you don't know who the system assigned.
+
+Active technicians (for your awareness only):
 ${lines.join("\n")}
-
-If no technician can be found for a job type or zip code, tell the lead:
-"Let me check with our scheduling team and confirm the best time for you — I'll follow up shortly."
-Then call update_lead_status with 'needs_attention'.
 === END TECHNICIANS ===`
 }
 
