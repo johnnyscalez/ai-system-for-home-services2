@@ -91,6 +91,8 @@ export interface Lead {
   last_inbound_at: string | null
   is_active_conversation: boolean
   ai_paused: boolean
+  job_type: string | null
+  selected_slots: Record<string, { tech_id: string; tech_name: string }> | null
   deal_value: number | null
   closed_job_type: string | null
   closed_technician_id: string | null

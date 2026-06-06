@@ -4,7 +4,7 @@ import { createCalendarEvent, getCalendarEvents } from "@/lib/google-calendar"
 import { getConversationFlow } from "@/lib/conversation-flows"
 import { getAvailableSlots, formatSlotsForPrompt, DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
 import { getTwilioClient } from "@/lib/twilio"
-import { selectTechnician, flagNoTechAvailable, getTechnicianContextForCompany } from "@/lib/technician-booking"
+import { selectTechnician, flagNoTechAvailable, findSlotsForLead, getTechnicianContextForCompany } from "@/lib/technician-booking"
 import type { AppointmentWindow, PerDaySlots } from "@/lib/availability"
 
 export type ConversationAction =
@@ -21,6 +21,25 @@ export type EngineResult = {
 }
 
 const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
+  {
+    name: "find_available_slots",
+    description:
+      "ALWAYS call this before offering any time slots to the lead. Call it once you (1) understand the job type from conversation AND (2) have the lead's zip code or full address. Returns real appointment slots filtered by which technician can handle this specific job in this area — and their actual calendar availability. Never offer slots from the AVAILABLE BOOKING SLOTS reference list without calling this tool first.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        job_type: {
+          type: "string",
+          description: "The specific job type. One of: ac_repair, ac_installation, ac_not_cooling, furnace_repair, furnace_not_working, heat_pump_repair, heat_pump_installation, mini_split_repair, mini_split_installation, duct_cleaning, duct_repair, boiler_repair, commercial_hvac, hvac_tune_up, hvac_replacement, air_quality, electrical, plumbing, general",
+        },
+        zip_code: {
+          type: "string",
+          description: "5-digit zip code extracted from the lead's address. If you only have a city, pass what you know.",
+        },
+      },
+      required: [],
+    },
+  },
   {
     name: "book_appointment",
     description:
@@ -305,11 +324,21 @@ export async function runConversation(
   let responseText = ""
   let action: ConversationAction | undefined
 
+  // Track find_available_slots tool call separately — it's a lookup, not an action
+  let findSlotsToolId:    string | null = null
+  let findSlotsJobType:   string | null = null
+  let findSlotsZip:       string | null = null
+
   for (const block of claudeResponse.content) {
     if (block.type === "text") {
       responseText = block.text.trim()
     } else if (block.type === "tool_use") {
-      if (block.name === "book_appointment") {
+      if (block.name === "find_available_slots") {
+        findSlotsToolId  = block.id
+        const inp = block.input as { job_type?: string; zip_code?: string }
+        findSlotsJobType = inp.job_type ?? null
+        findSlotsZip     = inp.zip_code ?? null
+      } else if (block.name === "book_appointment") {
         const input = block.input as { scheduled_at: string; address?: string; notes?: string }
         action = { type: "book_appointment", ...input }
       } else if (block.name === "cancel_appointment") {
@@ -325,6 +354,77 @@ export async function runConversation(
         action = { type: "request_callback" }
       }
     }
+  }
+
+  // ── find_available_slots: run the lookup, save slot→tech map, get Claude's slot-offer text ──
+  if (findSlotsToolId) {
+    const slotsResult = await findSlotsForLead(companyId, findSlotsJobType, findSlotsZip)
+
+    let toolResultText: string
+
+    if (slotsResult.found && slotsResult.slots.length > 0) {
+      // Save slot→tech map to the lead record (persists across turns so booking-time lookup works)
+      const slotMap: Record<string, { tech_id: string; tech_name: string }> = {}
+      for (const s of slotsResult.slots) {
+        slotMap[s.isoStart.substring(0, 16)] = { tech_id: s.techId, tech_name: s.techName }
+      }
+      await supabase.from("leads").update({ selected_slots: slotMap }).eq("id", leadId)
+
+      const slotLines = slotsResult.slots.slice(0, 5).map(s =>
+        `• ${s.label} | Tech assigned: ${s.techName} | scheduled_at for book_appointment: "${s.isoStart}"`
+      ).join("\n")
+
+      // Group by tech so AI knows who covers which slots
+      const techNames = [...new Set(slotsResult.slots.map(s => s.techName))]
+      const whosComing = techNames.length === 1
+        ? `${techNames[0]} would be the technician.`
+        : `Technicians available: ${techNames.join(" and ")} — each slot shows who would be assigned.`
+
+      toolResultText = `Available slots for this job and location:\n${slotLines}\n\n${whosComing}\n\nOffer the lead 2 of these slots. If they ask who will come, share the tech name shown above for their preferred slot. Use the exact scheduled_at string when calling book_appointment.`
+    } else {
+      const reasonLabels: Record<string, string> = {
+        no_technicians:          "no technicians configured yet",
+        no_specialization_match: "no tech with the required skill",
+        no_zip_match:            "no tech covers this zip code",
+        no_slots:                "all qualified techs are fully booked in the booking window",
+      }
+      const why = slotsResult.found === false ? (reasonLabels[slotsResult.reason] ?? slotsResult.reason) : "unknown"
+      toolResultText = `No available slots (${why}). Tell the lead warmly: "Let me check with our scheduling team and I'll follow up with some times shortly." Then call update_lead_status with 'needs_attention'.`
+    }
+
+    // Get Claude's slot-offering reply
+    const slotMessages = [
+      ...messages,
+      { role: "assistant" as const, content: claudeResponse.content },
+      {
+        role: "user" as const,
+        content: [{ type: "tool_result" as const, tool_use_id: findSlotsToolId, content: toolResultText }],
+      },
+    ]
+
+    const slotReply = await anthropic.messages.create({
+      model: "claude-sonnet-4-6",
+      max_tokens: 300,
+      system: systemPrompt,
+      tools: TOOLS,
+      messages: slotMessages,
+    })
+
+    for (const block of slotReply.content) {
+      if (block.type === "text") responseText = block.text.trim()
+      else if (block.type === "tool_use" && block.name === "update_lead_status") {
+        const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention" }
+        action = { type: "update_status", status: input.status }
+      }
+    }
+
+    // Strip meta-commentary for initial outreach (same as below)
+    if (isInitialOutreach && responseText) {
+      const firstLine = responseText.split("\n").find(l => l.trim().length > 0 && !l.startsWith("Note:") && !l.startsWith("**")) ?? responseText
+      responseText = firstLine.replace(/^---+\s*/, "").replace(/\s*---+$/, "").trim()
+    }
+
+    return { response: responseText, action }
   }
 
   // For initial outreach, strip any meta-commentary Claude might add — keep only the first real line
@@ -491,7 +591,20 @@ export async function processAndSave(
     if (result.action.type === "book_appointment") {
       const { scheduled_at, address, notes } = result.action
 
-      // Create appointment
+      // Look up pre-selected tech from find_available_slots (saved to leads.selected_slots mid-conversation)
+      const { data: freshLead } = await supabase
+        .from("leads")
+        .select("job_type, address, selected_slots")
+        .eq("id", leadId)
+        .single()
+
+      const selectedSlots = freshLead?.selected_slots as Record<string, { tech_id: string; tech_name: string }> | null
+      const normalKey = scheduled_at.substring(0, 16) // YYYY-MM-DDTHH:MM
+      const preSelected = selectedSlots
+        ? Object.entries(selectedSlots).find(([k]) => k.substring(0, 16) === normalKey)?.[1]
+        : null
+
+      // Create appointment — with pre-selected tech if available
       const { data: apt } = await supabase
         .from("appointments")
         .insert({
@@ -502,6 +615,8 @@ export async function processAndSave(
           notes:                notes ?? null,
           status:               "scheduled",
           confirmation_status:  "pending_confirmation",
+          technician_id:        preSelected?.tech_id   ?? null,
+          technician_name:      preSelected?.tech_name ?? null,
         })
         .select()
         .single()
@@ -512,15 +627,14 @@ export async function processAndSave(
         .update({ status: "appointment_booked", last_message_at: new Date().toISOString() })
         .eq("id", leadId)
 
-      // Infer job_type from the AI's booking notes and save to lead
-      // This is how specialization matching works — the notes always contain the job description
+      // Always infer and save job_type (even when tech was pre-selected — needed for Reports)
       const inferredJobType = inferJobType(notes ?? "")
       if (inferredJobType) {
         await supabase
           .from("leads")
           .update({ job_type: inferredJobType })
           .eq("id", leadId)
-          .is("job_type", null) // don't overwrite an explicitly set type
+          .is("job_type", null)
       }
 
       // Save address to lead record if not already stored
@@ -532,13 +646,12 @@ export async function processAndSave(
           .is("address", null)
       }
 
-      // Smart technician selection — runs after appointment is created
-      if (apt) {
-        const jobType = inferredJobType ?? null
-        const zip = extractZip(address ?? "")
+      // If no pre-selected tech (AI skipped find_available_slots or slots expired), fall back to selectTechnician
+      if (!preSelected && apt) {
+        const jobType = inferredJobType ?? (freshLead?.job_type as string | null)
+        const zip     = extractZip(address ?? freshLead?.address ?? "")
         const techResult = await selectTechnician(companyId, apt.id, scheduled_at, jobType, zip)
         if (!techResult.found) {
-          // Annotate the appointment so contractor knows manual dispatch is needed
           await flagNoTechAvailable(apt.id, techResult.reason)
         }
       }
@@ -1012,8 +1125,11 @@ Ask them in the order that feels most natural given what the lead says first.
    If renter: flag needs_attention. Some jobs require homeowner authorization.
    Do not book without checking this.
 
-6. PREFERRED TIME — "Do you have a preference — mornings or afternoons? Any particular day?"
-   Offer 2 specific slots from the available slots list, never ask open-endedly.
+6. OFFER TIME SLOTS — ALWAYS call find_available_slots first
+   Once you have the zip/address AND understand the job type, call find_available_slots(job_type, zip_code).
+   This returns real slots where a qualified technician is actually available for this specific job and area.
+   The tool tells you the tech name per slot — you can share it if the lead asks "who's coming?"
+   After the tool responds, offer 2 of the returned slots. Never invent times or use the reference list below.
 
 ═══════════════════════════════════════════════════
 BOOKING TRANSITION — NATURAL, NOT ANNOUNCED

@@ -1,11 +1,163 @@
 /**
  * Smart technician selection logic.
- * Called immediately after the AI books an appointment — selects the best
- * available technician based on specialization → zip coverage → schedule → workload.
+ *
+ * Two-phase dispatch:
+ * 1. findSlotsForLead  — called mid-conversation via find_available_slots tool.
+ *    Returns only slots where a qualified, available tech actually exists.
+ *    The slot→tech map is saved to leads.selected_slots for booking-time lookup.
+ *
+ * 2. selectTechnician  — fallback called after booking if no pre-selected tech.
+ *    Runs the same logic against the specific booked time.
  */
 
 import { createServiceRoleClient } from "@/lib/supabase-server"
+import { DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
+import type { AppointmentWindow } from "@/lib/availability"
 import type { Technician } from "@/types/database"
+
+function fmt12(t: string): string {
+  const [hStr, mStr] = t.split(":")
+  const h = parseInt(hStr, 10)
+  const ampm = h < 12 ? "AM" : "PM"
+  const h12 = h === 0 ? 12 : h > 12 ? h - 12 : h
+  return mStr === "00" ? `${h12} ${ampm}` : `${h12}:${mStr} ${ampm}`
+}
+
+export type SlotWithTech = {
+  label:    string
+  isoStart: string
+  isoEnd:   string
+  techId:   string
+  techName: string
+}
+
+export type FindSlotsResult =
+  | { found: true;  slots: SlotWithTech[] }
+  | { found: false; reason: "no_technicians" | "no_specialization_match" | "no_zip_match" | "no_slots" }
+
+/**
+ * Find real available booking slots for a specific job type and zip code.
+ * Only returns slots where a qualified tech is actually free — no phantom slots.
+ */
+export async function findSlotsForLead(
+  companyId: string,
+  jobType:   string | null,
+  zip:       string | null
+): Promise<FindSlotsResult> {
+  const db = createServiceRoleClient()
+
+  const [techRes, configRes] = await Promise.all([
+    db.from("technicians").select("*").eq("company_id", companyId).eq("status", "active").order("name"),
+    db.from("ai_agent_config")
+      .select("available_days, appointment_windows, booking_horizon_days, timezone")
+      .eq("company_id", companyId)
+      .single(),
+  ])
+
+  const allTechs = (techRes.data ?? []) as Technician[]
+  if (allTechs.length === 0) return { found: false, reason: "no_technicians" }
+
+  const config       = configRes.data
+  const tz           = (config?.timezone as string | null) ?? "America/New_York"
+  const horizonDays  = (config?.booking_horizon_days as number | null) ?? 7
+  const availDays    = (config?.available_days as string[] | null) ?? DEFAULT_DAYS
+  const windows      = ((config?.appointment_windows as AppointmentWindow[] | null) ?? DEFAULT_WINDOWS)
+                         .filter(w => w.enabled)
+
+  // 1. Specialization filter
+  const targetSpecs = jobType ? (JOB_TYPE_SPECIALIZATION_MAP[jobType] ?? []) : []
+  let candidates = targetSpecs.length === 0
+    ? allTechs
+    : allTechs.filter(t => t.specializations.length === 0 || t.specializations.some(s => targetSpecs.includes(s)))
+
+  if (candidates.length === 0) return { found: false, reason: "no_specialization_match" }
+
+  // 2. Zip coverage filter
+  if (zip) {
+    const zipFiltered = candidates.filter(t => t.zip_codes.length === 0 || t.zip_codes.includes(zip))
+    if (zipFiltered.length > 0) candidates = zipFiltered
+  }
+  if (candidates.length === 0) return { found: false, reason: "no_zip_match" }
+
+  // 3. Load existing appointments for these techs in the horizon
+  const techIds    = candidates.map(t => t.id)
+  const now        = new Date()
+  const horizonEnd = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000)
+
+  const { data: existingApts } = await db
+    .from("appointments")
+    .select("scheduled_at, technician_id")
+    .eq("company_id", companyId)
+    .in("technician_id", techIds)
+    .gte("scheduled_at", now.toISOString())
+    .lte("scheduled_at", horizonEnd.toISOString())
+    .neq("status", "cancelled")
+
+  // busy set: `techId|YYYY-MM-DDTHH:MM`
+  const busyAt = new Set<string>()
+  for (const a of existingApts ?? []) {
+    if (a.technician_id) busyAt.add(`${a.technician_id}|${a.scheduled_at.substring(0, 16)}`)
+  }
+
+  // weekly workload for tiebreaking
+  const weekStart = new Date(now)
+  weekStart.setDate(now.getDate() - now.getDay())
+  weekStart.setHours(0, 0, 0, 0)
+  const weekEnd = new Date(weekStart); weekEnd.setDate(weekStart.getDate() + 7)
+  const weeklyCount: Record<string, number> = {}
+  for (const t of candidates) weeklyCount[t.id] = 0
+  for (const a of existingApts ?? []) {
+    const d = new Date(a.scheduled_at)
+    if (a.technician_id && d >= weekStart && d < weekEnd)
+      weeklyCount[a.technician_id] = (weeklyCount[a.technician_id] ?? 0) + 1
+  }
+
+  // 4. Generate slots day by day, window by window — only include slots with an available tech
+  const slots: SlotWithTech[] = []
+
+  for (let offset = 0; offset <= horizonDays && slots.length < 8; offset++) {
+    const day     = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000)
+    const dayName = DAY_NAMES[day.getDay()] as string
+    if (!availDays.includes(dayName)) continue
+
+    const dateStr = day.toLocaleDateString("en-CA", { timeZone: tz }) // YYYY-MM-DD
+
+    for (const win of windows) {
+      const isoStart = `${dateStr}T${win.start}:00`
+      const isoEnd   = `${dateStr}T${win.end}:00`
+      if (new Date(isoStart) <= now) continue
+
+      const [slotH, slotM] = win.start.split(":").map(Number)
+      const slotMinutes    = slotH * 60 + slotM
+
+      const avail = candidates
+        .filter(t => {
+          const sched = t.schedule[dayName as keyof Technician["schedule"]] as
+            { enabled: boolean; start: string; end: string } | undefined
+          if (!sched?.enabled) return false
+          const [sh, sm] = sched.start.split(":").map(Number)
+          const [eh, em] = sched.end.split(":").map(Number)
+          if (slotMinutes < sh * 60 + sm || slotMinutes >= eh * 60 + em) return false
+          return !busyAt.has(`${t.id}|${isoStart.substring(0, 16)}`)
+        })
+        .sort((a, b) => (weeklyCount[a.id] ?? 0) - (weeklyCount[b.id] ?? 0))
+
+      if (avail.length === 0) continue
+
+      const best     = avail[0]
+      const dayLabel = day.toLocaleDateString("en-US", { timeZone: tz, weekday: "long", month: "short", day: "numeric" })
+      slots.push({
+        label:    `${dayLabel} — ${win.label} (${fmt12(win.start)}–${fmt12(win.end)})`,
+        isoStart,
+        isoEnd,
+        techId:   best.id,
+        techName: best.name,
+      })
+    }
+  }
+
+  return slots.length > 0 ? { found: true, slots } : { found: false, reason: "no_slots" }
+}
 
 export type TechnicianMatchResult =
   | { found: true;  technician: Technician }
@@ -200,13 +352,18 @@ No active technicians available right now.
   })
 
   return `=== TECHNICIANS ===
-When you book an appointment, the system automatically assigns the best-matched technician based on the job type, zip code, and their schedule. You do NOT know who gets assigned at the time of booking.
+Before offering time slots, call find_available_slots(job_type, zip_code).
+That tool returns real available slots AND tells you which technician is assigned to each one.
 
-After calling book_appointment, confirm with ONLY the date, time, and address:
-"You're on the schedule — [Day] at [Time] at [Address]. Our tech will reach out before heading over."
-Do NOT mention a technician name in the booking confirmation — you don't know who the system assigned.
+WHEN LEAD ASKS "WHO'S COMING?":
+→ If you already called find_available_slots: share the tech name shown for their preferred slot.
+→ If you haven't called it yet: "Let me check who's available for your job and area." Then call find_available_slots.
 
-Active technicians (for your awareness only):
+AFTER BOOKING:
+→ If find_available_slots told you a specific tech: "[Tech first name] is booked for [Day] at [Time] at [Address]. They'll reach out before heading over."
+→ If you do NOT know which tech: "You're on the schedule — [Day] at [Time] at [Address]. Our tech will reach out before heading over."
+
+Active technicians:
 ${lines.join("\n")}
 === END TECHNICIANS ===`
 }
