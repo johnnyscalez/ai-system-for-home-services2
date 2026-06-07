@@ -110,6 +110,9 @@ export default async function LeadDetailPage({
           <DeleteLeadButton
             leadId={id}
             leadName={`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim()}
+            leadStatus={lead.status}
+            dealValue={lead.deal_value as number | null}
+            refundAmount={lead.refund_amount as number | null}
             redirectAfter={true}
           />
         </div>

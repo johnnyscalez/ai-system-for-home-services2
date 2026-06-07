@@ -94,10 +94,13 @@ export interface Lead {
   job_type: string | null
   selected_slots: Record<string, { tech_id: string; tech_name: string }> | null
   deal_value: number | null
+  refund_amount: number | null
+  refund_note: string | null
   closed_job_type: string | null
   closed_technician_id: string | null
   closed_technician_name: string | null
   closed_at: string | null
+  deleted_at: string | null
   created_at: string
   updated_at: string
 }

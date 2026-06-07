@@ -79,9 +79,9 @@ export default async function DashboardPage() {
       .gte("scheduled_at", now.toISOString())
       .order("scheduled_at")
       .limit(4),
-    // Closed deals revenue (last 30 days)
+    // Closed deals revenue (last 30 days) — include refund_amount for net calculation
     supabase.from("leads")
-      .select("deal_value")
+      .select("deal_value, refund_amount")
       .eq("company_id", profile.company_id)
       .in("status", ["closed", "closed_won"])
       .not("deal_value", "is", null)
@@ -94,7 +94,11 @@ export default async function DashboardPage() {
   const avgJobValue = company?.avg_job_value ?? 0
   const revenueProjected = aptBooked * avgJobValue
   const closedDeals = closedLeadsRes.data ?? []
-  const revenueClosed = closedDeals.reduce((sum, l) => sum + (Number(l.deal_value) || 0), 0)
+  // Net revenue = deal_value minus any refund issued
+  const revenueClosed = closedDeals.reduce(
+    (sum, l) => sum + Math.max(0, (Number(l.deal_value) || 0) - (Number(l.refund_amount) || 0)),
+    0
+  )
   const closedCount = closedDeals.length
 
   const hour = now.getHours()

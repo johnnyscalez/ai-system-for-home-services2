@@ -65,9 +65,9 @@ export async function GET(req: NextRequest) {
       if (until) q = q.lte("created_at", until)
       return q
     })(),
-    // Closed deals in period
+    // Closed deals in period — include refund_amount for net calculation
     (() => {
-      let q = supabase.from("leads").select("deal_value, closed_job_type, closed_technician_id, closed_technician_name, closed_at")
+      let q = supabase.from("leads").select("deal_value, refund_amount, closed_job_type, closed_technician_id, closed_technician_name, closed_at")
         .eq("company_id", companyId).in("status", ["closed", "closed_won"]).not("deal_value", "is", null)
       if (since) q = q.gte("closed_at", since)
       if (until) q = q.lte("closed_at", until)
@@ -80,9 +80,9 @@ export async function GET(req: NextRequest) {
       if (until) q = q.lte("created_at", until)
       return q
     })(),
-    // Closed jobs per tech (in period)
+    // Closed jobs per tech (in period) — include refund_amount
     (() => {
-      let q = supabase.from("leads").select("closed_technician_id, closed_technician_name, deal_value")
+      let q = supabase.from("leads").select("closed_technician_id, closed_technician_name, deal_value, refund_amount")
         .eq("company_id", companyId).in("status", ["closed", "closed_won"]).not("closed_technician_id", "is", null)
       if (since) q = q.gte("closed_at", since)
       if (until) q = q.lte("closed_at", until)
@@ -149,7 +149,12 @@ export async function GET(req: NextRequest) {
   const avgJobValue = company?.avg_job_value ?? 0
   const revenueAtRisk = activeLeads * avgJobValue
 
-  const revenueClosed = closedDeals.reduce((sum, d) => sum + (Number(d.deal_value) || 0), 0)
+  // Net revenue = deal_value minus refunds
+  const revenueClosed = closedDeals.reduce(
+    (sum, d) => sum + Math.max(0, (Number(d.deal_value) || 0) - (Number(d.refund_amount) || 0)),
+    0
+  )
+  const totalRefunded = closedDeals.reduce((sum, d) => sum + (Number(d.refund_amount) || 0), 0)
   const closedCount = closedDeals.length
 
   // Technician performance
@@ -162,7 +167,8 @@ export async function GET(req: NextRequest) {
     const id = c.closed_technician_id ?? "unknown"
     if (!closedByTechMap[id]) closedByTechMap[id] = { count: 0, revenue: 0, name: c.closed_technician_name ?? "Unknown" }
     closedByTechMap[id].count++
-    closedByTechMap[id].revenue += Number(c.deal_value) || 0
+    const net = Math.max(0, (Number(c.deal_value) || 0) - (Number(c.refund_amount) || 0))
+    closedByTechMap[id].revenue += net
   }
   const techIds = new Set([...allTechnicians.map(t => t.id), ...Object.keys(closedByTechMap)])
   const techPerformance = Array.from(techIds).map(id => {
@@ -184,6 +190,7 @@ export async function GET(req: NextRequest) {
     bookingRate,
     revenueAtRisk,
     revenueClosed,
+    totalRefunded,
     closedCount,
     avgJobValue,
     dailyLeads,

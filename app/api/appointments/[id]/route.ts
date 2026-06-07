@@ -81,5 +81,17 @@ export async function PATCH(
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // When an appointment is cancelled, revert the lead's status from appointment_booked
+  // so it re-appears in the pipeline at the right stage. Keep the appointment record
+  // in the DB so the AI agent has full conversation history context.
+  if (status === "cancelled" && data?.lead_id) {
+    await db
+      .from("leads")
+      .update({ status: "qualified", updated_at: new Date().toISOString() })
+      .eq("id", data.lead_id)
+      .eq("status", "appointment_booked") // only revert if still in appointment_booked
+  }
+
   return NextResponse.json({ appointment: data })
 }

@@ -6,7 +6,7 @@ import {
   Users, CalendarCheck, TrendingUp, DollarSign,
   ArrowUpRight, ArrowDownRight, Minus,
   BarChart3, PieChart, GitMerge, HardHat,
-  RefreshCw,
+  RefreshCw, Edit2, Check, X, ChevronDown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import { DateRangePicker, type DateRange, PRESETS } from "@/components/ui/DateRangePicker"
@@ -18,6 +18,23 @@ type TechRow = {
   appointments: number; closedJobs: number; revenue: number
 }
 
+type Deal = {
+  id: string
+  first_name: string | null
+  last_name: string | null
+  phone: string | null
+  deal_value: number
+  refund_amount: number | null
+  refund_note: string | null
+  closed_at: string | null
+  closed_job_type: string | null
+  closed_technician_id: string | null
+  closed_technician_name: string | null
+  status: string
+}
+
+type Technician = { id: string; name: string; status: string }
+
 type Props = {
   leadsThisMonth: number
   leadsLastMonth: number
@@ -28,6 +45,7 @@ type Props = {
   bookingRate: number
   revenueAtRisk: number
   revenueClosed: number
+  totalRefunded: number
   closedCount: number
   avgJobValue: number
   dailyLeads: { date: string; count: number }[]
@@ -35,6 +53,8 @@ type Props = {
   sourceCounts: Record<string, number>
   funnel: { stage: string; count: number }[]
   techPerformance: TechRow[]
+  technicians: Technician[]
+  initialDeals: Deal[]
 }
 
 // ── Count-up ──────────────────────────────────────────────────────────────────
@@ -193,6 +213,7 @@ export function ReportsClient({
   bookingRate: initialBookingRate,
   revenueAtRisk: initialRevenueAtRisk,
   revenueClosed: initialRevenueClosed,
+  totalRefunded: initialTotalRefunded,
   closedCount: initialClosedCount,
   avgJobValue,
   dailyLeads: initialDailyLeads,
@@ -200,6 +221,8 @@ export function ReportsClient({
   sourceCounts: initialSourceCounts,
   funnel: initialFunnel,
   techPerformance: initialTechPerf,
+  technicians,
+  initialDeals,
 }: Props) {
   const [range, setRange]       = useState<DateRange>(defaultRange())
   const [fetching, setFetching] = useState(false)
@@ -212,12 +235,17 @@ export function ReportsClient({
   const [bookingRate, setBookingRate]       = useState(initialBookingRate)
   const [revenueAtRisk, setRevenueAtRisk]   = useState(initialRevenueAtRisk)
   const [revenueClosed, setRevenueClosed]   = useState(initialRevenueClosed)
+  const [totalRefunded, setTotalRefunded]   = useState(initialTotalRefunded)
   const [closedCount, setClosedCount]       = useState(initialClosedCount)
   const [dailyLeads, setDailyLeads]         = useState(initialDailyLeads)
   const [statusCounts, setStatusCounts]     = useState(initialStatusCounts)
   const [sourceCounts, setSourceCounts]     = useState(initialSourceCounts)
   const [funnel, setFunnel]                 = useState(initialFunnel)
   const [techPerformance, setTechPerf]      = useState(initialTechPerf)
+  const [deals, setDeals]                   = useState<Deal[]>(initialDeals)
+  const [editingDeal, setEditingDeal]       = useState<string | null>(null)
+  const [editForm, setEditForm]             = useState<{ dealValue: string; closedJobType: string; closedTechnicianId: string; closedTechnicianName: string }>({ dealValue: "", closedJobType: "", closedTechnicianId: "", closedTechnicianName: "" })
+  const [savingDeal, setSavingDeal]         = useState(false)
 
   const fetchReports = useCallback(async (r: DateRange) => {
     setFetching(true)
@@ -233,15 +261,52 @@ export function ReportsClient({
       setBookingRate(d.bookingRate)
       setRevenueAtRisk(d.revenueAtRisk)
       setRevenueClosed(d.revenueClosed)
+      setTotalRefunded(d.totalRefunded ?? 0)
       setClosedCount(d.closedCount)
       setDailyLeads(d.dailyLeads)
       setStatusCounts(d.statusCounts)
       setSourceCounts(d.sourceCounts)
       setFunnel(d.funnel)
       setTechPerf(d.techPerformance)
+      // Also refresh deals for the new range
+      const dr = await fetch(`/api/reports/deals?since=${r.from}&until=${r.until}`)
+      if (dr.ok) { const dd = await dr.json(); setDeals(dd.deals ?? []) }
     } catch { /* non-fatal */ }
     finally { setFetching(false) }
   }, [])
+
+  async function saveDeal(id: string) {
+    setSavingDeal(true)
+    try {
+      const res = await fetch("/api/reports/deals", {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          id,
+          dealValue: parseFloat(editForm.dealValue),
+          closedJobType: editForm.closedJobType,
+          closedTechnicianId: editForm.closedTechnicianId || null,
+          closedTechnicianName: editForm.closedTechnicianName || null,
+        }),
+      })
+      if (!res.ok) return
+      const { deal } = await res.json()
+      setDeals(ds => ds.map(d => d.id === id ? deal : d))
+      setEditingDeal(null)
+    } finally {
+      setSavingDeal(false)
+    }
+  }
+
+  function startEdit(d: Deal) {
+    setEditForm({
+      dealValue: String(d.deal_value),
+      closedJobType: d.closed_job_type ?? "",
+      closedTechnicianId: d.closed_technician_id ?? "",
+      closedTechnicianName: d.closed_technician_name ?? "",
+    })
+    setEditingDeal(d.id)
+  }
 
   const mounted = useRef(false)
   useEffect(() => {
@@ -302,7 +367,7 @@ export function ReportsClient({
                 <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
                   <DollarSign className="w-4 h-4 text-white" />
                 </div>
-                <p className="text-green-200 text-xs font-bold uppercase tracking-widest">Total Revenue Closed</p>
+                <p className="text-green-200 text-xs font-bold uppercase tracking-widest">Net Revenue Closed</p>
               </div>
               <p className="text-5xl font-bold" style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
                 ${revenueClosed.toLocaleString()}
@@ -311,16 +376,29 @@ export function ReportsClient({
                 {closedCount} deal{closedCount !== 1 ? "s" : ""} · {range.label}
                 {closedCount > 0 && ` · avg $${Math.round(revenueClosed / closedCount).toLocaleString()} per deal`}
               </p>
+              {totalRefunded > 0 && (
+                <p className="text-red-300 text-xs mt-1.5 flex items-center gap-1.5">
+                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-red-400" />
+                  ${totalRefunded.toLocaleString()} refunded · gross was ${(revenueClosed + totalRefunded).toLocaleString()}
+                </p>
+              )}
             </div>
             <div className="flex gap-4 sm:flex-col sm:items-end">
               <div className="text-center sm:text-right">
                 <p className="text-2xl font-bold">{closedCount}</p>
                 <p className="text-green-200 text-xs">Deals closed</p>
               </div>
-              <div className="text-center sm:text-right">
-                <p className="text-2xl font-bold">${avgJobValue.toLocaleString()}</p>
-                <p className="text-green-200 text-xs">Avg job value</p>
-              </div>
+              {totalRefunded > 0 ? (
+                <div className="text-center sm:text-right">
+                  <p className="text-2xl font-bold text-red-300">-${totalRefunded.toLocaleString()}</p>
+                  <p className="text-green-200 text-xs">Refunded</p>
+                </div>
+              ) : (
+                <div className="text-center sm:text-right">
+                  <p className="text-2xl font-bold">${avgJobValue.toLocaleString()}</p>
+                  <p className="text-green-200 text-xs">Avg job value</p>
+                </div>
+              )}
             </div>
           </div>
         </motion.div>
@@ -576,6 +654,198 @@ export function ReportsClient({
                     </tr>
                   </tfoot>
                 )}
+              </table>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Deals list */}
+        <motion.div
+          id="deals"
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+          className="bg-white rounded-2xl border border-border/60 overflow-hidden mb-6"
+          style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.06)" }}
+        >
+          <div className="px-6 py-4 border-b border-border/60 flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <div className="w-7 h-7 rounded-lg bg-[#F97316]/10 flex items-center justify-center">
+                <DollarSign className="w-3.5 h-3.5 text-[#F97316]" />
+              </div>
+              <h2 className="font-semibold text-sm">Closed Deals</h2>
+              <span className="text-xs text-muted-foreground ml-1">— {range.label}</span>
+            </div>
+            <span className="text-xs text-muted-foreground">{deals.length} deal{deals.length !== 1 ? "s" : ""}</span>
+          </div>
+
+          {deals.length === 0 ? (
+            <div className="px-6 py-10 text-center">
+              <DollarSign className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">No closed deals in this period.</p>
+            </div>
+          ) : (
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead>
+                  <tr className="bg-[#F5F4F2] text-[11px] font-semibold text-[#78716C] uppercase tracking-wider">
+                    <th className="text-left px-6 py-3">Lead</th>
+                    <th className="text-left px-4 py-3">Date Closed</th>
+                    <th className="text-left px-4 py-3">Job Type</th>
+                    <th className="text-left px-4 py-3">Technician</th>
+                    <th className="text-right px-4 py-3">Deal Value</th>
+                    <th className="text-right px-4 py-3">Refunded</th>
+                    <th className="text-right px-4 py-3">Net</th>
+                    <th className="px-4 py-3"></th>
+                  </tr>
+                </thead>
+                <tbody className="divide-y divide-border/40">
+                  {deals.map((deal, i) => {
+                    const isEditing = editingDeal === deal.id
+                    const name = [deal.first_name, deal.last_name].filter(Boolean).join(" ") || deal.phone || "Unknown"
+                    const refund = Number(deal.refund_amount) || 0
+                    const net = Math.max(0, Number(deal.deal_value) - refund)
+                    return (
+                      <motion.tr
+                        key={deal.id}
+                        initial={{ opacity: 0, x: -10 }}
+                        animate={{ opacity: 1, x: 0 }}
+                        transition={{ delay: 0.05 * i }}
+                        className={cn("transition-colors", isEditing ? "bg-[#FFF7ED]" : "hover:bg-[#F5F4F2]/50")}
+                      >
+                        <td className="px-6 py-4">
+                          <p className="text-sm font-semibold text-[#1C1917]">{name}</p>
+                          {deal.phone && <p className="text-xs text-muted-foreground font-mono">{deal.phone}</p>}
+                        </td>
+                        <td className="px-4 py-4 text-sm text-muted-foreground whitespace-nowrap">
+                          {deal.closed_at ? new Date(deal.closed_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric" }) : "—"}
+                        </td>
+                        <td className="px-4 py-4">
+                          {isEditing ? (
+                            <input
+                              value={editForm.closedJobType}
+                              onChange={e => setEditForm(f => ({ ...f, closedJobType: e.target.value }))}
+                              placeholder="e.g. AC Install"
+                              className="border border-[#E7E5E4] rounded-lg px-2 py-1 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20"
+                            />
+                          ) : (
+                            <span className="text-sm text-[#1C1917]">{deal.closed_job_type || <span className="text-muted-foreground">—</span>}</span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4">
+                          {isEditing ? (
+                            <div className="relative">
+                              <select
+                                value={editForm.closedTechnicianId}
+                                onChange={e => {
+                                  const tech = technicians.find(t => t.id === e.target.value)
+                                  setEditForm(f => ({ ...f, closedTechnicianId: e.target.value, closedTechnicianName: tech?.name ?? "" }))
+                                }}
+                                className="border border-[#E7E5E4] rounded-lg px-2 py-1 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 appearance-none pr-7"
+                              >
+                                <option value="">Unassigned</option>
+                                {technicians.map(t => (
+                                  <option key={t.id} value={t.id}>{t.name}</option>
+                                ))}
+                              </select>
+                              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
+                            </div>
+                          ) : (
+                            <span className="text-sm text-[#1C1917]">
+                              {deal.closed_technician_name || <span className="text-muted-foreground text-xs">Unassigned</span>}
+                            </span>
+                          )}
+                        </td>
+                        <td className="px-4 py-4 text-right">
+                          {isEditing ? (
+                            <div className="flex items-center justify-end gap-1">
+                              <span className="text-sm text-muted-foreground">$</span>
+                              <input
+                                type="number"
+                                value={editForm.dealValue}
+                                onChange={e => setEditForm(f => ({ ...f, dealValue: e.target.value }))}
+                                className="border border-[#E7E5E4] rounded-lg px-2 py-1 text-sm w-24 text-right font-mono focus:outline-none focus:ring-2 focus:ring-[#F97316]/20"
+                              />
+                            </div>
+                          ) : (
+                            <span className="text-sm font-bold font-mono text-[#4D7C0F]">
+                              ${Number(deal.deal_value).toLocaleString()}
+                            </span>
+                          )}
+                        </td>
+                        {/* Refunded */}
+                        <td className="px-4 py-4 text-right">
+                          {refund > 0 ? (
+                            <div>
+                              <span className="text-sm font-bold font-mono text-red-500">
+                                -${refund.toLocaleString()}
+                              </span>
+                              {deal.refund_note && (
+                                <p className="text-[10px] text-muted-foreground mt-0.5 max-w-[120px] text-right truncate" title={deal.refund_note}>
+                                  {deal.refund_note}
+                                </p>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </td>
+                        {/* Net */}
+                        <td className="px-4 py-4 text-right">
+                          <span className={cn(
+                            "text-sm font-bold font-mono",
+                            refund > 0 ? "text-[#1C1917]" : "text-[#4D7C0F]"
+                          )}>
+                            ${net.toLocaleString()}
+                          </span>
+                        </td>
+                        <td className="px-4 py-4">
+                          {isEditing ? (
+                            <div className="flex items-center gap-1.5">
+                              <button
+                                onClick={() => saveDeal(deal.id)}
+                                disabled={savingDeal}
+                                className="flex items-center gap-1 px-2.5 py-1.5 bg-[#F97316] text-white text-xs font-medium rounded-lg hover:bg-[#EA580C] transition-colors disabled:opacity-50"
+                              >
+                                <Check className="w-3 h-3" /> Save
+                              </button>
+                              <button
+                                onClick={() => setEditingDeal(null)}
+                                className="p-1.5 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-[#F5F4F2]"
+                              >
+                                <X className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          ) : (
+                            <button
+                              onClick={() => startEdit(deal)}
+                              className="p-1.5 text-muted-foreground hover:text-[#F97316] transition-colors rounded-lg hover:bg-[#F97316]/8"
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </button>
+                          )}
+                        </td>
+                      </motion.tr>
+                    )
+                  })}
+                </tbody>
+                <tfoot>
+                  <tr className="bg-[#F97316]/5 border-t-2 border-[#F97316]/20">
+                    <td colSpan={4} className="px-6 py-3 text-xs font-bold text-[#1C1917]">Total · {deals.length} deal{deals.length !== 1 ? "s" : ""}</td>
+                    <td className="px-4 py-3 text-right text-sm font-bold text-[#4D7C0F] font-mono">
+                      ${deals.reduce((s, d) => s + Number(d.deal_value), 0).toLocaleString()}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm font-bold text-red-500 font-mono">
+                      {deals.some(d => Number(d.refund_amount) > 0)
+                        ? `-$${deals.reduce((s, d) => s + (Number(d.refund_amount) || 0), 0).toLocaleString()}`
+                        : <span className="text-muted-foreground text-xs">—</span>}
+                    </td>
+                    <td className="px-4 py-3 text-right text-sm font-bold text-[#4D7C0F] font-mono">
+                      ${deals.reduce((s, d) => s + Math.max(0, Number(d.deal_value) - (Number(d.refund_amount) || 0)), 0).toLocaleString()}
+                    </td>
+                    <td />
+                  </tr>
+                </tfoot>
               </table>
             </div>
           )}
