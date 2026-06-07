@@ -26,8 +26,8 @@ const nav = [
 function FieldFMark({ size = 28 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 64 64" fill="none" aria-hidden="true">
-      <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1C1917" />
-      <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1C1917" />
+      <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#FFFFFF" />
+      <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#FFFFFF" />
       <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316" />
       <rect x="42" y="12" width="7"  height="11" rx="1.5" fill="#EA580C" />
     </svg>
