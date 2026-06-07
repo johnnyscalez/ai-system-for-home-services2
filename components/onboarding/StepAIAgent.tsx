@@ -1,8 +1,14 @@
 "use client"
 
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
+import { Label } from "@/components/ui/label"
 import { Textarea } from "@/components/ui/textarea"
-import { ChevronRight } from "lucide-react"
+import {
+  ChevronRight, Building2, MapPin, Home, CheckCircle2,
+  ShieldCheck, Plus,
+} from "lucide-react"
+import { cn } from "@/lib/utils"
 import type { KnowledgeBaseData } from "@/lib/claude"
 
 export type AIAgentData = {
@@ -12,6 +18,10 @@ export type AIAgentData = {
   customInstructions: string
   qualifyingQuestions: { id: string; question: string }[]
   disqualifiers: string
+  // Structured qualifying criteria (compiled into disqualifiers on submit)
+  qualifyingPropertyType: "residential_only" | "commercial_only" | "both"
+  qualifyingHomeTypes: string[]
+  qualifyingCustomQuestion: string
   objectionResponses: Record<string, string>
   workingHoursStart: number
   workingHoursEnd: number
@@ -30,9 +40,58 @@ interface Props {
   onBack: () => void
 }
 
+const HOME_TYPES: { value: string; label: string }[] = [
+  { value: "single_family",  label: "Single family home" },
+  { value: "townhouse",      label: "Townhouse" },
+  { value: "condo",          label: "Condo / Apartment" },
+  { value: "mobile_home",    label: "Mobile / Manufactured" },
+  { value: "multi_family",   label: "Multi-family / Duplex" },
+  { value: "new_construction", label: "New construction" },
+]
+
+const PROPERTY_TYPE_OPTIONS: { value: AIAgentData["qualifyingPropertyType"]; label: string }[] = [
+  { value: "residential_only", label: "Residential only" },
+  { value: "commercial_only",  label: "Commercial only" },
+  { value: "both",             label: "Both" },
+]
+
 export function StepAIAgent({ data, onChange, onNext, onBack }: Props) {
   function set<K extends keyof AIAgentData>(field: K, value: AIAgentData[K]) {
     onChange({ ...data, [field]: value })
+  }
+
+  function toggleHomeType(value: string) {
+    const current = data.qualifyingHomeTypes
+    const next = current.includes(value)
+      ? current.filter(v => v !== value)
+      : [...current, value]
+    onChange({ ...data, qualifyingHomeTypes: next })
+  }
+
+  function handleNext() {
+    const parts: string[] = []
+
+    if (data.qualifyingPropertyType === "residential_only") {
+      parts.push("Only book residential properties. Do not book commercial, industrial, or multi-tenant commercial buildings — politely let those leads know you only serve residential.")
+    } else if (data.qualifyingPropertyType === "commercial_only") {
+      parts.push("Only book commercial properties. Do not book residential homeowners — politely redirect them.")
+    }
+
+    parts.push("Always ask for the lead's full address and confirm it falls within the service area before scheduling.")
+
+    const excludedTypes = HOME_TYPES
+      .filter(h => !data.qualifyingHomeTypes.includes(h.value))
+      .map(h => h.label)
+    if (excludedTypes.length > 0 && excludedTypes.length < HOME_TYPES.length) {
+      parts.push(`Do not book the following home types: ${excludedTypes.join(", ")}. Politely let those leads know.`)
+    }
+
+    if (data.qualifyingCustomQuestion.trim()) {
+      parts.push(`Additional qualifying question to ask naturally in conversation: "${data.qualifyingCustomQuestion.trim()}"`)
+    }
+
+    onChange({ ...data, disqualifiers: parts.join("\n") })
+    onNext()
   }
 
   return (
@@ -44,31 +103,103 @@ export function StepAIAgent({ data, onChange, onNext, onBack }: Props) {
 
       <div className="space-y-8">
 
-        {/* Disqualifiers */}
-        <div className="space-y-3">
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">Who should the AI never book?</h2>
-          <p className="text-xs text-muted-foreground">
-            The AI will figure this out naturally through conversation — it won&apos;t interrogate leads,
-            just pick up on the right signals and politely move on if they don&apos;t qualify.
+        {/* ── Lead Qualifying Criteria ─────────────────────────────────────── */}
+        <div className="space-y-4">
+          <div className="flex items-center gap-2">
+            <ShieldCheck className="w-4 h-4 text-primary" />
+            <h2 className="text-sm font-semibold uppercase tracking-wide">Lead Qualifying Criteria</h2>
+          </div>
+          <p className="text-xs text-muted-foreground -mt-2">
+            Your AI asks these questions naturally in conversation and only books leads who qualify.
           </p>
-          <Textarea
-            id="disqualifiers"
-            placeholder={
-              "Be specific — the AI uses its judgment to screen these out naturally:\n\n" +
-              "— Renters or tenants (homeowners only)\n" +
-              "— Leads outside Miami-Dade and Broward County\n" +
-              "— Commercial or industrial properties\n" +
-              "— Units under 2 years old (still under manufacturer warranty)\n" +
-              "— Anyone looking for a free repair on a unit we didn't install"
-            }
-            value={data.disqualifiers}
-            onChange={(e) => set("disqualifiers", e.target.value)}
-            rows={6}
-            className="resize-none text-sm"
-          />
-          <p className="text-[11px] text-muted-foreground">
-            Leave blank and the AI will try to book every interested lead.
-          </p>
+
+          {/* Criteria 1 — Property type */}
+          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Building2 className="w-4 h-4 text-muted-foreground shrink-0" />
+              <span className="text-sm font-medium">Is it residential or commercial?</span>
+            </div>
+            <div className="flex gap-2">
+              {PROPERTY_TYPE_OPTIONS.map(opt => (
+                <button
+                  key={opt.value}
+                  type="button"
+                  onClick={() => set("qualifyingPropertyType", opt.value)}
+                  className={cn(
+                    "flex-1 py-2 px-3 rounded-lg text-sm border font-medium transition-colors",
+                    data.qualifyingPropertyType === opt.value
+                      ? "bg-primary text-white border-primary shadow-sm"
+                      : "border-border text-muted-foreground hover:bg-muted/50"
+                  )}
+                >
+                  {opt.label}
+                </button>
+              ))}
+            </div>
+          </div>
+
+          {/* Criteria 2 — Service area (always on) */}
+          <div className="bg-card border border-border rounded-xl p-4 space-y-1.5">
+            <div className="flex items-center gap-2">
+              <MapPin className="w-4 h-4 text-muted-foreground shrink-0" />
+              <span className="text-sm font-medium">What&apos;s your address?</span>
+              <span className="ml-auto px-2 py-0.5 text-[10px] rounded-full bg-emerald-500/15 text-emerald-600 border border-emerald-500/20 font-semibold shrink-0">
+                Always on
+              </span>
+            </div>
+            <p className="text-xs text-muted-foreground pl-6">
+              AI always asks for the lead&apos;s address and verifies it&apos;s in your service area before booking.
+            </p>
+          </div>
+
+          {/* Criteria 3 — Home type */}
+          <div className="bg-card border border-border rounded-xl p-4 space-y-3">
+            <div className="flex items-center gap-2">
+              <Home className="w-4 h-4 text-muted-foreground shrink-0" />
+              <span className="text-sm font-medium">What kind of home is it?</span>
+            </div>
+            <p className="text-xs text-muted-foreground">
+              Select every home type you serve — unselected types will be screened out.
+            </p>
+            <div className="grid grid-cols-2 gap-2">
+              {HOME_TYPES.map(ht => {
+                const selected = data.qualifyingHomeTypes.includes(ht.value)
+                return (
+                  <button
+                    key={ht.value}
+                    type="button"
+                    onClick={() => toggleHomeType(ht.value)}
+                    className={cn(
+                      "flex items-center gap-2 px-3 py-2 rounded-lg border text-sm text-left transition-colors",
+                      selected
+                        ? "bg-primary/10 border-primary/30 text-foreground"
+                        : "border-border text-muted-foreground hover:bg-muted/50"
+                    )}
+                  >
+                    {selected
+                      ? <CheckCircle2 className="w-3.5 h-3.5 text-primary shrink-0" />
+                      : <div className="w-3.5 h-3.5 rounded-full border border-muted-foreground/30 shrink-0" />
+                    }
+                    {ht.label}
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+
+          {/* Custom qualifying question */}
+          <div className="space-y-1.5">
+            <Label htmlFor="customQ" className="flex items-center gap-1.5 text-sm text-muted-foreground">
+              <Plus className="w-3.5 h-3.5" />
+              Add another qualifying question <span className="font-normal">(optional)</span>
+            </Label>
+            <Input
+              id="customQ"
+              placeholder='e.g. "Do you own the home?" or "Is the unit under warranty?"'
+              value={data.qualifyingCustomQuestion}
+              onChange={e => set("qualifyingCustomQuestion", e.target.value)}
+            />
+          </div>
         </div>
 
         {/* Working hours */}
@@ -123,7 +254,7 @@ export function StepAIAgent({ data, onChange, onNext, onBack }: Props) {
 
         <div className="flex gap-3 pt-2">
           <Button variant="outline" onClick={onBack}>Back</Button>
-          <Button onClick={onNext} className="gap-2">
+          <Button onClick={handleNext} className="gap-2">
             Continue <ChevronRight className="w-4 h-4" />
           </Button>
         </div>

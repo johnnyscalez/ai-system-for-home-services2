@@ -2,8 +2,9 @@
 
 import { useState, useEffect, useRef } from "react"
 import { useRouter } from "next/navigation"
-import { Zap, Check } from "lucide-react"
+import { Zap, Check, LogOut } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { createClient } from "@/lib/supabase"
 import { StepLeadSources, type LeadSourceState } from "@/components/onboarding/StepLeadSources"
 import { StepBusiness, type BusinessData } from "@/components/onboarding/StepBusiness"
 import { StepIntelligence, type IntelligenceData } from "@/components/onboarding/StepIntelligence"
@@ -26,6 +27,12 @@ type Step = 1 | 2 | 3 | 4 | 5 | 6 | 7
 
 export default function OnboardingPage() {
   const router = useRouter()
+  const supabase = createClient()
+
+  async function handleSignOut() {
+    await supabase.auth.signOut()
+    router.push("/login")
+  }
 
   const [step, setStep] = useState<Step>(1)
   const [error, setError] = useState("")
@@ -76,6 +83,9 @@ export default function OnboardingPage() {
     customInstructions: "",
     qualifyingQuestions: [],
     disqualifiers: "",
+    qualifyingPropertyType: "residential_only",
+    qualifyingHomeTypes: ["single_family", "townhouse", "condo", "mobile_home", "multi_family", "new_construction"],
+    qualifyingCustomQuestion: "",
     objectionResponses: {},
     workingHoursStart: 8,
     workingHoursEnd: 20,
@@ -195,7 +205,16 @@ export default function OnboardingPage() {
           </div>
           <span className="font-semibold tracking-tight">FieldBuilt AI</span>
         </div>
-        <span className="text-sm text-muted-foreground hidden sm:block">Setup — takes under 10 minutes</span>
+        <div className="flex items-center gap-4">
+          <span className="text-sm text-muted-foreground hidden sm:block">Setup — takes under 10 minutes</span>
+          <button
+            onClick={handleSignOut}
+            className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+          >
+            <LogOut className="w-3.5 h-3.5" />
+            <span className="hidden sm:inline">Sign out</span>
+          </button>
+        </div>
       </header>
 
       {/* Progress */}
