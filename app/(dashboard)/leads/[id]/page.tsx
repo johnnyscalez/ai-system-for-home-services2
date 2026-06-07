@@ -11,6 +11,7 @@ import { formatDistanceToNow } from "@/lib/utils"
 import { CallLeadButton } from "@/components/leads/CallLeadButton"
 import { DeleteLeadButton } from "@/components/leads/DeleteLeadButton"
 import { getJobTypeLabel, getJobTypeColor } from "@/lib/job-types"
+import { LeadPropertyImage } from "@/components/leads/LeadPropertyImage"
 
 const STATUS_STYLES: Record<string, string> = {
   new: "bg-sky-500/15 text-sky-400 border-sky-500/20",
@@ -140,7 +141,7 @@ export default async function LeadDetailPage({
           <div className="w-full">
             <CallLeadButton
               leadId={id}
-              disabled={lead.ai_paused || ["closed_won", "closed_lost"].includes(lead.status)}
+              disabled={(lead.ai_voice_paused as boolean) || ["closed_won", "closed_lost"].includes(lead.status)}
             />
           </div>
 
@@ -166,6 +167,9 @@ export default async function LeadDetailPage({
               )}
             </div>
           </div>
+
+          {/* Property image — auto-fetched when address is known */}
+          <LeadPropertyImage address={(lead.address as string) ?? null} />
 
           {/* Job type — AI-classified, shown prominently when known */}
           {lead.job_type && (
@@ -276,6 +280,7 @@ export default async function LeadDetailPage({
           companyId={profile.company_id}
           initialMessages={conversations ?? []}
           aiPaused={lead.ai_paused}
+          aiVoicePaused={lead.ai_voice_paused as boolean}
           leadStatus={lead.status}
           fromNumber={phoneRecord?.phone_number ?? null}
           leadPhone={lead.phone}
