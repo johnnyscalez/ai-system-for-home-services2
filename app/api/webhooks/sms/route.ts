@@ -6,6 +6,27 @@ import { notifyAppointmentBooked, notifyNeedsAttention } from "@/lib/notificatio
 import { buildRepliedNotBookedSchedule } from "@/lib/sequences"
 import { notifyTechnicianConfirmed } from "@/lib/appointment-reminders"
 
+// ─── Address extraction ────────────────────────────────────────────────────────
+
+const STREET_SUFFIX =
+  "(?:street|st|avenue|ave|boulevard|blvd|road|rd|drive|dr|lane|ln|court|ct|place|pl|way|" +
+  "circle|cir|terrace|ter|parkway|pkwy|highway|hwy|trail|trl|loop|run|pike|bend|ridge|" +
+  "hollow|grove|woods|meadow|heights|hills|park)"
+
+const STREET_RE = new RegExp(
+  // house number + optional direction + 1-5 name words + street type
+  // + optional unit + optional city + optional state abbrev + optional zip
+  `\\b(\\d{1,6}\\s+(?:[nsewNSEW]\\.?\\s+)?(?:[a-z0-9]+\\s+){1,5}${STREET_SUFFIX}\\.?` +
+  `(?:\\s*(?:apt|apartment|suite|ste|unit|#)\\.?\\s*[\\w-]+)?` +
+  `(?:\\s*,?\\s*[a-z][a-z .]{1,30})?(?:\\s*,?\\s*[a-z]{2})?(?:\\s*,?\\s*\\d{5}(?:-\\d{4})?)?)`,
+  "i"
+)
+
+function extractStreetAddress(text: string): string | null {
+  const m = text.match(STREET_RE)
+  return m ? m[1].trim().replace(/[,\s]+$/, "") : null
+}
+
 // ─── Confirmation reply detection ─────────────────────────────────────────────
 
 function isConfirmation(msg: string): boolean {
@@ -221,6 +242,18 @@ export async function POST(req: NextRequest) {
           .update({ twilio_sid: msg.sid })
           .eq("id", result.outboundConversationId)
       }
+    }
+
+    // If the lead mentioned their address in this message, save it immediately
+    // (don't wait for appointment booking). The .is("address", null) guard means
+    // we never overwrite an address that's already stored.
+    const detectedAddress = extractStreetAddress(messageBody)
+    if (detectedAddress) {
+      await supabase
+        .from("leads")
+        .update({ address: detectedAddress })
+        .eq("id", lead.id)
+        .is("address", null)
     }
 
     // Cancel any pending no-reply sequences since they replied

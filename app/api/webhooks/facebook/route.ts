@@ -107,16 +107,27 @@ export async function POST(req: NextRequest) {
       // Extract job/project details from any non-identity form fields.
       // Facebook lead forms often include custom questions like "What type of service do you need?"
       // We capture everything that isn't phone/name/email/location as notes so the AI can use it.
+      const ADDRESS_KEYS = [
+        "street_address", "address", "home_address", "lead_address",
+        "property_address", "service_address", "full_address", "mailing_address",
+      ]
       const IDENTITY_KEYS = new Set([
         "phone_number", "phone", "mobile_phone", "mobile",
         "first_name", "last_name", "full_name", "email", "email_address",
         "city", "state", "zip", "zip_code", "country", "postal_code",
+        ...ADDRESS_KEYS,
       ])
       const JOB_TYPE_KEYS = [
         "job_type", "service_type", "service_requested", "service_needed",
         "type_of_service", "project_type", "service_interest",
         "what_type_of_service", "what_service_do_you_need",
       ]
+
+      // Pull address from any recognised address field name
+      let leadAddress: string | null = null
+      for (const k of ADDRESS_KEYS) {
+        if (fields[k]) { leadAddress = fields[k]; break }
+      }
 
       // Pull explicit job-type field first
       let jobType: string | null = null
@@ -162,6 +173,7 @@ export async function POST(req: NextRequest) {
             first_name: firstName,
             last_name: lastName,
             email: fields["email"] || null,
+            address: leadAddress,
             source: "facebook",
             source_form_id: form_id,
             status: "just_came_in",
