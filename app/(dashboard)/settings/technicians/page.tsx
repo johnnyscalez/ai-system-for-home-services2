@@ -12,11 +12,15 @@ export default async function TechniciansPage() {
     .from("users").select("company_id").eq("id", user.id).single()
   if (!profile?.company_id) redirect("/onboarding")
 
-  const { data: technicians } = await supabase
-    .from("technicians")
-    .select("*")
-    .eq("company_id", profile.company_id)
-    .order("name")
+  const [{ data: technicians }, { data: company }] = await Promise.all([
+    supabase.from("technicians").select("*").eq("company_id", profile.company_id).order("name"),
+    supabase.from("companies").select("service_area").eq("id", profile.company_id).single(),
+  ])
+
+  const companyServiceAreas = (company?.service_area ?? "")
+    .split(/[,\n;]+/)
+    .map((s: string) => s.trim())
+    .filter((s: string) => s.length > 0)
 
   return (
     <div className="relative min-h-screen">
@@ -33,7 +37,10 @@ export default async function TechniciansPage() {
       </div>
 
       <div className="relative z-10 p-6 max-w-3xl">
-        <TechniciansClient initial={(technicians ?? []) as Technician[]} />
+        <TechniciansClient
+          initial={(technicians ?? []) as Technician[]}
+          companyServiceAreas={companyServiceAreas}
+        />
       </div>
     </div>
   )
