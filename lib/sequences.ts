@@ -11,9 +11,10 @@
  *   Step 7 — Day 14, 9am — SMS       (long game / seasonal)
  *
  * REPLIED-NOT-BOOKED sequence (lead replied but didn't book):
- *   Step 1 — 4h  — SMS
- *   Step 2 — 48h — Voice call
- *   Step 3 — 5d  — SMS  (final)
+ *   Step 1 — 4h               — SMS
+ *   Step 2 — Next day @ 9am   — SMS  (morning-after casual touch)
+ *   Step 3 — 48h              — Voice call
+ *   Step 4 — 5d               — SMS  (final)
  *
  * All "dayOffset + localHour" steps are scheduled in the company's timezone
  * so they fire at the right wall-clock time regardless of UTC.
@@ -27,17 +28,17 @@ export type SequenceStep = {
   scheduledAt: Date
 }
 
-// Voice steps: no_reply steps 1 and 4 / replied_not_booked step 2
+// Voice steps: no_reply steps 1 and 4 / replied_not_booked step 3
 export function isVoiceStep(sequenceType: string, step: number): boolean {
   if (sequenceType === "no_reply" && (step === 1 || step === 4)) return true
-  if (sequenceType === "replied_not_booked" && step === 2) return true
+  if (sequenceType === "replied_not_booked" && step === 3) return true
   return false
 }
 
 // Last step for each sequence — used to detect sequence exhaustion
 export const LAST_STEP: Record<string, number> = {
   no_reply: 7,
-  replied_not_booked: 3,
+  replied_not_booked: 4,
 }
 
 // Per-step AI follow-up instructions (injected into the AI prompt)
@@ -48,7 +49,8 @@ export const FOLLOW_UP_ANGLE: Record<string, string> = {
   "no_reply:6":             "Day 7. Last active attempt. Close the loop politely, make it easy for them to reply.",
   "no_reply:7":             "Day 14. Long game — seasonal or situational angle. Zero pressure, just staying relevant.",
   "replied_not_booked:1":   "They replied but haven't booked yet. Casual 4-hour check-in — keep it short and human.",
-  "replied_not_booked:3":   "Final follow-up. They replied but never booked. Low-pressure, no guilt — just closing the loop.",
+  "replied_not_booked:2":   "Morning after they replied — fresh, brief, low-key. Just making sure they haven't moved on. No pressure at all.",
+  "replied_not_booked:4":   "Final follow-up. They replied but never booked. Low-pressure, no guilt — just closing the loop.",
 }
 
 /**
@@ -148,11 +150,14 @@ export function buildNoReplySchedule(leadCreatedAt: Date, timezone: string): Seq
 }
 
 /**
- * Builds all 3 replied-not-booked steps. Timer starts from lastReplyAt
+ * Builds all 4 replied-not-booked steps. Timer starts from lastReplyAt
  * and resets on every new reply so the 4h window is always from the
  * lead's most recent message.
+ *
+ * Step 2 fires at 9am the next local morning — always a civilised hour
+ * regardless of when the lead originally replied.
  */
-export function buildRepliedNotBookedSchedule(lastReplyAt: Date): SequenceStep[] {
+export function buildRepliedNotBookedSchedule(lastReplyAt: Date, timezone: string): SequenceStep[] {
   return [
     // Step 1: 4h — SMS
     {
@@ -160,15 +165,21 @@ export function buildRepliedNotBookedSchedule(lastReplyAt: Date): SequenceStep[]
       type: "sms",
       scheduledAt: new Date(lastReplyAt.getTime() + 4 * 60 * 60 * 1000),
     },
-    // Step 2: 48h — Voice call
+    // Step 2: Next day @ 9am local — SMS (morning-after casual touch)
     {
       step: 2,
+      type: "sms",
+      scheduledAt: localDayTime(lastReplyAt, 1, 9, timezone),
+    },
+    // Step 3: 48h — Voice call
+    {
+      step: 3,
       type: "voice",
       scheduledAt: new Date(lastReplyAt.getTime() + 48 * 60 * 60 * 1000),
     },
-    // Step 3: 5d — SMS (final)
+    // Step 4: 5d — SMS (final)
     {
-      step: 3,
+      step: 4,
       type: "sms",
       scheduledAt: new Date(lastReplyAt.getTime() + 5 * 24 * 60 * 60 * 1000),
     },

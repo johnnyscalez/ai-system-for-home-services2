@@ -240,7 +240,7 @@ export async function POST(req: NextRequest) {
       !skipSequenceStatuses.includes(lead.status)
 
     if (shouldScheduleRepliedNotBooked) {
-      // Cancel all existing pending replied_not_booked steps, then pre-create all 3 fresh
+      // Cancel all existing pending replied_not_booked steps, then pre-create all 4 fresh
       await supabase
         .from("sequences")
         .update({ status: "cancelled" })
@@ -248,7 +248,14 @@ export async function POST(req: NextRequest) {
         .eq("sequence_type", "replied_not_booked")
         .eq("status", "pending")
 
-      const steps = buildRepliedNotBookedSchedule(new Date())
+      const { data: agentCfg } = await supabase
+        .from("ai_agent_config")
+        .select("timezone")
+        .eq("company_id", companyId)
+        .single()
+      const tz = (agentCfg?.timezone as string | null) ?? "America/New_York"
+
+      const steps = buildRepliedNotBookedSchedule(new Date(), tz)
       await supabase.from("sequences").insert(
         steps.map((s) => ({
           lead_id: lead.id,
