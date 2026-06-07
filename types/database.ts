@@ -18,7 +18,7 @@ export type LeadStatus =
   | "cold"
   | "nurturing"
   | "needs_attention"
-export type UserRole = "owner" | "admin" | "member"
+export type UserRole = "owner" | "admin" | "member" | "technician"
 export type SequenceType = "no_reply" | "replied_not_booked"
 export type SequenceStatus = "pending" | "sent" | "cancelled"
 export type AppointmentStatus = "scheduled" | "completed" | "cancelled" | "no_show"
@@ -91,6 +91,7 @@ export interface Lead {
   last_inbound_at: string | null
   is_active_conversation: boolean
   ai_paused: boolean
+  ai_voice_paused: boolean
   job_type: string | null
   selected_slots: Record<string, { tech_id: string; tech_name: string }> | null
   deal_value: number | null
@@ -171,6 +172,9 @@ export interface Technician {
   company_id: string
   name: string
   phone: string | null
+  email: string | null
+  auth_user_id: string | null
+  system_email: string | null
   photo_url: string | null
   specializations: string[]
   zip_codes: string[]

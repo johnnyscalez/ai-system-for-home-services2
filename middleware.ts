@@ -2,7 +2,6 @@ import { createServerClient } from "@supabase/ssr"
 import { NextResponse, type NextRequest } from "next/server"
 
 export async function middleware(request: NextRequest) {
-  // Skip middleware entirely if Supabase env vars aren't set (e.g. healthcheck before env loads)
   if (!process.env.NEXT_PUBLIC_SUPABASE_URL || !process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY) {
     return NextResponse.next()
   }
@@ -31,7 +30,11 @@ export async function middleware(request: NextRequest) {
   const { data: { user } } = await supabase.auth.getUser()
 
   const path = request.nextUrl.pathname
-  const isAuthRoute = path === "/login" || path === "/signup"
+  const isTech = user?.app_metadata?.role === "technician"
+
+  const isAuthRoute   = path === "/login" || path === "/signup"
+  const isTechLogin   = path === "/tech/login"
+  const isTechRoute   = path.startsWith("/tech") && !isTechLogin
   const isPublicRoute =
     path === "/" ||
     path === "/api/health" ||
@@ -39,18 +42,66 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/api/voice") ||
     path.startsWith("/api/cron") ||
     path.startsWith("/api/test") ||
+    path.startsWith("/api/auth") ||
+    path.startsWith("/api/dev") ||
+    path.startsWith("/api/tech/resolve-identifier") ||
     path.endsWith(".html")
-  const isProtected = !isAuthRoute && !isPublicRoute
+  const isProtected = !isAuthRoute && !isTechLogin && !isPublicRoute
 
-  if (!user && isProtected) {
+  // Unauthenticated: redirect to the right login page
+  if (!user) {
+    if (isTechRoute) {
+      const url = request.nextUrl.clone()
+      url.pathname = "/tech/login"
+      return NextResponse.redirect(url)
+    }
+    if (isProtected) {
+      const url = request.nextUrl.clone()
+      url.pathname = "/login"
+      return NextResponse.redirect(url)
+    }
+    return supabaseResponse
+  }
+
+  // Authenticated technician — keep them inside /tech/* only
+  if (isTech) {
+    // Redirect away from admin login/signup to their portal
+    if (isAuthRoute || path === "/") {
+      const url = request.nextUrl.clone()
+      url.pathname = "/tech/appointments"
+      return NextResponse.redirect(url)
+    }
+    // Redirect from /tech/login → /tech/appointments (already logged in)
+    if (isTechLogin) {
+      const url = request.nextUrl.clone()
+      url.pathname = "/tech/appointments"
+      return NextResponse.redirect(url)
+    }
+    // Block techs from accessing admin dashboard routes
+    if (!isTechRoute && isProtected) {
+      const url = request.nextUrl.clone()
+      url.pathname = "/tech/appointments"
+      return NextResponse.redirect(url)
+    }
+    return supabaseResponse
+  }
+
+  // Authenticated admin/owner/member — keep them out of /tech/* routes
+  if (isTechRoute) {
     const url = request.nextUrl.clone()
-    url.pathname = "/login"
+    url.pathname = "/dashboard"
     return NextResponse.redirect(url)
   }
 
-  // Only redirect logged-in users away from /login — never from /signup,
-  // so they can always create a new account without being forced to log out first.
-  if (user && path === "/login") {
+  // Redirect logged-in admin away from /login
+  if (path === "/login") {
+    const url = request.nextUrl.clone()
+    url.pathname = "/dashboard"
+    return NextResponse.redirect(url)
+  }
+
+  // Redirect /tech/login → /dashboard for admins
+  if (isTechLogin) {
     const url = request.nextUrl.clone()
     url.pathname = "/dashboard"
     return NextResponse.redirect(url)

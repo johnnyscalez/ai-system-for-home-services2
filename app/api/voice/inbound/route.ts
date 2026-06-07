@@ -71,11 +71,11 @@ export async function POST(req: NextRequest) {
 
     const { data: lead } = await db
       .from("leads")
-      .select("first_name, service_type, ai_paused, notes, metadata, job_type")
+      .select("first_name, service_type, ai_voice_paused, notes, metadata, job_type")
       .eq("id", leadId)
       .single()
 
-    if (lead?.ai_paused) return twiml(errorTwiML(appUrl))
+    if (lead?.ai_voice_paused) return twiml(errorTwiML(appUrl))
     leadFirstName   = lead?.first_name   ?? null
     leadServiceType = lead?.service_type ?? null
   } else {
@@ -96,7 +96,7 @@ export async function POST(req: NextRequest) {
 
     let { data: lead } = await db
       .from("leads")
-      .select("id, status, ai_paused, first_name, service_type")
+      .select("id, status, ai_voice_paused, first_name, service_type")
       .eq("company_id", companyId)
       .eq("phone", normalizedFrom)
       .maybeSingle()
@@ -105,13 +105,13 @@ export async function POST(req: NextRequest) {
       const { data: newLead } = await db
         .from("leads")
         .insert({ company_id: companyId, phone: normalizedFrom, source: "voice_inbound", status: "new" })
-        .select("id, status, ai_paused, first_name, service_type")
+        .select("id, status, ai_voice_paused, first_name, service_type")
         .single()
       lead = newLead
     }
 
     if (!lead) return twiml(errorTwiML(appUrl))
-    if (lead.ai_paused) return twiml(errorTwiML(appUrl))
+    if (lead.ai_voice_paused) return twiml(errorTwiML(appUrl))
 
     leadId          = lead.id
     leadFirstName   = lead.first_name   ?? null

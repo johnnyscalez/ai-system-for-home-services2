@@ -15,11 +15,13 @@ export async function POST(req: NextRequest) {
   const smsWebhookUrl = `${appUrl}/api/webhooks/sms`
 
   try {
-    // Check if account already has a number (handles trial accounts + retry scenarios)
-    const existingNumbers = await client.incomingPhoneNumbers.list({ limit: 1 })
+    // Check if THIS USER already has a provisioned number (handles retry/refresh scenarios).
+    // Filter by friendlyName scoped to this user so we never return another company's number.
+    const userTag = `LeadReply — ${user.id.slice(0, 8)}`
+    const existingNumbers = await client.incomingPhoneNumbers.list({ friendlyName: userTag, limit: 1 })
     if (existingNumbers.length > 0) {
       const existing = existingNumbers[0]
-      // Re-configure webhooks in case they weren't set before
+      // Re-configure webhooks in case they weren't set in a previous partial attempt
       await client.incomingPhoneNumbers(existing.sid).update({
         smsUrl: smsWebhookUrl,
         smsMethod: "POST",
@@ -61,7 +63,7 @@ export async function POST(req: NextRequest) {
       voiceMethod: "POST",
       statusCallback: `${appUrl}/api/voice/status`,
       statusCallbackMethod: "POST",
-      friendlyName: `LeadReply — ${user.id.slice(0, 8)}`,
+      friendlyName: userTag,
     })
 
     return NextResponse.json({

@@ -7,20 +7,21 @@ import { createClient } from "@/lib/supabase"
 import {
   LayoutDashboard, Users, CalendarDays, Calendar,
   Settings, LogOut, MessageSquare, TrendingUp,
-  Plug, Mail, HardHat, Menu, X,
+  Plug, Mail, HardHat, Menu, X, HomeIcon,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 const nav = [
-  { href: "/dashboard",     icon: LayoutDashboard, label: "Dashboard" },
-  { href: "/leads",         icon: Users,           label: "Leads" },
-  { href: "/conversations", icon: MessageSquare,   label: "Conversations" },
-  { href: "/appointments",  icon: Calendar,        label: "Appointments" },
-  { href: "/calendar",      icon: CalendarDays,    label: "Calendar" },
-  { href: "/technicians",   icon: HardHat,         label: "Technicians" },
-  { href: "/email",         icon: Mail,            label: "Email & SMS" },
-  { href: "/integrations",  icon: Plug,            label: "Integrations" },
-  { href: "/reports",       icon: TrendingUp,      label: "Reports" },
+  { href: "/dashboard",      icon: LayoutDashboard, label: "Dashboard" },
+  { href: "/leads",          icon: Users,           label: "Leads" },
+  { href: "/conversations",  icon: MessageSquare,   label: "Conversations" },
+  { href: "/appointments",   icon: Calendar,        label: "Appointments" },
+  { href: "/calendar",       icon: CalendarDays,    label: "Calendar" },
+  { href: "/technicians",    icon: HardHat,         label: "Technicians" },
+  { href: "/property-image", icon: HomeIcon,        label: "Property Image" },
+  { href: "/email",          icon: Mail,            label: "Email & SMS" },
+  { href: "/integrations",   icon: Plug,            label: "Integrations" },
+  { href: "/reports",        icon: TrendingUp,      label: "Reports" },
 ]
 
 function FieldFMark({ size = 28 }: { size?: number }) {

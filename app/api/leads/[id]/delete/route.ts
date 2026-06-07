@@ -25,14 +25,13 @@ export async function DELETE(
 
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 })
 
-  // Delete cascade: conversations, appointments, sequences, then the lead
+  // Soft delete: mark the lead deleted and cancel pending sequences.
+  // Data is preserved in Supabase; RLS policy hides deleted leads from all auth-key reads.
   const service = createServiceRoleClient()
   await Promise.all([
-    service.from("conversations").delete().eq("lead_id", id),
-    service.from("appointments").delete().eq("lead_id", id),
-    service.from("sequences").delete().eq("lead_id", id),
+    service.from("leads").update({ deleted_at: new Date().toISOString() }).eq("id", id),
+    service.from("sequences").update({ status: "cancelled" }).eq("lead_id", id).eq("status", "pending"),
   ])
-  await service.from("leads").delete().eq("id", id)
 
   return NextResponse.json({ success: true })
 }

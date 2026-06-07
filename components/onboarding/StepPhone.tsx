@@ -159,7 +159,7 @@ export function StepPhone({ provisioning, provisionedNumber, loading, error, onB
               disabled={loading || !!error}
               className="gap-2"
             >
-              {loading ? "Setting everything up..." : "Go to dashboard →"}
+              {loading ? "Setting everything up..." : "Continue to team setup →"}
             </Button>
           </div>
         </>

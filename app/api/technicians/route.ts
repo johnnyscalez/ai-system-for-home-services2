@@ -37,8 +37,10 @@ export async function POST(req: NextRequest) {
   const { name, phone, email, password, specializations, zip_codes, schedule, status, notes } = body
 
   if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 })
-  if (!password?.trim()) return NextResponse.json({ error: "Password is required to send login credentials" }, { status: 400 })
-  if (password.length < 6) return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 })
+  const hasPassword = password?.trim() && password.trim().length >= 6
+  if (password?.trim() && password.trim().length < 6) {
+    return NextResponse.json({ error: "Password must be at least 6 characters" }, { status: 400 })
+  }
 
   const db = createServiceRoleClient()
   const admin = createAdminClient()
@@ -72,88 +74,81 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: techError?.message ?? "Failed to create technician" }, { status: 500 })
   }
 
-  // Determine auth email: real email if provided, else generated from tech ID
-  const realEmail = email?.trim() || null
+  const realEmail   = email?.trim() || null
   const systemEmail = realEmail ?? `tech-${tech.id}@fieldbuilt.tech`
 
-  // Create Supabase auth user so the tech can log in
-  const { data: authData, error: authError } = await admin.auth.admin.createUser({
-    email: systemEmail,
-    password: password.trim(),
-    email_confirm: true,
-    app_metadata: { role: "technician", company_id: profile.company_id },
-    user_metadata: { full_name: name.trim() },
-  })
+  // Only create auth account when a password was supplied (skip during quick onboarding)
+  if (hasPassword) {
+    const { data: authData, error: authError } = await admin.auth.admin.createUser({
+      email: systemEmail,
+      password: password!.trim(),
+      email_confirm: true,
+      app_metadata: { role: "technician", company_id: profile.company_id },
+      user_metadata: { full_name: name.trim() },
+    })
 
-  if (authError || !authData.user) {
-    // Roll back technician insert on auth failure
-    await db.from("technicians").delete().eq("id", tech.id)
-    return NextResponse.json({ error: authError?.message ?? "Failed to create login account" }, { status: 500 })
-  }
+    if (authError || !authData.user) {
+      await db.from("technicians").delete().eq("id", tech.id)
+      return NextResponse.json({ error: authError?.message ?? "Failed to create login account" }, { status: 500 })
+    }
 
-  const authUserId = authData.user.id
+    const authUserId = authData.user.id
 
-  // Link auth user to technician and save system_email
-  await db
-    .from("technicians")
-    .update({ auth_user_id: authUserId, system_email: systemEmail })
-    .eq("id", tech.id)
+    await db
+      .from("technicians")
+      .update({ auth_user_id: authUserId, system_email: systemEmail })
+      .eq("id", tech.id)
 
-  // Insert a public.users row for the tech (trigger may have already created it)
-  await db.from("users").upsert({
-    id: authUserId,
-    company_id: profile.company_id,
-    role: "technician",
-    full_name: name.trim(),
-    email: systemEmail,
-  }, { onConflict: "id" })
+    await db.from("users").upsert({
+      id: authUserId,
+      company_id: profile.company_id,
+      role: "technician",
+      full_name: name.trim(),
+      email: systemEmail,
+    }, { onConflict: "id" })
 
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
-  const loginUrl = `${appUrl}/tech/login`
-  const loginMethod = realEmail ? "Email" : "Phone"
-  const loginIdentifier = realEmail ? realEmail : (phone?.trim() || "your phone number")
+    const appUrl          = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+    const loginUrl        = `${appUrl}/tech/login`
+    const loginMethod     = realEmail ? "Email" : "Phone"
+    const loginIdentifier = realEmail ? realEmail : (phone?.trim() || "your phone number")
 
-  // Send SMS invite (only if phone provided)
-  if (phone?.trim()) {
-    const smsBody =
-      `Hi ${name.trim().split(" ")[0]}! 👷 You've been added to the ${companyName} field team on FieldBuilt AI.\n\n` +
-      `Login at: ${loginUrl}\n` +
-      `${loginMethod}: ${loginIdentifier}\n` +
-      `Password: ${password.trim()}`
+    if (phone?.trim()) {
+      const smsBody =
+        `Hi ${name.trim().split(" ")[0]}! 👷 You've been added to the ${companyName} field team on FieldBuilt AI.\n\n` +
+        `Login at: ${loginUrl}\n` +
+        `${loginMethod}: ${loginIdentifier}\n` +
+        `Password: ${password!.trim()}`
 
-    try {
-      // Try using the company's provisioned number first, fall back to default
-      const { data: phoneRecord } = await db
-        .from("phone_numbers")
-        .select("phone_number")
-        .eq("company_id", profile.company_id)
-        .eq("is_active", true)
-        .single()
+      try {
+        const { data: phoneRecord } = await db
+          .from("phone_numbers")
+          .select("phone_number")
+          .eq("company_id", profile.company_id)
+          .eq("is_active", true)
+          .single()
 
-      await sendSMS(phone.trim(), smsBody, phoneRecord?.phone_number ?? undefined)
-    } catch (err) {
-      console.error("[technicians] SMS invite failed:", err)
-      // Non-fatal — tech was created, just log the failure
+        await sendSMS(phone.trim(), smsBody, phoneRecord?.phone_number ?? undefined)
+      } catch (err) {
+        console.error("[technicians] SMS invite failed:", err)
+      }
+    }
+
+    if (realEmail) {
+      try {
+        const resend    = new Resend(process.env.RESEND_API_KEY)
+        const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
+        await resend.emails.send({
+          from: `${companyName} via FieldBuilt AI <${fromEmail}>`,
+          to: realEmail,
+          subject: `You've been invited to join ${companyName} on FieldBuilt AI`,
+          html: buildInviteEmail({ name: name.trim(), companyName, loginUrl, loginIdentifier, password: password!.trim() }),
+        })
+      } catch (err) {
+        console.error("[technicians] Email invite failed:", err)
+      }
     }
   }
 
-  // Send email invite (only if real email provided)
-  if (realEmail) {
-    try {
-      const resend = new Resend(process.env.RESEND_API_KEY)
-      const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
-      await resend.emails.send({
-        from: `${companyName} via FieldBuilt AI <${fromEmail}>`,
-        to: realEmail,
-        subject: `You've been invited to join ${companyName} on FieldBuilt AI`,
-        html: buildInviteEmail({ name: name.trim(), companyName, loginUrl, loginIdentifier, password: password.trim() }),
-      })
-    } catch (err) {
-      console.error("[technicians] Email invite failed:", err)
-    }
-  }
-
-  // Return the full technician record
   const { data: finalTech } = await db.from("technicians").select("*").eq("id", tech.id).single()
   return NextResponse.json(finalTech ?? tech, { status: 201 })
 }

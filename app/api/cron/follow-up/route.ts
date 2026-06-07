@@ -25,7 +25,7 @@ export async function GET(req: NextRequest) {
   // ── Process pending sequence steps ─────────────────────────────────────────
   const { data: dueSteps } = await supabase
     .from("sequences")
-    .select("*, leads(id, phone, status, ai_paused, first_name, last_name, service_type)")
+    .select("*, leads(id, phone, status, ai_paused, ai_voice_paused, first_name, last_name, service_type)")
     .eq("status", "pending")
     .lte("scheduled_at", now.toISOString())
     .order("scheduled_at", { ascending: true })  // oldest-first so no step is skipped
@@ -35,20 +35,32 @@ export async function GET(req: NextRequest) {
 
   for (const step of dueSteps ?? []) {
     const lead = step.leads as {
-      id: string; phone: string; status: string; ai_paused: boolean;
+      id: string; phone: string; status: string; ai_paused: boolean; ai_voice_paused: boolean;
       first_name: string | null; last_name: string | null; service_type: string | null;
     } | null
 
     if (!lead) continue
 
-    // Skip finished leads
+    const stepIsVoice = isVoiceStep(step.sequence_type, step.step)
+
+    // Cancel steps for terminal leads
     if (
-      lead.ai_paused ||
       lead.status === "appointment_booked" ||
       lead.status === "closed_won" ||
       lead.status === "closed_lost"
     ) {
       await supabase.from("sequences").update({ status: "cancelled" }).eq("id", step.id)
+      continue
+    }
+
+    // SMS AI paused — cancel SMS sequence steps (human has taken over)
+    if (!stepIsVoice && lead.ai_paused) {
+      await supabase.from("sequences").update({ status: "cancelled" }).eq("id", step.id)
+      continue
+    }
+
+    // Voice AI paused — skip (leave pending) so the step fires when voice AI is re-enabled
+    if (stepIsVoice && lead.ai_voice_paused) {
       continue
     }
 
@@ -216,7 +228,7 @@ export async function GET(req: NextRequest) {
   // ── Process scheduled voice callbacks (lead-requested callbacks) ────────────
   const { data: dueCalls } = await supabase
     .from("scheduled_calls")
-    .select("*, leads(id, phone, status, ai_paused, company_id)")
+    .select("*, leads(id, phone, status, ai_voice_paused, company_id)")
     .eq("status", "pending")
     .lte("scheduled_at", now.toISOString())
     .limit(20)
@@ -225,12 +237,12 @@ export async function GET(req: NextRequest) {
 
   for (const call of dueCalls ?? []) {
     const lead = call.leads as {
-      id: string; phone: string; status: string; ai_paused: boolean; company_id: string
+      id: string; phone: string; status: string; ai_voice_paused: boolean; company_id: string
     } | null
 
     if (!lead) continue
 
-    if (lead.ai_paused || ["closed_won", "closed_lost"].includes(lead.status)) {
+    if (lead.ai_voice_paused || ["closed_won", "closed_lost"].includes(lead.status)) {
       await supabase.from("scheduled_calls").update({ status: "cancelled" }).eq("id", call.id)
       continue
     }

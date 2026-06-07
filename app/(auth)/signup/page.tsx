@@ -63,14 +63,17 @@ export default function SignupPage() {
     setError("")
     setLoading(true)
 
-    const { error: signUpError } = await supabase.auth.signUp({
-      email: form.email,
-      password: form.password,
-      options: { data: { full_name: form.fullName } },
+    // Create user server-side with email pre-confirmed so signIn works immediately
+    const res = await fetch("/api/auth/signup", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ email: form.email, password: form.password, fullName: form.fullName }),
     })
 
-    if (signUpError) {
-      setError(signUpError.message)
+    const data = await res.json()
+
+    if (!res.ok) {
+      setError(data.error ?? "Failed to create account. Please try again.")
       setLoading(false)
       return
     }
@@ -81,7 +84,8 @@ export default function SignupPage() {
     })
 
     if (signInError) {
-      router.push("/login")
+      setError("Account created but couldn't sign in automatically. Please log in.")
+      setLoading(false)
       return
     }
 

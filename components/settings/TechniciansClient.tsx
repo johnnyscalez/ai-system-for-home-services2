@@ -5,7 +5,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import {
   Plus, User, Phone, MapPin, Wrench, Clock, Trash2,
   ChevronDown, ChevronUp, Check, X, Edit2, Power,
-  Calendar, AlertCircle, Loader2, Upload,
+  Calendar, AlertCircle, Loader2, Upload, Mail, Lock, Eye, EyeOff,
 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -43,6 +43,8 @@ const DEFAULT_SCHEDULE: TechnicianSchedule = {
 type FormState = {
   name: string
   phone: string
+  email: string
+  password: string
   specializations: string[]
   customSpecialization: string
   zipInput: string
@@ -55,6 +57,8 @@ type FormState = {
 const EMPTY_FORM: FormState = {
   name: "",
   phone: "",
+  email: "",
+  password: "",
   specializations: [],
   customSpecialization: "",
   zipInput: "",
@@ -66,7 +70,7 @@ const EMPTY_FORM: FormState = {
 
 // ─── Main component ───────────────────────────────────────────────────────────
 
-export function TechniciansClient({ initial }: { initial: Technician[] }) {
+export function TechniciansClient({ initial, companyServiceAreas = [] }: { initial: Technician[]; companyServiceAreas?: string[] }) {
   const [technicians, setTechnicians] = useState<Technician[]>(initial)
   const [showForm, setShowForm]       = useState(false)
   const [editId, setEditId]           = useState<string | null>(null)
@@ -76,6 +80,7 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
   const [toggling, setToggling]       = useState<string | null>(null)
   const [expandedId, setExpandedId]   = useState<string | null>(null)
   const [error, setError]             = useState<string | null>(null)
+  const [showPassword, setShowPassword] = useState(false)
 
   // ── Form helpers ────────────────────────────────────────────────────────────
 
@@ -91,6 +96,8 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
     setForm({
       name: t.name,
       phone: t.phone ?? "",
+      email: t.email ?? "",
+      password: "",
       specializations: t.specializations,
       customSpecialization: "",
       zipInput: "",
@@ -112,10 +119,19 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
 
   // ── Zip code helpers ─────────────────────────────────────────────────────────
 
-  function addZip() {
-    const zips = form.zipInput.split(/[\s,]+/).map(z => z.trim()).filter(z => /^\d{5}$/.test(z))
-    const unique = Array.from(new Set([...form.zip_codes, ...zips]))
+  function addArea(raw: string) {
+    const areas = raw.split(/[,\n]+/).map(z => z.trim()).filter(z => z.length > 0)
+    const unique = Array.from(new Set([...form.zip_codes, ...areas]))
     setForm(f => ({ ...f, zip_codes: unique, zipInput: "" }))
+  }
+
+  function toggleArea(area: string) {
+    setForm(f => ({
+      ...f,
+      zip_codes: f.zip_codes.includes(area)
+        ? f.zip_codes.filter(x => x !== area)
+        : [...f.zip_codes, area],
+    }))
   }
 
   function removeZip(z: string) {
@@ -161,7 +177,8 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
     if (!form.name.trim()) { setError("Name is required."); return }
     setSaving(true); setError(null)
 
-    const payload = {
+    // password + email only sent on create (not edit)
+    const payload: Record<string, unknown> = {
       name:            form.name.trim(),
       phone:           form.phone.trim() || null,
       specializations: form.specializations,
@@ -169,6 +186,10 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
       schedule:        form.schedule,
       status:          form.status,
       notes:           form.notes.trim() || null,
+    }
+    if (!editId) {
+      payload.email    = form.email.trim() || null
+      payload.password = form.password.trim()
     }
 
     try {
@@ -291,15 +312,66 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
                 </div>
                 <div className="space-y-1.5">
                   <Label className="text-sm font-medium text-[#1C1917]">Phone number</Label>
-                  <Input
-                    value={form.phone}
-                    onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
-                    placeholder="+1 555 000 0000"
-                    type="tel"
-                    className="border-[#E7E5E4] focus-visible:ring-[#F97316]"
-                  />
+                  <div className="relative">
+                    <Phone className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#A8A29E]" />
+                    <Input
+                      value={form.phone}
+                      onChange={e => setForm(f => ({ ...f, phone: e.target.value }))}
+                      placeholder="+1 555 000 0000"
+                      type="tel"
+                      className="border-[#E7E5E4] focus-visible:ring-[#F97316] pl-9"
+                    />
+                  </div>
                 </div>
               </div>
+
+              {/* Login credentials (new techs only) */}
+              {!editId && (
+                <div className="rounded-xl border border-[#F97316]/20 bg-[#FFF8F3] p-4 space-y-4">
+                  <div className="flex items-center gap-2">
+                    <Lock className="w-3.5 h-3.5 text-[#F97316]" />
+                    <p className="text-sm font-semibold text-[#F97316]">Login credentials</p>
+                    <p className="text-xs text-[#78716C]">— sent to the technician via SMS</p>
+                  </div>
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="space-y-1.5">
+                      <Label className="text-sm font-medium text-[#1C1917]">Tech&apos;s email <span className="text-[#A8A29E] font-normal">(optional)</span></Label>
+                      <div className="relative">
+                        <Mail className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#A8A29E]" />
+                        <Input
+                          value={form.email}
+                          onChange={e => setForm(f => ({ ...f, email: e.target.value }))}
+                          placeholder="jake@example.com"
+                          type="email"
+                          className="border-[#E7E5E4] focus-visible:ring-[#F97316] pl-9 bg-white"
+                        />
+                      </div>
+                      <p className="text-[11px] text-[#A8A29E]">If provided, tech can log in with email. Without email, they log in with their phone number.</p>
+                    </div>
+                    <div className="space-y-1.5">
+                      <Label className="text-sm font-medium text-[#1C1917]">Password *</Label>
+                      <div className="relative">
+                        <Lock className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-[#A8A29E]" />
+                        <Input
+                          value={form.password}
+                          onChange={e => setForm(f => ({ ...f, password: e.target.value }))}
+                          placeholder="Min. 6 characters"
+                          type={showPassword ? "text" : "password"}
+                          className="border-[#E7E5E4] focus-visible:ring-[#F97316] pl-9 pr-9 bg-white"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => setShowPassword(s => !s)}
+                          className="absolute right-3 top-1/2 -translate-y-1/2 text-[#A8A29E] hover:text-[#1C1917] transition-colors"
+                        >
+                          {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
+                        </button>
+                      </div>
+                      <p className="text-[11px] text-[#A8A29E]">Credentials are sent via SMS (and email if provided).</p>
+                    </div>
+                  </div>
+                </div>
+              )}
 
               {/* Status toggle */}
               <div className="flex items-center gap-3">
@@ -362,28 +434,63 @@ export function TechniciansClient({ initial }: { initial: Technician[] }) {
                 ))}
               </div>
 
-              {/* Zip codes */}
-              <div className="space-y-2">
-                <Label className="text-sm font-medium text-[#1C1917]">Service zip codes</Label>
-                <p className="text-xs text-[#78716C]">Enter 5-digit zip codes separated by spaces or commas.</p>
-                <div className="flex gap-2">
-                  <Input
-                    value={form.zipInput}
-                    onChange={e => setForm(f => ({ ...f, zipInput: e.target.value }))}
-                    onKeyDown={e => (e.key === "Enter" || e.key === ",") && (e.preventDefault(), addZip())}
-                    placeholder="90210, 90211, 90212"
-                    className="border-[#E7E5E4] focus-visible:ring-[#F97316] text-sm h-9"
-                  />
-                  <Button type="button" variant="outline" size="sm" onClick={addZip} className="h-9 shrink-0">
-                    Add
-                  </Button>
+              {/* Service areas */}
+              <div className="space-y-3">
+                <Label className="text-sm font-medium text-[#1C1917]">Service areas</Label>
+
+                {/* Company areas quick-select */}
+                {companyServiceAreas.length > 0 && (
+                  <div className="space-y-1.5">
+                    <p className="text-xs text-[#78716C]">From your service area — click to add:</p>
+                    <div className="flex flex-wrap gap-1.5">
+                      {companyServiceAreas.map(area => {
+                        const selected = form.zip_codes.includes(area)
+                        return (
+                          <button
+                            key={area}
+                            type="button"
+                            onClick={() => toggleArea(area)}
+                            className={cn(
+                              "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                              selected
+                                ? "bg-[#F97316] border-[#F97316] text-white"
+                                : "bg-white border-[#E7E5E4] text-[#78716C] hover:border-[#F97316] hover:text-[#F97316]"
+                            )}
+                          >
+                            {selected && <Check className="w-3 h-3 inline mr-1" />}
+                            {area}
+                          </button>
+                        )
+                      })}
+                    </div>
+                  </div>
+                )}
+
+                {/* Free text input */}
+                <div className="space-y-1.5">
+                  <p className="text-xs text-[#78716C]">Or type a city, zip code, or custom area:</p>
+                  <div className="flex gap-2">
+                    <Input
+                      value={form.zipInput}
+                      onChange={e => setForm(f => ({ ...f, zipInput: e.target.value }))}
+                      onKeyDown={e => (e.key === "Enter" || e.key === ",") && (e.preventDefault(), addArea(form.zipInput))}
+                      placeholder="e.g. North Chicago, 60614"
+                      className="border-[#E7E5E4] focus-visible:ring-[#F97316] text-sm h-9"
+                    />
+                    <Button type="button" variant="outline" size="sm" onClick={() => addArea(form.zipInput)} className="h-9 shrink-0">
+                      Add
+                    </Button>
+                  </div>
                 </div>
+
+                {/* Selected areas */}
                 {form.zip_codes.length > 0 && (
                   <div className="flex flex-wrap gap-1.5">
                     {form.zip_codes.map(z => (
-                      <span key={z} className="flex items-center gap-1 bg-[#F5F4F2] border border-[#E7E5E4] text-xs font-mono px-2 py-1 rounded-md text-[#1C1917]">
+                      <span key={z} className="flex items-center gap-1 bg-[#F97316]/8 border border-[#F97316]/20 text-xs px-2 py-1 rounded-md text-[#F97316]">
+                        <MapPin className="w-2.5 h-2.5 shrink-0" />
                         {z}
-                        <button onClick={() => removeZip(z)} className="text-[#78716C] hover:text-red-500 transition-colors">
+                        <button onClick={() => removeZip(z)} className="text-[#F97316]/60 hover:text-red-500 transition-colors ml-0.5">
                           <X className="w-2.5 h-2.5" />
                         </button>
                       </span>

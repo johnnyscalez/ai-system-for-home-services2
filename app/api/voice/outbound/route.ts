@@ -22,7 +22,7 @@ export async function POST(req: NextRequest) {
 
   // Load lead + company + Twilio number in parallel
   const [leadRes, profileRes] = await Promise.all([
-    db.from("leads").select("id, phone, company_id, ai_paused, status").eq("id", leadId).single(),
+    db.from("leads").select("id, phone, company_id, ai_voice_paused, status").eq("id", leadId).single(),
     db.from("users").select("company_id").eq("id", user.id).single(),
   ])
 
@@ -31,7 +31,7 @@ export async function POST(req: NextRequest) {
   if (lead.company_id !== profileRes.data?.company_id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
   }
-  if (lead.ai_paused) return NextResponse.json({ error: "AI paused for this lead" }, { status: 400 })
+  if (lead.ai_voice_paused) return NextResponse.json({ error: "Voice AI is paused for this lead" }, { status: 400 })
   if (["closed_won", "closed_lost"].includes(lead.status)) {
     return NextResponse.json({ error: "Lead is closed" }, { status: 400 })
   }

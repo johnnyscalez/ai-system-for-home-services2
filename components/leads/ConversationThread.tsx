@@ -6,7 +6,10 @@ import { Button } from "@/components/ui/button"
 import { Textarea } from "@/components/ui/textarea"
 import { Badge } from "@/components/ui/badge"
 import { cn } from "@/lib/utils"
-import { Send, Bot, User, Pause, Play, AlertCircle, XCircle } from "lucide-react"
+import {
+  Send, Bot, User, Pause, Play, AlertCircle, XCircle,
+  MessageSquare, Phone, CheckCircle2, Info,
+} from "lucide-react"
 import { createClient } from "@/lib/supabase"
 
 type Message = {
@@ -18,11 +21,14 @@ type Message = {
   twilio_sid?: string | null
 }
 
+type AgentType = "sms" | "voice"
+
 type Props = {
   leadId: string
   companyId: string
   initialMessages: Message[]
   aiPaused: boolean
+  aiVoicePaused: boolean
   leadStatus: string
   fromNumber: string | null
   leadPhone: string
@@ -34,30 +40,38 @@ export function ConversationThread({
   companyId,
   initialMessages,
   aiPaused: initialAiPaused,
+  aiVoicePaused: initialAiVoicePaused,
   leadStatus,
   fromNumber,
   leadPhone,
   companyTimezone = "America/New_York",
 }: Props) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
-  const [aiPaused, setAiPaused] = useState(initialAiPaused)
+  const [aiSmsPaused, setAiSmsPaused] = useState(initialAiPaused)
+  const [aiVoicePaused, setAiVoicePaused] = useState(initialAiVoicePaused)
   const [draft, setDraft] = useState("")
   const [sending, setSending] = useState(false)
-  const [togglingAi, setTogglingAi] = useState(false)
+  const [togglingAgent, setTogglingAgent] = useState<AgentType | null>(null)
+  const [resumedAgent, setResumedAgent] = useState<AgentType | null>(null)
   const [error, setError] = useState<string | null>(null)
   const bottomRef = useRef<HTMLDivElement>(null)
   const messagesRef = useRef(messages)
   const animatedIds = useRef(new Set(initialMessages.map((m) => m.id)))
+  const resumeBannerTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const supabase = createClient()
 
   useEffect(() => { messagesRef.current = messages }, [messages])
 
-  // Scroll to bottom when messages change
   useEffect(() => {
     bottomRef.current?.scrollIntoView({ behavior: "smooth" })
   }, [messages])
 
-  // Merge incoming rows into state — animates new ones, updates twilio_sid on existing
+  useEffect(() => {
+    return () => {
+      if (resumeBannerTimer.current) clearTimeout(resumeBannerTimer.current)
+    }
+  }, [])
+
   const mergeMessages = useCallback((rows: Message[]) => {
     setMessages((prev) => {
       const prevMap = new Map(prev.map((m) => [m.id, m]))
@@ -81,7 +95,7 @@ export function ConversationThread({
     })
   }, [])
 
-  // Polling — guaranteed delivery every 3 seconds regardless of realtime status
+  // Poll every 3 seconds for new messages
   useEffect(() => {
     const poll = async () => {
       const { data } = await supabase
@@ -91,14 +105,7 @@ export function ConversationThread({
         .order("created_at", { ascending: true })
 
       if (!data) return
-
-      // Track which IDs are new for animation
-      data.forEach((row) => {
-        if (!animatedIds.current.has(row.id)) {
-          animatedIds.current.add(row.id)
-        }
-      })
-
+      data.forEach((row) => { animatedIds.current.add(row.id) })
       mergeMessages(data as Message[])
     }
 
@@ -106,7 +113,7 @@ export function ConversationThread({
     return () => clearInterval(interval)
   }, [leadId, supabase, mergeMessages])
 
-  // Realtime subscription — bonus layer on top of polling
+  // Realtime subscription
   useEffect(() => {
     const channel = supabase
       .channel(`conversations-thread:${leadId}`)
@@ -170,17 +177,30 @@ export function ConversationThread({
     }
   }
 
-  const toggleAi = async () => {
-    setTogglingAi(true)
+  const toggleAgent = async (agent: AgentType) => {
+    const currentlyPaused = agent === "sms" ? aiSmsPaused : aiVoicePaused
+    const newPaused = !currentlyPaused
+
+    setTogglingAgent(agent)
     try {
       const res = await fetch(`/api/leads/${leadId}/ai-pause`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ paused: !aiPaused }),
+        body: JSON.stringify({ paused: newPaused, agent }),
       })
-      if (res.ok) setAiPaused(!aiPaused)
+      if (res.ok) {
+        if (agent === "sms") setAiSmsPaused(newPaused)
+        else setAiVoicePaused(newPaused)
+
+        // When re-enabling, show the full-context banner for 5 seconds
+        if (!newPaused) {
+          setResumedAgent(agent)
+          if (resumeBannerTimer.current) clearTimeout(resumeBannerTimer.current)
+          resumeBannerTimer.current = setTimeout(() => setResumedAgent(null), 5000)
+        }
+      }
     } finally {
-      setTogglingAi(false)
+      setTogglingAgent(null)
     }
   }
 
@@ -192,30 +212,67 @@ export function ConversationThread({
           <span className="text-sm font-medium">SMS Conversation</span>
           <span className="text-xs text-muted-foreground font-mono">{leadPhone}</span>
         </div>
-        <div className="flex items-center gap-2">
-          {aiPaused ? (
-            <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20 gap-1">
-              <Pause className="w-3 h-3" /> AI paused
-            </Badge>
-          ) : (
-            <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-400 border-emerald-500/20 gap-1">
-              <Bot className="w-3 h-3" /> AI active
-            </Badge>
-          )}
-          <Button
-            variant="outline"
-            size="sm"
-            onClick={toggleAi}
-            disabled={togglingAi}
-            className="text-xs h-7 gap-1.5"
-          >
-            {aiPaused ? (
-              <><Play className="w-3 h-3" /> Resume AI</>
-            ) : (
-              <><Pause className="w-3 h-3" /> Pause AI</>
-            )}
-          </Button>
+        {/* Legacy combined badge — shows combined state for quick glance */}
+        {(aiSmsPaused || aiVoicePaused) ? (
+          <Badge variant="outline" className="text-xs bg-amber-500/10 text-amber-400 border-amber-500/20 gap-1">
+            <Pause className="w-3 h-3" />
+            {aiSmsPaused && aiVoicePaused ? "Both agents paused" : aiSmsPaused ? "SMS agent paused" : "Voice agent paused"}
+          </Badge>
+        ) : (
+          <Badge variant="outline" className="text-xs bg-emerald-500/10 text-emerald-400 border-emerald-500/20 gap-1">
+            <Bot className="w-3 h-3" /> AI agents active
+          </Badge>
+        )}
+      </div>
+
+      {/* AI Agent Controls */}
+      <div className="px-5 py-3 border-b border-border/60 bg-muted/20 shrink-0">
+        <p className="text-[10px] font-semibold text-muted-foreground uppercase tracking-wider mb-2.5">
+          AI Agents
+        </p>
+        <div className="flex flex-wrap gap-2">
+          <AgentToggleCard
+            icon={<MessageSquare className="w-3.5 h-3.5" />}
+            label="SMS Agent"
+            paused={aiSmsPaused}
+            toggling={togglingAgent === "sms"}
+            onToggle={() => toggleAgent("sms")}
+          />
+          <AgentToggleCard
+            icon={<Phone className="w-3.5 h-3.5" />}
+            label="Voice Agent"
+            paused={aiVoicePaused}
+            toggling={togglingAgent === "voice"}
+            onToggle={() => toggleAgent("voice")}
+          />
         </div>
+
+        {/* Full-context resume banner */}
+        <AnimatePresence>
+          {resumedAgent && (
+            <motion.div
+              key="resume-banner"
+              initial={{ opacity: 0, height: 0, marginTop: 0 }}
+              animate={{ opacity: 1, height: "auto", marginTop: 10 }}
+              exit={{ opacity: 0, height: 0, marginTop: 0 }}
+              transition={{ duration: 0.25 }}
+              className="overflow-hidden"
+            >
+              <div className="flex items-start gap-2.5 bg-emerald-500/8 border border-emerald-500/20 rounded-lg px-3 py-2.5">
+                <CheckCircle2 className="w-4 h-4 text-emerald-400 shrink-0 mt-0.5" />
+                <div>
+                  <p className="text-xs font-medium text-emerald-400">
+                    {resumedAgent === "sms" ? "SMS" : "Voice"} Agent re-enabled
+                  </p>
+                  <p className="text-[11px] text-emerald-400/70 mt-0.5 leading-relaxed">
+                    The AI has full context on this lead — every message, qualification answer, objection,
+                    and appointment detail. It will pick up exactly where it left off.
+                  </p>
+                </div>
+              </div>
+            </motion.div>
+          )}
+        </AnimatePresence>
       </div>
 
       {/* Messages */}
@@ -235,7 +292,6 @@ export function ConversationThread({
               const isAi = msg.sent_by === "ai"
               const isReminder = msg.sent_by === "reminder"
               const ageSeconds = (Date.now() - new Date(msg.created_at).getTime()) / 1000
-              // Only flag delivery failure for AI messages — reminder/confirmation SMS may not have a SID logged yet
               const deliveryFailed = isOutbound && !isReminder && msg.twilio_sid === null && ageSeconds > 15
               const isInitial = initialMessages.some((m) => m.id === msg.id)
 
@@ -243,22 +299,10 @@ export function ConversationThread({
                 <motion.div
                   key={msg.id}
                   layout
-                  initial={isInitial ? false : {
-                    opacity: 0,
-                    y: 18,
-                    scale: 0.96,
-                  }}
+                  initial={isInitial ? false : { opacity: 0, y: 18, scale: 0.96 }}
                   animate={{ opacity: 1, y: 0, scale: 1 }}
-                  transition={{
-                    type: "spring",
-                    stiffness: 380,
-                    damping: 28,
-                    mass: 0.8,
-                  }}
-                  className={cn(
-                    "flex gap-2",
-                    isOutbound ? "justify-end" : "justify-start"
-                  )}
+                  transition={{ type: "spring", stiffness: 380, damping: 28, mass: 0.8 }}
+                  className={cn("flex gap-2", isOutbound ? "justify-end" : "justify-start")}
                 >
                   {!isOutbound && (
                     <div className="w-7 h-7 rounded-full bg-muted flex items-center justify-center shrink-0 mt-0.5">
@@ -336,14 +380,16 @@ export function ConversationThread({
             {error}
           </motion.div>
         )}
-        {aiPaused && (
-          <p className="text-xs text-amber-400/80">
-            AI is paused — your message will be sent as you.
-          </p>
-        )}
-        {!aiPaused && (
+        {aiSmsPaused ? (
+          <div className="flex items-center gap-1.5">
+            <Info className="w-3 h-3 text-amber-400 shrink-0" />
+            <p className="text-xs text-amber-400/90">
+              SMS Agent paused — your message will be sent as you. The AI will not auto-reply.
+            </p>
+          </div>
+        ) : (
           <p className="text-xs text-muted-foreground">
-            Send a manual message — AI will continue responding to their replies.
+            Send a manual message — the SMS Agent will continue responding to their replies.
           </p>
         )}
         <div className="flex gap-2">
@@ -368,6 +414,62 @@ export function ConversationThread({
           </Button>
         </div>
       </div>
+    </div>
+  )
+}
+
+function AgentToggleCard({
+  icon,
+  label,
+  paused,
+  toggling,
+  onToggle,
+}: {
+  icon: React.ReactNode
+  label: string
+  paused: boolean
+  toggling: boolean
+  onToggle: () => void
+}) {
+  return (
+    <div className={cn(
+      "flex items-center gap-2.5 rounded-lg border px-3 py-2 transition-colors",
+      paused
+        ? "bg-amber-500/5 border-amber-500/25"
+        : "bg-emerald-500/5 border-emerald-500/20"
+    )}>
+      <span className={paused ? "text-amber-400" : "text-emerald-400"}>
+        {icon}
+      </span>
+      <div className="flex flex-col min-w-0">
+        <span className="text-xs font-medium leading-none">{label}</span>
+        <span className={cn(
+          "text-[10px] mt-0.5 leading-none",
+          paused ? "text-amber-400/70" : "text-emerald-400/70"
+        )}>
+          {paused ? "Paused" : "Active"}
+        </span>
+      </div>
+      <Button
+        variant="ghost"
+        size="sm"
+        onClick={onToggle}
+        disabled={toggling}
+        className={cn(
+          "h-6 px-2 text-[10px] gap-1 rounded-md font-medium ml-1",
+          paused
+            ? "text-emerald-400 hover:bg-emerald-500/10 hover:text-emerald-300"
+            : "text-amber-400 hover:bg-amber-500/10 hover:text-amber-300"
+        )}
+      >
+        {toggling ? (
+          <div className="w-2.5 h-2.5 rounded-full border border-current border-t-transparent animate-spin" />
+        ) : paused ? (
+          <><Play className="w-2.5 h-2.5" /> Resume</>
+        ) : (
+          <><Pause className="w-2.5 h-2.5" /> Pause</>
+        )}
+      </Button>
     </div>
   )
 }

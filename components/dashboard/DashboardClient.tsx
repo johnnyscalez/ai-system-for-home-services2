@@ -278,9 +278,10 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
           className="grid grid-cols-1 sm:grid-cols-2 gap-4"
         >
           {/* REAL closed revenue — primary card */}
+          <Link href="/reports#deals" className="block">
           <motion.div
             whileHover={{ scale: 1.005 }}
-            className="relative overflow-hidden rounded-2xl p-6 text-white"
+            className="relative overflow-hidden rounded-2xl p-6 text-white cursor-pointer"
             style={{
               background: "linear-gradient(135deg, #14532d 0%, #166534 60%, #14532d 100%)",
               boxShadow: "0 8px 40px rgba(21,128,61,0.30), 0 2px 8px rgba(21,128,61,0.15)",
@@ -319,6 +320,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
               )}
             </div>
           </motion.div>
+          </Link>
 
           {/* Projected pipeline revenue — secondary card */}
           {stats.booked > 0 && stats.avgJobValue > 0 && (
