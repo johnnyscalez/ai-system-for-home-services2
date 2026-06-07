@@ -1,14 +1,16 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { createClient } from "@/lib/supabase"
 import { Badge } from "@/components/ui/badge"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import {
   ChevronLeft, ChevronRight, Calendar, MapPin, Phone,
   CheckCircle2, XCircle, AlertTriangle, Clock, X, User,
-  Wrench, RotateCcw, MessageSquare, AlertCircle,
+  Wrench, RotateCcw, MessageSquare, AlertCircle, Plus,
+  List, Search, Edit2, Send, Check,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 import type { AppointmentWindow } from "@/lib/availability"
@@ -32,6 +34,17 @@ type Appointment = {
   leads: Lead | null
   technicians: Technician
 }
+
+type LeadResult = {
+  id: string
+  first_name: string | null
+  last_name: string | null
+  phone: string
+  email: string | null
+  status: string
+}
+
+type TechOption = { id: string; name: string; phone: string | null }
 
 type Props = {
   companyId: string
@@ -86,7 +99,6 @@ const CONFIRMATION_STATUS_CONFIG: Record<ConfirmationStatus, StatusCfg> = {
   },
 }
 
-// For cancelled/no-show appointments (status-level, not confirmation-level)
 const STATUS_FALLBACK: Record<string, StatusCfg> = {
   cancelled: {
     label: "Cancelled",
@@ -126,6 +138,27 @@ function fmt12(t: string): string {
   return `${h12}:${m.toString().padStart(2, "0")} ${ampm}`
 }
 
+function toLocalDateInput(iso: string, tz: string): string {
+  return new Date(iso).toLocaleDateString("en-CA", { timeZone: tz })
+}
+
+function toLocalTimeInput(iso: string, tz: string): string {
+  return new Date(iso).toLocaleTimeString("en-US", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz })
+}
+
+function localDateTimeToISO(dateStr: string, timeStr: string, tz: string): string {
+  // Parse local date+time string in the given timezone to UTC ISO string
+  const [year, month, day] = dateStr.split("-").map(Number)
+  const [hour, minute] = timeStr.split(":").map(Number)
+  // Use Intl to find the UTC offset for this local moment
+  const refDate = new Date(`${dateStr}T${timeStr}:00`)
+  const localStr = refDate.toLocaleString("en-US", { timeZone: tz })
+  const utcStr   = refDate.toLocaleString("en-US", { timeZone: "UTC" })
+  const diff     = new Date(localStr).getTime() - new Date(utcStr).getTime()
+  const d        = new Date(Date.UTC(year, month - 1, day, hour, minute) - diff)
+  return d.toISOString()
+}
+
 function getSlotAppointment(
   appointments: Appointment[],
   date: Date,
@@ -151,11 +184,58 @@ function getSlotAppointment(
 
 export function AppointmentsCalendar({ companyId, timezone, availableDays, appointmentWindows }: Props) {
   const supabase = createClient()
-  const [weekStart, setWeekStart]       = useState(() => getMonday(new Date()))
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [selected, setSelected]         = useState<Appointment | null>(null)
-  const [updating, setUpdating]         = useState<string | null>(null)
-  const [filterStatus, setFilterStatus] = useState<string>("all")
+
+  // ── View state ──
+  const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar")
+  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()))
+
+  // ── Appointment data ──
+  const [appointments, setAppointments]   = useState<Appointment[]>([])
+  const [selected, setSelected]           = useState<Appointment | null>(null)
+  const [updating, setUpdating]           = useState<string | null>(null)
+
+  // ── List view ──
+  const [listSearch, setListSearch]       = useState("")
+  const [listStatus, setListStatus]       = useState("all")
+  const [listAppointments, setListApts]   = useState<Appointment[]>([])
+  const [listLoading, setListLoading]     = useState(false)
+  const listDebounce                      = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // ── Technicians ──
+  const [technicians, setTechnicians]     = useState<TechOption[]>([])
+
+  // ── New appointment modal ──
+  const [showNewModal, setShowNewModal]   = useState(false)
+  const [newStep, setNewStep]             = useState<1 | 2>(1)
+  const [leadSearchQ, setLeadSearchQ]     = useState("")
+  const [leadResults, setLeadResults]     = useState<LeadResult[]>([])
+  const [leadSearching, setLeadSearching] = useState(false)
+  const [selectedLead, setSelectedLead]   = useState<LeadResult | null>(null)
+  const [newForm, setNewForm]             = useState({
+    date: new Date().toLocaleDateString("en-CA"),
+    time: "09:00",
+    technician_id: "",
+    technician_name: "",
+    address: "",
+    notes: "",
+    send_confirmation: true,
+  })
+  const [creating, setCreating]           = useState(false)
+  const [createError, setCreateError]     = useState("")
+  const leadSearchDebounce                = useRef<ReturnType<typeof setTimeout> | null>(null)
+
+  // ── Edit mode (inside detail panel) ──
+  const [editMode, setEditMode]           = useState(false)
+  const [editForm, setEditForm]           = useState({
+    date: "",
+    time: "",
+    technician_id: "",
+    technician_name: "",
+    address: "",
+    notes: "",
+  })
+  const [saving, setSaving]               = useState(false)
+  const [saveError, setSaveError]         = useState("")
 
   const enabledWindows = appointmentWindows.filter((w) => w.enabled)
 
@@ -169,6 +249,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
   weekEnd.setDate(weekStart.getDate() + 6)
   weekEnd.setHours(23, 59, 59, 999)
 
+  // ── Load calendar appointments ──
   const loadAppointments = useCallback(async () => {
     const from = new Date(weekStart); from.setDate(from.getDate() - 7)
     const to   = new Date(weekEnd);   to.setDate(to.getDate() + 7)
@@ -184,6 +265,32 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
     setAppointments((data ?? []) as Appointment[])
   }, [companyId, weekStart]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  // ── Load list view appointments ──
+  const loadListAppointments = useCallback(async (q: string, status: string) => {
+    setListLoading(true)
+    try {
+      const params = new URLSearchParams({ limit: "200" })
+      if (q)           params.set("q", q)
+      if (status !== "all") params.set("status", status)
+      const res  = await fetch(`/api/appointments?${params}`)
+      const data = await res.json()
+      setListApts((data.appointments ?? []) as Appointment[])
+    } finally {
+      setListLoading(false)
+    }
+  }, [])
+
+  // ── Load technicians ──
+  useEffect(() => {
+    supabase
+      .from("technicians")
+      .select("id, name, phone")
+      .eq("company_id", companyId)
+      .eq("status", "active")
+      .order("name")
+      .then(({ data }) => setTechnicians((data ?? []) as TechOption[]))
+  }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
+
   useEffect(() => { loadAppointments() }, [loadAppointments])
 
   useEffect(() => {
@@ -192,11 +299,38 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
       .on(
         "postgres_changes",
         { event: "*", schema: "public", table: "appointments", filter: `company_id=eq.${companyId}` },
-        () => loadAppointments()
+        () => {
+          loadAppointments()
+          if (viewMode === "list") loadListAppointments(listSearch, listStatus)
+        }
       )
       .subscribe()
     return () => { supabase.removeChannel(channel) }
-  }, [companyId, loadAppointments]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [companyId, loadAppointments, viewMode, listSearch, listStatus, loadListAppointments]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  useEffect(() => {
+    if (viewMode !== "list") return
+    if (listDebounce.current) clearTimeout(listDebounce.current)
+    listDebounce.current = setTimeout(() => loadListAppointments(listSearch, listStatus), 300)
+  }, [viewMode, listSearch, listStatus, loadListAppointments])
+
+  // ── Lead search for new modal ──
+  useEffect(() => {
+    if (leadSearchDebounce.current) clearTimeout(leadSearchDebounce.current)
+    if (leadSearchQ.length < 2) { setLeadResults([]); return }
+    leadSearchDebounce.current = setTimeout(async () => {
+      setLeadSearching(true)
+      try {
+        const res  = await fetch(`/api/leads/search?q=${encodeURIComponent(leadSearchQ)}`)
+        const data = await res.json()
+        setLeadResults(data.leads ?? [])
+      } finally {
+        setLeadSearching(false)
+      }
+    }, 300)
+  }, [leadSearchQ])
+
+  // ── Status / confirmation update helpers ──
 
   async function updateConfirmationStatus(id: string, confirmationStatus: ConfirmationStatus) {
     setUpdating(id)
@@ -222,6 +356,121 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
     setUpdating(null)
   }
 
+  // ── Open edit mode ──
+  function openEdit(apt: Appointment) {
+    setEditForm({
+      date: toLocalDateInput(apt.scheduled_at, timezone),
+      time: toLocalTimeInput(apt.scheduled_at, timezone),
+      technician_id: apt.technician_id ?? "",
+      technician_name: apt.technician_name ?? "",
+      address: apt.address ?? "",
+      notes: apt.notes ?? "",
+    })
+    setSaveError("")
+    setEditMode(true)
+  }
+
+  async function saveEdit() {
+    if (!selected) return
+    setSaving(true)
+    setSaveError("")
+    try {
+      const scheduled_at = localDateTimeToISO(editForm.date, editForm.time, timezone)
+      const techId   = editForm.technician_id || null
+      const techName = techId
+        ? (technicians.find(t => t.id === techId)?.name ?? (editForm.technician_name || null))
+        : (editForm.technician_name || null)
+
+      const res = await fetch(`/api/appointments/${selected.id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          scheduled_at,
+          technician_id: techId,
+          technician_name: techName,
+          address: editForm.address || null,
+          notes: editForm.notes || null,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setSaveError(data.error ?? "Save failed"); return }
+
+      // Update selected + appointments list
+      if (data.appointment) {
+        const updated = {
+          ...selected,
+          ...data.appointment,
+          leads: data.appointment.leads ?? selected.leads,
+          technicians: data.appointment.technicians ?? selected.technicians,
+        } as Appointment
+        setSelected(updated)
+        setAppointments(prev => prev.map(a => a.id === updated.id ? updated : a))
+        if (viewMode === "list") loadListAppointments(listSearch, listStatus)
+      }
+      setEditMode(false)
+    } finally {
+      setSaving(false)
+    }
+  }
+
+  // ── Create new appointment ──
+  function openNewModal() {
+    setShowNewModal(true)
+    setNewStep(1)
+    setLeadSearchQ("")
+    setLeadResults([])
+    setSelectedLead(null)
+    setNewForm({
+      date: new Date().toLocaleDateString("en-CA"),
+      time: "09:00",
+      technician_id: "",
+      technician_name: "",
+      address: "",
+      notes: "",
+      send_confirmation: true,
+    })
+    setCreateError("")
+  }
+
+  async function createAppointment() {
+    if (!selectedLead) return
+    setCreating(true)
+    setCreateError("")
+    try {
+      const scheduled_at = localDateTimeToISO(newForm.date, newForm.time, timezone)
+      const techId   = newForm.technician_id || null
+      const techName = techId
+        ? (technicians.find(t => t.id === techId)?.name ?? null)
+        : (newForm.technician_name || null)
+
+      const res = await fetch("/api/appointments", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          lead_id: selectedLead.id,
+          scheduled_at,
+          technician_id: techId,
+          technician_name: techName,
+          address: newForm.address || null,
+          notes: newForm.notes || null,
+          send_confirmation: newForm.send_confirmation,
+        }),
+      })
+      const data = await res.json()
+      if (!res.ok) { setCreateError(data.error ?? "Failed to create appointment"); return }
+
+      setShowNewModal(false)
+      await loadAppointments()
+      if (viewMode === "list") loadListAppointments(listSearch, listStatus)
+      // Jump calendar to the appointment's week
+      const aptDate = new Date(data.appointment.scheduled_at)
+      setWeekStart(getMonday(aptDate))
+    } finally {
+      setCreating(false)
+    }
+  }
+
+  // ─── Derived values ──────────────────────────────────────────────────────────
   const weekLabel = `${weekStart.toLocaleDateString("en-US", { month: "long", day: "numeric" })} – ${weekEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`
   const isToday   = (d: Date) => d.toLocaleDateString("en-CA") === new Date().toLocaleDateString("en-CA")
   const isPast    = (d: Date, win: AppointmentWindow) => {
@@ -239,40 +488,78 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
   )
 
   const statusCounts = {
-    pending:    thisWeekApts.filter(a => a.confirmation_status === "pending_confirmation").length,
-    confirmed:  thisWeekApts.filter(a => a.confirmation_status === "confirmed").length,
+    pending:     thisWeekApts.filter(a => a.confirmation_status === "pending_confirmation").length,
+    confirmed:   thisWeekApts.filter(a => a.confirmation_status === "confirmed").length,
     no_response: thisWeekApts.filter(a => a.confirmation_status === "no_response").length,
-    reschedule: thisWeekApts.filter(a => a.confirmation_status === "reschedule_requested").length,
+    reschedule:  thisWeekApts.filter(a => a.confirmation_status === "reschedule_requested").length,
   }
 
+  // ─── Render ───────────────────────────────────────────────────────────────────
   return (
     <div className="flex flex-col gap-6">
-      {/* Header: nav + status summary */}
+
+      {/* ── Header ── */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-3">
-          <Button
-            variant="outline" size="icon" className="h-8 w-8 border-[#E7E5E4]"
-            onClick={() => setWeekStart(w => { const d = new Date(w); d.setDate(d.getDate() - 7); return d })}
-          >
-            <ChevronLeft className="w-4 h-4" />
-          </Button>
-          <span className="text-sm font-medium text-[#1C1917]">{weekLabel}</span>
-          <Button
-            variant="outline" size="icon" className="h-8 w-8 border-[#E7E5E4]"
-            onClick={() => setWeekStart(w => { const d = new Date(w); d.setDate(d.getDate() + 7); return d })}
-          >
-            <ChevronRight className="w-4 h-4" />
-          </Button>
-          <Button
-            variant="ghost" size="sm" className="text-xs h-8 text-[#78716C]"
-            onClick={() => setWeekStart(getMonday(new Date()))}
-          >
-            Today
-          </Button>
+          {viewMode === "calendar" && (
+            <>
+              <Button
+                variant="outline" size="icon" className="h-8 w-8 border-[#E7E5E4]"
+                onClick={() => setWeekStart(w => { const d = new Date(w); d.setDate(d.getDate() - 7); return d })}
+              >
+                <ChevronLeft className="w-4 h-4" />
+              </Button>
+              <span className="text-sm font-medium text-[#1C1917]">{weekLabel}</span>
+              <Button
+                variant="outline" size="icon" className="h-8 w-8 border-[#E7E5E4]"
+                onClick={() => setWeekStart(w => { const d = new Date(w); d.setDate(d.getDate() + 7); return d })}
+              >
+                <ChevronRight className="w-4 h-4" />
+              </Button>
+              <Button
+                variant="ghost" size="sm" className="text-xs h-8 text-[#78716C]"
+                onClick={() => setWeekStart(getMonday(new Date()))}
+              >
+                Today
+              </Button>
+            </>
+          )}
+          {viewMode === "list" && (
+            <span className="text-sm font-medium text-[#1C1917]">All Appointments</span>
+          )}
         </div>
 
-        {/* Status summary pills */}
-        <div className="flex flex-wrap items-center gap-2 text-xs">
+        <div className="flex items-center gap-2">
+          {/* View toggle */}
+          <div className="flex items-center bg-[#F5F4F2] rounded-lg p-0.5 border border-[#E7E5E4]">
+            <button
+              onClick={() => setViewMode("calendar")}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all", viewMode === "calendar" ? "bg-white shadow-sm text-[#1C1917]" : "text-[#78716C] hover:text-[#1C1917]")}
+            >
+              <Calendar className="w-3.5 h-3.5" /> Calendar
+            </button>
+            <button
+              onClick={() => setViewMode("list")}
+              className={cn("flex items-center gap-1.5 px-3 py-1.5 rounded-md text-xs font-medium transition-all", viewMode === "list" ? "bg-white shadow-sm text-[#1C1917]" : "text-[#78716C] hover:text-[#1C1917]")}
+            >
+              <List className="w-3.5 h-3.5" /> List
+            </button>
+          </div>
+
+          {/* New appointment */}
+          <Button
+            size="sm"
+            className="h-8 gap-1.5 bg-[#F97316] hover:bg-[#ea6c0e] text-white text-xs"
+            onClick={openNewModal}
+          >
+            <Plus className="w-3.5 h-3.5" /> New Appointment
+          </Button>
+        </div>
+      </div>
+
+      {/* ── Status summary pills (calendar only) ── */}
+      {viewMode === "calendar" && (statusCounts.pending > 0 || statusCounts.confirmed > 0 || statusCounts.no_response > 0 || statusCounts.reschedule > 0) && (
+        <div className="flex flex-wrap items-center gap-2 text-xs -mt-3">
           {statusCounts.pending > 0 && (
             <span className="flex items-center gap-1 bg-amber-50 border border-amber-200 text-amber-700 px-2 py-1 rounded-full">
               <span className="w-1.5 h-1.5 rounded-full bg-amber-400 shrink-0" />
@@ -298,154 +585,261 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
             </span>
           )}
         </div>
-      </div>
+      )}
 
-      {/* Calendar grid */}
-      <div className="bg-white border border-[#E7E5E4] rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-        {/* Day headers */}
-        <div
-          className="grid border-b border-[#E7E5E4]"
-          style={{ gridTemplateColumns: `120px repeat(${weekDays.length}, 1fr)` }}
-        >
-          <div className="px-4 py-3 text-xs text-[#78716C] font-medium bg-[#FAFAF8]" />
-          {weekDays.map((d) => (
+      {/* ── Calendar view ── */}
+      {viewMode === "calendar" && (
+        <>
+          <div className="bg-white border border-[#E7E5E4] rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            {/* Day headers */}
             <div
-              key={d.toISOString()}
-              className={cn(
-                "px-3 py-3 text-center border-l border-[#E7E5E4]",
-                isToday(d) ? "bg-[#F97316]/5" : "bg-[#FAFAF8]"
-              )}
-            >
-              <p className={cn("text-xs font-medium", isToday(d) ? "text-[#F97316]" : "text-[#78716C]")}>
-                {DAY_SHORT[d.getDay()]}
-              </p>
-              <p className={cn("text-lg font-bold leading-tight", isToday(d) ? "text-[#F97316]" : "text-[#1C1917]")}>
-                {d.getDate()}
-              </p>
-            </div>
-          ))}
-        </div>
-
-        {/* Time window rows */}
-        {enabledWindows.length === 0 ? (
-          <div className="py-16 text-center text-sm text-[#78716C]">
-            No time windows enabled. Configure them in AI Agent settings.
-          </div>
-        ) : (
-          enabledWindows.map((win, wi) => (
-            <div
-              key={win.id}
-              className={cn("grid", wi < enabledWindows.length - 1 && "border-b border-[#E7E5E4]")}
+              className="grid border-b border-[#E7E5E4]"
               style={{ gridTemplateColumns: `120px repeat(${weekDays.length}, 1fr)` }}
             >
-              {/* Time label */}
-              <div className="px-4 py-4 flex flex-col justify-center bg-[#FAFAF8] border-r border-[#E7E5E4]">
-                <p className="text-xs font-semibold text-[#1C1917]">{win.label}</p>
-                <p className="text-xs text-[#78716C]">{fmt12(win.start)}–{fmt12(win.end)}</p>
+              <div className="px-4 py-3 text-xs text-[#78716C] font-medium bg-[#FAFAF8]" />
+              {weekDays.map((d) => (
+                <div
+                  key={d.toISOString()}
+                  className={cn(
+                    "px-3 py-3 text-center border-l border-[#E7E5E4]",
+                    isToday(d) ? "bg-[#F97316]/5" : "bg-[#FAFAF8]"
+                  )}
+                >
+                  <p className={cn("text-xs font-medium", isToday(d) ? "text-[#F97316]" : "text-[#78716C]")}>
+                    {DAY_SHORT[d.getDay()]}
+                  </p>
+                  <p className={cn("text-lg font-bold leading-tight", isToday(d) ? "text-[#F97316]" : "text-[#1C1917]")}>
+                    {d.getDate()}
+                  </p>
+                </div>
+              ))}
+            </div>
+
+            {/* Time window rows */}
+            {enabledWindows.length === 0 ? (
+              <div className="py-16 text-center text-sm text-[#78716C]">
+                No time windows enabled. Configure them in AI Agent settings.
               </div>
+            ) : (
+              enabledWindows.map((win, wi) => (
+                <div
+                  key={win.id}
+                  className={cn("grid", wi < enabledWindows.length - 1 && "border-b border-[#E7E5E4]")}
+                  style={{ gridTemplateColumns: `120px repeat(${weekDays.length}, 1fr)` }}
+                >
+                  {/* Time label */}
+                  <div className="px-4 py-4 flex flex-col justify-center bg-[#FAFAF8] border-r border-[#E7E5E4]">
+                    <p className="text-xs font-semibold text-[#1C1917]">{win.label}</p>
+                    <p className="text-xs text-[#78716C]">{fmt12(win.start)}–{fmt12(win.end)}</p>
+                  </div>
 
-              {/* Day cells */}
-              {weekDays.map((d) => {
-                const apt  = getSlotAppointment(appointments, d, win, timezone)
-                const past = isPast(d, win)
-                const cfg  = apt ? getStatusCfg(apt) : null
+                  {/* Day cells */}
+                  {weekDays.map((d) => {
+                    const apt  = getSlotAppointment(appointments, d, win, timezone)
+                    const past = isPast(d, win)
+                    const cfg  = apt ? getStatusCfg(apt) : null
 
-                return (
-                  <div
-                    key={d.toISOString()}
-                    className={cn(
-                      "border-l border-[#E7E5E4] px-2 py-2 min-h-[80px] flex items-center justify-center transition-colors",
-                      apt ? "cursor-pointer hover:bg-[#FAFAF8]" : past ? "bg-[#FAFAF8]/50" : "hover:bg-[#FAFAF8]/60",
-                      isToday(d) && !apt && "bg-[#F97316]/2"
-                    )}
-                    onClick={() => apt && setSelected(apt)}
-                  >
-                    {apt ? (
-                      <div className={cn("w-full rounded-xl px-2.5 py-2 border", cfg!.color)}>
-                        <div className="flex items-center gap-1.5 mb-0.5">
-                          <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", cfg!.dotColor)} />
-                          <p className="text-xs font-semibold truncate">
-                            {apt.leads?.first_name} {apt.leads?.last_name}
-                          </p>
-                        </div>
-                        <p className="text-xs opacity-70">
-                          {new Date(apt.scheduled_at).toLocaleTimeString("en-US", {
-                            hour: "numeric", minute: "2-digit", timeZone: timezone,
-                          })}
-                        </p>
-                        {(apt.technician_name || (apt.technicians as { name: string } | null)?.name) && (
-                          <p className="text-xs opacity-60 flex items-center gap-0.5 mt-0.5">
-                            <Wrench className="w-2.5 h-2.5 shrink-0" />
-                            {apt.technician_name ?? (apt.technicians as { name: string })?.name}
-                          </p>
+                    return (
+                      <div
+                        key={d.toISOString()}
+                        className={cn(
+                          "border-l border-[#E7E5E4] px-2 py-2 min-h-[80px] flex items-center justify-center transition-colors",
+                          apt ? "cursor-pointer hover:bg-[#FAFAF8]" : past ? "bg-[#FAFAF8]/50" : "hover:bg-[#FAFAF8]/60",
+                          isToday(d) && !apt && "bg-[#F97316]/2"
                         )}
-                        {apt.address && (
-                          <p className="text-xs opacity-50 truncate flex items-center gap-0.5 mt-0.5">
-                            <MapPin className="w-2.5 h-2.5 shrink-0" />{apt.address}
-                          </p>
+                        onClick={() => apt && setSelected(apt)}
+                      >
+                        {apt ? (
+                          <div className={cn("w-full rounded-xl px-2.5 py-2 border", cfg!.color)}>
+                            <div className="flex items-center gap-1.5 mb-0.5">
+                              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", cfg!.dotColor)} />
+                              <p className="text-xs font-semibold truncate">
+                                {apt.leads?.first_name} {apt.leads?.last_name}
+                              </p>
+                            </div>
+                            <p className="text-xs opacity-70">
+                              {new Date(apt.scheduled_at).toLocaleTimeString("en-US", {
+                                hour: "numeric", minute: "2-digit", timeZone: timezone,
+                              })}
+                            </p>
+                            {(apt.technician_name || (apt.technicians as { name: string } | null)?.name) && (
+                              <p className="text-xs opacity-60 flex items-center gap-0.5 mt-0.5">
+                                <Wrench className="w-2.5 h-2.5 shrink-0" />
+                                {apt.technician_name ?? (apt.technicians as { name: string })?.name}
+                              </p>
+                            )}
+                            {apt.address && (
+                              <p className="text-xs opacity-50 truncate flex items-center gap-0.5 mt-0.5">
+                                <MapPin className="w-2.5 h-2.5 shrink-0" />{apt.address}
+                              </p>
+                            )}
+                          </div>
+                        ) : (
+                          <span className={cn("text-xs", past ? "text-[#78716C]/30" : "text-[#78716C]/40")}>
+                            {past ? "—" : "Free"}
+                          </span>
                         )}
                       </div>
-                    ) : (
-                      <span className={cn("text-xs", past ? "text-[#78716C]/30" : "text-[#78716C]/40")}>
-                        {past ? "—" : "Free"}
-                      </span>
-                    )}
-                  </div>
-                )
-              })}
-            </div>
-          ))
-        )}
-      </div>
-
-      {/* Upcoming list */}
-      {(() => {
-        const outside = appointments.filter(a => {
-          const d = new Date(a.scheduled_at)
-          return d < weekStart || d > weekEnd
-        })
-        if (outside.length === 0) return null
-        return (
-          <div>
-            <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mb-2">Other appointments</p>
-            <div className="bg-white border border-[#E7E5E4] rounded-2xl divide-y divide-[#E7E5E4] overflow-hidden">
-              {outside.map(apt => {
-                const cfg = getStatusCfg(apt)
-                return (
-                  <div
-                    key={apt.id}
-                    className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-[#FAFAF8] transition-colors"
-                    onClick={() => setSelected(apt)}
-                  >
-                    <div className="flex items-center gap-3">
-                      <Calendar className="w-4 h-4 text-[#78716C] shrink-0" />
-                      <div>
-                        <p className="text-sm font-medium text-[#1C1917]">{apt.leads?.first_name} {apt.leads?.last_name}</p>
-                        <p className="text-xs text-[#78716C]">
-                          {new Date(apt.scheduled_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: timezone })} ·{" "}
-                          {new Date(apt.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone })}
-                          {apt.technician_name && ` · ${apt.technician_name}`}
-                        </p>
-                      </div>
-                    </div>
-                    <Badge variant="outline" className={cn("text-xs shrink-0", cfg.color)}>{cfg.label}</Badge>
-                  </div>
-                )
-              })}
-            </div>
+                    )
+                  })}
+                </div>
+              ))
+            )}
           </div>
-        )
-      })()}
 
-      {/* Empty state */}
-      {weekDays.length === 0 && (
-        <div className="bg-white border border-[#E7E5E4] rounded-2xl px-5 py-16 text-center">
-          <Calendar className="w-10 h-10 text-[#78716C]/30 mx-auto mb-3" />
-          <p className="text-sm text-[#78716C]">No available days configured for this week.</p>
+          {/* Upcoming list (outside current week) */}
+          {(() => {
+            const outside = appointments.filter(a => {
+              const d = new Date(a.scheduled_at)
+              return d < weekStart || d > weekEnd
+            })
+            if (outside.length === 0) return null
+            return (
+              <div>
+                <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mb-2">Other appointments</p>
+                <div className="bg-white border border-[#E7E5E4] rounded-2xl divide-y divide-[#E7E5E4] overflow-hidden">
+                  {outside.map(apt => {
+                    const cfg = getStatusCfg(apt)
+                    return (
+                      <div
+                        key={apt.id}
+                        className="flex items-center justify-between px-5 py-3 cursor-pointer hover:bg-[#FAFAF8] transition-colors"
+                        onClick={() => setSelected(apt)}
+                      >
+                        <div className="flex items-center gap-3">
+                          <Calendar className="w-4 h-4 text-[#78716C] shrink-0" />
+                          <div>
+                            <p className="text-sm font-medium text-[#1C1917]">{apt.leads?.first_name} {apt.leads?.last_name}</p>
+                            <p className="text-xs text-[#78716C]">
+                              {new Date(apt.scheduled_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: timezone })} ·{" "}
+                              {new Date(apt.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone })}
+                              {apt.technician_name && ` · ${apt.technician_name}`}
+                            </p>
+                          </div>
+                        </div>
+                        <Badge variant="outline" className={cn("text-xs shrink-0", cfg.color)}>{cfg.label}</Badge>
+                      </div>
+                    )
+                  })}
+                </div>
+              </div>
+            )
+          })()}
+
+          {/* Empty state */}
+          {weekDays.length === 0 && (
+            <div className="bg-white border border-[#E7E5E4] rounded-2xl px-5 py-16 text-center">
+              <Calendar className="w-10 h-10 text-[#78716C]/30 mx-auto mb-3" />
+              <p className="text-sm text-[#78716C]">No available days configured for this week.</p>
+            </div>
+          )}
+        </>
+      )}
+
+      {/* ── List view ── */}
+      {viewMode === "list" && (
+        <div className="flex flex-col gap-4">
+          {/* Search + filters */}
+          <div className="flex flex-col sm:flex-row gap-3">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#78716C]" />
+              <Input
+                placeholder="Search by name, phone, email, job type, address…"
+                value={listSearch}
+                onChange={e => setListSearch(e.target.value)}
+                className="pl-9 bg-white border-[#E7E5E4] h-9 text-sm"
+              />
+            </div>
+            <select
+              value={listStatus}
+              onChange={e => setListStatus(e.target.value)}
+              className="h-9 px-3 text-sm border border-[#E7E5E4] rounded-md bg-white text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30"
+            >
+              <option value="all">All statuses</option>
+              <option value="scheduled">Scheduled</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+              <option value="no_show">No-show</option>
+            </select>
+          </div>
+
+          {/* Table */}
+          <div className="bg-white border border-[#E7E5E4] rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            {listLoading ? (
+              <div className="py-12 text-center text-sm text-[#78716C]">Loading…</div>
+            ) : listAppointments.length === 0 ? (
+              <div className="py-16 text-center">
+                <Calendar className="w-10 h-10 text-[#78716C]/30 mx-auto mb-3" />
+                <p className="text-sm text-[#78716C]">No appointments found.</p>
+              </div>
+            ) : (
+              <div className="overflow-x-auto">
+                <table className="w-full text-sm">
+                  <thead>
+                    <tr className="border-b border-[#E7E5E4] bg-[#FAFAF8]">
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[#78716C] uppercase tracking-wide">Lead</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[#78716C] uppercase tracking-wide">Date & Time</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[#78716C] uppercase tracking-wide hidden md:table-cell">Technician</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[#78716C] uppercase tracking-wide hidden lg:table-cell">Address / Notes</th>
+                      <th className="px-4 py-3 text-left text-xs font-semibold text-[#78716C] uppercase tracking-wide">Status</th>
+                      <th className="px-4 py-3 w-16" />
+                    </tr>
+                  </thead>
+                  <tbody className="divide-y divide-[#E7E5E4]">
+                    {listAppointments.map(apt => {
+                      const cfg = getStatusCfg(apt)
+                      return (
+                        <tr key={apt.id} className="hover:bg-[#FAFAF8] transition-colors">
+                          <td className="px-4 py-3">
+                            <p className="font-medium text-[#1C1917]">{apt.leads?.first_name} {apt.leads?.last_name}</p>
+                            <p className="text-xs text-[#78716C] flex items-center gap-1 mt-0.5">
+                              <Phone className="w-3 h-3" />
+                              {apt.leads?.phone}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3 whitespace-nowrap">
+                            <p className="font-medium text-[#1C1917]">
+                              {new Date(apt.scheduled_at).toLocaleDateString("en-US", { month: "short", day: "numeric", year: "numeric", timeZone: timezone })}
+                            </p>
+                            <p className="text-xs text-[#78716C]">
+                              {new Date(apt.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone })}
+                            </p>
+                          </td>
+                          <td className="px-4 py-3 hidden md:table-cell">
+                            <span className="text-[#78716C]">
+                              {apt.technician_name ?? (apt.technicians as { name: string } | null)?.name ?? "—"}
+                            </span>
+                          </td>
+                          <td className="px-4 py-3 hidden lg:table-cell max-w-[200px]">
+                            <p className="text-[#78716C] truncate">{apt.address ?? apt.notes ?? "—"}</p>
+                          </td>
+                          <td className="px-4 py-3">
+                            <Badge variant="outline" className={cn("text-xs", cfg.color)}>{cfg.label}</Badge>
+                          </td>
+                          <td className="px-4 py-3 text-right">
+                            <Button
+                              variant="ghost" size="sm"
+                              className="h-7 px-2 text-[#78716C] hover:text-[#1C1917]"
+                              onClick={() => { setSelected(apt); setEditMode(false) }}
+                            >
+                              <Edit2 className="w-3.5 h-3.5" />
+                            </Button>
+                          </td>
+                        </tr>
+                      )
+                    })}
+                  </tbody>
+                </table>
+                <div className="px-4 py-2.5 border-t border-[#E7E5E4] bg-[#FAFAF8]">
+                  <p className="text-xs text-[#78716C]">{listAppointments.length} appointment{listAppointments.length !== 1 ? "s" : ""}</p>
+                </div>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
-      {/* Detail panel */}
+      {/* ── Detail panel ── */}
       <AnimatePresence>
         {selected && (
           <motion.div
@@ -453,7 +847,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
             className="fixed inset-0 z-50 flex justify-end"
-            onClick={() => setSelected(null)}
+            onClick={() => { setSelected(null); setEditMode(false) }}
           >
             <div className="absolute inset-0 bg-black/20 backdrop-blur-sm" />
             <motion.div
@@ -466,14 +860,31 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
             >
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-5 border-b border-[#E7E5E4]">
-                <h2 className="font-semibold text-lg text-[#1C1917]">Appointment</h2>
-                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setSelected(null)}>
-                  <X className="w-4 h-4" />
-                </Button>
+                <h2 className="font-semibold text-lg text-[#1C1917]">
+                  {editMode ? "Edit Appointment" : "Appointment"}
+                </h2>
+                <div className="flex items-center gap-2">
+                  {!editMode && (
+                    <Button
+                      variant="outline" size="sm"
+                      className="h-8 gap-1.5 text-xs border-[#E7E5E4]"
+                      onClick={() => openEdit(selected)}
+                    >
+                      <Edit2 className="w-3.5 h-3.5" /> Edit
+                    </Button>
+                  )}
+                  <Button
+                    variant="ghost" size="icon" className="h-8 w-8"
+                    onClick={() => { setSelected(null); setEditMode(false) }}
+                  >
+                    <X className="w-4 h-4" />
+                  </Button>
+                </div>
               </div>
 
               {/* Content */}
               <div className="flex-1 px-6 py-5 space-y-5">
+
                 {/* Lead */}
                 <div className="flex items-center gap-3">
                   <div className="w-10 h-10 rounded-full bg-[#F97316]/10 flex items-center justify-center shrink-0">
@@ -487,153 +898,474 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                   </div>
                 </div>
 
-                {/* Technician */}
-                {(selected.technician_name || (selected.technicians as { name: string } | null)?.name) && (
-                  <div className="flex items-center gap-3 bg-[#4D7C0F]/8 border border-[#4D7C0F]/20 rounded-xl px-4 py-3">
-                    <Wrench className="w-4 h-4 text-[#4D7C0F] shrink-0" />
-                    <div>
-                      <p className="text-xs font-semibold text-[#4D7C0F] uppercase tracking-wide">Assigned Technician</p>
-                      <p className="text-sm font-medium text-[#1C1917]">
-                        {selected.technician_name ?? (selected.technicians as { name: string })?.name}
-                      </p>
-                      {(selected.technicians as { phone: string | null } | null)?.phone && (
-                        <p className="text-xs text-[#78716C]">
-                          {(selected.technicians as { phone: string })?.phone}
-                        </p>
-                      )}
-                    </div>
-                  </div>
-                )}
-
-                {/* Date/time/address */}
-                <div className="bg-[#FAFAF8] rounded-xl px-4 py-3 space-y-2">
-                  <div className="flex items-center gap-2 text-sm">
-                    <Calendar className="w-4 h-4 text-[#78716C]" />
-                    <span className="font-medium text-[#1C1917]">
-                      {new Date(selected.scheduled_at).toLocaleDateString("en-US", {
-                        weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: timezone,
-                      })}
-                    </span>
-                  </div>
-                  <div className="flex items-center gap-2 text-sm">
-                    <Clock className="w-4 h-4 text-[#78716C]" />
-                    <span className="text-[#1C1917]">
-                      {new Date(selected.scheduled_at).toLocaleTimeString("en-US", {
-                        hour: "numeric", minute: "2-digit", timeZone: timezone,
-                      })}
-                    </span>
-                  </div>
-                  {selected.address && (
-                    <div className="flex items-start gap-2 text-sm">
-                      <MapPin className="w-4 h-4 text-[#78716C] shrink-0 mt-0.5" />
-                      <span className="text-[#1C1917]">{selected.address}</span>
-                    </div>
-                  )}
-                </div>
-
-                {/* Notes */}
-                {selected.notes && (
-                  <div>
-                    <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mb-1">Job notes</p>
-                    <p className="text-sm text-[#78716C] bg-[#FAFAF8] rounded-lg px-3 py-2.5">{selected.notes}</p>
-                  </div>
-                )}
-
-                {/* Confirmation status */}
-                <div>
-                  <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mb-2">Confirmation status</p>
-                  {(() => {
-                    const cfg = getStatusCfg(selected)
-                    const Icon = cfg.icon
-                    return (
-                      <div className={cn("flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium", cfg.color)}>
-                        <Icon className="w-4 h-4" /> {cfg.label}
+                {editMode ? (
+                  /* ── Edit form ── */
+                  <div className="space-y-4">
+                    <div className="grid grid-cols-2 gap-3">
+                      <div>
+                        <label className="text-xs font-medium text-[#78716C] mb-1 block">Date</label>
+                        <Input
+                          type="date"
+                          value={editForm.date}
+                          onChange={e => setEditForm(f => ({ ...f, date: e.target.value }))}
+                          className="h-9 text-sm border-[#E7E5E4]"
+                        />
                       </div>
-                    )
-                  })()}
-                </div>
+                      <div>
+                        <label className="text-xs font-medium text-[#78716C] mb-1 block">Time</label>
+                        <Input
+                          type="time"
+                          value={editForm.time}
+                          onChange={e => setEditForm(f => ({ ...f, time: e.target.value }))}
+                          className="h-9 text-sm border-[#E7E5E4]"
+                        />
+                      </div>
+                    </div>
 
-                {/* Status actions */}
-                {selected.status !== "cancelled" && selected.status !== "no_show" && (
-                  <div>
-                    <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mb-2">Change status</p>
-                    <div className="space-y-2">
-                      {selected.confirmation_status !== "confirmed" && (
-                        <Button
-                          className="w-full justify-start gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
-                          disabled={updating === selected.id}
-                          onClick={() => updateConfirmationStatus(selected.id, "confirmed")}
-                        >
-                          <CheckCircle2 className="w-4 h-4" /> Mark as confirmed
-                        </Button>
-                      )}
-                      {selected.confirmation_status !== "completed" && (
-                        <Button
-                          className="w-full justify-start gap-2 bg-sky-600 hover:bg-sky-700 text-white"
-                          disabled={updating === selected.id}
-                          onClick={() => updateConfirmationStatus(selected.id, "completed")}
-                        >
-                          <CheckCircle2 className="w-4 h-4" /> Mark as completed
-                        </Button>
-                      )}
-                      {selected.confirmation_status !== "reschedule_requested" && (
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start gap-2 text-orange-600 border-orange-300 hover:bg-orange-50"
-                          disabled={updating === selected.id}
-                          onClick={() => updateConfirmationStatus(selected.id, "reschedule_requested")}
-                        >
-                          <RotateCcw className="w-4 h-4" /> Mark reschedule requested
-                        </Button>
-                      )}
-                      {selected.confirmation_status !== "no_response" && (
-                        <Button
-                          variant="outline"
-                          className="w-full justify-start gap-2 text-slate-600 border-slate-300 hover:bg-slate-50"
-                          disabled={updating === selected.id}
-                          onClick={() => updateConfirmationStatus(selected.id, "no_response")}
-                        >
-                          <MessageSquare className="w-4 h-4" /> Mark no response
-                        </Button>
-                      )}
+                    <div>
+                      <label className="text-xs font-medium text-[#78716C] mb-1 block">Technician</label>
+                      <select
+                        value={editForm.technician_id}
+                        onChange={e => {
+                          const id = e.target.value
+                          const name = technicians.find(t => t.id === id)?.name ?? ""
+                          setEditForm(f => ({ ...f, technician_id: id, technician_name: name }))
+                        }}
+                        className="w-full h-9 px-3 text-sm border border-[#E7E5E4] rounded-md bg-white text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30"
+                      >
+                        <option value="">No technician</option>
+                        {technicians.map(t => (
+                          <option key={t.id} value={t.id}>{t.name}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-[#78716C] mb-1 block">Address</label>
+                      <Input
+                        value={editForm.address}
+                        onChange={e => setEditForm(f => ({ ...f, address: e.target.value }))}
+                        placeholder="Job address"
+                        className="h-9 text-sm border-[#E7E5E4]"
+                      />
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-[#78716C] mb-1 block">Notes / Job type</label>
+                      <textarea
+                        value={editForm.notes}
+                        onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
+                        placeholder="e.g. Roof replacement, full house"
+                        rows={3}
+                        className="w-full px-3 py-2 text-sm border border-[#E7E5E4] rounded-md bg-white text-[#1C1917] resize-none focus:outline-none focus:ring-2 focus:ring-[#F97316]/30"
+                      />
+                    </div>
+
+                    {saveError && (
+                      <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{saveError}</p>
+                    )}
+
+                    <div className="flex gap-2 pt-1">
                       <Button
                         variant="outline"
-                        className="w-full justify-start gap-2 text-amber-600 border-amber-300 hover:bg-amber-50"
-                        disabled={updating === selected.id}
-                        onClick={() => updateStatus(selected.id, "no_show")}
+                        className="flex-1 border-[#E7E5E4] text-[#78716C]"
+                        onClick={() => { setEditMode(false); setSaveError("") }}
+                        disabled={saving}
                       >
-                        <AlertTriangle className="w-4 h-4" /> Mark as no-show
+                        Cancel
                       </Button>
                       <Button
+                        className="flex-1 bg-[#F97316] hover:bg-[#ea6c0e] text-white gap-1.5"
+                        onClick={saveEdit}
+                        disabled={saving}
+                      >
+                        <Check className="w-3.5 h-3.5" />
+                        {saving ? "Saving…" : "Save changes"}
+                      </Button>
+                    </div>
+                  </div>
+                ) : (
+                  /* ── View mode ── */
+                  <>
+                    {/* Technician */}
+                    {(selected.technician_name || (selected.technicians as { name: string } | null)?.name) && (
+                      <div className="flex items-center gap-3 bg-[#4D7C0F]/8 border border-[#4D7C0F]/20 rounded-xl px-4 py-3">
+                        <Wrench className="w-4 h-4 text-[#4D7C0F] shrink-0" />
+                        <div>
+                          <p className="text-xs font-semibold text-[#4D7C0F] uppercase tracking-wide">Assigned Technician</p>
+                          <p className="text-sm font-medium text-[#1C1917]">
+                            {selected.technician_name ?? (selected.technicians as { name: string })?.name}
+                          </p>
+                          {(selected.technicians as { phone: string | null } | null)?.phone && (
+                            <p className="text-xs text-[#78716C]">
+                              {(selected.technicians as { phone: string })?.phone}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Date/time/address */}
+                    <div className="bg-[#FAFAF8] rounded-xl px-4 py-3 space-y-2">
+                      <div className="flex items-center gap-2 text-sm">
+                        <Calendar className="w-4 h-4 text-[#78716C]" />
+                        <span className="font-medium text-[#1C1917]">
+                          {new Date(selected.scheduled_at).toLocaleDateString("en-US", {
+                            weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: timezone,
+                          })}
+                        </span>
+                      </div>
+                      <div className="flex items-center gap-2 text-sm">
+                        <Clock className="w-4 h-4 text-[#78716C]" />
+                        <span className="text-[#1C1917]">
+                          {new Date(selected.scheduled_at).toLocaleTimeString("en-US", {
+                            hour: "numeric", minute: "2-digit", timeZone: timezone,
+                          })}
+                        </span>
+                      </div>
+                      {selected.address && (
+                        <div className="flex items-start gap-2 text-sm">
+                          <MapPin className="w-4 h-4 text-[#78716C] shrink-0 mt-0.5" />
+                          <span className="text-[#1C1917]">{selected.address}</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Notes */}
+                    {selected.notes && (
+                      <div>
+                        <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mb-1">Job notes</p>
+                        <p className="text-sm text-[#78716C] bg-[#FAFAF8] rounded-lg px-3 py-2.5">{selected.notes}</p>
+                      </div>
+                    )}
+
+                    {/* Confirmation status */}
+                    <div>
+                      <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mb-2">Confirmation status</p>
+                      {(() => {
+                        const cfg = getStatusCfg(selected)
+                        const Icon = cfg.icon
+                        return (
+                          <div className={cn("flex items-center gap-2 px-3 py-2 rounded-lg border text-sm font-medium", cfg.color)}>
+                            <Icon className="w-4 h-4" /> {cfg.label}
+                          </div>
+                        )
+                      })()}
+                    </div>
+
+                    {/* Status actions */}
+                    {selected.status !== "cancelled" && selected.status !== "no_show" && (
+                      <div>
+                        <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mb-2">Change status</p>
+                        <div className="space-y-2">
+                          {selected.confirmation_status !== "confirmed" && (
+                            <Button
+                              className="w-full justify-start gap-2 bg-emerald-600 hover:bg-emerald-700 text-white"
+                              disabled={updating === selected.id}
+                              onClick={() => updateConfirmationStatus(selected.id, "confirmed")}
+                            >
+                              <CheckCircle2 className="w-4 h-4" /> Mark as confirmed
+                            </Button>
+                          )}
+                          {selected.confirmation_status !== "completed" && (
+                            <Button
+                              className="w-full justify-start gap-2 bg-sky-600 hover:bg-sky-700 text-white"
+                              disabled={updating === selected.id}
+                              onClick={() => updateConfirmationStatus(selected.id, "completed")}
+                            >
+                              <CheckCircle2 className="w-4 h-4" /> Mark as completed
+                            </Button>
+                          )}
+                          {selected.confirmation_status !== "reschedule_requested" && (
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start gap-2 text-orange-600 border-orange-300 hover:bg-orange-50"
+                              disabled={updating === selected.id}
+                              onClick={() => updateConfirmationStatus(selected.id, "reschedule_requested")}
+                            >
+                              <RotateCcw className="w-4 h-4" /> Mark reschedule requested
+                            </Button>
+                          )}
+                          {selected.confirmation_status !== "no_response" && (
+                            <Button
+                              variant="outline"
+                              className="w-full justify-start gap-2 text-slate-600 border-slate-300 hover:bg-slate-50"
+                              disabled={updating === selected.id}
+                              onClick={() => updateConfirmationStatus(selected.id, "no_response")}
+                            >
+                              <MessageSquare className="w-4 h-4" /> Mark no response
+                            </Button>
+                          )}
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start gap-2 text-amber-600 border-amber-300 hover:bg-amber-50"
+                            disabled={updating === selected.id}
+                            onClick={() => updateStatus(selected.id, "no_show")}
+                          >
+                            <AlertTriangle className="w-4 h-4" /> Mark as no-show
+                          </Button>
+                          <Button
+                            variant="outline"
+                            className="w-full justify-start gap-2 text-red-600 border-red-300 hover:bg-red-50"
+                            disabled={updating === selected.id}
+                            onClick={() => {
+                              updateStatus(selected.id, "cancelled")
+                              updateConfirmationStatus(selected.id, "cancelled_by_lead")
+                            }}
+                          >
+                            <XCircle className="w-4 h-4" /> Cancel appointment
+                          </Button>
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Restore */}
+                    {(selected.status === "cancelled" || selected.status === "no_show") && (
+                      <Button
                         variant="outline"
-                        className="w-full justify-start gap-2 text-red-600 border-red-300 hover:bg-red-50"
+                        className="w-full gap-2 border-[#E7E5E4]"
                         disabled={updating === selected.id}
                         onClick={() => {
-                          updateStatus(selected.id, "cancelled")
-                          updateConfirmationStatus(selected.id, "cancelled_by_lead")
+                          updateStatus(selected.id, "scheduled")
+                          updateConfirmationStatus(selected.id, "pending_confirmation")
                         }}
                       >
-                        <XCircle className="w-4 h-4" /> Cancel appointment
+                        <Clock className="w-4 h-4" /> Restore to scheduled
                       </Button>
-                    </div>
-                  </div>
-                )}
-
-                {/* Restore */}
-                {(selected.status === "cancelled" || selected.status === "no_show") && (
-                  <Button
-                    variant="outline"
-                    className="w-full gap-2 border-[#E7E5E4]"
-                    disabled={updating === selected.id}
-                    onClick={() => {
-                      updateStatus(selected.id, "scheduled")
-                      updateConfirmationStatus(selected.id, "pending_confirmation")
-                    }}
-                  >
-                    <Clock className="w-4 h-4" /> Restore to scheduled
-                  </Button>
+                    )}
+                  </>
                 )}
               </div>
+            </motion.div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+
+      {/* ── New Appointment Modal ── */}
+      <AnimatePresence>
+        {showNewModal && (
+          <motion.div
+            initial={{ opacity: 0 }}
+            animate={{ opacity: 1 }}
+            exit={{ opacity: 0 }}
+            className="fixed inset-0 z-50 flex items-center justify-center p-4"
+            onClick={() => setShowNewModal(false)}
+          >
+            <div className="absolute inset-0 bg-black/30 backdrop-blur-sm" />
+            <motion.div
+              initial={{ scale: 0.95, opacity: 0, y: 10 }}
+              animate={{ scale: 1, opacity: 1, y: 0 }}
+              exit={{ scale: 0.95, opacity: 0, y: 10 }}
+              transition={{ type: "spring", damping: 25, stiffness: 350 }}
+              className="relative w-full max-w-md bg-white rounded-2xl shadow-2xl border border-[#E7E5E4] overflow-hidden"
+              onClick={e => e.stopPropagation()}
+            >
+              {/* Modal header */}
+              <div className="flex items-center justify-between px-6 py-5 border-b border-[#E7E5E4]">
+                <div>
+                  <h2 className="font-semibold text-lg text-[#1C1917]">New Appointment</h2>
+                  <p className="text-xs text-[#78716C] mt-0.5">
+                    {newStep === 1 ? "Step 1 of 2 — Select a lead" : "Step 2 of 2 — Appointment details"}
+                  </p>
+                </div>
+                <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowNewModal(false)}>
+                  <X className="w-4 h-4" />
+                </Button>
+              </div>
+
+              {/* Step 1 — Lead search */}
+              {newStep === 1 && (
+                <div className="px-6 py-5 space-y-4">
+                  <div className="relative">
+                    <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#78716C]" />
+                    <Input
+                      autoFocus
+                      placeholder="Search lead by name, phone, or email…"
+                      value={leadSearchQ}
+                      onChange={e => setLeadSearchQ(e.target.value)}
+                      className="pl-9 border-[#E7E5E4] h-10"
+                    />
+                  </div>
+
+                  {leadSearching && (
+                    <p className="text-sm text-[#78716C] text-center py-4">Searching…</p>
+                  )}
+
+                  {!leadSearching && leadResults.length > 0 && (
+                    <div className="border border-[#E7E5E4] rounded-xl overflow-hidden divide-y divide-[#E7E5E4] max-h-64 overflow-y-auto">
+                      {leadResults.map(lead => (
+                        <button
+                          key={lead.id}
+                          className={cn(
+                            "w-full flex items-center gap-3 px-4 py-3 text-left hover:bg-[#FAFAF8] transition-colors",
+                            selectedLead?.id === lead.id && "bg-[#F97316]/5 border-l-2 border-[#F97316]"
+                          )}
+                          onClick={() => setSelectedLead(lead)}
+                        >
+                          <div className="w-8 h-8 rounded-full bg-[#F97316]/10 flex items-center justify-center shrink-0">
+                            <User className="w-4 h-4 text-[#F97316]" />
+                          </div>
+                          <div className="min-w-0">
+                            <p className="text-sm font-medium text-[#1C1917] truncate">
+                              {lead.first_name} {lead.last_name}
+                            </p>
+                            <p className="text-xs text-[#78716C]">{lead.phone}{lead.email ? ` · ${lead.email}` : ""}</p>
+                          </div>
+                          {selectedLead?.id === lead.id && (
+                            <Check className="w-4 h-4 text-[#F97316] shrink-0 ml-auto" />
+                          )}
+                        </button>
+                      ))}
+                    </div>
+                  )}
+
+                  {!leadSearching && leadSearchQ.length >= 2 && leadResults.length === 0 && (
+                    <p className="text-sm text-[#78716C] text-center py-4">No leads found matching &ldquo;{leadSearchQ}&rdquo;</p>
+                  )}
+
+                  {leadSearchQ.length < 2 && (
+                    <p className="text-xs text-[#78716C] text-center py-2">Type at least 2 characters to search</p>
+                  )}
+
+                  <div className="flex gap-2 pt-2">
+                    <Button variant="outline" className="flex-1 border-[#E7E5E4]" onClick={() => setShowNewModal(false)}>
+                      Cancel
+                    </Button>
+                    <Button
+                      className="flex-1 bg-[#F97316] hover:bg-[#ea6c0e] text-white"
+                      disabled={!selectedLead}
+                      onClick={() => setNewStep(2)}
+                    >
+                      Next →
+                    </Button>
+                  </div>
+                </div>
+              )}
+
+              {/* Step 2 — Appointment details */}
+              {newStep === 2 && (
+                <div className="px-6 py-5 space-y-4">
+                  {/* Selected lead summary */}
+                  <div className="flex items-center gap-3 bg-[#F97316]/5 border border-[#F97316]/20 rounded-xl px-4 py-3">
+                    <User className="w-4 h-4 text-[#F97316] shrink-0" />
+                    <div>
+                      <p className="text-sm font-semibold text-[#1C1917]">{selectedLead?.first_name} {selectedLead?.last_name}</p>
+                      <p className="text-xs text-[#78716C]">{selectedLead?.phone}</p>
+                    </div>
+                    <button
+                      className="ml-auto text-xs text-[#F97316] hover:underline"
+                      onClick={() => setNewStep(1)}
+                    >
+                      Change
+                    </button>
+                  </div>
+
+                  <div className="grid grid-cols-2 gap-3">
+                    <div>
+                      <label className="text-xs font-medium text-[#78716C] mb-1 block">Date *</label>
+                      <Input
+                        type="date"
+                        value={newForm.date}
+                        onChange={e => setNewForm(f => ({ ...f, date: e.target.value }))}
+                        className="h-9 text-sm border-[#E7E5E4]"
+                      />
+                    </div>
+                    <div>
+                      <label className="text-xs font-medium text-[#78716C] mb-1 block">Time *</label>
+                      <Input
+                        type="time"
+                        value={newForm.time}
+                        onChange={e => setNewForm(f => ({ ...f, time: e.target.value }))}
+                        className="h-9 text-sm border-[#E7E5E4]"
+                      />
+                    </div>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-[#78716C] mb-1 block">Technician</label>
+                    <select
+                      value={newForm.technician_id}
+                      onChange={e => {
+                        const id = e.target.value
+                        setNewForm(f => ({ ...f, technician_id: id, technician_name: technicians.find(t => t.id === id)?.name ?? "" }))
+                      }}
+                      className="w-full h-9 px-3 text-sm border border-[#E7E5E4] rounded-md bg-white text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30"
+                    >
+                      <option value="">No technician</option>
+                      {technicians.map(t => (
+                        <option key={t.id} value={t.id}>{t.name}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-[#78716C] mb-1 block">Address</label>
+                    <Input
+                      value={newForm.address}
+                      onChange={e => setNewForm(f => ({ ...f, address: e.target.value }))}
+                      placeholder="Job address"
+                      className="h-9 text-sm border-[#E7E5E4]"
+                    />
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-[#78716C] mb-1 block">Notes / Job type</label>
+                    <textarea
+                      value={newForm.notes}
+                      onChange={e => setNewForm(f => ({ ...f, notes: e.target.value }))}
+                      placeholder="e.g. Full roof replacement, 2,000 sq ft"
+                      rows={3}
+                      className="w-full px-3 py-2 text-sm border border-[#E7E5E4] rounded-md bg-white text-[#1C1917] resize-none focus:outline-none focus:ring-2 focus:ring-[#F97316]/30"
+                    />
+                  </div>
+
+                  {/* Confirmation SMS toggle */}
+                  <label className="flex items-center gap-3 cursor-pointer select-none">
+                    <div
+                      className={cn(
+                        "relative w-9 h-5 rounded-full transition-colors shrink-0",
+                        newForm.send_confirmation ? "bg-[#F97316]" : "bg-[#E7E5E4]"
+                      )}
+                      onClick={() => setNewForm(f => ({ ...f, send_confirmation: !f.send_confirmation }))}
+                    >
+                      <span className={cn(
+                        "absolute top-0.5 w-4 h-4 rounded-full bg-white shadow transition-transform",
+                        newForm.send_confirmation ? "translate-x-4" : "translate-x-0.5"
+                      )} />
+                    </div>
+                    <div>
+                      <p className="text-sm font-medium text-[#1C1917] flex items-center gap-1.5">
+                        <Send className="w-3.5 h-3.5 text-[#F97316]" />
+                        Send confirmation SMS
+                      </p>
+                      <p className="text-xs text-[#78716C]">AI sends a confirmation message to the lead right away</p>
+                    </div>
+                  </label>
+
+                  {createError && (
+                    <p className="text-xs text-red-600 bg-red-50 px-3 py-2 rounded-lg">{createError}</p>
+                  )}
+
+                  <div className="flex gap-2 pt-1">
+                    <Button
+                      variant="outline"
+                      className="flex-1 border-[#E7E5E4] text-[#78716C]"
+                      onClick={() => setNewStep(1)}
+                      disabled={creating}
+                    >
+                      ← Back
+                    </Button>
+                    <Button
+                      className="flex-1 bg-[#F97316] hover:bg-[#ea6c0e] text-white gap-1.5"
+                      onClick={createAppointment}
+                      disabled={creating || !newForm.date || !newForm.time}
+                    >
+                      <Calendar className="w-3.5 h-3.5" />
+                      {creating ? "Booking…" : "Book Appointment"}
+                    </Button>
+                  </div>
+                </div>
+              )}
             </motion.div>
           </motion.div>
         )}
