@@ -525,7 +525,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
 
   const thisWeekApts = appointments.filter(a =>
     a.status !== "cancelled" &&
-    weekDays.some(d =>
+    allDays.some(d =>
       d.toLocaleDateString("en-CA", { timeZone: timezone }) ===
       new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: timezone })
     )
@@ -772,8 +772,17 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                               borderLeftColor: c.bg,
                             }}
                           >
+                            {/* Pending confirmation tag — amber corner ribbon */}
+                            {apt.confirmation_status === "pending_confirmation" && (
+                              <div
+                                className="absolute top-0 right-0 px-1.5 py-[3px] text-[8px] font-bold text-white uppercase tracking-wider"
+                                style={{ background: "#F59E0B", borderBottomLeftRadius: 6 }}
+                              >
+                                Pending
+                              </div>
+                            )}
                             <div className="px-2.5 py-2 h-full flex flex-col gap-0.5">
-                              <p className="text-[12px] font-bold truncate leading-tight" style={{ color: c.bg }}>
+                              <p className="text-[12px] font-bold truncate leading-tight pr-10" style={{ color: c.bg }}>
                                 {apt.leads?.first_name} {apt.leads?.last_name}
                               </p>
                               <p className="text-[11px] text-[#78716C] font-medium flex items-center gap-0.5">
