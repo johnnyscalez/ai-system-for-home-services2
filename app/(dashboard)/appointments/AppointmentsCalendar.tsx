@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef } from "react"
+import { useState, useEffect, useCallback, useRef, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { createClient } from "@/lib/supabase"
 import { Badge } from "@/components/ui/badge"
@@ -55,6 +55,34 @@ type Props = {
 
 const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
 const DAY_SHORT = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"]
+
+// ─── HouseCall Pro-style time grid ────────────────────────────────────────────
+const CAL_START   = 7
+const CAL_END     = 20
+const CAL_HOURS   = CAL_END - CAL_START
+const CAL_HOUR_PX = 88
+
+const TECH_PALETTE = [
+  { bg: "#1D4ED8", light: "rgba(29,78,216,0.09)",   border: "#3B82F6" },
+  { bg: "#7C3AED", light: "rgba(124,58,237,0.09)",  border: "#8B5CF6" },
+  { bg: "#059669", light: "rgba(5,150,105,0.09)",   border: "#10B981" },
+  { bg: "#B45309", light: "rgba(180,83,9,0.09)",    border: "#F59E0B" },
+  { bg: "#DC2626", light: "rgba(220,38,38,0.09)",   border: "#EF4444" },
+  { bg: "#0891B2", light: "rgba(8,145,178,0.09)",   border: "#06B6D4" },
+  { bg: "#EA580C", light: "rgba(234,88,12,0.09)",   border: "#F97316" },
+  { bg: "#9333EA", light: "rgba(147,51,234,0.09)",  border: "#A855F7" },
+]
+
+type TechColor = { bg: string; light: string; border: string }
+const UNASSIGNED_COLOR: TechColor = { bg: "#64748B", light: "rgba(100,116,139,0.09)", border: "#94A3B8" }
+
+function aptTimeToY(isoStr: string, tz: string): number {
+  const timeStr = new Date(isoStr).toLocaleTimeString("en-US", {
+    hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz,
+  })
+  const [h, m] = timeStr.split(":").map(Number)
+  return Math.max(0, (h - CAL_START) * CAL_HOUR_PX + (m / 60) * CAL_HOUR_PX)
+}
 
 // ─── Status configs ───────────────────────────────────────────────────────────
 
@@ -239,11 +267,27 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
 
   const enabledWindows = appointmentWindows.filter((w) => w.enabled)
 
-  const weekDays: Date[] = Array.from({ length: 7 }, (_, i) => {
+  // All 7 days of the week (for time-grid view)
+  const allDays: Date[] = Array.from({ length: 7 }, (_, i) => {
     const d = new Date(weekStart)
     d.setDate(weekStart.getDate() + i)
     return d
-  }).filter((d) => availableDays.includes(DAY_NAMES[d.getDay()]))
+  })
+
+  // Legacy: only available days (kept for week label calculation)
+  const weekDays: Date[] = allDays.filter((d) => availableDays.includes(DAY_NAMES[d.getDay()]))
+
+  // Build technician → color map (index by position in the technicians list)
+  const techColorMap = useMemo(() => {
+    const map = new Map<string, TechColor>()
+    technicians.forEach((t, i) => map.set(t.id, TECH_PALETTE[i % TECH_PALETTE.length]))
+    return map
+  }, [technicians])
+
+  function getTechColor(techId: string | null | undefined): TechColor {
+    if (!techId) return UNASSIGNED_COLOR
+    return techColorMap.get(techId) ?? UNASSIGNED_COLOR
+  }
 
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekStart.getDate() + 6)
@@ -587,111 +631,186 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
         </div>
       )}
 
-      {/* ── Calendar view ── */}
+      {/* ── Calendar view (HouseCall Pro-style time grid) ── */}
       {viewMode === "calendar" && (
         <>
-          <div className="bg-white border border-[#E7E5E4] rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
-            {/* Day headers */}
-            <div
-              className="grid border-b border-[#E7E5E4]"
-              style={{ gridTemplateColumns: `120px repeat(${weekDays.length}, 1fr)` }}
-            >
-              <div className="px-4 py-3 text-xs text-[#78716C] font-medium bg-[#FAFAF8]" />
-              {weekDays.map((d) => (
-                <div
-                  key={d.toISOString()}
-                  className={cn(
-                    "px-3 py-3 text-center border-l border-[#E7E5E4]",
-                    isToday(d) ? "bg-[#F97316]/5" : "bg-[#FAFAF8]"
-                  )}
-                >
-                  <p className={cn("text-xs font-medium", isToday(d) ? "text-[#F97316]" : "text-[#78716C]")}>
-                    {DAY_SHORT[d.getDay()]}
-                  </p>
-                  <p className={cn("text-lg font-bold leading-tight", isToday(d) ? "text-[#F97316]" : "text-[#1C1917]")}>
-                    {d.getDate()}
-                  </p>
+          {/* Technician color legend */}
+          {technicians.length > 0 && (
+            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 -mt-2">
+              <span className="text-xs font-semibold text-[#78716C] uppercase tracking-wide">Technicians:</span>
+              {technicians.map(t => {
+                const c = techColorMap.get(t.id)
+                return c ? (
+                  <div key={t.id} className="flex items-center gap-1.5 text-xs text-[#78716C]">
+                    <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: c.bg }} />
+                    {t.name}
+                  </div>
+                ) : null
+              })}
+              {appointments.some(a => a.status !== "cancelled" && !a.technician_id) && (
+                <div className="flex items-center gap-1.5 text-xs text-[#78716C]">
+                  <div className="w-2.5 h-2.5 rounded-sm bg-slate-400 shrink-0" />
+                  Unassigned
                 </div>
-              ))}
+              )}
+            </div>
+          )}
+
+          {/* Time-based week grid */}
+          <div className="bg-white border border-[#E7E5E4] rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
+            {/* Day header row */}
+            <div className="grid border-b border-[#E7E5E4]" style={{ gridTemplateColumns: "56px repeat(7, 1fr)" }}>
+              <div className="border-r border-[#E7E5E4] bg-[#FAFAF8]" />
+              {allDays.map((d, i) => {
+                const today_ = isToday(d)
+                const available = availableDays.includes(DAY_NAMES[d.getDay()])
+                const dayApts = appointments.filter(a =>
+                  a.status !== "cancelled" &&
+                  new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: timezone }) ===
+                  d.toLocaleDateString("en-CA", { timeZone: timezone })
+                )
+                return (
+                  <div
+                    key={i}
+                    className={cn(
+                      "px-2 py-2.5 text-center border-r border-[#E7E5E4] last:border-r-0",
+                      today_ ? "bg-[#F97316]/5" : !available ? "bg-[#FAFAF8]/70" : "bg-[#FAFAF8]"
+                    )}
+                  >
+                    <p className={cn("text-xs font-medium", today_ ? "text-[#F97316]" : "text-[#78716C]")}>
+                      {DAY_SHORT[d.getDay()]}
+                    </p>
+                    <p className={cn(
+                      "text-xl font-bold leading-tight mt-0.5",
+                      today_ ? "text-[#F97316]" : !available ? "text-[#78716C]/40" : "text-[#1C1917]"
+                    )}>
+                      {d.getDate()}
+                    </p>
+                    {dayApts.length > 0 && (
+                      <div className="flex justify-center gap-0.5 mt-1.5">
+                        {dayApts.slice(0, 4).map(a => (
+                          <div
+                            key={a.id}
+                            className="w-1.5 h-1.5 rounded-full"
+                            style={{ background: getTechColor(a.technician_id).bg }}
+                          />
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
             </div>
 
-            {/* Time window rows */}
-            {enabledWindows.length === 0 ? (
-              <div className="py-16 text-center text-sm text-[#78716C]">
-                No time windows enabled. Configure them in AI Agent settings.
-              </div>
-            ) : (
-              enabledWindows.map((win, wi) => (
-                <div
-                  key={win.id}
-                  className={cn("grid", wi < enabledWindows.length - 1 && "border-b border-[#E7E5E4]")}
-                  style={{ gridTemplateColumns: `120px repeat(${weekDays.length}, 1fr)` }}
-                >
-                  {/* Time label */}
-                  <div className="px-4 py-4 flex flex-col justify-center bg-[#FAFAF8] border-r border-[#E7E5E4]">
-                    <p className="text-xs font-semibold text-[#1C1917]">{win.label}</p>
-                    <p className="text-xs text-[#78716C]">{fmt12(win.start)}–{fmt12(win.end)}</p>
-                  </div>
-
-                  {/* Day cells */}
-                  {weekDays.map((d) => {
-                    const apt  = getSlotAppointment(appointments, d, win, timezone)
-                    const past = isPast(d, win)
-                    const cfg  = apt ? getStatusCfg(apt) : null
-
+            {/* Scrollable time grid */}
+            <div className="overflow-y-auto" style={{ maxHeight: "calc(100vh - 340px)" }}>
+              <div className="grid relative" style={{ gridTemplateColumns: "56px repeat(7, 1fr)", height: CAL_HOURS * CAL_HOUR_PX }}>
+                {/* Hour labels */}
+                <div className="border-r border-[#E7E5E4] relative bg-[#FAFAF8]/60">
+                  {Array.from({ length: CAL_HOURS }, (_, i) => {
+                    const h = CAL_START + i
+                    const label = h < 12 ? `${h}am` : h === 12 ? "12pm" : `${h - 12}pm`
                     return (
                       <div
-                        key={d.toISOString()}
-                        className={cn(
-                          "border-l border-[#E7E5E4] px-2 py-2 min-h-[80px] flex items-center justify-center transition-colors",
-                          apt ? "cursor-pointer hover:bg-[#FAFAF8]" : past ? "bg-[#FAFAF8]/50" : "hover:bg-[#FAFAF8]/60",
-                          isToday(d) && !apt && "bg-[#F97316]/2"
-                        )}
-                        onClick={() => apt && setSelected(apt)}
+                        key={i}
+                        className="absolute w-full flex items-start justify-end pr-2"
+                        style={{ top: i * CAL_HOUR_PX, height: CAL_HOUR_PX }}
                       >
-                        {apt ? (
-                          <div className={cn("w-full rounded-xl px-2.5 py-2 border", cfg!.color)}>
-                            <div className="flex items-center gap-1.5 mb-0.5">
-                              <span className={cn("w-1.5 h-1.5 rounded-full shrink-0", cfg!.dotColor)} />
-                              <p className="text-xs font-semibold truncate">
-                                {apt.leads?.first_name} {apt.leads?.last_name}
-                              </p>
-                            </div>
-                            <p className="text-xs opacity-70">
-                              {new Date(apt.scheduled_at).toLocaleTimeString("en-US", {
-                                hour: "numeric", minute: "2-digit", timeZone: timezone,
-                              })}
-                            </p>
-                            {(apt.technician_name || (apt.technicians as { name: string } | null)?.name) && (
-                              <p className="text-xs opacity-60 flex items-center gap-0.5 mt-0.5">
-                                <Wrench className="w-2.5 h-2.5 shrink-0" />
-                                {apt.technician_name ?? (apt.technicians as { name: string })?.name}
-                              </p>
-                            )}
-                            {apt.address && (
-                              <p className="text-xs opacity-50 truncate flex items-center gap-0.5 mt-0.5">
-                                <MapPin className="w-2.5 h-2.5 shrink-0" />{apt.address}
-                              </p>
-                            )}
-                          </div>
-                        ) : (
-                          <span className={cn("text-xs", past ? "text-[#78716C]/30" : "text-[#78716C]/40")}>
-                            {past ? "—" : "Free"}
-                          </span>
-                        )}
+                        <span className="text-[10px] text-[#78716C] -translate-y-2">{label}</span>
                       </div>
                     )
                   })}
                 </div>
-              ))
-            )}
+
+                {/* Day columns */}
+                {allDays.map((day, di) => {
+                  const available = availableDays.includes(DAY_NAMES[day.getDay()])
+                  const dayDateStr = day.toLocaleDateString("en-CA", { timeZone: timezone })
+                  const dayApts = appointments.filter(a =>
+                    a.status !== "cancelled" &&
+                    new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: timezone }) === dayDateStr
+                  )
+
+                  return (
+                    <div
+                      key={di}
+                      className={cn(
+                        "border-r border-[#E7E5E4] last:border-r-0 relative",
+                        !available && "bg-[#FAFAF8]/50"
+                      )}
+                    >
+                      {/* Hour lines */}
+                      {Array.from({ length: CAL_HOURS }, (_, i) => (
+                        <div key={i} className="absolute w-full border-t border-[#E7E5E4]" style={{ top: i * CAL_HOUR_PX }} />
+                      ))}
+                      {/* Half-hour dashes */}
+                      {Array.from({ length: CAL_HOURS }, (_, i) => (
+                        <div
+                          key={`hh${i}`}
+                          className="absolute w-full border-t border-[#E7E5E4]/60 border-dashed"
+                          style={{ top: i * CAL_HOUR_PX + CAL_HOUR_PX / 2 }}
+                        />
+                      ))}
+
+                      {/* Appointment blocks */}
+                      {dayApts.map(apt => {
+                        const top = aptTimeToY(apt.scheduled_at, timezone)
+                        const c = getTechColor(apt.technician_id)
+                        const techName = apt.technician_name ?? (apt.technicians as { name: string } | null)?.name
+                        return (
+                          <button
+                            key={apt.id}
+                            onClick={() => { setSelected(apt); setEditMode(false) }}
+                            className="absolute left-1 right-1 rounded-lg overflow-hidden hover:brightness-95 transition-all text-left"
+                            style={{
+                              top,
+                              height: Math.max(CAL_HOUR_PX * 1.5, 90),
+                              backgroundColor: c.light,
+                              borderLeft: `3px solid ${c.bg}`,
+                              border: `1px solid ${c.border}35`,
+                              borderLeftWidth: 3,
+                              borderLeftColor: c.bg,
+                            }}
+                          >
+                            <div className="px-2.5 py-2 h-full flex flex-col gap-0.5">
+                              <p className="text-[12px] font-bold truncate leading-tight" style={{ color: c.bg }}>
+                                {apt.leads?.first_name} {apt.leads?.last_name}
+                              </p>
+                              <p className="text-[11px] text-[#78716C] font-medium flex items-center gap-0.5">
+                                <Clock className="w-2.5 h-2.5 shrink-0" />
+                                {new Date(apt.scheduled_at).toLocaleTimeString("en-US", {
+                                  hour: "numeric", minute: "2-digit", timeZone: timezone,
+                                })}
+                              </p>
+                              {apt.address && (
+                                <p className="text-[10px] text-[#78716C] truncate flex items-center gap-0.5">
+                                  <MapPin className="w-2.5 h-2.5 shrink-0" />{apt.address}
+                                </p>
+                              )}
+                              {apt.notes && (
+                                <p className="text-[10px] text-[#78716C] truncate">{apt.notes}</p>
+                              )}
+                              {techName && (
+                                <p className="text-[10px] font-semibold mt-auto flex items-center gap-0.5" style={{ color: c.bg }}>
+                                  <Wrench className="w-2.5 h-2.5 shrink-0" />{techName}
+                                </p>
+                              )}
+                            </div>
+                          </button>
+                        )
+                      })}
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
           </div>
 
-          {/* Upcoming list (outside current week) */}
+          {/* Appointments outside current week */}
           {(() => {
             const outside = appointments.filter(a => {
               const d = new Date(a.scheduled_at)
-              return d < weekStart || d > weekEnd
+              return (d < weekStart || d > weekEnd) && a.status !== "cancelled"
             })
             if (outside.length === 0) return null
             return (
@@ -700,6 +819,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                 <div className="bg-white border border-[#E7E5E4] rounded-2xl divide-y divide-[#E7E5E4] overflow-hidden">
                   {outside.map(apt => {
                     const cfg = getStatusCfg(apt)
+                    const c = getTechColor(apt.technician_id)
                     return (
                       <div
                         key={apt.id}
@@ -707,13 +827,16 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                         onClick={() => setSelected(apt)}
                       >
                         <div className="flex items-center gap-3">
-                          <Calendar className="w-4 h-4 text-[#78716C] shrink-0" />
+                          <div className="w-2 h-8 rounded-full shrink-0" style={{ background: c.bg }} />
                           <div>
                             <p className="text-sm font-medium text-[#1C1917]">{apt.leads?.first_name} {apt.leads?.last_name}</p>
                             <p className="text-xs text-[#78716C]">
-                              {new Date(apt.scheduled_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: timezone })} ·{" "}
+                              {new Date(apt.scheduled_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: timezone })}
+                              {" · "}
                               {new Date(apt.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone })}
-                              {apt.technician_name && ` · ${apt.technician_name}`}
+                              {(apt.technician_name ?? (apt.technicians as { name: string } | null)?.name) && (
+                                <> · {apt.technician_name ?? (apt.technicians as { name: string })?.name}</>
+                              )}
                             </p>
                           </div>
                         </div>
@@ -725,14 +848,6 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
               </div>
             )
           })()}
-
-          {/* Empty state */}
-          {weekDays.length === 0 && (
-            <div className="bg-white border border-[#E7E5E4] rounded-2xl px-5 py-16 text-center">
-              <Calendar className="w-10 h-10 text-[#78716C]/30 mx-auto mb-3" />
-              <p className="text-sm text-[#78716C]">No available days configured for this week.</p>
-            </div>
-          )}
         </>
       )}
 
