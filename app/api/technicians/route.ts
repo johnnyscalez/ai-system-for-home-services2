@@ -177,23 +177,31 @@ function buildInviteEmail(opts: {
         Use the credentials below to access your appointments.
       </p>
 
-      <div style="background:#F5F4F2;border-radius:12px;padding:20px;margin-bottom:28px;">
-        <p style="margin:0 0 12px;font-size:11px;font-weight:700;color:#78716C;text-transform:uppercase;letter-spacing:1px;">Your login details</p>
-        <div style="display:flex;flex-direction:column;gap:10px;">
-          <div>
-            <p style="margin:0;font-size:11px;color:#78716C;">Login page</p>
-            <p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#F97316;">${opts.loginUrl}</p>
-          </div>
-          <div>
-            <p style="margin:0;font-size:11px;color:#78716C;">Email</p>
-            <p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#1C1917;font-family:monospace;">${opts.loginIdentifier}</p>
-          </div>
-          <div>
-            <p style="margin:0;font-size:11px;color:#78716C;">Password</p>
-            <p style="margin:2px 0 0;font-size:14px;font-weight:600;color:#1C1917;font-family:monospace;">${opts.password}</p>
-          </div>
-        </div>
-      </div>
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F4F2;border-radius:12px;padding:20px;margin-bottom:28px;">
+        <tr>
+          <td style="padding:0 0 14px 0;">
+            <p style="margin:0;font-size:11px;font-weight:700;color:#78716C;text-transform:uppercase;letter-spacing:1px;">Your login details</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:0 0 14px 0;border-bottom:1px solid #E7E5E4;">
+            <p style="margin:0 0 3px;font-size:11px;color:#A8A29E;">Login page</p>
+            <a href="${opts.loginUrl}" style="font-size:14px;font-weight:600;color:#F97316;text-decoration:none;word-break:break-all;">${opts.loginUrl}</a>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:14px 0;border-bottom:1px solid #E7E5E4;">
+            <p style="margin:0 0 3px;font-size:11px;color:#A8A29E;">Email</p>
+            <p style="margin:0;font-size:14px;font-weight:600;color:#1C1917;font-family:Courier,monospace;">${opts.loginIdentifier}</p>
+          </td>
+        </tr>
+        <tr>
+          <td style="padding:14px 0 0 0;">
+            <p style="margin:0 0 3px;font-size:11px;color:#A8A29E;">Password</p>
+            <p style="margin:0;font-size:14px;font-weight:600;color:#1C1917;font-family:Courier,monospace;">${opts.password}</p>
+          </td>
+        </tr>
+      </table>
 
       <a href="${opts.loginUrl}" style="display:block;text-align:center;background:#F97316;color:#fff;font-weight:700;font-size:15px;padding:14px 24px;border-radius:10px;text-decoration:none;">
         Log in to see your appointments →
