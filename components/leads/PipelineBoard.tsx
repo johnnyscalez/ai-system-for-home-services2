@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useCallback } from "react"
+import { useState, useCallback, useMemo } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import {
   DndContext, DragEndEvent, DragOverlay, DragStartEvent,
@@ -9,7 +9,7 @@ import {
 import { useDraggable } from "@dnd-kit/core"
 import Link from "next/link"
 import {
-  Clock, Zap, MessageSquare, DollarSign, HardHat,
+  Clock, Zap, MessageSquare, DollarSign, HardHat, CalendarDays,
 } from "lucide-react"
 import { formatDistanceToNow } from "@/lib/utils"
 import { CloseDealModal } from "./CloseDealModal"
@@ -19,36 +19,65 @@ import type { Lead } from "@/types/database"
 // ─── Column config ─────────────────────────────────────────────────────────────
 
 const PIPELINE_COLUMNS = [
-  { key: "just_came_in",       statuses: ["just_came_in", "new", "contacted"],                 label: "Just came in",            color: "text-sky-500",     dot: "bg-sky-500",     bg: "bg-sky-500/5" },
-  { key: "following_up",       statuses: ["following_up"],                                      label: "No Reply – Following Up", color: "text-orange-500",  dot: "bg-orange-500",  bg: "bg-orange-500/5" },
+  { key: "just_came_in",        statuses: ["just_came_in", "new", "contacted"],                label: "Just came in",            color: "text-sky-500",     dot: "bg-sky-500",     bg: "bg-sky-500/5" },
+  { key: "following_up",        statuses: ["following_up"],                                     label: "No Reply – Following Up", color: "text-orange-500",  dot: "bg-orange-500",  bg: "bg-orange-500/5" },
   { key: "active_conversation", statuses: ["active_conversation", "followed_up", "nurturing"],  label: "Active conversation",     color: "text-[#F97316]",   dot: "bg-[#F97316]",   bg: "bg-[#F97316]/5" },
-  { key: "qualified",          statuses: ["qualified"],                                          label: "Qualified",               color: "text-amber-500",   dot: "bg-amber-500",   bg: "bg-amber-500/5" },
-  { key: "unqualified",        statuses: ["unqualified"],                                        label: "Unqualified",             color: "text-red-400",     dot: "bg-red-400",     bg: "bg-red-400/5" },
-  { key: "appointment_booked", statuses: ["appointment_booked"],                                 label: "Appointment",             color: "text-emerald-500", dot: "bg-emerald-500", bg: "bg-emerald-500/5" },
-  { key: "closed",             statuses: ["closed", "closed_won"],                              label: "Closed ✓",                color: "text-green-600",   dot: "bg-green-500",   bg: "bg-green-500/8" },
-  { key: "lost",               statuses: ["lost", "cold", "closed_lost"],                       label: "Lost",                    color: "text-slate-400",   dot: "bg-slate-400",   bg: "bg-slate-400/5" },
+  { key: "qualified",           statuses: ["qualified"],                                         label: "Qualified",               color: "text-amber-500",   dot: "bg-amber-500",   bg: "bg-amber-500/5" },
+  { key: "unqualified",         statuses: ["unqualified"],                                       label: "Unqualified",             color: "text-red-400",     dot: "bg-red-400",     bg: "bg-red-400/5" },
+  { key: "appointment_booked",  statuses: ["appointment_booked"],                                label: "Appointment",             color: "text-emerald-500", dot: "bg-emerald-500", bg: "bg-emerald-500/5" },
+  { key: "closed",              statuses: ["closed", "closed_won"],                             label: "Closed ✓",                color: "text-green-600",   dot: "bg-green-500",   bg: "bg-green-500/8" },
+  { key: "lost",                statuses: ["lost", "cold", "closed_lost"],                      label: "Lost",                    color: "text-slate-400",   dot: "bg-slate-400",   bg: "bg-slate-400/5" },
 ]
 
 const COLUMN_STATUS_MAP: Record<string, string> = {
-  just_came_in:       "just_came_in",
-  following_up:       "following_up",
+  just_came_in:        "just_came_in",
+  following_up:        "following_up",
   active_conversation: "active_conversation",
-  qualified:          "qualified",
-  unqualified:        "unqualified",
-  appointment_booked: "appointment_booked",
-  closed:             "closed_won",
-  lost:               "lost",
+  qualified:           "qualified",
+  unqualified:         "unqualified",
+  appointment_booked:  "appointment_booked",
+  closed:              "closed_won",
+  lost:                "lost",
 }
 
-type Technician = { id: string; name: string }
+// ─── Date filter ───────────────────────────────────────────────────────────────
 
+type DateFilterKey = "today" | "week" | "month" | "all"
+
+const DATE_FILTERS: { key: DateFilterKey; label: string }[] = [
+  { key: "today", label: "Today" },
+  { key: "week",  label: "This Week" },
+  { key: "month", label: "This Month" },
+  { key: "all",   label: "All Time" },
+]
+
+function getDateThreshold(filter: DateFilterKey): string | null {
+  const now = new Date()
+  if (filter === "today") {
+    return new Date(now.getFullYear(), now.getMonth(), now.getDate()).toISOString()
+  }
+  if (filter === "week") {
+    const d = new Date(now)
+    d.setDate(d.getDate() - d.getDay())
+    d.setHours(0, 0, 0, 0)
+    return d.toISOString()
+  }
+  if (filter === "month") {
+    return new Date(now.getFullYear(), now.getMonth(), 1).toISOString()
+  }
+  return null
+}
+
+// ─── Types ─────────────────────────────────────────────────────────────────────
+
+type Technician  = { id: string; name: string }
 type PendingClose = {
   lead: Lead
   prefilledTechId: string | null
   prefilledTechName: string | null
 }
 
-// ─── Draggable lead card ───────────────────────────────────────────────────────
+// ─── Lead card ─────────────────────────────────────────────────────────────────
 
 function LeadCard({ lead, isDragging = false }: { lead: Lead; isDragging?: boolean }) {
   const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
@@ -84,7 +113,6 @@ function LeadCard({ lead, isDragging = false }: { lead: Lead; isDragging?: boole
         </span>
       )}
 
-      {/* Closed deal value badge */}
       {lead.deal_value && (
         <div className="flex items-center gap-1 mb-2">
           <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[10px] font-bold bg-green-500/15 text-green-700 border border-green-500/20">
@@ -130,9 +158,9 @@ function DraggableLead({ lead }: { lead: Lead }) {
 // ─── Droppable column ──────────────────────────────────────────────────────────
 
 function DroppableColumn({
-  colKey, label, color, dot, bg, leads,
+  colKey, label, color, dot, leads,
 }: {
-  colKey: string; label: string; color: string; dot: string; bg: string; leads: Lead[]
+  colKey: string; label: string; color: string; dot: string; leads: Lead[]
 }) {
   const { setNodeRef, isOver } = useDroppable({ id: colKey })
   const isClosedCol = colKey === "closed"
@@ -141,7 +169,7 @@ function DroppableColumn({
     <div
       ref={setNodeRef}
       className={cn(
-        "min-w-[220px] flex-shrink-0 rounded-xl p-2 transition-all duration-150",
+        "min-w-[210px] w-[210px] flex-shrink-0 rounded-xl p-2 flex flex-col transition-all duration-150",
         isOver
           ? isClosedCol
             ? "bg-green-500/15 ring-2 ring-green-500/40"
@@ -150,17 +178,17 @@ function DroppableColumn({
       )}
     >
       {/* Column header */}
-      <div className="flex items-center gap-2 mb-3 px-1">
+      <div className="flex items-center gap-2 mb-2 px-1 shrink-0">
         <div className={cn("w-2 h-2 rounded-full shrink-0", dot)} />
-        <span className={cn("text-xs font-bold", color)}>{label}</span>
-        <span className="text-[10px] text-[#78716C] bg-white rounded-full px-1.5 py-0.5 ml-auto border border-[#E7E5E4]">
+        <span className={cn("text-xs font-bold truncate flex-1", color)}>{label}</span>
+        <span className="text-[10px] text-[#78716C] bg-white rounded-full px-1.5 py-0.5 border border-[#E7E5E4] shrink-0">
           {leads.length}
         </span>
       </div>
 
       {/* Revenue sum for closed column */}
       {isClosedCol && leads.length > 0 && (
-        <div className="mx-1 mb-3 px-2 py-1.5 bg-green-500/10 rounded-lg border border-green-500/20">
+        <div className="mx-1 mb-2 px-2 py-1 bg-green-500/10 rounded-lg border border-green-500/20 shrink-0">
           <p className="text-[10px] text-green-700 font-medium">
             ${leads.reduce((sum, l) => sum + (l.deal_value ?? 0), 0).toLocaleString()} closed
           </p>
@@ -169,13 +197,13 @@ function DroppableColumn({
 
       {/* Drop zone hint */}
       {isOver && isClosedCol && (
-        <div className="mb-2 mx-1 border-2 border-dashed border-green-500/50 rounded-lg p-2 text-center">
+        <div className="mb-2 mx-1 border-2 border-dashed border-green-500/50 rounded-lg p-2 text-center shrink-0">
           <p className="text-[10px] font-semibold text-green-600">Drop to close deal</p>
         </div>
       )}
 
-      {/* Cards */}
-      <div className="space-y-2">
+      {/* Scrollable card list — capped height so columns don't grow infinitely */}
+      <div className="overflow-y-auto space-y-2 flex-1 pr-0.5" style={{ maxHeight: 300 }}>
         {leads.length === 0 && !isOver ? (
           <div className="border border-dashed border-[#E7E5E4] rounded-lg p-4 text-center text-[10px] text-[#78716C]">
             No leads
@@ -202,6 +230,7 @@ export function PipelineBoard({
   const [leads, setLeads]               = useState<Lead[]>(initialLeads)
   const [activeId, setActiveId]         = useState<string | null>(null)
   const [pendingClose, setPendingClose] = useState<PendingClose | null>(null)
+  const [dateFilter, setDateFilter]     = useState<DateFilterKey>("all")
 
   const sensors = useSensors(
     useSensor(PointerSensor, { activationConstraint: { distance: 8 } })
@@ -209,9 +238,16 @@ export function PipelineBoard({
 
   const activeLead = activeId ? leads.find(l => l.id === activeId) : null
 
+  // Apply date filter to pipeline view only
+  const filteredLeads = useMemo(() => {
+    const threshold = getDateThreshold(dateFilter)
+    if (!threshold) return leads
+    return leads.filter(l => l.created_at >= threshold)
+  }, [leads, dateFilter])
+
   const getColumnLeads = useCallback(
-    (statuses: string[]) => leads.filter(l => statuses.includes(l.status)),
-    [leads]
+    (statuses: string[]) => filteredLeads.filter(l => statuses.includes(l.status)),
+    [filteredLeads]
   )
 
   function handleDragStart({ active }: DragStartEvent) {
@@ -222,33 +258,28 @@ export function PipelineBoard({
     setActiveId(null)
     if (!over) return
 
-    const leadId = active.id as string
+    const leadId      = active.id as string
     const targetColKey = over.id as string
-    const lead = leads.find(l => l.id === leadId)
+    const lead        = leads.find(l => l.id === leadId)
     if (!lead) return
 
-    // Find which column this lead is currently in
     const currentCol = PIPELINE_COLUMNS.find(c => c.statuses.includes(lead.status))
-    if (currentCol?.key === targetColKey) return  // dropped in same column
+    if (currentCol?.key === targetColKey) return
 
-    // If dropped on closed → trigger modal
     if (targetColKey === "closed") {
-      // Look up the booked technician from the appointment
       const apt = await fetch(`/api/appointments/by-lead/${leadId}`).then(r => r.ok ? r.json() : null).catch(() => null)
       const aptData = apt?.appointment
       setPendingClose({
         lead,
-        prefilledTechId: aptData?.technician_id ?? null,
+        prefilledTechId:   aptData?.technician_id   ?? null,
         prefilledTechName: aptData?.technician_name ?? null,
       })
       return
     }
 
-    // Otherwise just update status
     const newStatus = COLUMN_STATUS_MAP[targetColKey]
     if (!newStatus) return
 
-    // Optimistic update
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, status: newStatus as Lead["status"] } : l))
 
     try {
@@ -258,7 +289,6 @@ export function PipelineBoard({
         body: JSON.stringify({ status: newStatus }),
       })
     } catch {
-      // Revert on failure
       setLeads(prev => prev.map(l => l.id === leadId ? lead : l))
     }
   }
@@ -280,15 +310,40 @@ export function PipelineBoard({
     if (!res.ok) throw new Error("Failed")
     const { lead: updated } = await res.json()
 
-    // Update local state
     setLeads(prev => prev.map(l => l.id === leadId ? { ...l, ...updated } : l))
     setPendingClose(null)
   }
 
   return (
     <>
+      {/* Date filter bar */}
+      <div className="flex items-center gap-2 mb-3 flex-wrap">
+        <CalendarDays className="w-3.5 h-3.5 text-[#78716C] shrink-0" />
+        <span className="text-xs text-[#78716C] font-medium shrink-0">Period:</span>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          {DATE_FILTERS.map(f => (
+            <button
+              key={f.key}
+              onClick={() => setDateFilter(f.key)}
+              className={cn(
+                "px-3 py-1 rounded-full text-xs font-medium transition-all border",
+                dateFilter === f.key
+                  ? "bg-[#F97316] text-white border-[#F97316] shadow-sm"
+                  : "bg-white border-[#E7E5E4] text-[#78716C] hover:border-[#F97316]/50 hover:text-[#F97316]"
+              )}
+            >
+              {f.label}
+            </button>
+          ))}
+        </div>
+        <span className="text-xs text-[#A8A29E] ml-1">
+          {filteredLeads.length} lead{filteredLeads.length !== 1 ? "s" : ""}
+        </span>
+      </div>
+
       <DndContext sensors={sensors} onDragStart={handleDragStart} onDragEnd={handleDragEnd}>
-        <div className="flex gap-3 overflow-x-auto pb-4 pt-1">
+        {/* Horizontal scroll, fixed height so it never pushes content below */}
+        <div className="flex gap-3 overflow-x-auto pb-3 pt-1" style={{ maxHeight: 420 }}>
           {PIPELINE_COLUMNS.map(col => (
             <DroppableColumn
               key={col.key}
@@ -296,7 +351,6 @@ export function PipelineBoard({
               label={col.label}
               color={col.color}
               dot={col.dot}
-              bg={col.bg}
               leads={getColumnLeads(col.statuses)}
             />
           ))}
@@ -307,7 +361,6 @@ export function PipelineBoard({
         </DragOverlay>
       </DndContext>
 
-      {/* Close deal modal */}
       <AnimatePresence>
         {pendingClose && (
           <CloseDealModal
