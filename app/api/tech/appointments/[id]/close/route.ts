@@ -26,25 +26,27 @@ export async function POST(
 
   if (!tech) return NextResponse.json({ error: "Tech not found" }, { status: 404 })
 
-  // Get appointment and verify ownership
+  // Get appointment and verify ownership — also fetch lead for job_type
   const { data: apt } = await db
     .from("appointments")
-    .select("id, lead_id, company_id, technician_id")
+    .select("id, lead_id, company_id, technician_id, leads(job_type, service_type)")
     .eq("id", id)
     .eq("technician_id", tech.id)
     .single()
 
   if (!apt) return NextResponse.json({ error: "Appointment not found" }, { status: 404 })
 
+  const leadData = (Array.isArray(apt.leads) ? apt.leads[0] : apt.leads) as { job_type: string | null; service_type: string | null } | null
+  const closedJobType = leadData?.job_type ?? leadData?.service_type ?? null
   const now = new Date().toISOString()
 
   // Mark appointment as completed
   await db
     .from("appointments")
-    .update({ status: "completed" })
+    .update({ status: "completed", updated_at: now })
     .eq("id", apt.id)
 
-  // Mark lead as closed_won with deal value
+  // Mark lead as closed_won with deal value, technician, timestamp, and job type
   await db
     .from("leads")
     .update({
@@ -53,6 +55,7 @@ export async function POST(
       closed_at:                now,
       closed_technician_id:     tech.id,
       closed_technician_name:   tech.name,
+      closed_job_type:          closedJobType,
     })
     .eq("id", apt.lead_id)
 

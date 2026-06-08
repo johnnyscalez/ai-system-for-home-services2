@@ -4,7 +4,7 @@ import { useState } from "react"
 import Link from "next/link"
 import { usePathname, useRouter } from "next/navigation"
 import { motion } from "framer-motion"
-import { Calendar, LogOut, HardHat, ChevronRight } from "lucide-react"
+import { Calendar, LogOut, HardHat, ChevronRight, Clock, ListChecks } from "lucide-react"
 import { createClient } from "@/lib/supabase"
 import { cn } from "@/lib/utils"
 
@@ -14,7 +14,9 @@ interface Props {
 }
 
 const NAV = [
-  { href: "/tech/appointments", icon: Calendar, label: "My Appointments" },
+  { href: "/tech/appointments", icon: ListChecks, label: "My Jobs" },
+  { href: "/tech/calendar",     icon: Calendar,   label: "Calendar" },
+  { href: "/tech/availability", icon: Clock,      label: "Availability" },
 ]
 
 export function TechSidebar({ techName, companyName }: Props) {
