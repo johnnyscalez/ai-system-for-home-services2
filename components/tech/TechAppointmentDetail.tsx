@@ -296,6 +296,13 @@ export function TechAppointmentDetail({ appointment, lead, conversations, techNa
   const [propertyImage, setPropertyImage] = useState<string | null>(null)
   const [imageSource, setImageSource]     = useState<string | null>(null)
 
+  const date       = new Date(appointment.scheduled_at)
+  const dateLabel  = date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: timezone })
+  const timeLabel  = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone })
+  const leadName   = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Lead"
+  const leadFirst  = lead.first_name ?? "there"
+  const address    = appointment.address || lead.address
+
   useEffect(() => {
     if (!address) return
     fetch("/api/property-image", {
@@ -312,13 +319,6 @@ export function TechAppointmentDetail({ appointment, lead, conversations, techNa
       })
       .catch(() => {})
   }, [address])
-
-  const date       = new Date(appointment.scheduled_at)
-  const dateLabel  = date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: timezone })
-  const timeLabel  = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone })
-  const leadName   = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Lead"
-  const leadFirst  = lead.first_name ?? "there"
-  const address    = appointment.address || lead.address
 
   return (
     <>
