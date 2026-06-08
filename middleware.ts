@@ -34,7 +34,7 @@ export async function middleware(request: NextRequest) {
 
   const isAuthRoute   = path === "/login" || path === "/signup"
   const isTechLogin   = path === "/tech/login"
-  const isTechRoute   = path.startsWith("/tech") && !isTechLogin
+  const isTechRoute   = (path === "/tech" || path.startsWith("/tech/")) && !isTechLogin
   const isPublicRoute =
     path === "/" ||
     path === "/api/health" ||
