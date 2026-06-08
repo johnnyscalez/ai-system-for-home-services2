@@ -27,7 +27,7 @@ export default function TechCalendarPage() {
       </div>
 
       {/* Calendar fills remaining height */}
-      <div className="relative z-10 flex-1 overflow-hidden bg-white/60">
+      <div className="relative z-10 flex-1 min-h-0 bg-white/60">
         <TechWeekCalendar />
       </div>
     </div>

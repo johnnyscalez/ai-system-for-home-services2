@@ -87,7 +87,7 @@ export function TechWeekCalendar() {
   const hours = Array.from({ length: HOURS + 1 }, (_, i) => START_HOUR + i)
 
   return (
-    <div className="flex flex-col h-full">
+    <div className="flex flex-col h-full min-h-0">
       {/* Week nav bar */}
       <div className="flex items-center justify-between px-5 py-3 border-b border-[#E7E5E4] bg-white shrink-0">
         <div className="flex items-center gap-3">
@@ -146,7 +146,7 @@ export function TechWeekCalendar() {
       </div>
 
       {/* Time grid */}
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 min-h-0 overflow-y-auto">
         {loading ? (
           <div className="flex items-center justify-center py-20 text-[#A8A29E] text-sm gap-2">
             <div className="w-4 h-4 border-2 border-[#F97316]/30 border-t-[#F97316] rounded-full animate-spin" />
