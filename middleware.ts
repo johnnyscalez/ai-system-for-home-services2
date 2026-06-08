@@ -100,12 +100,8 @@ export async function middleware(request: NextRequest) {
     return NextResponse.redirect(url)
   }
 
-  // Redirect /tech/login → /dashboard for admins
-  if (isTechLogin) {
-    const url = request.nextUrl.clone()
-    url.pathname = "/dashboard"
-    return NextResponse.redirect(url)
-  }
+  // Admins can visit /tech/login (useful for testing the tech portal)
+  // Just pass through — don't redirect them away
 
   return supabaseResponse
 }
