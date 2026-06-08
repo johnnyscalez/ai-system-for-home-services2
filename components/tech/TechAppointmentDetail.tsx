@@ -1,6 +1,6 @@
 "use client"
 
-import { useState } from "react"
+import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import { motion, AnimatePresence } from "framer-motion"
 import {
@@ -293,6 +293,25 @@ export function TechAppointmentDetail({ appointment, lead, conversations, techNa
   const [isClosed, setIsClosed]         = useState(
     appointment.status === "completed" || lead.status === "closed_won"
   )
+  const [propertyImage, setPropertyImage] = useState<string | null>(null)
+  const [imageSource, setImageSource]     = useState<string | null>(null)
+
+  useEffect(() => {
+    if (!address) return
+    fetch("/api/property-image", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ address }),
+    })
+      .then(r => r.json())
+      .then(d => {
+        if (d.success && d.imageUrl) {
+          setPropertyImage(d.imageUrl)
+          setImageSource(d.source)
+        }
+      })
+      .catch(() => {})
+  }, [address])
 
   const date       = new Date(appointment.scheduled_at)
   const dateLabel  = date.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: timezone })
@@ -362,7 +381,30 @@ export function TechAppointmentDetail({ appointment, lead, conversations, techNa
 
         <div className="flex flex-col md:flex-row flex-1 overflow-hidden">
           {/* Left panel — info */}
-          <div className="md:w-72 shrink-0 border-b md:border-b-0 md:border-r border-[#E7E5E4] overflow-y-auto p-4 space-y-5 max-h-[40vh] md:max-h-none bg-white">
+          <div className="md:w-72 shrink-0 border-b md:border-b-0 md:border-r border-[#E7E5E4] overflow-y-auto max-h-[40vh] md:max-h-none bg-white">
+            {/* Property image */}
+            {propertyImage && (
+              <div className="relative w-full h-36 overflow-hidden">
+                <img
+                  src={propertyImage}
+                  alt={`Property at ${address}`}
+                  className="w-full h-full object-cover"
+                />
+                <div className="absolute inset-0 bg-gradient-to-t from-black/40 to-transparent" />
+                {imageSource === "street_view" && (
+                  <span className="absolute bottom-2 right-2 text-[10px] text-white/70 bg-black/30 px-1.5 py-0.5 rounded">
+                    Street View
+                  </span>
+                )}
+                {imageSource === "maps_static_fallback" && (
+                  <span className="absolute bottom-2 right-2 text-[10px] text-white/70 bg-black/30 px-1.5 py-0.5 rounded">
+                    Satellite
+                  </span>
+                )}
+              </div>
+            )}
+
+            <div className="p-4 space-y-5">
             {/* Avatar */}
             <div className="flex flex-col items-center text-center gap-2 pt-2">
               <div className="w-14 h-14 rounded-full bg-[#F97316]/10 flex items-center justify-center text-xl font-bold text-[#F97316]">
@@ -446,6 +488,7 @@ export function TechAppointmentDetail({ appointment, lead, conversations, techNa
                 </Button>
               </div>
             )}
+            </div>
           </div>
 
           {/* Right panel — conversation (read-only) */}
