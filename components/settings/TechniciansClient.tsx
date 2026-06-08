@@ -331,7 +331,7 @@ export function TechniciansClient({ initial, companyServiceAreas = [] }: { initi
                   <div className="flex items-center gap-2">
                     <Lock className="w-3.5 h-3.5 text-[#F97316]" />
                     <p className="text-sm font-semibold text-[#F97316]">Login credentials</p>
-                    <p className="text-xs text-[#78716C]">— sent to the technician via SMS</p>
+                    <p className="text-xs text-[#78716C]">— sent via SMS and email</p>
                   </div>
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
                     <div className="space-y-1.5">
