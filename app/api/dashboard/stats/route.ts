@@ -42,6 +42,7 @@ export async function GET(req: NextRequest) {
     { count: cold },
     { count: needsAttention },
     closedLeadsRes,
+    allTimeClosedRes,
   ] = await Promise.all([
     // Leads that arrived in the period
     (() => {
@@ -83,12 +84,20 @@ export async function GET(req: NextRequest) {
       if (until) q = q.lte("closed_at", until)
       return q
     })(),
+    // All-time closed deals — for computing real avg job value
+    supabase.from("leads").select("deal_value").eq("company_id", companyId).in("status", ["closed", "closed_won"]).not("deal_value", "is", null),
   ])
 
   const leads = newLeads ?? 0
   const aptBooked = booked ?? 0
   const bookingRate = leads > 0 ? Math.round((aptBooked / leads) * 100) : 0
-  const avgJobValue = company?.avg_job_value ?? 0
+
+  // Prefer real avg from all-time closed deals; fall back to company setting
+  const allTimeClosed = allTimeClosedRes.data ?? []
+  const avgJobValue = allTimeClosed.length > 0
+    ? Math.round(allTimeClosed.reduce((sum, l) => sum + (Number(l.deal_value) || 0), 0) / allTimeClosed.length)
+    : (company?.avg_job_value ?? 0)
+
   const revenueProjected = aptBooked * avgJobValue
   const closedLeads = closedLeadsRes.data ?? []
   const revenueClosed = closedLeads.reduce((sum, l) => sum + (Number(l.deal_value) || 0), 0)

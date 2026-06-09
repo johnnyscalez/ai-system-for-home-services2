@@ -39,6 +39,7 @@ export async function GET(req: NextRequest) {
     technicianApptsRes,
     closedByTechRes,
     techniciansRes,
+    allTimeClosedRes,
   ] = await Promise.all([
     // Leads in the selected period
     (() => {
@@ -90,6 +91,8 @@ export async function GET(req: NextRequest) {
     })(),
     // Technicians
     supabase.from("technicians").select("id, name, status").eq("company_id", companyId).order("name"),
+    // All-time closed deals — for computing real avg job value
+    supabase.from("leads").select("deal_value").eq("company_id", companyId).in("status", ["closed", "closed_won"]).not("deal_value", "is", null),
   ])
 
   const leadsInPeriod = leadsInPeriodRes.data ?? []
@@ -101,6 +104,7 @@ export async function GET(req: NextRequest) {
   const technicianApts = technicianApptsRes.data ?? []
   const closedByTech = closedByTechRes.data ?? []
   const allTechnicians = techniciansRes.data ?? []
+  const allTimeClosed = allTimeClosedRes.data ?? []
 
   // Build daily sparkline — dynamic range based on period length
   const fromDate = since ? new Date(since) : new Date(Date.now() - 30 * 24 * 60 * 60 * 1000)
@@ -146,7 +150,10 @@ export async function GET(req: NextRequest) {
   const activeLeads = leadsInPeriod.filter(l =>
     !["closed", "closed_won", "closed_lost", "lost", "unqualified", "cold"].includes(l.status)
   ).length
-  const avgJobValue = company?.avg_job_value ?? 0
+  // Prefer real avg from all-time closed deals; fall back to company setting
+  const avgJobValue = allTimeClosed.length > 0
+    ? Math.round(allTimeClosed.reduce((sum, l) => sum + (Number(l.deal_value) || 0), 0) / allTimeClosed.length)
+    : (company?.avg_job_value ?? 0)
   const revenueAtRisk = activeLeads * avgJobValue
 
   // Net revenue = deal_value minus refunds
