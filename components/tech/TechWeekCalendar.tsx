@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback } from "react"
+import { useState, useCallback } from "react"
 import { motion } from "framer-motion"
 import { ChevronLeft, ChevronRight, MapPin, Phone, Clock, CheckCircle } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -54,33 +54,58 @@ function sameDay(a: Date, b: Date) {
          a.getDate() === b.getDate()
 }
 
-export function TechWeekCalendar() {
+type Props = { initialAppointments?: Appointment[] }
+
+export function TechWeekCalendar({ initialAppointments = [] }: Props) {
   const [baseDate, setBaseDate] = useState(() => {
     const d = new Date(); d.setHours(0, 0, 0, 0); return d
   })
-  const [appointments, setAppointments] = useState<Appointment[]>([])
-  const [loading, setLoading]           = useState(true)
-  const [selected, setSelected]         = useState<Appointment | null>(null)
+  // All loaded appointments (server-seeded + any nav fetches merged)
+  const [allAppointments, setAllAppointments] = useState<Appointment[]>(initialAppointments)
+  const [loading, setLoading]                 = useState(false)
+  const [selected, setSelected]               = useState<Appointment | null>(null)
 
   const weekDates = getWeekDates(baseDate)
   const weekStart = weekDates[0]
   const weekEnd   = weekDates[6]
 
-  const load = useCallback(async () => {
+  // Only fetch from API when navigating to a week not covered by initialAppointments
+  const fetchWeek = useCallback(async (start: Date, end: Date) => {
     setLoading(true)
-    const timeMin = new Date(weekStart).toISOString()
-    const end = new Date(weekEnd); end.setHours(23, 59, 59)
-    const timeMax = end.toISOString()
+    const timeMin = new Date(start).toISOString()
+    const endCopy = new Date(end); endCopy.setHours(23, 59, 59)
+    const timeMax = endCopy.toISOString()
     try {
       const res = await fetch(`/api/tech/appointments/calendar?timeMin=${timeMin}&timeMax=${timeMax}`)
+      if (!res.ok) return
       const data = await res.json()
-      setAppointments(data.appointments ?? [])
+      const fetched: Appointment[] = data.appointments ?? []
+      // Merge: replace any existing apts in this range, keep others
+      setAllAppointments(prev => {
+        const outside = prev.filter(a => {
+          const t = new Date(a.scheduled_at).getTime()
+          return t < start.getTime() || t > endCopy.getTime()
+        })
+        return [...outside, ...fetched]
+      })
     } catch { /* non-fatal */ }
     finally { setLoading(false) }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [weekStart.toISOString()])
+  }, [])
 
-  useEffect(() => { load() }, [load])
+  // When navigating, fetch the new week
+  const handleNav = useCallback((delta: number) => {
+    const d = new Date(baseDate)
+    d.setDate(d.getDate() + delta)
+    setBaseDate(d)
+    const newDates = getWeekDates(d)
+    fetchWeek(newDates[0], newDates[6])
+  }, [baseDate, fetchWeek])
+
+  // Filter to this week
+  const appointments = allAppointments.filter(a =>
+    sameDay(new Date(a.scheduled_at), weekStart) ||
+    weekDates.some(d => sameDay(new Date(a.scheduled_at), d))
+  )
 
   const today = new Date(); today.setHours(0, 0, 0, 0)
   const HOURS = END_HOUR - START_HOUR
@@ -92,7 +117,7 @@ export function TechWeekCalendar() {
       <div className="flex items-center justify-between px-5 py-3 border-b border-[#E7E5E4] bg-white shrink-0">
         <div className="flex items-center gap-3">
           <button
-            onClick={() => { const d = new Date(baseDate); d.setDate(d.getDate() - 7); setBaseDate(d) }}
+            onClick={() => handleNav(-7)}
             className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#F5F4F2] transition-colors"
           >
             <ChevronLeft className="w-4 h-4 text-[#78716C]" />
@@ -103,14 +128,14 @@ export function TechWeekCalendar() {
             {weekEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
           </span>
           <button
-            onClick={() => { const d = new Date(baseDate); d.setDate(d.getDate() + 7); setBaseDate(d) }}
+            onClick={() => handleNav(7)}
             className="w-7 h-7 flex items-center justify-center rounded-lg hover:bg-[#F5F4F2] transition-colors"
           >
             <ChevronRight className="w-4 h-4 text-[#78716C]" />
           </button>
         </div>
         <button
-          onClick={() => setBaseDate(new Date())}
+          onClick={() => { const d = new Date(); d.setHours(0,0,0,0); setBaseDate(d) }}
           className="text-xs px-3 py-1.5 rounded-lg border border-[#E7E5E4] text-[#78716C] hover:bg-[#F5F4F2] transition-colors"
         >
           Today
@@ -146,13 +171,14 @@ export function TechWeekCalendar() {
       </div>
 
       {/* Time grid */}
-      <div className="flex-1 min-h-0 overflow-y-auto">
-        {loading ? (
-          <div className="flex items-center justify-center py-20 text-[#A8A29E] text-sm gap-2">
-            <div className="w-4 h-4 border-2 border-[#F97316]/30 border-t-[#F97316] rounded-full animate-spin" />
-            Loading calendar…
+      <div className="flex-1 min-h-0 overflow-y-auto relative">
+        {loading && (
+          <div className="absolute top-3 right-4 z-30 flex items-center gap-1.5 text-xs text-[#A8A29E]">
+            <div className="w-3 h-3 border-2 border-[#F97316]/30 border-t-[#F97316] rounded-full animate-spin" />
+            Loading…
           </div>
-        ) : (
+        )}
+        {(
           <div className="grid relative" style={{ gridTemplateColumns: "52px repeat(7, 1fr)" }}>
             {/* Hour labels */}
             <div>
