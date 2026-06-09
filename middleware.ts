@@ -44,7 +44,7 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/api/test") ||
     path.startsWith("/api/auth") ||
     path.startsWith("/api/dev") ||
-    path.startsWith("/api/tech/resolve-identifier") ||
+    path.startsWith("/api/tech/") ||
     path.startsWith("/api/property-image") ||
     path.endsWith(".html")
   const isProtected = !isAuthRoute && !isTechLogin && !isPublicRoute
