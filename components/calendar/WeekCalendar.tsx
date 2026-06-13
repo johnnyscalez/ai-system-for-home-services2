@@ -8,7 +8,9 @@ import { cn } from "@/lib/utils"
 const START_HOUR = 7
 const END_HOUR = 20
 const HOURS = END_HOUR - START_HOUR
-const HOUR_PX = 88
+const HOUR_PX = 96        // taller rows — more breathing room
+const APT_MIN_H = 80      // our appointments: minimum block height
+const GCAL_MIN_H = 38     // Google events: minimum block height (respect short durations)
 
 const TECH_PALETTE = [
   { bg: "#1D4ED8", light: "rgba(29,78,216,0.09)",   border: "#3B82F6" },
@@ -33,12 +35,7 @@ type Appointment = {
   google_event_id?: string | null
   technician_id?: string | null
   technician_name?: string | null
-  leads?: {
-    first_name: string | null
-    last_name: string | null
-    phone: string
-    status: string
-  } | null
+  leads?: { first_name: string | null; last_name: string | null; phone: string; status: string } | null
 }
 
 type GoogleEvent = {
@@ -49,6 +46,51 @@ type GoogleEvent = {
   location?: string | null
   htmlLink?: string | null
 }
+
+// ─── Column layout algorithm ───────────────────────────────────────────────────
+// Assigns each event a (col, numCols) pair so concurrent events sit side-by-side
+// instead of stacking on top of each other.
+type LayoutEvent = { id: string; top: number; height: number }
+type LayoutResult = Record<string, { col: number; numCols: number }>
+
+function layoutColumns(events: LayoutEvent[]): LayoutResult {
+  const result: LayoutResult = {}
+  if (!events.length) return result
+
+  const sorted = [...events].sort((a, b) => a.top - b.top)
+  const colBottoms: number[] = []
+  const assigned = new Map<string, number>()
+
+  for (const ev of sorted) {
+    let placed = false
+    for (let c = 0; c < colBottoms.length; c++) {
+      if (ev.top >= colBottoms[c] - 2) {
+        colBottoms[c] = ev.top + ev.height
+        assigned.set(ev.id, c)
+        placed = true
+        break
+      }
+    }
+    if (!placed) {
+      assigned.set(ev.id, colBottoms.length)
+      colBottoms.push(ev.top + ev.height)
+    }
+  }
+
+  for (const ev of sorted) {
+    const col = assigned.get(ev.id) ?? 0
+    const evBottom = ev.top + ev.height
+    const overlapping = sorted.filter(
+      o => o.id !== ev.id && o.top < evBottom && o.top + o.height > ev.top
+    )
+    const maxCol = overlapping.reduce((m, o) => Math.max(m, assigned.get(o.id) ?? 0), col)
+    result[ev.id] = { col, numCols: maxCol + 1 }
+  }
+
+  return result
+}
+
+// ─── Helpers ──────────────────────────────────────────────────────────────────
 
 function getWeekDates(base: Date) {
   const day = base.getDay()
@@ -64,16 +106,16 @@ function getWeekDates(base: Date) {
 
 function timeToY(dateStr: string): number {
   const d = new Date(dateStr)
-  const h = d.getHours()
-  const m = d.getMinutes()
-  return Math.max(0, (h - START_HOUR) * HOUR_PX + (m / 60) * HOUR_PX)
+  return Math.max(0, (d.getHours() - START_HOUR) * HOUR_PX + (d.getMinutes() / 60) * HOUR_PX)
 }
 
 function durationPx(startStr: string, endStr: string, fallbackMins = 90): number {
   const start = new Date(startStr).getTime()
   const end = endStr ? new Date(endStr).getTime() : start + fallbackMins * 60000
-  return Math.max(80, ((end - start) / 60000 / 60) * HOUR_PX)
+  return ((end - start) / 60000 / 60) * HOUR_PX
 }
+
+// ─── Component ────────────────────────────────────────────────────────────────
 
 export function WeekCalendar() {
   const [baseDate, setBaseDate] = useState(() => {
@@ -108,7 +150,6 @@ export function WeekCalendar() {
 
   useEffect(() => { load() }, [load])
 
-  // Assign a color per technician in order of first appearance
   const techColorMap = useMemo(() => {
     const map = new Map<string, TechColor>()
     let idx = 0
@@ -126,17 +167,15 @@ export function WeekCalendar() {
     return techColorMap.get(techId) ?? UNASSIGNED_COLOR
   }
 
-  // Legend entries (tech name + color)
   const techLegend = useMemo(() => {
     const seen = new Set<string>()
-    const entries: { id: string; name: string }[] = []
-    for (const apt of appointments) {
+    return appointments.reduce<{ id: string; name: string }[]>((acc, apt) => {
       if (apt.technician_id && !seen.has(apt.technician_id)) {
         seen.add(apt.technician_id)
-        entries.push({ id: apt.technician_id, name: apt.technician_name ?? "Unknown" })
+        acc.push({ id: apt.technician_id, name: apt.technician_name ?? "Unknown" })
       }
-    }
-    return entries
+      return acc
+    }, [])
   }, [appointments])
 
   const today = new Date()
@@ -146,13 +185,13 @@ export function WeekCalendar() {
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 
   const aptsForDay = (day: Date) =>
-    appointments.filter((a) => {
+    appointments.filter(a => {
       const d = new Date(a.scheduled_at)
       return d.getDate() === day.getDate() && d.getMonth() === day.getMonth() && d.getFullYear() === day.getFullYear()
     })
 
   const gcalForDay = (day: Date) =>
-    googleEvents.filter((e) => {
+    googleEvents.filter(e => {
       if (!e.start?.dateTime) return false
       const d = new Date(e.start.dateTime)
       return d.getDate() === day.getDate() && d.getMonth() === day.getMonth() && d.getFullYear() === day.getFullYear()
@@ -179,7 +218,6 @@ export function WeekCalendar() {
           </div>
         </div>
 
-        {/* Technician legend */}
         <div className="flex items-center flex-wrap gap-3">
           {techLegend.map(t => {
             const c = getColor(t.id)
@@ -249,6 +287,23 @@ export function WeekCalendar() {
             const dayApts = aptsForDay(day)
             const dayGcal = gcalForDay(day)
 
+            // Compute heights for layout
+            const aptHeights = dayApts.map(a => ({
+              id: a.id,
+              top: timeToY(a.scheduled_at),
+              height: Math.max(APT_MIN_H, durationPx(a.scheduled_at, "")),
+            }))
+            const gcalHeights = dayGcal.map(e => ({
+              id: e.id ?? `gcal-${dayIdx}-${e.summary}`,
+              top: e.start?.dateTime ? timeToY(e.start.dateTime) : 0,
+              height: e.start?.dateTime
+                ? Math.max(GCAL_MIN_H, durationPx(e.start.dateTime, e.end?.dateTime ?? ""))
+                : GCAL_MIN_H,
+            }))
+
+            // Run layout for all events together so they avoid each other
+            const allLayouts = layoutColumns([...aptHeights, ...gcalHeights])
+
             return (
               <div
                 key={dayIdx}
@@ -266,19 +321,25 @@ export function WeekCalendar() {
                 {/* Google Calendar events */}
                 {dayGcal.map((ev) => {
                   if (!ev.start?.dateTime) return null
+                  const evId = ev.id ?? `gcal-${dayIdx}-${ev.summary}`
                   const top = timeToY(ev.start.dateTime)
-                  const height = durationPx(ev.start.dateTime, ev.end?.dateTime ?? "")
+                  const height = Math.max(GCAL_MIN_H, durationPx(ev.start.dateTime, ev.end?.dateTime ?? ""))
                   if (top < 0 || top > HOURS * HOUR_PX) return null
+                  const layout = allLayouts[evId] ?? { col: 0, numCols: 1 }
+                  const leftPct = (layout.col / layout.numCols) * 100
+                  const widthPct = (1 / layout.numCols) * 100
                   return (
                     <a
-                      key={ev.id}
+                      key={evId}
                       href={ev.htmlLink ?? "#"}
                       target="_blank"
                       rel="noopener noreferrer"
-                      className="absolute left-1 right-1 rounded-lg overflow-hidden hover:brightness-95 transition-all"
+                      className="absolute rounded-lg overflow-hidden hover:brightness-95 transition-all"
                       style={{
                         top,
-                        height: Math.max(height, 80),
+                        height,
+                        left: `calc(${leftPct}% + 2px)`,
+                        width: `calc(${widthPct}% - 4px)`,
                         backgroundColor: "rgba(249,115,22,0.08)",
                         borderLeft: "3px solid #F97316",
                         border: "1px solid rgba(249,115,22,0.25)",
@@ -286,22 +347,26 @@ export function WeekCalendar() {
                         borderLeftColor: "#F97316",
                       }}
                     >
-                      <div className="px-2.5 py-2 h-full flex flex-col gap-0.5">
-                        <p className="text-[11px] font-bold text-[#EA580C] truncate leading-tight">{ev.summary}</p>
-                        <p className="text-[10px] text-[#F97316] flex items-center gap-0.5">
-                          <Clock className="w-2.5 h-2.5 shrink-0" />
-                          {ev.start?.dateTime && new Date(ev.start.dateTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                          {ev.end?.dateTime && ` – ${new Date(ev.end.dateTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`}
-                        </p>
-                        {ev.location && (
-                          <p className="text-[10px] text-[#EA580C]/70 truncate flex items-center gap-0.5">
-                            <MapPin className="w-2.5 h-2.5 shrink-0" />{ev.location}
+                      <div className="px-1.5 py-1 h-full flex flex-col gap-0.5 overflow-hidden">
+                        <p className="text-[10px] font-bold text-[#EA580C] truncate leading-tight">{ev.summary}</p>
+                        {height > 50 && ev.start?.dateTime && (
+                          <p className="text-[9px] text-[#F97316] flex items-center gap-0.5">
+                            <Clock className="w-2 h-2 shrink-0" />
+                            {new Date(ev.start.dateTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                            {ev.end?.dateTime && ` – ${new Date(ev.end.dateTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`}
                           </p>
                         )}
-                        <div className="mt-auto flex items-center gap-1">
-                          <ExternalLink className="w-2.5 h-2.5 text-[#F97316]/60" />
-                          <span className="text-[9px] text-[#F97316]/60">Google Calendar</span>
-                        </div>
+                        {height > 70 && ev.location && (
+                          <p className="text-[9px] text-[#EA580C]/70 truncate flex items-center gap-0.5">
+                            <MapPin className="w-2 h-2 shrink-0" />{ev.location}
+                          </p>
+                        )}
+                        {height > 80 && (
+                          <div className="mt-auto flex items-center gap-1">
+                            <ExternalLink className="w-2 h-2 text-[#F97316]/60" />
+                            <span className="text-[8px] text-[#F97316]/60">GCal</span>
+                          </div>
+                        )}
                       </div>
                     </a>
                   )
@@ -310,16 +375,21 @@ export function WeekCalendar() {
                 {/* Our appointments */}
                 {dayApts.map((apt) => {
                   const top = timeToY(apt.scheduled_at)
-                  const height = durationPx(apt.scheduled_at, "")
+                  const height = Math.max(APT_MIN_H, durationPx(apt.scheduled_at, ""))
                   const c = getColor(apt.technician_id)
+                  const layout = allLayouts[apt.id] ?? { col: 0, numCols: 1 }
+                  const leftPct = (layout.col / layout.numCols) * 100
+                  const widthPct = (1 / layout.numCols) * 100
                   return (
                     <button
                       key={apt.id}
                       onClick={() => setSelectedEvent(apt)}
-                      className="absolute left-1 right-1 rounded-lg overflow-hidden hover:brightness-95 transition-all text-left group"
+                      className="absolute rounded-lg overflow-hidden hover:brightness-95 transition-all text-left"
                       style={{
                         top,
-                        height: Math.max(height, 80),
+                        height,
+                        left: `calc(${leftPct}% + 2px)`,
+                        width: `calc(${widthPct}% - 4px)`,
                         backgroundColor: c.light,
                         borderLeft: `3px solid ${c.bg}`,
                         border: `1px solid ${c.border}35`,
@@ -327,25 +397,25 @@ export function WeekCalendar() {
                         borderLeftColor: c.bg,
                       }}
                     >
-                      <div className="px-2.5 py-2 h-full flex flex-col gap-0.5">
-                        <p className="text-[12px] font-bold truncate leading-tight" style={{ color: c.bg }}>
+                      <div className="px-2 py-1.5 h-full flex flex-col gap-0.5 overflow-hidden">
+                        <p className="text-[11px] font-bold truncate leading-tight" style={{ color: c.bg }}>
                           {apt.leads?.first_name} {apt.leads?.last_name}
                         </p>
-                        <p className="text-[11px] text-slate-500 flex items-center gap-0.5">
+                        <p className="text-[10px] text-slate-500 flex items-center gap-0.5">
                           <Clock className="w-2.5 h-2.5 shrink-0" />
                           {new Date(apt.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
                         </p>
-                        {apt.address && (
+                        {apt.address && height > 75 && (
                           <p className="text-[10px] text-slate-500 truncate flex items-center gap-0.5">
                             <MapPin className="w-2.5 h-2.5 shrink-0" />{apt.address}
                           </p>
                         )}
-                        {apt.notes && (
-                          <p className="text-[10px] text-slate-400 truncate">{apt.notes}</p>
+                        {apt.notes && height > 100 && (
+                          <p className="text-[9px] text-slate-400 truncate">{apt.notes}</p>
                         )}
                         {apt.technician_name && (
-                          <p className="text-[10px] font-semibold mt-auto flex items-center gap-0.5" style={{ color: c.bg }}>
-                            <Wrench className="w-2.5 h-2.5 shrink-0" />{apt.technician_name}
+                          <p className="text-[9px] font-semibold mt-auto flex items-center gap-0.5" style={{ color: c.bg }}>
+                            <Wrench className="w-2 h-2 shrink-0" />{apt.technician_name}
                           </p>
                         )}
                       </div>
@@ -368,22 +438,18 @@ export function WeekCalendar() {
             className="bg-card border border-border rounded-t-2xl sm:rounded-2xl w-full max-w-sm mx-4 overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            {/* Colored stripe matching tech color */}
             <div className="h-1.5" style={{ background: getColor(selectedEvent.technician_id).bg }} />
             <div className="p-6 space-y-4">
-              <div className="flex items-start justify-between">
-                <div>
-                  <h3 className="font-semibold text-lg">
-                    {selectedEvent.leads?.first_name} {selectedEvent.leads?.last_name}
-                  </h3>
-                  <p className="text-sm text-muted-foreground mt-0.5">
-                    {new Date(selectedEvent.scheduled_at).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
-                    {" · "}
-                    {new Date(selectedEvent.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                  </p>
-                </div>
+              <div>
+                <h3 className="font-semibold text-lg">
+                  {selectedEvent.leads?.first_name} {selectedEvent.leads?.last_name}
+                </h3>
+                <p className="text-sm text-muted-foreground mt-0.5">
+                  {new Date(selectedEvent.scheduled_at).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                  {" · "}
+                  {new Date(selectedEvent.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                </p>
               </div>
-
               {selectedEvent.technician_name && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Wrench className="w-3.5 h-3.5" /> {selectedEvent.technician_name}
@@ -402,7 +468,6 @@ export function WeekCalendar() {
               {selectedEvent.notes && (
                 <p className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-3">{selectedEvent.notes}</p>
               )}
-
               <div className="flex gap-2 pt-1">
                 <a
                   href={`/leads/${selectedEvent.id}`}

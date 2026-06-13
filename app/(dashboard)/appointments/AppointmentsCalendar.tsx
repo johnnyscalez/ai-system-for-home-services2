@@ -84,6 +84,48 @@ function aptTimeToY(isoStr: string, tz: string): number {
   return Math.max(0, (h - CAL_START) * CAL_HOUR_PX + (m / 60) * CAL_HOUR_PX)
 }
 
+// ─── Column layout algorithm ─────────────────────────────────────────────────
+// Spreads concurrent events side-by-side instead of stacking them.
+type LayoutEvent = { id: string; top: number; height: number }
+type LayoutResult = Record<string, { col: number; numCols: number }>
+
+function layoutColumns(events: LayoutEvent[]): LayoutResult {
+  const result: LayoutResult = {}
+  if (!events.length) return result
+
+  const sorted = [...events].sort((a, b) => a.top - b.top)
+  const colBottoms: number[] = []
+  const assigned = new Map<string, number>()
+
+  for (const ev of sorted) {
+    let placed = false
+    for (let c = 0; c < colBottoms.length; c++) {
+      if (ev.top >= colBottoms[c] - 2) {
+        colBottoms[c] = ev.top + ev.height
+        assigned.set(ev.id, c)
+        placed = true
+        break
+      }
+    }
+    if (!placed) {
+      assigned.set(ev.id, colBottoms.length)
+      colBottoms.push(ev.top + ev.height)
+    }
+  }
+
+  for (const ev of sorted) {
+    const col = assigned.get(ev.id) ?? 0
+    const evBottom = ev.top + ev.height
+    const overlapping = sorted.filter(
+      o => o.id !== ev.id && o.top < evBottom && o.top + o.height > ev.top
+    )
+    const maxCol = overlapping.reduce((m, o) => Math.max(m, assigned.get(o.id) ?? 0), col)
+    result[ev.id] = { col, numCols: maxCol + 1 }
+  }
+
+  return result
+}
+
 // ─── Status configs ───────────────────────────────────────────────────────────
 
 type StatusCfg = { label: string; color: string; dotColor: string; icon: React.ElementType }
@@ -752,62 +794,79 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                         />
                       ))}
 
-                      {/* Appointment blocks */}
-                      {dayApts.map(apt => {
-                        const top = aptTimeToY(apt.scheduled_at, timezone)
-                        const c = getTechColor(apt.technician_id)
-                        const techName = apt.technician_name ?? (apt.technicians as { name: string } | null)?.name
-                        return (
-                          <button
-                            key={apt.id}
-                            onClick={() => { setSelected(apt); setEditMode(false) }}
-                            className="absolute left-1 right-1 rounded-lg overflow-hidden hover:brightness-95 transition-all text-left"
-                            style={{
-                              top,
-                              height: Math.max(CAL_HOUR_PX * 1.5, 90),
-                              backgroundColor: c.light,
-                              borderLeft: `3px solid ${c.bg}`,
-                              border: `1px solid ${c.border}35`,
-                              borderLeftWidth: 3,
-                              borderLeftColor: c.bg,
-                            }}
-                          >
-                            {/* Pending confirmation tag — amber corner ribbon */}
-                            {apt.confirmation_status === "pending_confirmation" && (
-                              <div
-                                className="absolute top-0 right-0 px-1.5 py-[3px] text-[8px] font-bold text-white uppercase tracking-wider"
-                                style={{ background: "#F59E0B", borderBottomLeftRadius: 6 }}
-                              >
-                                Pending
+                      {/* Appointment blocks — column layout prevents overlap */}
+                      {(() => {
+                        const APT_MIN_H = Math.max(CAL_HOUR_PX * 1.5, 90)
+                        const aptData = dayApts.map(apt => ({
+                          id: apt.id,
+                          top: aptTimeToY(apt.scheduled_at, timezone),
+                          height: APT_MIN_H,
+                        }))
+                        const layouts = layoutColumns(aptData)
+
+                        return dayApts.map(apt => {
+                          const top = aptTimeToY(apt.scheduled_at, timezone)
+                          const height = APT_MIN_H
+                          const c = getTechColor(apt.technician_id)
+                          const techName = apt.technician_name ?? (apt.technicians as { name: string } | null)?.name
+                          const layout = layouts[apt.id] ?? { col: 0, numCols: 1 }
+                          const leftPct = (layout.col / layout.numCols) * 100
+                          const widthPct = (1 / layout.numCols) * 100
+
+                          return (
+                            <button
+                              key={apt.id}
+                              onClick={() => { setSelected(apt); setEditMode(false) }}
+                              className="absolute rounded-lg overflow-hidden hover:brightness-95 transition-all text-left"
+                              style={{
+                                top,
+                                height,
+                                left: `calc(${leftPct}% + 2px)`,
+                                width: `calc(${widthPct}% - 4px)`,
+                                backgroundColor: c.light,
+                                borderLeft: `3px solid ${c.bg}`,
+                                border: `1px solid ${c.border}35`,
+                                borderLeftWidth: 3,
+                                borderLeftColor: c.bg,
+                              }}
+                            >
+                              {/* Pending confirmation tag */}
+                              {apt.confirmation_status === "pending_confirmation" && (
+                                <div
+                                  className="absolute top-0 right-0 px-1.5 py-[3px] text-[8px] font-bold text-white uppercase tracking-wider"
+                                  style={{ background: "#F59E0B", borderBottomLeftRadius: 6 }}
+                                >
+                                  Pending
+                                </div>
+                              )}
+                              <div className="px-2 py-1.5 h-full flex flex-col gap-0.5 overflow-hidden">
+                                <p className="text-[11px] font-bold truncate leading-tight pr-10" style={{ color: c.bg }}>
+                                  {apt.leads?.first_name} {apt.leads?.last_name}
+                                </p>
+                                <p className="text-[10px] text-[#78716C] font-medium flex items-center gap-0.5">
+                                  <Clock className="w-2 h-2 shrink-0" />
+                                  {new Date(apt.scheduled_at).toLocaleTimeString("en-US", {
+                                    hour: "numeric", minute: "2-digit", timeZone: timezone,
+                                  })}
+                                </p>
+                                {apt.address && (
+                                  <p className="text-[10px] text-[#78716C] truncate flex items-center gap-0.5">
+                                    <MapPin className="w-2 h-2 shrink-0" />{apt.address}
+                                  </p>
+                                )}
+                                {apt.notes && (
+                                  <p className="text-[9px] text-[#78716C] truncate">{apt.notes}</p>
+                                )}
+                                {techName && (
+                                  <p className="text-[9px] font-semibold mt-auto flex items-center gap-0.5" style={{ color: c.bg }}>
+                                    <Wrench className="w-2 h-2 shrink-0" />{techName}
+                                  </p>
+                                )}
                               </div>
-                            )}
-                            <div className="px-2.5 py-2 h-full flex flex-col gap-0.5">
-                              <p className="text-[12px] font-bold truncate leading-tight pr-10" style={{ color: c.bg }}>
-                                {apt.leads?.first_name} {apt.leads?.last_name}
-                              </p>
-                              <p className="text-[11px] text-[#78716C] font-medium flex items-center gap-0.5">
-                                <Clock className="w-2.5 h-2.5 shrink-0" />
-                                {new Date(apt.scheduled_at).toLocaleTimeString("en-US", {
-                                  hour: "numeric", minute: "2-digit", timeZone: timezone,
-                                })}
-                              </p>
-                              {apt.address && (
-                                <p className="text-[10px] text-[#78716C] truncate flex items-center gap-0.5">
-                                  <MapPin className="w-2.5 h-2.5 shrink-0" />{apt.address}
-                                </p>
-                              )}
-                              {apt.notes && (
-                                <p className="text-[10px] text-[#78716C] truncate">{apt.notes}</p>
-                              )}
-                              {techName && (
-                                <p className="text-[10px] font-semibold mt-auto flex items-center gap-0.5" style={{ color: c.bg }}>
-                                  <Wrench className="w-2.5 h-2.5 shrink-0" />{techName}
-                                </p>
-                              )}
-                            </div>
-                          </button>
-                        )
-                      })}
+                            </button>
+                          )
+                        })
+                      })()}
                     </div>
                   )
                 })}
