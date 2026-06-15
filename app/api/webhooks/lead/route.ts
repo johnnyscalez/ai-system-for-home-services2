@@ -94,21 +94,41 @@ export async function POST(req: NextRequest) {
 }
 
 async function handleLead(req: NextRequest, body: Record<string, unknown>) {
-  const secret = extractSecret(req, body)
-  if (!secret) {
-    return NextResponse.json({ error: "Missing webhook secret" }, { status: 401, headers: CORS_HEADERS })
-  }
-
   const supabase = createServiceRoleClient()
 
-  const { data: company } = await supabase
-    .from("companies")
-    .select("id, service_type")
-    .eq("webhook_secret", secret)
-    .single()
+  let company: { id: string; service_type: string | null } | null = null
 
-  if (!company) {
-    return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401, headers: CORS_HEADERS })
+  const secret = extractSecret(req, body)
+
+  if (secret) {
+    const { data } = await supabase
+      .from("companies")
+      .select("id, service_type")
+      .eq("webhook_secret", secret)
+      .single()
+    company = data
+    if (!company) {
+      return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401, headers: CORS_HEADERS })
+    }
+  } else {
+    // No secret — accept if company_id is provided directly (public lead capture forms, e.g. Lovable)
+    const companyId =
+      new URL(req.url).searchParams.get("company_id") ||
+      (typeof body.company_id === "string" ? body.company_id : null)
+
+    if (!companyId) {
+      return NextResponse.json({ error: "Missing webhook secret or company_id" }, { status: 401, headers: CORS_HEADERS })
+    }
+
+    const { data } = await supabase
+      .from("companies")
+      .select("id, service_type")
+      .eq("id", companyId)
+      .single()
+    company = data
+    if (!company) {
+      return NextResponse.json({ error: "Company not found" }, { status: 404, headers: CORS_HEADERS })
+    }
   }
 
   const lead = normalizeLead(body)
