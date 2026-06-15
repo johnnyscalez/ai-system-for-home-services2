@@ -111,23 +111,34 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
       return NextResponse.json({ error: "Invalid webhook secret" }, { status: 401, headers: CORS_HEADERS })
     }
   } else {
-    // No secret — accept if company_id is provided directly (public lead capture forms, e.g. Lovable)
+    // No secret — try company_id from query/body, then fall back to the single company
     const companyId =
       new URL(req.url).searchParams.get("company_id") ||
       (typeof body.company_id === "string" ? body.company_id : null)
 
-    if (!companyId) {
-      return NextResponse.json({ error: "Missing webhook secret or company_id" }, { status: 401, headers: CORS_HEADERS })
-    }
-
-    const { data } = await supabase
-      .from("companies")
-      .select("id, service_type")
-      .eq("id", companyId)
-      .single()
-    company = data
-    if (!company) {
-      return NextResponse.json({ error: "Company not found" }, { status: 404, headers: CORS_HEADERS })
+    if (companyId) {
+      const { data } = await supabase
+        .from("companies")
+        .select("id, service_type")
+        .eq("id", companyId)
+        .single()
+      company = data
+      if (!company) {
+        return NextResponse.json({ error: "Company not found" }, { status: 404, headers: CORS_HEADERS })
+      }
+    } else {
+      // No identifier at all — use the only company in the system (single-tenant fallback)
+      const { data: companies } = await supabase
+        .from("companies")
+        .select("id, service_type")
+        .limit(2)
+      if (!companies || companies.length === 0) {
+        return NextResponse.json({ error: "No company configured" }, { status: 404, headers: CORS_HEADERS })
+      }
+      if (companies.length > 1) {
+        return NextResponse.json({ error: "Multiple companies exist — include company_id or webhook_secret" }, { status: 401, headers: CORS_HEADERS })
+      }
+      company = companies[0]
     }
   }
 

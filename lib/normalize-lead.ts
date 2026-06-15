@@ -68,6 +68,11 @@ const FORM_ID_KEYS = [
   "form_id", "formId", "form_name", "formName",
 ]
 
+// Keys that are webhook infrastructure — not lead fields, not metadata
+const INFRA_KEYS = [
+  "company_id", "companyId", "source", "webhook_secret", "secret", "key",
+]
+
 /**
  * Flattens one level of nested objects so top-level lookup works on
  * e.g. { data: { phone: "..." } } or { lead: { email: "..." } }
@@ -131,6 +136,7 @@ export function normalizeLead(raw: Record<string, unknown>): NormalizedLead {
   const knownKeys = new Set([
     ...PHONE_KEYS, ...FIRST_NAME_KEYS, ...LAST_NAME_KEYS, ...FULL_NAME_KEYS,
     ...EMAIL_KEYS, ...ADDRESS_KEYS, ...NOTES_KEYS, ...SERVICE_TYPE_KEYS, ...FORM_ID_KEYS,
+    ...INFRA_KEYS,
   ].map(k => k.toLowerCase()))
 
   // Sensitive fields that must never be stored in lead metadata
