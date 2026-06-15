@@ -60,8 +60,8 @@ const NOTES_KEYS = [
 ]
 
 const SERVICE_TYPE_KEYS = [
-  "service_type", "serviceType", "service", "Service Type", "Service",
-  "service_needed", "type_of_service", "job_type",
+  "service_type", "serviceType", "servicetype", "service", "Service Type", "Service",
+  "service_needed", "type_of_service", "job_type", "jobType",
 ]
 
 const FORM_ID_KEYS = [
@@ -71,6 +71,7 @@ const FORM_ID_KEYS = [
 // Keys that are webhook infrastructure — not lead fields, not metadata
 const INFRA_KEYS = [
   "company_id", "companyId", "source", "webhook_secret", "secret", "key",
+  "submittedAt", "submitted_at", "timestamp",
 ]
 
 /**
