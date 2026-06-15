@@ -197,8 +197,8 @@ export async function POST(req: NextRequest) {
   // If AI is paused for this lead, skip
   if (lead.ai_paused) return twimlOk()
 
-  // Don't respond to leads that are already done
-  if (["closed", "closed_won", "closed_lost", "lost", "unqualified"].includes(lead.status)) {
+  // Don't respond to leads that are fully closed/terminal
+  if (["closed", "closed_won", "closed_lost", "lost"].includes(lead.status)) {
     return twimlOk()
   }
 
