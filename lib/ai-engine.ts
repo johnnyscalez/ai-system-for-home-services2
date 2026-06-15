@@ -93,11 +93,11 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "update_lead_status",
     description:
-      "Update the lead's status. Use 'qualified' the moment the lead has answered the discover-stage questions (what's wrong, how old the unit is, whether they own the home). Call this DURING Stage 2–3, NOT after booking — it moves them into the qualified pipeline. Do not wait until after the appointment is booked. Use 'closed_lost' when they explicitly say they're not interested or already chose someone else. Use 'needs_attention' when they seem frustrated, it's a renter without landlord auth, or a commercial property.",
+      "Update the lead's status. Use 'qualified' the moment the lead has answered the discover-stage questions (what's wrong, how old the unit is, whether they own the home). Call this DURING Stage 2–3, NOT after booking — it moves them into the qualified pipeline. Do not wait until after the appointment is booked. Use 'closed_lost' when they explicitly say they're not interested or already chose someone else. Use 'needs_attention' when they seem frustrated, it's a renter without landlord auth, or a commercial property. Use 'returning_client' when an existing customer (RETURNING CUSTOMER in the lead file) initiates a new service request — this re-enters them into the active pipeline.",
     input_schema: {
       type: "object" as const,
       properties: {
-        status: { type: "string", enum: ["qualified", "closed_lost", "needs_attention"] },
+        status: { type: "string", enum: ["qualified", "closed_lost", "needs_attention", "returning_client"] },
       },
       required: ["status"],
     },
@@ -797,6 +797,7 @@ export async function processAndSave(
         qualified: "qualified",
         closed_lost: "lost",
         needs_attention: "needs_attention",
+        returning_client: "contacted",
       }
       await supabase
         .from("leads")
@@ -1010,7 +1011,19 @@ Lead source: ${lead.source ?? "unknown"}
 Current status: ${lead.status}
 Customer type: ${isReturning ? "⭐ RETURNING CUSTOMER — has history with this company" : "NEW LEAD — first contact, no prior jobs"}
 Today / current time: ${nowFmt}
-`
+${isReturning ? `
+=== RETURNING CUSTOMER RULES — OVERRIDE STANDARD NEW-LEAD FLOW ===
+This person is an existing customer. They already trust the company. Your job is SERVICE, not qualification.
+
+1. DO NOT re-ask questions already answered (address is on file, ownership is known).
+2. Skip or compress discovery — ask only what's NEW or DIFFERENT about this visit.
+3. Get to booking FAST. They don't need to be sold — they came back.
+4. If they're asking about a past job, answer helpfully and offer to schedule a follow-up if needed.
+5. If they need a new appointment, use find_available_slots then book it — same flow as new leads but shorter.
+6. Never treat them like a stranger. Reference their history naturally: "Since we've been out before..."
+7. After resolving their request, ask if there's anything else — they may have multiple needs.
+=== END RETURNING CUSTOMER RULES ===` : ""}`
+
 
   if (lead.address) ctx += `Address on file: ${lead.address}\n`
   if (lead.email) ctx += `Email: ${lead.email}\n`
