@@ -31,18 +31,23 @@ export async function sendAppointmentEmail(
   const fromName = data.fromName || data.companyName
 
   if (gmail) {
-    await sendEmailViaGmail(
-      gmail.accessToken,
-      gmail.refreshToken,
-      to,
-      resolvedSubject,
-      html,
-      fromName,
-      gmail.fromEmail,
-      data.replyToEmail ?? null,
-      gmail.onTokenRefresh,
-    )
-    return
+    try {
+      await sendEmailViaGmail(
+        gmail.accessToken,
+        gmail.refreshToken,
+        to,
+        resolvedSubject,
+        html,
+        fromName,
+        gmail.fromEmail,
+        data.replyToEmail ?? null,
+        gmail.onTokenRefresh,
+      )
+      return
+    } catch (gmailErr) {
+      // Gmail failed (expired token, revoked access, etc.) — fall through to Resend
+      console.warn("[email] Gmail send failed, falling back to Resend:", gmailErr)
+    }
   }
 
   const fromEmail = process.env.RESEND_FROM_EMAIL || "onboarding@resend.dev"
