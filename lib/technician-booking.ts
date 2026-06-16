@@ -15,6 +15,38 @@ import { DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
 import type { AppointmentWindow } from "@/lib/availability"
 import type { Technician } from "@/types/database"
 
+/**
+ * Convert a local slot time (e.g. "08:00" on "2026-06-17" in "America/New_York")
+ * to a UTC ISO string. Uses Intl.DateTimeFormat.formatToParts so DST is handled
+ * correctly — no date libraries needed.
+ */
+function localSlotToUtcIso(dateStr: string, timeStr: string, tz: string): string {
+  // Treat the local values as UTC temporarily so we can do arithmetic
+  const naiveUtc = new Date(`${dateStr}T${timeStr}:00Z`)
+
+  // Find what that "UTC" moment looks like when rendered in the target timezone
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz,
+    year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit",
+    hour12: false,
+  }).formatToParts(naiveUtc)
+
+  const get = (type: string) => parts.find(p => p.type === type)?.value ?? "00"
+  const localMs = Date.UTC(
+    parseInt(get("year")),
+    parseInt(get("month")) - 1,
+    parseInt(get("day")),
+    parseInt(get("hour")) % 24, // hour12:false returns "24" for midnight in some envs
+    parseInt(get("minute")),
+    parseInt(get("second")),
+  )
+
+  // The gap between naiveUtc and localMs IS the UTC offset for this timezone on this date
+  const offsetMs = naiveUtc.getTime() - localMs
+  return new Date(naiveUtc.getTime() + offsetMs).toISOString()
+}
+
 function fmt12(t: string): string {
   const [hStr, mStr] = t.split(":")
   const h = parseInt(hStr, 10)
@@ -93,10 +125,11 @@ export async function findSlotsForLead(
     .lte("scheduled_at", horizonEnd.toISOString())
     .neq("status", "cancelled")
 
-  // busy set: `techId|YYYY-MM-DDTHH:MM`
+  // busy set: `techId|YYYY-MM-DDTHH:MM` — normalize to UTC ISO so format is always consistent
   const busyAt = new Set<string>()
   for (const a of existingApts ?? []) {
-    if (a.technician_id) busyAt.add(`${a.technician_id}|${a.scheduled_at.substring(0, 16)}`)
+    if (a.technician_id)
+      busyAt.add(`${a.technician_id}|${new Date(a.scheduled_at).toISOString().substring(0, 16)}`)
   }
 
   // weekly workload for tiebreaking
@@ -123,13 +156,15 @@ export async function findSlotsForLead(
     const dateStr = day.toLocaleDateString("en-CA", { timeZone: tz }) // YYYY-MM-DD
 
     for (const win of windows) {
-      const isoStart = `${dateStr}T${win.start}:00`
-      const isoEnd   = `${dateStr}T${win.end}:00`
+      // Convert local slot times to UTC so stored scheduled_at values are always UTC
+      const isoStart = localSlotToUtcIso(dateStr, win.start, tz)
+      const isoEnd   = localSlotToUtcIso(dateStr, win.end,   tz)
       if (new Date(isoStart) <= now) continue
 
       const [slotH, slotM] = win.start.split(":").map(Number)
       const slotMinutes    = slotH * 60 + slotM
 
+      const isoStartKey = isoStart.substring(0, 16) // "YYYY-MM-DDTHH:MM" in UTC
       const avail = candidates
         .filter(t => {
           const sched = t.schedule[dayName as keyof Technician["schedule"]] as
@@ -138,7 +173,7 @@ export async function findSlotsForLead(
           const [sh, sm] = sched.start.split(":").map(Number)
           const [eh, em] = sched.end.split(":").map(Number)
           if (slotMinutes < sh * 60 + sm || slotMinutes >= eh * 60 + em) return false
-          return !busyAt.has(`${t.id}|${isoStart.substring(0, 16)}`)
+          return !busyAt.has(`${t.id}|${isoStartKey}`)
         })
         .sort((a, b) => (weeklyCount[a.id] ?? 0) - (weeklyCount[b.id] ?? 0))
 

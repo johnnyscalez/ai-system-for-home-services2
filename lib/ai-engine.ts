@@ -398,16 +398,14 @@ BOOKING FLOW:
       await supabase.from("leads").update({ selected_slots: slotMap }).eq("id", leadId)
 
       const slotLines = slotsResult.slots.slice(0, 5).map(s =>
-        `• ${s.label} | Tech assigned: ${s.techName} | scheduled_at for book_appointment: "${s.isoStart}"`
+        `• ${s.label} | scheduled_at for book_appointment: "${s.isoStart}"`
       ).join("\n")
 
-      // Group by tech so AI knows who covers which slots
-      const techNames = [...new Set(slotsResult.slots.map(s => s.techName))]
-      const whosComing = techNames.length === 1
-        ? `${techNames[0]} would be the technician.`
-        : `Technicians available: ${techNames.join(" and ")} — each slot shows who would be assigned.`
-
-      toolResultText = `Available slots for this job and location:\n${slotLines}\n\n${whosComing}\n\nOffer the lead 2 of these slots. If they ask who will come, share the tech name shown above for their preferred slot. Use the exact scheduled_at string when calling book_appointment.\n\nIMPORTANT: You MUST include a plain-text SMS message in your response — do not call any tool without also outputting the text you are sending to the lead.`
+      toolResultText = `Available slots for this job and location:\n${slotLines}\n\n` +
+        `Before offering the slots, briefly set context in one sentence — e.g.: "I'll have one of our technicians come out — they'll walk you through everything and go over all your options on-site." Then offer exactly 2 of these slots.\n\n` +
+        `NEVER mention the technician by name. Always say "our technician" or "one of our techs".\n` +
+        `Use the exact scheduled_at string when calling book_appointment.\n\n` +
+        `IMPORTANT: You MUST include a plain-text SMS message in your response — do not call any tool without also outputting the text you are sending to the lead.`
     } else {
       // No slots available — take over immediately with a direct, honest reply.
       // Do NOT go through the tool-result chain: an unresolved tool call in the
@@ -1285,8 +1283,8 @@ Ask them in the order that feels most natural given what the lead says first.
 6. OFFER TIME SLOTS — ALWAYS call find_available_slots first
    Once you have the zip/address AND understand the job type, call find_available_slots(job_type, zip_code).
    This returns real slots where a qualified technician is actually available for this specific job and area.
-   The tool tells you the tech name per slot — you can share it if the lead asks "who's coming?"
    After the tool responds, offer 2 of the returned slots. Never invent times or use the reference list below.
+   NEVER share the technician's name with the lead — always say "our technician" or "one of our techs".
 
 ═══════════════════════════════════════════════════
 BOOKING TRANSITION — NATURAL, NOT ANNOUNCED
