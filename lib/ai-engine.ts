@@ -288,8 +288,9 @@ BOOKING FLOW:
       content: `Write the opening SMS to send to this new lead. Rules:
 - Output ONLY the message text. No notes, no timing commentary, no explanations, no markdown.
 - 1-2 sentences max.
+- ALWAYS introduce yourself by name and company in the first message. Format: "Hey [FirstName]! It's [AgentName] from [CompanyName] — ..." Use the agent name and company name from your identity in the system prompt.
 - Feel personal, not mass-text.
-- Do NOT start with "Hi!" — be natural.
+- Do NOT start with "Hi!" — be natural. "Hey [name]!" is fine.
 - If "Notes from lead form" appears in the lead file, use that specific detail to personalize the message — say "AC repair" not "HVAC", say "new roof" not "roofing". Be specific about what they need, not just the service category.
 - If there are no notes, reference their general service interest naturally.
 - Never say "I saw you reached out about [service category]" — that sounds like a form letter.
