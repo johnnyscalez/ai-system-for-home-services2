@@ -409,17 +409,60 @@ BOOKING FLOW:
 
       toolResultText = `Available slots for this job and location:\n${slotLines}\n\n${whosComing}\n\nOffer the lead 2 of these slots. If they ask who will come, share the tech name shown above for their preferred slot. Use the exact scheduled_at string when calling book_appointment.\n\nIMPORTANT: You MUST include a plain-text SMS message in your response — do not call any tool without also outputting the text you are sending to the lead.`
     } else {
+      // No slots available — take over immediately with a direct, honest reply.
+      // Do NOT go through the tool-result chain: an unresolved tool call in the
+      // message history confuses the fallback, and the global catch-all has no
+      // slot context so Claude invents times from the system prompt. Instead,
+      // make one clean call with explicit "no slots, here's why" context.
       const reasonLabels: Record<string, string> = {
-        no_technicians:          "no technicians configured yet",
-        no_specialization_match: "no tech with the required skill",
-        no_zip_match:            "no tech covers this zip code",
-        no_slots:                "all qualified techs are fully booked in the booking window",
+        no_technicians:          "no technicians have been configured yet",
+        no_specialization_match: "no technician is trained for this service type",
+        no_zip_match:            "this zip code is outside our current service area",
+        no_slots:                "all technicians are fully booked for the next few days",
       }
-      const why = slotsResult.found === false ? (reasonLabels[slotsResult.reason] ?? slotsResult.reason) : "unknown"
-      toolResultText = `No available slots (${why}). Tell the lead warmly: "Let me check with our scheduling team and I'll follow up with some times shortly." Then call update_lead_status with 'needs_attention'.`
+      const why = slotsResult.found === false
+        ? (reasonLabels[slotsResult.reason] ?? slotsResult.reason)
+        : reasonLabels.no_slots
+
+      // Save the extracted zip to the lead record so the CRM reflects it
+      if (findSlotsZip) {
+        const existingMeta = (typeof lead.metadata === "object" && lead.metadata !== null)
+          ? lead.metadata as Record<string, unknown>
+          : {}
+        try {
+          await supabase
+            .from("leads")
+            .update({ metadata: { ...existingMeta, service_zip: findSlotsZip } })
+            .eq("id", leadId)
+        } catch { /* non-critical */ }
+      }
+
+      const noSlotsReply = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 150,
+        system: systemPrompt,
+        messages: [
+          ...messages,
+          {
+            role: "user" as const,
+            content: `You tried to find available appointment slots but could not: ${why}. ` +
+              `You CANNOT offer any time slots — do not invent or suggest any specific times. ` +
+              `Write one brief, warm SMS to the lead letting them know you'll need to follow up with available times. ` +
+              `Plain text only, no markdown, no asterisks.`,
+          },
+        ],
+      })
+      for (const block of noSlotsReply.content) {
+        if (block.type === "text") responseText = block.text.trim()
+      }
+      if (!responseText) {
+        responseText = "Let me check our schedule and I'll follow up with you shortly on available times!"
+      }
+      action = { type: "update_status", status: "needs_attention" }
+      return { response: responseText, action }
     }
 
-    // Get Claude's slot-offering reply
+    // Get Claude's slot-offering reply (reached only when slotsResult.found === true)
     const slotMessages = [
       ...messages,
       { role: "assistant" as const, content: claudeResponse.content },
@@ -452,13 +495,23 @@ BOOKING FLOW:
 
     // Fallback: if Claude called a tool but produced no text, force a text-only reply
     if (!responseText) {
-      const fallbackMessages = [
+      // Need to provide a tool_result for the tool Claude just called so the
+      // message history stays valid (Anthropic requires tool_use and tool_result
+      // to alternate). Build a minimal result and ask for the final text.
+      const lastToolUse = slotReply.content.find(b => b.type === "tool_use") as
+        { type: "tool_use"; id: string; name: string } | undefined
+      const toolResultContent = lastToolUse?.name === "book_appointment"
+        ? "Appointment booked. Now send the lead a brief confirmation text."
+        : "Done. Now send the lead a brief, warm text reply."
+      const fallbackMessages: typeof slotMessages = [
         ...slotMessages,
         { role: "assistant" as const, content: slotReply.content },
         {
           role: "user" as const,
-          content: "You must send a text message to the lead now. Write only the SMS text — no tool calls.",
-        },
+          content: lastToolUse
+            ? [{ type: "tool_result" as const, tool_use_id: lastToolUse.id, content: toolResultContent }]
+            : "You must send a text message to the lead now. Write only the SMS text — no tool calls.",
+        } as { role: "user"; content: string | Array<{ type: "tool_result"; tool_use_id: string; content: string }> },
       ]
       const fallbackReply = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
