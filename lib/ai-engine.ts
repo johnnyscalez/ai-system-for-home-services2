@@ -539,6 +539,34 @@ BOOKING FLOW:
     }
   }
 
+  // Global catch-all: if we still have no text by this point (tool-only reply, failed
+  // second call, or any other silent path) force one text-only response so the lead
+  // always gets a reply and the conversation never just stops.
+  if (!responseText && !isInitialOutreach) {
+    try {
+      const catchAllReply = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 150,
+        system: systemPrompt,
+        tool_choice: { type: "none" } as Parameters<typeof anthropic.messages.create>[0]["tool_choice"],
+        tools: TOOLS,
+        messages: [
+          ...messages,
+          {
+            role: "user" as const,
+            content: "You have not sent a reply yet. Write a short SMS response to the lead now. Plain text only.",
+          },
+        ],
+      })
+      for (const block of catchAllReply.content) {
+        if (block.type === "text") responseText = block.text.trim()
+      }
+    } catch {
+      // absolute last resort — better than silence
+      responseText = "Got your message — let me check on that and get right back to you."
+    }
+  }
+
   return { response: responseText, action }
 }
 
