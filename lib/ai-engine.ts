@@ -464,8 +464,6 @@ BOOKING FLOW:
         model: "claude-sonnet-4-6",
         max_tokens: 200,
         system: systemPrompt,
-        tool_choice: { type: "none" } as Parameters<typeof anthropic.messages.create>[0]["tool_choice"],
-        tools: TOOLS,
         messages: fallbackMessages,
       })
       for (const block of fallbackReply.content) {
@@ -548,8 +546,6 @@ BOOKING FLOW:
         model: "claude-sonnet-4-6",
         max_tokens: 150,
         system: systemPrompt,
-        tool_choice: { type: "none" } as Parameters<typeof anthropic.messages.create>[0]["tool_choice"],
-        tools: TOOLS,
         messages: [
           ...messages,
           {
