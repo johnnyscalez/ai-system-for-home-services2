@@ -272,6 +272,19 @@ BOOKING FLOW:
 • If address IS already on file, book without asking for it again.
 • After booking: one short confirmation — day, time, address. Done.
 
+YOU ARE REAL-TIME — NEVER DEFER:
+You are an AI that operates instantly. When you call find_available_slots, that IS the check — it runs in real time and you already have the answer.
+NEVER say any of the following (or anything that means the same thing):
+  ✗ "Let me check availability"
+  ✗ "I'll look into that"
+  ✗ "Give me a moment"
+  ✗ "I'll follow up with some times"
+  ✗ "Let me check with our team"
+  ✗ "I'll get back to you"
+  ✗ "I want to make sure we get the right tech — let me check"
+Why: Every one of these implies you are about to go check something. But you already checked — the tool ran and the result is in front of you. Saying "let me check" after already checking is a lie. It makes you sound like a confused human, not a professional AI.
+What to do instead: Tell the lead what the system found RIGHT NOW. If there are slots, offer them. If there are no slots, say so directly and tell them what happens next. Always answer with what you know, not with a promise to find out later.
+
 === END SMS HARD RULES ===`
 
   const systemPrompt = [baseSystemPrompt, financingBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext, slotsBlock, leadContext, smsHardRules]
@@ -435,6 +448,30 @@ BOOKING FLOW:
         } catch { /* non-critical */ }
       }
 
+      // Build a reason-specific honest message. The key rule: you already checked
+      // right now — never say "let me check" or "I'll follow up to look into this."
+      // Those phrases imply future checking that won't happen. Be direct about what
+      // the system found (or didn't find) and what happens next.
+      const noSlotsContext = slotsResult.found === false ? {
+        no_zip_match:
+          `You just checked in real time and found that zip code ${findSlotsZip ?? "provided"} is outside the current service area. ` +
+          `Say: we checked and unfortunately that area is a bit outside where we currently operate, but our team will personally reach out within 24 hours to see if we can make it work. ` +
+          `Do NOT say "let me check" or "I'll look into it" — you already checked. Be warm, direct, and honest.`,
+        no_specialization_match:
+          `You just checked in real time and found no technician trained for this specific service type in this area. ` +
+          `Say: we checked and don't currently have a tech certified for that service nearby, but your details have been flagged for our team who will reach out within 24 hours with options. ` +
+          `Do NOT say "let me check" — you already checked.`,
+        no_technicians:
+          `You just checked in real time and found no technicians have been set up in the system yet. ` +
+          `Say: you've been flagged as a priority and someone from our team will reach out within 24 hours to get you scheduled. ` +
+          `Do NOT say "let me check" — you already checked.`,
+        no_slots:
+          `You just checked in real time and found all technicians are fully booked for the next several days. ` +
+          `Say: we're fully booked right now, but your name is at the top of the list and our team will reach out within 24 hours the moment a slot opens. ` +
+          `Do NOT say "let me check" — you already checked.`,
+      }[slotsResult.reason] ?? `You already checked and found no availability (${why}). Be honest and direct about this. Do NOT say "let me check" or imply future checking.`
+      : `You already checked and found no availability (${why}). Be direct about this.`
+
       const noSlotsReply = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 150,
@@ -443,10 +480,9 @@ BOOKING FLOW:
           ...messages,
           {
             role: "user" as const,
-            content: `You tried to find available appointment slots but could not: ${why}. ` +
-              `You CANNOT offer any time slots — do not invent or suggest any specific times. ` +
-              `Write one brief, warm SMS to the lead letting them know you'll need to follow up with available times. ` +
-              `Plain text only, no markdown, no asterisks.`,
+            content: `IMPORTANT — YOU ALREADY CHECKED AVAILABILITY RIGHT NOW AND THIS IS THE RESULT:\n${noSlotsContext}\n\n` +
+              `Write one warm, brief SMS based on this. Plain text only, no markdown, no asterisks. ` +
+              `NEVER say "let me check", "I'll look into it", "give me a moment", or any phrase that implies you are about to check — because you already did.`,
           },
         ],
       })
@@ -454,7 +490,9 @@ BOOKING FLOW:
         if (block.type === "text") responseText = block.text.trim()
       }
       if (!responseText) {
-        responseText = "Let me check our schedule and I'll follow up with you shortly on available times!"
+        responseText = slotsResult.found === false && slotsResult.reason === "no_zip_match"
+          ? "We checked and that area is just outside our current coverage — our team will reach out within 24 hours to see if we can make it work!"
+          : "We checked and we're fully booked right now — our team will reach out within 24 hours the moment something opens up!"
       }
       action = { type: "update_status", status: "needs_attention" }
       return { response: responseText, action }
