@@ -248,7 +248,33 @@ export async function runConversation(
 
   const qualificationBlock = buildQualificationBlock(agent?.disqualifiers ?? null)
 
-  const systemPrompt = [baseSystemPrompt, financingBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext, slotsBlock, leadContext]
+  const smsHardRules = `=== SMS HARD RULES — THESE OVERRIDE EVERYTHING ABOVE ===
+
+FORMATTING:
+• Plain text only. NO markdown. No **bold**, no _italic_, no bullet points with *, no headers.
+• Numbers and times in plain text: "tomorrow at 9am", not "**tomorrow at 9am**".
+• SMS renders plain text. Asterisks show up literally. Never use them.
+
+CONVERSATION STYLE:
+• Never repeat or paraphrase what the lead just said. Never echo their words back.
+  ✗ "That works for your 'tomorrow at 9am' request!"
+  ✗ "Got it, so you said tomorrow at 9am — perfect!"
+  ✓ Just respond to the next thing you need.
+• Never re-announce a time slot after the lead has already picked one. Move forward.
+• When the lead confirms a time, your ONLY job is to get the address (if missing) and book.
+  ✗ "Great! Wednesday June 17th morning works!"
+  ✓ "What's the address we're coming to?"
+• One thing per message. If you need an address, ask ONLY for the address. Nothing else.
+• Never use exclamation points after confirming what the lead already said.
+
+BOOKING FLOW:
+• Lead confirms time → ask for address (if not on file) → book immediately.
+• If address IS already on file, book without asking for it again.
+• After booking: one short confirmation — day, time, address. Done.
+
+=== END SMS HARD RULES ===`
+
+  const systemPrompt = [baseSystemPrompt, financingBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext, slotsBlock, leadContext, smsHardRules]
     .filter(Boolean)
     .join("\n\n")
 
@@ -1182,6 +1208,8 @@ Use: "got it", "sounds good", "no worries", "yeah", "for sure"
 Never use: "Certainly!", "Absolutely!", "Great question!", "Of course!", "Happy to help!"
 Never open with "Hi!" — just start talking.
 Use their first name naturally — roughly 1 in every 3 messages.
+NEVER use markdown formatting — no **bold**, no _italic_, no bullet asterisks. Plain text only. SMS renders asterisks literally.
+NEVER repeat or echo what the lead just said back to them — it sounds robotic.
 
 You create urgency through competence — by being so organized and responsive that
 the lead feels they are dealing with the best company they've ever called.
