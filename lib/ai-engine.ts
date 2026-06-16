@@ -407,7 +407,7 @@ BOOKING FLOW:
         ? `${techNames[0]} would be the technician.`
         : `Technicians available: ${techNames.join(" and ")} — each slot shows who would be assigned.`
 
-      toolResultText = `Available slots for this job and location:\n${slotLines}\n\n${whosComing}\n\nOffer the lead 2 of these slots. If they ask who will come, share the tech name shown above for their preferred slot. Use the exact scheduled_at string when calling book_appointment.`
+      toolResultText = `Available slots for this job and location:\n${slotLines}\n\n${whosComing}\n\nOffer the lead 2 of these slots. If they ask who will come, share the tech name shown above for their preferred slot. Use the exact scheduled_at string when calling book_appointment.\n\nIMPORTANT: You MUST include a plain-text SMS message in your response — do not call any tool without also outputting the text you are sending to the lead.`
     } else {
       const reasonLabels: Record<string, string> = {
         no_technicians:          "no technicians configured yet",
@@ -439,9 +439,37 @@ BOOKING FLOW:
 
     for (const block of slotReply.content) {
       if (block.type === "text") responseText = block.text.trim()
-      else if (block.type === "tool_use" && block.name === "update_lead_status") {
-        const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention" }
-        action = { type: "update_status", status: input.status }
+      else if (block.type === "tool_use") {
+        if (block.name === "update_lead_status") {
+          const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention" }
+          action = { type: "update_status", status: input.status }
+        } else if (block.name === "book_appointment") {
+          const input = block.input as { scheduled_at: string; address?: string; notes?: string }
+          action = { type: "book_appointment", ...input }
+        }
+      }
+    }
+
+    // Fallback: if Claude called a tool but produced no text, force a text-only reply
+    if (!responseText) {
+      const fallbackMessages = [
+        ...slotMessages,
+        { role: "assistant" as const, content: slotReply.content },
+        {
+          role: "user" as const,
+          content: "You must send a text message to the lead now. Write only the SMS text — no tool calls.",
+        },
+      ]
+      const fallbackReply = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 200,
+        system: systemPrompt,
+        tool_choice: { type: "none" } as Parameters<typeof anthropic.messages.create>[0]["tool_choice"],
+        tools: TOOLS,
+        messages: fallbackMessages,
+      })
+      for (const block of fallbackReply.content) {
+        if (block.type === "text") responseText = block.text.trim()
       }
     }
 
