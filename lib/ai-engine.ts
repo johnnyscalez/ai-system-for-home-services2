@@ -125,7 +125,7 @@ export async function runConversation(
       .order("created_at", { ascending: true }),
     supabase
       .from("ai_agent_config")
-      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, per_day_slots, disqualifiers")
+      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, per_day_slots, disqualifiers, qualifying_questions")
       .eq("company_id", companyId)
       .single(),
     supabase
@@ -246,7 +246,10 @@ export async function runConversation(
     ? `=== FINANCING OPTIONS (know this precisely — leads ask about this) ===\n${kb.financing_options}\n=== END FINANCING ===`
     : ""
 
-  const qualificationBlock = buildQualificationBlock(agent?.disqualifiers ?? null)
+  const qualifyingQs = Array.isArray(agent?.qualifying_questions)
+    ? (agent.qualifying_questions as Array<{ question: string }>).map(q => q.question)
+    : []
+  const qualificationBlock = buildQualificationBlock(agent?.disqualifiers ?? null, qualifyingQs)
 
   const smsHardRules = `=== SMS HARD RULES — THESE OVERRIDE EVERYTHING ABOVE ===
 
@@ -271,6 +274,9 @@ BOOKING FLOW:
 • Lead confirms time → ask for address (if not on file) → book immediately.
 • If address IS already on file, book without asking for it again.
 • After booking: one short confirmation — day, time, address. Done.
+• If the conversation was interrupted (wrong address, out of area, correction) before the lead confirmed a specific slot, re-confirm the time BEFORE booking.
+  Example: lead said "afternoon works" → you asked for address → they gave a wrong one → they corrected it → do NOT silently book at "afternoon." Ask: "Does 1–3pm today still work?" then book on yes.
+• "Afternoon works" or "morning is fine" is a PREFERENCE, not a confirmed booking. Only book when the lead has confirmed a specific time in direct response to your offer.
 
 YOU ARE REAL-TIME — NEVER DEFER:
 You are an AI that operates instantly. When you call find_available_slots, that IS the check — it runs in real time and you already have the answer.
@@ -1102,17 +1108,26 @@ export async function processAndSave(
   return { ...result, outboundConversationId }
 }
 
-export function buildQualificationBlock(disqualifiers: string | null): string {
+export function buildQualificationBlock(disqualifiers: string | null, qualifyingQuestions: string[] = []): string {
+  const questionsBlock = qualifyingQuestions.length > 0
+    ? `\nQUALIFYING QUESTIONS — ask these naturally before offering any time slots:
+${qualifyingQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n")}
+
+These are not a script to recite line by line. Weave them into the conversation naturally — one at a time, in context.
+You do NOT need every answer to proceed, but aim to cover the most relevant ones before moving to booking.
+The question about location/zip is always required — you need it to check technician availability.\n`
+    : ""
+
   if (!disqualifiers?.trim()) {
     return `=== QUALIFICATION RULES ===
 Every lead starts unqualified. Your job is to qualify them through natural conversation.
-
+${questionsBlock}
 WHO QUALIFIES: Any lead who is interested, reachable, owns the property (or has authority to book), and the job falls within your service area and scope.
 
 WHEN TO CALL update_lead_status "qualified":
-- They've answered the discover-stage questions (what's wrong, property details, ownership)
+- They've answered the key discover-stage questions
 - Nothing in the conversation disqualifies them
-- Call it in the same response as you move toward booking — do NOT wait until after the appointment is booked
+- Call it in the same response as you move toward booking — do NOT wait until after booking
 
 WHEN TO CALL update_lead_status "closed_lost":
 - They explicitly say they're not interested or already chose someone else
@@ -1123,7 +1138,7 @@ WHEN TO CALL update_lead_status "closed_lost":
 
   return `=== QUALIFICATION RULES ===
 This company has defined who they do NOT want to book. Read this carefully — it defines what "qualified" means for every lead you talk to.
-
+${questionsBlock}
 WHO NOT TO BOOK:
 ${disqualifiers.trim()}
 
