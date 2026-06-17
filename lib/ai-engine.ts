@@ -274,9 +274,9 @@ BOOKING FLOW:
 • Lead confirms time → ask for address (if not on file) → book immediately.
 • If address IS already on file, book without asking for it again.
 • After booking: one short confirmation — day, time, address. Done.
-• If the conversation was interrupted (wrong address, out of area, correction) before the lead confirmed a specific slot, re-confirm the time BEFORE booking.
-  Example: lead said "afternoon works" → you asked for address → they gave a wrong one → they corrected it → do NOT silently book at "afternoon." Ask: "Does 1–3pm today still work?" then book on yes.
-• "Afternoon works" or "morning is fine" is a PREFERENCE, not a confirmed booking. Only book when the lead has confirmed a specific time in direct response to your offer.
+• Normal flow: lead picks a time → you ask for address → they give it → book immediately. Do NOT ask "does that still work?" — the time was already confirmed.
+• Only re-confirm the time if there was an explicit rejection in between: you told them their address is outside your service area, OR they said "actually, wrong address" and corrected themselves. In those cases, say "Does [time] still work for you?" before booking.
+• The address being given is part of the normal booking flow — it is NOT an interruption and does NOT require re-confirmation.
 
 YOU ARE REAL-TIME — NEVER DEFER:
 You are an AI that operates instantly. When you call find_available_slots, that IS the check — it runs in real time and you already have the answer.
@@ -401,6 +401,11 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       }
     }
   }
+
+  // If find_available_slots was called, discard any text Claude produced alongside it.
+  // That text is always "thinking out loud" (e.g. "Let me check...") — the real SMS
+  // comes from the slot-flow response below, never from the same turn as the tool call.
+  if (findSlotsToolId) responseText = ""
 
   // ── find_available_slots: run the lookup, save slot→tech map, get Claude's slot-offer text ──
   if (findSlotsToolId) {
