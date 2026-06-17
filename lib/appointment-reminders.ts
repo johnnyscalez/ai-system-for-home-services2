@@ -144,8 +144,7 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
   const { data: apt } = await supabase
     .from("appointments")
     .select(`
-      id, lead_id, company_id, scheduled_at, address, notes,
-      technician_name, confirmation_status, confirmation_requested_at,
+      id, lead_id, company_id, scheduled_at, confirmation_requested_at,
       leads(first_name, phone),
       companies(name)
     `)
@@ -177,7 +176,6 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
   const timezone  = agentCfg?.timezone  ?? "America/New_York"
   const agentName = agentCfg?.agent_name ?? company.name
   const firstName = lead.first_name ?? "there"
-  const techName  = apt.technician_name
 
   const scheduledAt = new Date(apt.scheduled_at)
   const dayLabel = scheduledAt.toLocaleDateString("en-US", {
@@ -187,10 +185,7 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
     hour: "numeric", minute: "2-digit", timeZone: timezone,
   })
 
-  const jobNotes = apt.notes ? ` for ${apt.notes}` : ""
-  const techPart  = techName ? ` with ${techName}` : ""
-
-  const body = `Hi ${firstName}, this is ${agentName} confirming your appointment tomorrow, ${dayLabel} at ${timeLabel}${techPart}${jobNotes}. Can you confirm you'll be available? Reply YES to confirm or let me know if you need to reschedule.`
+  const body = `Hi ${firstName}, this is ${agentName} confirming your upcoming appointment on ${dayLabel} at ${timeLabel}. Can you confirm you'll be available? Reply YES to confirm or NO to reschedule.`
 
   try {
     const msg = await sendSMS(lead.phone, body, phoneNum.phone_number)
@@ -360,9 +355,11 @@ export async function processAppointmentReminders() {
     .lt("scheduled_at", oneHourAgo.toISOString())
 
   // ── 1. Send 24h confirmation requests ────────────────────────────────────────
-  // Find appointments 23–25 hours from now that haven't had a confirmation request yet
+  // Find appointments 23–25 hours from now that haven't had a confirmation request yet.
+  // Guard: created_at must be > 2h ago so we never fire this immediately after booking.
   const confirmWindow24hStart = new Date(now.getTime() + 23 * 60 * 60 * 1000)
   const confirmWindow24hEnd   = new Date(now.getTime() + 25 * 60 * 60 * 1000)
+  const twoHoursAgo           = new Date(now.getTime() - 2 * 60 * 60 * 1000)
 
   const { data: toConfirm } = await supabase
     .from("appointments")
@@ -371,6 +368,7 @@ export async function processAppointmentReminders() {
     .is("confirmation_requested_at", null)
     .gte("scheduled_at", confirmWindow24hStart.toISOString())
     .lte("scheduled_at", confirmWindow24hEnd.toISOString())
+    .lt("created_at", twoHoursAgo.toISOString())
 
   for (const apt of toConfirm ?? []) {
     await sendConfirmationRequest(apt.id)
