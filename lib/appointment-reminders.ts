@@ -397,7 +397,7 @@ export async function processAppointmentReminders() {
       reminder_2d_email_sent, reminder_2d_sms_sent,
       reminder_1d_email_sent, reminder_1d_sms_sent,
       reminder_2h_email_sent, reminder_2h_sms_sent,
-      confirmation_requested_at,
+      confirmation_requested_at, confirmation_status,
       leads(first_name, last_name, phone, email),
       companies(name, service_type)
     `)
@@ -420,7 +420,7 @@ export async function processAppointmentReminders() {
 
     const { data: agentCfg } = await supabase
       .from("ai_agent_config")
-      .select("timezone")
+      .select("timezone, agent_name")
       .eq("company_id", apt.company_id)
       .single()
 
@@ -453,8 +453,10 @@ export async function processAppointmentReminders() {
         }
       : null
 
-    const timezone = agentCfg?.timezone ?? "America/New_York"
-    const leadName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "there"
+    const timezone  = agentCfg?.timezone   ?? "America/New_York"
+    const agentName = agentCfg?.agent_name ?? company.name
+    const leadName  = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "there"
+    const firstName = lead.first_name ?? "there"
     const companyName = emailTpl?.from_name || company.name
 
     const emailData = {
@@ -546,7 +548,10 @@ export async function processAppointmentReminders() {
         processed++
       }
       if (!apt.reminder_2h_sms_sent && emailTpl?.sms_reminder_2h_enabled !== false) {
-        const body = `${companyName}: Your appointment starts in 2 hours — ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. See you soon!`
+        const isConfirmed = (apt as { confirmation_status?: string | null }).confirmation_status === "confirmed"
+        const body = isConfirmed
+          ? `${companyName}: Your appointment starts in 2 hours — ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. See you soon!`
+          : `Hi ${firstName}, this is ${agentName} — just checking in to confirm your appointment today at ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. Reply YES to confirm or NO to reschedule.`
         await sendReminderSMS(body, "reminder_2h_sms_sent")
         processed++
       }
