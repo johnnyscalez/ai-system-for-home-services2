@@ -50,7 +50,7 @@ async function handleConfirmationReply(
   // Find the most recent appointment pending confirmation for this lead
   const { data: apt } = await supabase
     .from("appointments")
-    .select("id, scheduled_at, technician_name, confirmation_status, confirmation_requested_at, leads(first_name)")
+    .select("id, scheduled_at, confirmation_status, confirmation_requested_at, leads(first_name)")
     .eq("lead_id", leadId)
     .eq("status", "scheduled")
     .not("confirmation_requested_at", "is", null)
@@ -75,7 +75,6 @@ async function handleConfirmationReply(
   const timezone  = agentCfg?.timezone  ?? "America/New_York"
   const agentName = agentCfg?.agent_name ?? company?.name ?? "us"
   const firstName = (apt.leads as unknown as { first_name: string | null } | null)?.first_name ?? null
-  const techName  = apt.technician_name
   const timeLabel = new Date(apt.scheduled_at).toLocaleString("en-US", {
     weekday: "short", month: "short", day: "numeric",
     hour: "numeric", minute: "2-digit", timeZone: timezone,
@@ -88,8 +87,7 @@ async function handleConfirmationReply(
       confirmed_at: new Date().toISOString(),
     }).eq("id", apt.id)
 
-    const techPart = techName ? ` ${techName}` : " our tech"
-    const reply = `Perfect${firstName ? `, ${firstName}` : ""}! You're confirmed.${techPart} will be there ${timeLabel}. See you then!`
+    const reply = `Perfect${firstName ? `, ${firstName}` : ""}! You're all set — our technician will be there ${timeLabel}. See you then!`
 
     const msg = await sendSMS(leadPhone, reply, fromNumber)
     await supabase.from("conversations").insert({

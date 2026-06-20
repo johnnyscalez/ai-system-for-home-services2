@@ -548,11 +548,19 @@ export async function processAppointmentReminders() {
         processed++
       }
       if (!apt.reminder_2h_sms_sent && emailTpl?.sms_reminder_2h_enabled !== false) {
-        const isConfirmed = (apt as { confirmation_status?: string | null }).confirmation_status === "confirmed"
+        const isConfirmed   = (apt as { confirmation_status?: string | null }).confirmation_status === "confirmed"
+        const alreadyAsked  = !!(apt as { confirmation_requested_at?: string | null }).confirmation_requested_at
         const body = isConfirmed
           ? `${companyName}: Your appointment starts in 2 hours — ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. See you soon!`
           : `Hi ${firstName}, this is ${agentName} — just checking in to confirm your appointment today at ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. Reply YES to confirm or NO to reschedule.`
         await sendReminderSMS(body, "reminder_2h_sms_sent")
+        // If we just sent a confirmation request, ensure confirmation_requested_at is set
+        // so handleConfirmationReply in the SMS webhook can intercept their YES/NO reply.
+        if (!isConfirmed && !alreadyAsked) {
+          await supabase.from("appointments").update({
+            confirmation_requested_at: new Date().toISOString(),
+          }).eq("id", apt.id)
+        }
         processed++
       }
     }
