@@ -17,8 +17,7 @@ export async function GET(req: NextRequest) {
   }
 
   // Aria — warm, natural, young female. Override with ELEVENLABS_VOICE_ID env var.
-  // Rachel — neutral American, warm, professional. Override with ELEVENLABS_VOICE_ID.
-  const voiceId = process.env.ELEVENLABS_VOICE_ID ?? "21m00Tcm4TlvDq8ikWAM"
+  const voiceId = process.env.ELEVENLABS_VOICE_ID ?? "DXFkLCBUTmvXpp2QwZjA"
 
   const res = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
