@@ -749,8 +749,19 @@ export async function processAndSave(
       .in("status", ["just_came_in", "new", "contacted", "following_up", "followed_up", "nurturing", "cold"])
   }
 
-  // Run the AI engine
-  const result = await runConversation(leadId, companyId, incomingMessage, followUpAngle)
+  // Run the AI engine — wrapped so any internal crash still gets a reply to the lead
+  let result: EngineResult
+  try {
+    result = await runConversation(leadId, companyId, incomingMessage, followUpAngle)
+  } catch (err) {
+    console.error("[ai-engine] runConversation threw — sending fallback reply:", err)
+    result = { response: "Hey, sorry about that — something came up on our end. I'll follow back up with you in just a moment." }
+  }
+
+  // Final guard — runConversation returned but with empty text (should never happen, but belt-and-suspenders)
+  if (!result.response && incomingMessage !== null) {
+    result = { ...result, response: "Got your message — give me just a sec and I'll get right back to you." }
+  }
 
   // Save outbound AI message and capture its ID for Twilio SID update
   let outboundConversationId: string | undefined
