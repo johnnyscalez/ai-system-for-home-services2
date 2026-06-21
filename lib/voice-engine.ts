@@ -3,12 +3,10 @@ import { buildQualificationBlock } from "@/lib/ai-engine"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { createCalendarEvent } from "@/lib/google-calendar"
 import { determineAgentType, getAgentPrompt } from "@/lib/voice-agents"
-import { getAvailableSlots, formatSlotsForPrompt, DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
 import { updateSession, appendMessages } from "@/lib/voice-session"
 import { JOB_TYPES, JOB_TYPE_TOOL_DESCRIPTION, getJobTypeLabel } from "@/lib/job-types"
-import { selectTechnician, getTechnicianContextForCompany } from "@/lib/technician-booking"
+import { selectTechnician, getTechnicianContextForCompany, findSlotsForLead } from "@/lib/technician-booking"
 import type { VoiceSession, VoiceMessage } from "@/lib/voice-session"
-import type { AppointmentWindow } from "@/lib/availability"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
@@ -34,16 +32,32 @@ MANDATORY RULES — never break these:
 3. One question per response — ask it, then stop. Never stack two questions.
 4. Speak naturally: say "around ten years old" not "10". Say "Thursday morning" not "8:00 AM".
 5. Never say AI, software, system, bot, or anything technical.
-6. If asked "are you a real person?": "Yes, I'm Linda — just your contact here. What can I help you with?"
+6. If asked "are you a real person?": "Yes, I'm [AgentName] — just your contact here. What can I help you with?"
 7. When booking: confirm day, time, and address naturally in one sentence.
-8. When calling a tool: include your verbal response in the same message turn.
+8. When calling most tools: include your verbal response in the same message turn. EXCEPTION: call find_available_slots silently — no text — so the real availability results come back and inform what you say.
 9. Keep filler natural and brief: "Got it.", "Sure thing." — then continue.
 10. Never read out a list of slots — offer exactly two naturally: "I've got Thursday morning or Friday afternoon."
+11. SERVICE AREA RULE: You MUST call find_available_slots after learning the lead's zip code. Never offer specific times before calling this tool.
+12. TIMEZONE RULE: When booking, use the exact ISO 8601 datetime from the find_available_slots results. Never construct your own datetime string — the slots returned are already in the correct timezone.
+13. OUTSIDE SERVICE AREA: If find_available_slots says outside service area, say warmly that you don't serve that area, then call update_lead_status("closed_lost"), add_note with the zip, and end_call.
 === END VOICE RULES ===`
 
 // ─── Tool definitions ──────────────────────────────────────────────────────────
 
 const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
+  {
+    name: "find_available_slots",
+    description:
+      "Check real technician availability and service area coverage for a lead's zip code. Call this SILENTLY (no text) immediately after learning the lead's zip code. Returns either: available booking slots tied to actual technicians, or an OUTSIDE_SERVICE_AREA signal. You MUST call this before offering any appointment times. Use the exact ISO datetimes returned when calling book_appointment.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        zip:      { type: "string", description: "5-digit ZIP code from the lead's address" },
+        job_type: { type: "string", description: "Job type enum value if known (e.g. 'ac_repair', 'furnace_repair'). Optional." },
+      },
+      required: ["zip"],
+    },
+  },
   {
     name: "book_appointment",
     description:
@@ -181,9 +195,8 @@ export async function runVoiceTurn(
   userMessage: string | null  // null = initial greeting turn
 ): Promise<VoiceEngineResult> {
   const db = createServiceRoleClient()
-  const horizonMs = 14 * 24 * 60 * 60 * 1000
 
-  const [leadRes, agentRes, kbRes, appointmentsRes, companyAptsRes, technicianContext] = await Promise.all([
+  const [leadRes, agentRes, kbRes, appointmentsRes, technicianContext] = await Promise.all([
     db.from("leads").select("*").eq("id", session.lead_id).single(),
     db.from("ai_agent_config")
       .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, disqualifiers")
@@ -195,12 +208,6 @@ export async function runVoiceTurn(
       .select("id, scheduled_at, status, address, notes, created_at")
       .eq("lead_id", session.lead_id)
       .order("scheduled_at", { ascending: false }),
-    db.from("appointments")
-      .select("scheduled_at")
-      .eq("company_id", session.company_id)
-      .eq("status", "scheduled")
-      .gte("scheduled_at", new Date().toISOString())
-      .lte("scheduled_at", new Date(Date.now() + horizonMs).toISOString()),
     getTechnicianContextForCompany(session.company_id),
   ])
 
@@ -208,7 +215,6 @@ export async function runVoiceTurn(
   const agent       = agentRes.data
   const kb          = kbRes.data
   const appointments = appointmentsRes.data ?? []
-  const companyApts  = companyAptsRes.data ?? []
 
   if (!lead) throw new Error("Lead not found")
 
@@ -221,26 +227,13 @@ export async function runVoiceTurn(
   const agentType   = determineAgentType(appointments, isFollowUp)
   const agentPrompt = getAgentPrompt(agentType, agentName)
 
-  // ── Available booking slots (pre-fetched — no mid-call tool needed) ─────────
-  const availableSlots = getAvailableSlots(
-    {
-      available_days: (agent?.available_days as string[] | null) ?? DEFAULT_DAYS,
-      appointment_windows: (agent?.appointment_windows as AppointmentWindow[] | null) ?? DEFAULT_WINDOWS,
-      booking_horizon_days: agent?.booking_horizon_days ?? 7,
-      max_appointments_per_day: agent?.max_appointments_per_day ?? null,
-      timezone: tz,
-    },
-    companyApts
-  )
-
   // ── Build system prompt layers ──────────────────────────────────────────────
   const basePrompt = agent?.generated_system_prompt ||
-    `You are ${agent?.agent_name ?? "Linda"}, a sales rep for a ${lead.service_type ?? "HVAC"} company.
+    `You are ${agentName}, a sales rep for a ${lead.service_type ?? "HVAC"} company.
 ${kb?.business_description ? `About us: ${kb.business_description}` : ""}
 ${kb?.services_offered ? `Services: ${kb.services_offered}` : ""}
 ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
 
-  const slotsBlock = formatSlotsForPrompt(availableSlots)
   const leadContext = buildVoiceLeadContext(lead, appointments, session.collected, tz)
 
   const customKnowledgeBlock = kb?.custom_ai_knowledge
@@ -251,7 +244,8 @@ ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
 
   const voiceRules = VOICE_RULES.replaceAll("[AgentName]", agentName)
 
-  const systemPrompt = [voiceRules, basePrompt, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, slotsBlock, leadContext]
+  // Note: no pre-computed slots block — the agent calls find_available_slots after getting zip code.
+  const systemPrompt = [voiceRules, basePrompt, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext]
     .filter(Boolean)
     .join("\n\n")
 
@@ -314,8 +308,73 @@ ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
     }
   }
 
-  // ── If tool called with no accompanying verbal response — get it ─────────────
-  if (toolBlock && !responseText) {
+  // ── find_available_slots — run real lookup and feed results back to Claude ──
+  // This is the voice equivalent of the SMS agent's find_available_slots tool.
+  // The agent calls it silently (no text) after learning the zip code.
+  // We run findSlotsForLead(), pass real slot data or outside-area signal back,
+  // then get Claude's verbal response (slot offer or warm rejection).
+  if (toolBlock?.name === "find_available_slots") {
+    responseText = "" // ensure no "let me check..." text leaks through
+    const { zip, job_type } = toolBlock.input as { zip: string; job_type?: string }
+
+    const slotsResult = await findSlotsForLead(session.company_id, job_type ?? null, zip ?? null)
+
+    let toolResultContent: string
+    if (!slotsResult.found) {
+      if (slotsResult.reason === "no_zip_match") {
+        toolResultContent =
+          `OUTSIDE_SERVICE_AREA: zip code "${zip}" is not covered by any active technician. ` +
+          `Respond warmly in 2 sentences — say you unfortunately don't serve that area and you hope they find someone quickly. ` +
+          `Then call update_lead_status("closed_lost"), add_note("Outside service area: ${zip}"), and end_call("not_interested").`
+      } else if (slotsResult.reason === "no_technicians") {
+        toolResultContent =
+          "NO_TECHNICIANS: No active technicians on file right now. " +
+          "Apologize briefly and offer to have someone call them back. Call schedule_callback."
+      } else {
+        toolResultContent =
+          "NO_SLOTS: No availability in the next 7 days. " +
+          "Offer to call back when scheduling opens up. Call schedule_callback."
+      }
+    } else {
+      const slotLines = slotsResult.slots.slice(0, 6)
+        .map(s => `${s.label} — ISO: ${s.isoStart}`)
+        .join("\n")
+      toolResultContent =
+        `IN_SERVICE_AREA. Available slots (offer exactly 2 — use the ISO values when calling book_appointment):\n${slotLines}`
+    }
+
+    const slotMessages: VoiceMessage[] = [
+      ...messages,
+      { role: "assistant", content: response.content },
+      {
+        role: "user",
+        content: [{
+          type: "tool_result",
+          tool_use_id: toolBlock.id,
+          content: toolResultContent,
+        }],
+      },
+    ]
+
+    const slotResponse = await anthropic.messages.create({
+      model:      "claude-sonnet-4-6",
+      max_tokens: 250,
+      system:     systemPrompt,
+      tools:      TOOLS,
+      messages:   slotMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],
+    })
+
+    // Reset toolBlock — the follow-up may call a different tool (e.g. update_lead_status for outside area)
+    toolBlock = null
+    for (const block of slotResponse.content) {
+      if (block.type === "text")     responseText = block.text.trim()
+      if (block.type === "tool_use") {
+        toolBlock = { name: block.name, id: block.id, input: block.input as Record<string, unknown> }
+      }
+    }
+  }
+  // ── Other tools called without verbal — get verbal response ─────────────────
+  else if (toolBlock && !responseText) {
     const followUpMessages: VoiceMessage[] = [
       ...messages,
       { role: "assistant", content: response.content },
@@ -330,11 +389,11 @@ ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
     ]
 
     const followUp = await anthropic.messages.create({
-      model: "claude-sonnet-4-6",
+      model:      "claude-sonnet-4-6",
       max_tokens: 150,
-      system: systemPrompt,
-      tools: TOOLS,
-      messages: followUpMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],
+      system:     systemPrompt,
+      tools:      TOOLS,
+      messages:   followUpMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],
     })
 
     for (const block of followUp.content) {
@@ -373,6 +432,11 @@ async function executeTool(
   db: ReturnType<typeof createServiceRoleClient>
 ): Promise<VoiceAction> {
   switch (tool.name) {
+
+    // find_available_slots is handled inline in runVoiceTurn before executeTool is called.
+    // If it somehow reaches here, it's a no-op.
+    case "find_available_slots":
+      return { type: "continue" }
 
     case "book_appointment": {
       const { scheduled_at, address, notes } = tool.input as { scheduled_at: string; address: string; notes?: string }
