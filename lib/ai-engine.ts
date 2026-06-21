@@ -582,6 +582,37 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       }
     }
 
+    // Hard guarantee — slots path returns early before global catch-all, so enforce
+    // text here. If book_appointment fired we can build confirmation from data.
+    // Otherwise ask Claude text-only with no tools so it must reply.
+    if (!responseText) {
+      if (action?.type === "book_appointment") {
+        const a = action as { type: "book_appointment"; scheduled_at: string; address?: string }
+        const day = new Date(a.scheduled_at).toLocaleDateString("en-US", {
+          weekday: "long", month: "short", day: "numeric", timeZone: tz,
+        })
+        responseText = a.address
+          ? `You're on the schedule — ${day} at ${a.address}. Our tech will reach out before heading over.`
+          : `You're on the schedule for ${day}. Our tech will reach out before heading over.`
+      } else {
+        try {
+          const lastResort = await anthropic.messages.create({
+            model: "claude-haiku-4-5-20251001",
+            max_tokens: 100,
+            system: systemPrompt,
+            messages: [
+              ...messages,
+              { role: "user" as const, content: "Reply to this lead now with 1-2 sentences. Plain text only. No tool calls." },
+            ],
+          })
+          for (const b of lastResort.content) {
+            if (b.type === "text") responseText = b.text.trim()
+          }
+        } catch { /* ignore */ }
+        if (!responseText) responseText = "I can get a tech out to you this week — does morning or afternoon work better?"
+      }
+    }
+
     // Strip meta-commentary for initial outreach (same as below)
     if (isInitialOutreach && responseText) {
       const firstLine = responseText.split("\n").find(l => l.trim().length > 0 && !l.startsWith("Note:") && !l.startsWith("**")) ?? responseText
@@ -671,8 +702,8 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         if (block.type === "text") responseText = block.text.trim()
       }
     } catch {
-      // absolute last resort — better than silence
-      responseText = "Got your message — let me check on that and get right back to you."
+      // absolute last resort — never imply deferred follow-up the AI won't do
+      responseText = "I can get a tech out to you this week — does morning or afternoon work better?"
     }
   }
 
@@ -768,12 +799,39 @@ export async function processAndSave(
     result = await runConversation(leadId, companyId, incomingMessage, followUpAngle)
   } catch (err) {
     console.error("[ai-engine] runConversation threw — sending fallback reply:", err)
-    result = { response: "Hey, sorry about that — something came up on our end. I'll follow back up with you in just a moment." }
+    result = { response: "I can get a tech out to you this week — does morning or afternoon work better?" }
   }
 
-  // Final guard — runConversation returned but with empty text (should never happen, but belt-and-suspenders)
+  // Final guard — runConversation returned empty text. Call Claude text-only for real response.
+  // Never use deferred-action language ("get back to you") — AI won't follow up manually.
   if (!result.response && incomingMessage !== null) {
-    result = { ...result, response: "Got your message — give me just a sec and I'll get right back to you." }
+    try {
+      const { data: hist } = await supabase
+        .from("conversations")
+        .select("direction, body")
+        .eq("lead_id", leadId)
+        .eq("channel", "sms")
+        .order("created_at", { ascending: true })
+        .limit(20)
+      const histLines = (hist ?? []).map(m => `${m.direction === "inbound" ? "Lead" : "AI"}: ${m.body}`).join("\n")
+      const { data: agentCfg } = await supabase.from("ai_agent_config").select("generated_system_prompt").eq("company_id", companyId).single()
+      const sp = agentCfg?.generated_system_prompt ?? "You are an HVAC scheduling assistant. Reply with 1 short SMS."
+      const rescue = await anthropic.messages.create({
+        model: "claude-haiku-4-5-20251001",
+        max_tokens: 100,
+        system: sp + "\n\nRULE: Reply with 1-2 sentences. Plain text only. No tool calls. Move the conversation toward booking.",
+        messages: [
+          { role: "user" as const, content: `Conversation:\n${histLines}\n\nLead just said: "${incomingMessage}"\n\nReply now.` },
+        ],
+      })
+      for (const b of rescue.content) {
+        if (b.type === "text" && b.text.trim()) result = { ...result, response: b.text.trim() }
+      }
+    } catch { /* ignore */ }
+    // If even rescue fails, use contextual fallback — never "get back to you"
+    if (!result.response) {
+      result = { ...result, response: "I can get a tech out to you this week — does morning or afternoon work better?" }
+    }
   }
 
   // Save outbound AI message and capture its ID for Twilio SID update

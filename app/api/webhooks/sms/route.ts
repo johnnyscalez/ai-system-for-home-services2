@@ -349,7 +349,7 @@ export async function POST(req: NextRequest) {
     console.error("SMS conversation engine error:", err)
     // Lead must never get silence — send a human fallback if the engine crashed entirely
     try {
-      const fallback = "Hey, sorry about that — something came up on our end. I'll follow right back up with you in just a moment."
+      const fallback = "I can get a tech out to you this week — does morning or afternoon work better?"
       await sendSMS(normalizedFrom, fallback, to)
       await supabase.from("conversations").insert({
         lead_id:    lead.id,
