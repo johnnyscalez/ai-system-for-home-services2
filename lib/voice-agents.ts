@@ -131,8 +131,13 @@ COMMERCIAL PROPERTIES & RENTERS:
 
 const TOOL_GUIDE = `=== YOUR TOOLS — READ THIS CAREFULLY ===
 
-find_available_slots — REQUIRED before offering any booking times. Call it SILENTLY (no text response).
-  TRIGGER: The moment you have the lead's zip code or full address — call it immediately, mid-sentence if needed.
+find_available_slots — REQUIRED before offering any booking times.
+  TRIGGER: The moment you have the lead's zip code or full address.
+  SAY ONE short natural sentence first, then call the tool. Examples:
+    "Give me just a second to check who's available."
+    "Let me pull up what we've got."
+    "One second — let me check availability for you."
+  Keep it to one sentence. The slot offer comes after the results return.
   INPUT: zip = the 5-digit ZIP code. job_type = optional, whatever job type you've learned.
   OUTSIDE SERVICE AREA result: Warmly say you don't serve that area (2 sentences), then:
     call update_lead_status("closed_lost"), add_note("Outside service area: [zip]"), end_call("not_interested").

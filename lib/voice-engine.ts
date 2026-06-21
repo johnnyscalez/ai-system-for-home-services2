@@ -34,10 +34,10 @@ MANDATORY RULES — never break these:
 5. Never say AI, software, system, bot, or anything technical.
 6. If asked "are you a real person?": "Yes, I'm [AgentName] — just your contact here. What can I help you with?"
 7. When booking: confirm day, time, and address naturally in one sentence.
-8. When calling most tools: include your verbal response in the same message turn. EXCEPTION: call find_available_slots silently — no text — so the real availability results come back and inform what you say.
+8. When calling most tools: include your verbal response in the same message turn.
 9. Keep filler natural and brief: "Got it.", "Sure thing." — then continue.
 10. Never read out a list of slots — offer exactly two naturally: "I've got Thursday morning or Friday afternoon."
-11. SERVICE AREA RULE: You MUST call find_available_slots after learning the lead's zip code. Never offer specific times before calling this tool.
+11. SERVICE AREA RULE: You MUST call find_available_slots after learning the lead's zip code. Say ONE short natural sentence before calling it — something like "Give me just a second to check who's available." or "Let me pull up what we've got." That's it — one sentence, then call the tool. The slot offer comes after the results return.
 12. TIMEZONE RULE: When booking, use the exact ISO 8601 datetime from the find_available_slots results. Never construct your own datetime string — the slots returned are already in the correct timezone.
 13. OUTSIDE SERVICE AREA: If find_available_slots says outside service area, say warmly that you don't serve that area, then call update_lead_status("closed_lost"), add_note with the zip, and end_call.
 === END VOICE RULES ===`
@@ -48,7 +48,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "find_available_slots",
     description:
-      "Check real technician availability and service area coverage for a lead's zip code. Call this SILENTLY (no text) immediately after learning the lead's zip code. Returns either: available booking slots tied to actual technicians, or an OUTSIDE_SERVICE_AREA signal. You MUST call this before offering any appointment times. Use the exact ISO datetimes returned when calling book_appointment.",
+      "Check real technician availability and service area coverage for a lead's zip code. Call this immediately after learning the lead's zip code — say ONE short natural sentence first ('Give me just a second to check who's available.'), then call this tool. Returns either: available booking slots tied to actual technicians, or an OUTSIDE_SERVICE_AREA signal. You MUST call this before offering any appointment times. Use the exact ISO datetimes returned when calling book_appointment.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -314,7 +314,8 @@ ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
   // We run findSlotsForLead(), pass real slot data or outside-area signal back,
   // then get Claude's verbal response (slot offer or warm rejection).
   if (toolBlock?.name === "find_available_slots") {
-    responseText = "" // ensure no "let me check..." text leaks through
+    const bridgingPhrase = responseText.trim() // e.g. "Give me just a second to check who's available."
+    responseText = ""
     const { zip, job_type } = toolBlock.input as { zip: string; job_type?: string }
 
     const slotsResult = await findSlotsForLead(session.company_id, job_type ?? null, zip ?? null)
@@ -371,6 +372,12 @@ ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
       if (block.type === "tool_use") {
         toolBlock = { name: block.name, id: block.id, input: block.input as Record<string, unknown> }
       }
+    }
+
+    // Prepend the bridging phrase so the lead hears one fluid response:
+    // "Give me just a second to check who's available. Okay — I've got Thursday morning or Friday afternoon."
+    if (bridgingPhrase && responseText) {
+      responseText = `${bridgingPhrase} ${responseText}`
     }
   }
   // ── Other tools called without verbal — get verbal response ─────────────────
