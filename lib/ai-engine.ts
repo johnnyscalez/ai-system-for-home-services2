@@ -510,13 +510,21 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     }
 
     // Get Claude's slot-offering reply (reached only when slotsResult.found === true)
+    // Provide tool_results for EVERY tool_use in the response (Claude sometimes calls
+    // update_lead_status alongside find_available_slots in the same turn — every tool_use
+    // must have a corresponding tool_result or the API returns a 400).
+    const slotToolResults = (claudeResponse.content as Array<{ type: string; id?: string; name?: string }>)
+      .filter(b => b.type === "tool_use")
+      .map(b => ({
+        type: "tool_result" as const,
+        tool_use_id: b.id!,
+        content: b.id === findSlotsToolId ? toolResultText : "Status updated.",
+      }))
+
     const slotMessages = [
       ...messages,
       { role: "assistant" as const, content: claudeResponse.content },
-      {
-        role: "user" as const,
-        content: [{ type: "tool_result" as const, tool_use_id: findSlotsToolId, content: toolResultText }],
-      },
+      { role: "user" as const, content: slotToolResults },
     ]
 
     const slotReply = await anthropic.messages.create({
@@ -540,25 +548,28 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       }
     }
 
-    // Fallback: if Claude called a tool but produced no text, force a text-only reply
+    // Fallback: if Claude called a tool but produced no text, force a text-only reply.
+    // Provide tool_results for ALL tool_use blocks in slotReply — not just the first.
     if (!responseText) {
-      // Need to provide a tool_result for the tool Claude just called so the
-      // message history stays valid (Anthropic requires tool_use and tool_result
-      // to alternate). Build a minimal result and ask for the final text.
-      const lastToolUse = slotReply.content.find(b => b.type === "tool_use") as
-        { type: "tool_use"; id: string; name: string } | undefined
-      const toolResultContent = lastToolUse?.name === "book_appointment"
-        ? "Appointment booked. Now send the lead a brief confirmation text."
-        : "Done. Now send the lead a brief, warm text reply."
+      const slotReplyToolResults = (slotReply.content as Array<{ type: string; id?: string; name?: string }>)
+        .filter(b => b.type === "tool_use")
+        .map(b => ({
+          type: "tool_result" as const,
+          tool_use_id: b.id!,
+          content: b.name === "book_appointment"
+            ? "Appointment booked. Now send the lead a brief confirmation text."
+            : "Done. Now send the lead a brief, warm text reply.",
+        }))
+
+      const fallbackContent: string | Array<{ type: "tool_result"; tool_use_id: string; content: string }> =
+        slotReplyToolResults.length > 0
+          ? slotReplyToolResults
+          : "You must send a text message to the lead now. Write only the SMS text — no tool calls."
+
       const fallbackMessages: typeof slotMessages = [
         ...slotMessages,
         { role: "assistant" as const, content: slotReply.content },
-        {
-          role: "user" as const,
-          content: lastToolUse
-            ? [{ type: "tool_result" as const, tool_use_id: lastToolUse.id, content: toolResultContent }]
-            : "You must send a text message to the lead now. Write only the SMS text — no tool calls.",
-        } as { role: "user"; content: string | Array<{ type: "tool_result"; tool_use_id: string; content: string }> },
+        { role: "user" as const, content: fallbackContent } as { role: "user"; content: typeof fallbackContent },
       ]
       const fallbackReply = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
@@ -587,27 +598,29 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   }
 
   // If Claude used a tool and needs to continue to get the text response,
-  // send tool result back and get the final text
+  // send tool result back and get the final text.
+  // Provide tool_results for ALL tool_use blocks — Claude sometimes calls multiple
+  // tools in one turn (e.g. update_lead_status + book_appointment). Every tool_use
+  // must have a corresponding tool_result or the API returns a 400.
   if (action && !responseText) {
+    const actionToolResults = (claudeResponse.content as Array<{ type: string; id?: string; name?: string }>)
+      .filter(b => b.type === "tool_use")
+      .map(b => ({
+        type: "tool_result" as const,
+        tool_use_id: b.id!,
+        content: action?.type === "cancel_appointment"
+          ? "Appointment cancelled. Send a brief, warm confirmation to the lead that it's been cancelled."
+          : action?.type === "reschedule_appointment"
+          ? "Appointment rescheduled. Confirm the new date and time to the lead in a short, friendly text."
+          : action?.type === "request_callback"
+          ? "Call initiated. Send exactly this message and nothing else: 'Calling you now!' Do NOT ask any more questions."
+          : "Appointment booked. Confirm to the lead with the scheduled day, time, and address. Do NOT include a technician name — the system assigns the right tech automatically and they will reach out directly. Say: 'You're on the schedule — [Day] at [Time] at [Address]. Our tech will reach out before heading over.'",
+      }))
+
     const toolResultMessages = [
       ...messages,
       { role: "assistant" as const, content: claudeResponse.content },
-      {
-        role: "user" as const,
-        content: [
-          {
-            type: "tool_result" as const,
-            tool_use_id: (claudeResponse.content.find((b) => b.type === "tool_use") as { id: string })?.id ?? "",
-            content: action?.type === "cancel_appointment"
-              ? "Appointment cancelled. Send a brief, warm confirmation to the lead that it's been cancelled."
-              : action?.type === "reschedule_appointment"
-              ? "Appointment rescheduled. Confirm the new date and time to the lead in a short, friendly text."
-              : action?.type === "request_callback"
-              ? "Call initiated. Send exactly this message and nothing else: 'Calling you now!' Do NOT ask any more questions."
-              : "Appointment booked. Confirm to the lead with the scheduled day, time, and address. Do NOT include a technician name — the system assigns the right tech automatically and they will reach out directly. Say: 'You're on the schedule — [Day] at [Time] at [Address]. Our tech will reach out before heading over.'",
-          },
-        ],
-      },
+      { role: "user" as const, content: actionToolResults },
     ]
 
     const followUp = await anthropic.messages.create({
