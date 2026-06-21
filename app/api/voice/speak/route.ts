@@ -30,10 +30,10 @@ export async function GET(req: NextRequest) {
       body: JSON.stringify({
         text,
         model_id: "eleven_turbo_v2_5",
-        // ulaw_8000 = native phone codec (~8KB/s vs 176KB/s for mp3_44100_128).
-        // Phone calls are 8kHz PSTN — the higher bitrate is downsampled anyway.
-        // This starts playing in Twilio ~20x faster.
-        output_format: "ulaw_8000",
+        // mp3_22050_32 — 22kHz 32kbps MP3. Twilio <Play> supports MP3 natively.
+        // Raw ulaw_8000 (headerless bytes) was served as audio/basic which Twilio
+        // cannot decode — caused pure noise on every call.
+        output_format: "mp3_22050_32",
         voice_settings: {
           stability: 0.45,
           similarity_boost: 0.80,
@@ -54,10 +54,14 @@ export async function GET(req: NextRequest) {
     )
   }
 
+  if (!res.body) {
+    console.error("[voice/speak] ElevenLabs returned empty body")
+    return new Response("Empty audio response", { status: 502 })
+  }
+
   return new Response(res.body, {
     headers: {
-      // audio/basic is the MIME type for μ-law 8kHz — Twilio accepts it natively
-      "Content-Type": "audio/basic",
+      "Content-Type": "audio/mpeg",
       "Cache-Control": "no-store",
     },
   })
