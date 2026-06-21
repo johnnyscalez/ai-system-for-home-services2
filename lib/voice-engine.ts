@@ -292,7 +292,7 @@ ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
   // ── First Claude call ────────────────────────────────────────────────────────
   const response = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
-    max_tokens: 200,
+    max_tokens: 150,
     system: systemPrompt,
     tools: TOOLS,
     messages: messages as Parameters<typeof anthropic.messages.create>[0]["messages"],
@@ -359,7 +359,7 @@ ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
 
     const slotResponse = await anthropic.messages.create({
       model:      "claude-sonnet-4-6",
-      max_tokens: 250,
+      max_tokens: 150,
       system:     systemPrompt,
       tools:      TOOLS,
       messages:   slotMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],
@@ -397,7 +397,7 @@ ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
 
     const followUp = await anthropic.messages.create({
       model:      "claude-sonnet-4-6",
-      max_tokens: 150,
+      max_tokens: 100,
       system:     systemPrompt,
       tools:      TOOLS,
       messages:   followUpMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],

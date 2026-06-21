@@ -17,7 +17,8 @@ export async function GET(req: NextRequest) {
   }
 
   // Aria — warm, natural, young female. Override with ELEVENLABS_VOICE_ID env var.
-  const voiceId = process.env.ELEVENLABS_VOICE_ID ?? "9BWtsMINqrJLrRacOk9x"
+  // Rachel — neutral American, warm, professional. Override with ELEVENLABS_VOICE_ID.
+  const voiceId = process.env.ELEVENLABS_VOICE_ID ?? "21m00Tcm4TlvDq8ikWAM"
 
   const res = await fetch(
     `https://api.elevenlabs.io/v1/text-to-speech/${voiceId}/stream`,
@@ -29,10 +30,8 @@ export async function GET(req: NextRequest) {
       },
       body: JSON.stringify({
         text,
-        model_id: "eleven_turbo_v2_5",
-        // mp3_22050_32 — 22kHz 32kbps MP3. Twilio <Play> supports MP3 natively.
-        // Raw ulaw_8000 (headerless bytes) was served as audio/basic which Twilio
-        // cannot decode — caused pure noise on every call.
+        // eleven_flash_v2_5 — ~75ms first-chunk latency vs ~300ms for turbo.
+        model_id: "eleven_flash_v2_5",
         output_format: "mp3_22050_32",
         voice_settings: {
           stability: 0.45,

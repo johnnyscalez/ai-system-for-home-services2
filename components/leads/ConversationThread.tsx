@@ -19,6 +19,7 @@ type Message = {
   body: string
   created_at: string
   twilio_sid?: string | null
+  channel?: string | null
 }
 
 type AgentType = "sms" | "voice"
@@ -100,8 +101,9 @@ export function ConversationThread({
     const poll = async () => {
       const { data } = await supabase
         .from("conversations")
-        .select("id, direction, sent_by, body, created_at, twilio_sid")
+        .select("id, direction, sent_by, body, created_at, twilio_sid, channel")
         .eq("lead_id", leadId)
+        .eq("channel", "sms")
         .order("created_at", { ascending: true })
 
       if (!data) return
@@ -122,6 +124,7 @@ export function ConversationThread({
         { event: "INSERT", schema: "public", table: "conversations", filter: `lead_id=eq.${leadId}` },
         (payload) => {
           const msg = payload.new as Message
+          if (msg.channel && msg.channel !== "sms") return  // ignore voice transcripts
           setMessages((prev) => {
             if (prev.some((m) => m.id === msg.id)) return prev
             return [...prev, msg]
