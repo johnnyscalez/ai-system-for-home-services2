@@ -58,7 +58,7 @@ export async function PATCH(req: NextRequest) {
     .update(update)
     .eq("id", id)
     .eq("company_id", profile.company_id)
-    .select("id, first_name, last_name, phone, deal_value, closed_at, closed_job_type, closed_technician_id, closed_technician_name, status")
+    .select("id, first_name, last_name, phone, deal_value, refund_amount, refund_note, closed_at, closed_job_type, closed_technician_id, closed_technician_name, status")
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

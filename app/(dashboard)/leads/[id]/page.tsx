@@ -4,7 +4,7 @@ import { Badge } from "@/components/ui/badge"
 import { ConversationThread } from "@/components/leads/ConversationThread"
 import {
   Phone, Mail, MapPin, Calendar, Clock, User,
-  ArrowLeft, Zap, Wrench, Thermometer
+  ArrowLeft, Zap, Wrench, Thermometer, DollarSign
 } from "lucide-react"
 import Link from "next/link"
 import { formatDistanceToNow } from "@/lib/utils"
@@ -224,6 +224,38 @@ export default async function LeadDetailPage({
               </div>
             </div>
           </div>
+
+          {/* Closed deal summary — visible only when the lead is won */}
+          {(lead.status === "closed_won" || lead.status === "closed") && (lead.deal_value as number | null) && (
+            <div className="space-y-2">
+              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Closed Deal</p>
+              <div className="bg-emerald-500/8 border border-emerald-500/20 rounded-lg p-3 space-y-1.5">
+                <div className="flex items-center gap-2">
+                  <DollarSign className="w-3.5 h-3.5 text-emerald-500 shrink-0" />
+                  <span className="text-base font-bold text-emerald-600 font-mono">
+                    ${(lead.deal_value as number).toLocaleString()}
+                  </span>
+                </div>
+                {(lead.closed_job_type as string | null) && (
+                  <p className="text-xs text-muted-foreground flex items-center gap-1.5">
+                    <Wrench className="w-3 h-3 shrink-0" />
+                    {lead.closed_job_type as string}
+                  </p>
+                )}
+                {(lead.closed_at as string | null) && (
+                  <p className="text-xs text-muted-foreground">
+                    Closed {formatDistanceToNow(lead.closed_at as string)} ago
+                  </p>
+                )}
+                {(lead.refund_amount as number | null) && (
+                  <p className="text-xs text-amber-600">
+                    Refund: −${(lead.refund_amount as number).toLocaleString()}
+                    {(lead.refund_note as string | null) ? ` · ${lead.refund_note}` : ""}
+                  </p>
+                )}
+              </div>
+            </div>
+          )}
 
           {/* Notes */}
           {lead.notes && (
