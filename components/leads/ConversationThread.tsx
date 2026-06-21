@@ -278,9 +278,9 @@ export function ConversationThread({
         </AnimatePresence>
       </div>
 
-      {/* Messages */}
+      {/* Messages — filter voice transcripts at render time so they never appear here */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-        {messages.length === 0 ? (
+        {messages.filter(m => !m.channel || m.channel === "sms").length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Bot className="w-10 h-10 text-muted-foreground/30 mb-3" />
             <p className="text-sm text-muted-foreground">No messages yet</p>
@@ -290,7 +290,7 @@ export function ConversationThread({
           </div>
         ) : (
           <AnimatePresence initial={false}>
-            {messages.map((msg) => {
+            {messages.filter(m => !m.channel || m.channel === "sms").map((msg) => {
               const isOutbound = msg.direction === "outbound"
               const isAi = msg.sent_by === "ai"
               const isReminder = msg.sent_by === "reminder"
