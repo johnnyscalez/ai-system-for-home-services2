@@ -178,6 +178,7 @@ export interface Technician {
   photo_url: string | null
   specializations: string[]
   zip_codes: string[]
+  serves_all_areas: boolean
   schedule: TechnicianSchedule
   status: "active" | "inactive"
   notes: string | null

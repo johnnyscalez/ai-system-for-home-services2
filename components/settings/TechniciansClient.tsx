@@ -49,6 +49,7 @@ type FormState = {
   customSpecialization: string
   zipInput: string
   zip_codes: string[]
+  serves_all_areas: boolean
   schedule: TechnicianSchedule
   status: "active" | "inactive"
   notes: string
@@ -63,6 +64,7 @@ const EMPTY_FORM: FormState = {
   customSpecialization: "",
   zipInput: "",
   zip_codes: [],
+  serves_all_areas: true,
   schedule: DEFAULT_SCHEDULE,
   status: "active",
   notes: "",
@@ -102,6 +104,7 @@ export function TechniciansClient({ initial, companyServiceAreas = [] }: { initi
       customSpecialization: "",
       zipInput: "",
       zip_codes: t.zip_codes,
+      serves_all_areas: t.serves_all_areas,
       schedule: t.schedule,
       status: t.status,
       notes: t.notes ?? "",
@@ -119,23 +122,32 @@ export function TechniciansClient({ initial, companyServiceAreas = [] }: { initi
 
   // ── Zip code helpers ─────────────────────────────────────────────────────────
 
+  function setAllAreas(on: boolean) {
+    if (on) {
+      setForm(f => ({ ...f, serves_all_areas: true, zip_codes: [] }))
+    } else {
+      setForm(f => ({ ...f, serves_all_areas: false }))
+    }
+  }
+
   function addArea(raw: string) {
     const areas = raw.split(/[,\n]+/).map(z => z.trim()).filter(z => z.length > 0)
+    if (areas.length === 0) return
     const unique = Array.from(new Set([...form.zip_codes, ...areas]))
-    setForm(f => ({ ...f, zip_codes: unique, zipInput: "" }))
+    setForm(f => ({ ...f, zip_codes: unique, zipInput: "", serves_all_areas: false }))
   }
 
   function toggleArea(area: string) {
-    setForm(f => ({
-      ...f,
-      zip_codes: f.zip_codes.includes(area)
+    setForm(f => {
+      const next = f.zip_codes.includes(area)
         ? f.zip_codes.filter(x => x !== area)
-        : [...f.zip_codes, area],
-    }))
+        : [...f.zip_codes, area]
+      return { ...f, zip_codes: next, serves_all_areas: false }
+    })
   }
 
   function removeZip(z: string) {
-    setForm(f => ({ ...f, zip_codes: f.zip_codes.filter(x => x !== z) }))
+    setForm(f => ({ ...f, zip_codes: f.zip_codes.filter(x => x !== z), serves_all_areas: false }))
   }
 
   // ── Specialization helpers ───────────────────────────────────────────────────
@@ -175,17 +187,22 @@ export function TechniciansClient({ initial, companyServiceAreas = [] }: { initi
 
   async function save() {
     if (!form.name.trim()) { setError("Name is required."); return }
+    if (!form.serves_all_areas && form.zip_codes.length === 0) {
+      setError("Select at least one service area, or enable \"Serves All Areas\".")
+      return
+    }
     setSaving(true); setError(null)
 
     // password + email only sent on create (not edit)
     const payload: Record<string, unknown> = {
-      name:            form.name.trim(),
-      phone:           form.phone.trim() || null,
-      specializations: form.specializations,
-      zip_codes:       form.zip_codes,
-      schedule:        form.schedule,
-      status:          form.status,
-      notes:           form.notes.trim() || null,
+      name:             form.name.trim(),
+      phone:            form.phone.trim() || null,
+      specializations:  form.specializations,
+      zip_codes:        form.serves_all_areas ? [] : form.zip_codes,
+      serves_all_areas: form.serves_all_areas,
+      schedule:         form.schedule,
+      status:           form.status,
+      notes:            form.notes.trim() || null,
     }
     if (!editId) {
       payload.email    = form.email.trim() || null
@@ -438,63 +455,101 @@ export function TechniciansClient({ initial, companyServiceAreas = [] }: { initi
               <div className="space-y-3">
                 <Label className="text-sm font-medium text-[#1C1917]">Service areas</Label>
 
-                {/* Company areas quick-select */}
-                {companyServiceAreas.length > 0 && (
-                  <div className="space-y-1.5">
-                    <p className="text-xs text-[#78716C]">From your service area — click to add:</p>
-                    <div className="flex flex-wrap gap-1.5">
-                      {companyServiceAreas.map(area => {
-                        const selected = form.zip_codes.includes(area)
-                        return (
-                          <button
-                            key={area}
-                            type="button"
-                            onClick={() => toggleArea(area)}
-                            className={cn(
-                              "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
-                              selected
-                                ? "bg-[#F97316] border-[#F97316] text-white"
-                                : "bg-white border-[#E7E5E4] text-[#78716C] hover:border-[#F97316] hover:text-[#F97316]"
-                            )}
-                          >
-                            {selected && <Check className="w-3 h-3 inline mr-1" />}
-                            {area}
-                          </button>
-                        )
-                      })}
+                {/* All Areas toggle */}
+                <button
+                  type="button"
+                  onClick={() => setAllAreas(!form.serves_all_areas)}
+                  className={cn(
+                    "flex items-center gap-2.5 px-4 py-2.5 rounded-xl border text-sm font-medium transition-all w-full",
+                    form.serves_all_areas
+                      ? "bg-emerald-50 border-emerald-300 text-emerald-700"
+                      : "bg-white border-[#E7E5E4] text-[#78716C] hover:border-emerald-300 hover:text-emerald-700"
+                  )}
+                >
+                  <div className={cn(
+                    "w-5 h-5 rounded-md border-2 flex items-center justify-center shrink-0 transition-colors",
+                    form.serves_all_areas
+                      ? "bg-emerald-500 border-emerald-500"
+                      : "border-[#D6D3D1] bg-white"
+                  )}>
+                    {form.serves_all_areas && <Check className="w-3 h-3 text-white" />}
+                  </div>
+                  <span>Serves All Areas</span>
+                  {form.serves_all_areas && (
+                    <span className="ml-auto text-xs bg-emerald-100 text-emerald-700 px-2 py-0.5 rounded-full">
+                      Default
+                    </span>
+                  )}
+                </button>
+
+                {/* Specific area selector — only shown when All Areas is OFF */}
+                {!form.serves_all_areas && (
+                  <div className="space-y-3 pl-1">
+                    {companyServiceAreas.length === 0 ? (
+                      <p className="text-xs text-[#78716C] bg-amber-50 border border-amber-200 rounded-lg px-3 py-2.5">
+                        No service areas configured yet.{" "}
+                        <a href="/settings" className="underline text-[#F97316] hover:text-[#ea6d04]">
+                          Add service areas in your company settings first.
+                        </a>
+                      </p>
+                    ) : (
+                      <div className="space-y-1.5">
+                        <p className="text-xs text-[#78716C]">Select from your company service areas:</p>
+                        <div className="flex flex-wrap gap-1.5">
+                          {companyServiceAreas.map(area => {
+                            const selected = form.zip_codes.includes(area)
+                            return (
+                              <button
+                                key={area}
+                                type="button"
+                                onClick={() => toggleArea(area)}
+                                className={cn(
+                                  "px-3 py-1.5 rounded-full text-xs font-medium border transition-all",
+                                  selected
+                                    ? "bg-[#F97316] border-[#F97316] text-white"
+                                    : "bg-white border-[#E7E5E4] text-[#78716C] hover:border-[#F97316] hover:text-[#F97316]"
+                                )}
+                              >
+                                {selected && <Check className="w-3 h-3 inline mr-1" />}
+                                {area}
+                              </button>
+                            )
+                          })}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Free text input */}
+                    <div className="space-y-1.5">
+                      <p className="text-xs text-[#78716C]">Or add a custom city / zip code:</p>
+                      <div className="flex gap-2">
+                        <Input
+                          value={form.zipInput}
+                          onChange={e => setForm(f => ({ ...f, zipInput: e.target.value }))}
+                          onKeyDown={e => (e.key === "Enter" || e.key === ",") && (e.preventDefault(), addArea(form.zipInput))}
+                          placeholder="e.g. North Chicago, 60614"
+                          className="border-[#E7E5E4] focus-visible:ring-[#F97316] text-sm h-9"
+                        />
+                        <Button type="button" variant="outline" size="sm" onClick={() => addArea(form.zipInput)} className="h-9 shrink-0">
+                          Add
+                        </Button>
+                      </div>
                     </div>
-                  </div>
-                )}
 
-                {/* Free text input */}
-                <div className="space-y-1.5">
-                  <p className="text-xs text-[#78716C]">Or type a city, zip code, or custom area:</p>
-                  <div className="flex gap-2">
-                    <Input
-                      value={form.zipInput}
-                      onChange={e => setForm(f => ({ ...f, zipInput: e.target.value }))}
-                      onKeyDown={e => (e.key === "Enter" || e.key === ",") && (e.preventDefault(), addArea(form.zipInput))}
-                      placeholder="e.g. North Chicago, 60614"
-                      className="border-[#E7E5E4] focus-visible:ring-[#F97316] text-sm h-9"
-                    />
-                    <Button type="button" variant="outline" size="sm" onClick={() => addArea(form.zipInput)} className="h-9 shrink-0">
-                      Add
-                    </Button>
-                  </div>
-                </div>
-
-                {/* Selected areas */}
-                {form.zip_codes.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {form.zip_codes.map(z => (
-                      <span key={z} className="flex items-center gap-1 bg-[#F97316]/8 border border-[#F97316]/20 text-xs px-2 py-1 rounded-md text-[#F97316]">
-                        <MapPin className="w-2.5 h-2.5 shrink-0" />
-                        {z}
-                        <button onClick={() => removeZip(z)} className="text-[#F97316]/60 hover:text-red-500 transition-colors ml-0.5">
-                          <X className="w-2.5 h-2.5" />
-                        </button>
-                      </span>
-                    ))}
+                    {/* Selected areas pills */}
+                    {form.zip_codes.length > 0 && (
+                      <div className="flex flex-wrap gap-1.5">
+                        {form.zip_codes.map(z => (
+                          <span key={z} className="flex items-center gap-1 bg-[#F97316]/8 border border-[#F97316]/20 text-xs px-2 py-1 rounded-md text-[#F97316]">
+                            <MapPin className="w-2.5 h-2.5 shrink-0" />
+                            {z}
+                            <button onClick={() => removeZip(z)} className="text-[#F97316]/60 hover:text-red-500 transition-colors ml-0.5">
+                              <X className="w-2.5 h-2.5" />
+                            </button>
+                          </span>
+                        ))}
+                      </div>
+                    )}
                   </div>
                 )}
               </div>
@@ -637,16 +692,26 @@ export function TechniciansClient({ initial, companyServiceAreas = [] }: { initi
                       {t.status}
                     </Badge>
                   </div>
-                  <div className="flex items-center gap-3 mt-0.5 text-xs text-[#78716C]">
+                  <div className="flex items-center gap-2 mt-0.5 flex-wrap">
                     {t.phone && (
-                      <span className="flex items-center gap-1">
+                      <span className="flex items-center gap-1 text-xs text-[#78716C]">
                         <Phone className="w-3 h-3" />{t.phone}
                       </span>
                     )}
-                    {t.zip_codes.length > 0 && (
-                      <span className="flex items-center gap-1">
-                        <MapPin className="w-3 h-3" />{t.zip_codes.slice(0, 3).join(", ")}{t.zip_codes.length > 3 ? ` +${t.zip_codes.length - 3}` : ""}
+                    {/* Service area badge */}
+                    {t.serves_all_areas || t.zip_codes.length === 0 ? (
+                      <span className="flex items-center gap-1 bg-emerald-50 border border-emerald-200 text-emerald-700 text-[10px] font-semibold px-2 py-0.5 rounded-full">
+                        <Check className="w-2.5 h-2.5" /> All Areas
                       </span>
+                    ) : (
+                      t.zip_codes.slice(0, 4).map(z => (
+                        <span key={z} className="flex items-center gap-0.5 bg-[#F97316]/8 border border-[#F97316]/20 text-[#F97316] text-[10px] font-medium px-2 py-0.5 rounded-full">
+                          <MapPin className="w-2.5 h-2.5 shrink-0" />{z}
+                        </span>
+                      ))
+                    )}
+                    {!t.serves_all_areas && t.zip_codes.length > 4 && (
+                      <span className="text-[10px] text-[#78716C]">+{t.zip_codes.length - 4} more</span>
                     )}
                   </div>
                   {t.specializations.length > 0 && (
@@ -753,9 +818,9 @@ export function TechniciansClient({ initial, companyServiceAreas = [] }: { initi
                           : t.specializations.map(s => (
                             <p key={s} className="text-xs py-0.5 text-[#1C1917]">• {s}</p>
                           ))}
-                        <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mt-3 mb-2">All zip codes</p>
-                        {t.zip_codes.length === 0
-                          ? <p className="text-xs text-[#78716C]">None set — tech serves all areas</p>
+                        <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mt-3 mb-2">Service areas</p>
+                        {t.serves_all_areas || t.zip_codes.length === 0
+                          ? <p className="text-xs text-emerald-600 font-medium">✓ Serves all areas</p>
                           : <p className="text-xs font-mono text-[#1C1917]">{t.zip_codes.join(", ")}</p>}
                         {t.notes && (
                           <>

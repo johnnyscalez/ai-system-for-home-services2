@@ -105,9 +105,14 @@ export async function findSlotsForLead(
   if (candidates.length === 0) return { found: false, reason: "no_specialization_match" }
 
   // 2. Zip coverage filter — hard filter: if a zip is provided and no tech covers it, fail.
-  // A tech with zip_codes = [] covers all areas; non-empty means explicit coverage list.
+  // A tech is eligible if serves_all_areas = true, zip_codes is empty (legacy all-areas),
+  // or zip_codes explicitly includes the lead's zip.
   if (zip) {
-    candidates = candidates.filter(t => t.zip_codes.length === 0 || t.zip_codes.includes(zip))
+    candidates = candidates.filter(t =>
+      t.serves_all_areas === true ||
+      t.zip_codes.length === 0 ||
+      t.zip_codes.includes(zip)
+    )
   }
   if (candidates.length === 0) return { found: false, reason: "no_zip_match" }
 

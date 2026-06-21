@@ -34,7 +34,7 @@ export async function POST(req: NextRequest) {
   if (!profile?.company_id) return NextResponse.json({ error: "No company" }, { status: 400 })
 
   const body = await req.json()
-  const { name, phone, email, password, specializations, zip_codes, schedule, status, notes } = body
+  const { name, phone, email, password, specializations, zip_codes, serves_all_areas, schedule, status, notes } = body
 
   if (!name?.trim()) return NextResponse.json({ error: "Name is required" }, { status: 400 })
   const hasPassword = password?.trim() && password.trim().length >= 6
@@ -58,14 +58,15 @@ export async function POST(req: NextRequest) {
     .from("technicians")
     .insert({
       company_id:      profile.company_id,
-      name:            name.trim(),
-      phone:           phone?.trim() || null,
-      email:           email?.trim() || null,
-      specializations: specializations ?? [],
-      zip_codes:       (zip_codes ?? []).map((z: string) => z.trim()).filter(Boolean),
-      schedule:        schedule ?? undefined,
-      status:          status ?? "active",
-      notes:           notes?.trim() || null,
+      name:             name.trim(),
+      phone:            phone?.trim() || null,
+      email:            email?.trim() || null,
+      specializations:  specializations ?? [],
+      zip_codes:        (zip_codes ?? []).map((z: string) => z.trim()).filter(Boolean),
+      serves_all_areas: serves_all_areas !== false,
+      schedule:         schedule ?? undefined,
+      status:           status ?? "active",
+      notes:            notes?.trim() || null,
     })
     .select()
     .single()

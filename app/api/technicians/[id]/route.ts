@@ -15,7 +15,7 @@ export async function PATCH(req: NextRequest, { params }: { params: Promise<{ id
   if (!profile?.company_id) return NextResponse.json({ error: "No company" }, { status: 400 })
 
   const body = await req.json()
-  const allowed = ["name", "phone", "photo_url", "specializations", "zip_codes", "schedule", "status", "notes"]
+  const allowed = ["name", "phone", "photo_url", "specializations", "zip_codes", "serves_all_areas", "schedule", "status", "notes"]
   const updates: Record<string, unknown> = {}
   for (const key of allowed) {
     if (key in body) {
