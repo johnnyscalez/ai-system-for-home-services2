@@ -60,8 +60,13 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    // Voice AI paused — skip (leave pending) so the step fires when voice AI is re-enabled
+    // Voice AI paused — skip unless the step is too stale (>48h past due), then cancel it.
+    // Without the age check a step could sit pending for weeks and fire the moment voice is re-enabled.
     if (stepIsVoice && lead.ai_voice_paused) {
+      const stepAge = now.getTime() - new Date(step.scheduled_at).getTime()
+      if (stepAge > 48 * 60 * 60 * 1000) {
+        await supabase.from("sequences").update({ status: "cancelled" }).eq("id", step.id)
+      }
       continue
     }
 

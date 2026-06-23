@@ -130,8 +130,8 @@ export async function POST(req: NextRequest) {
   const params: Record<string, string> = {}
   formData.forEach((value, key) => { params[key] = value.toString() })
 
-  // Validate Twilio signature in production using the already-parsed params
-  if (process.env.NODE_ENV === "production") {
+  // Validate Twilio signature whenever the auth token is available (all deployed envs, not just production)
+  if (process.env.TWILIO_AUTH_TOKEN) {
     const signature = req.headers.get("x-twilio-signature") ?? ""
     const url = (process.env.NEXT_PUBLIC_APP_URL ?? "").replace(/\/$/, "") + "/api/webhooks/sms"
     if (!validateTwilioSignature(signature, url, params)) {

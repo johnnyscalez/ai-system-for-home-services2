@@ -673,7 +673,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     if (!responseText && action?.type === "book_appointment") {
       const a = action as { type: "book_appointment"; scheduled_at: string; address?: string }
       const day = new Date(a.scheduled_at).toLocaleDateString("en-US", {
-        weekday: "long", month: "short", day: "numeric", timeZone: "America/New_York",
+        weekday: "long", month: "short", day: "numeric", timeZone: tz,
       })
       responseText = a.address
         ? `You're on the schedule — ${day} at ${a.address}. Tech will reach out before heading over.`

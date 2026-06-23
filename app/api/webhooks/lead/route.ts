@@ -127,7 +127,8 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
         return NextResponse.json({ error: "Company not found" }, { status: 404, headers: CORS_HEADERS })
       }
     } else {
-      // No identifier at all — use the only company in the system (single-tenant fallback)
+      // No identifier — safe single-tenant fallback. Returns 401 when >1 company exists,
+      // so this is safe for multi-tenant. Clients must include webhook_secret or company_id.
       const { data: companies } = await supabase
         .from("companies")
         .select("id, service_type")
