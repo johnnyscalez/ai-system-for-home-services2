@@ -43,10 +43,10 @@ export async function POST(req: NextRequest) {
     twilio_sid: msg.sid,
   })
 
-  // Update lead last_message_at
+  // Pause the AI and update last_message_at — human took over this conversation
   await service
     .from("leads")
-    .update({ last_message_at: new Date().toISOString() })
+    .update({ last_message_at: new Date().toISOString(), ai_paused: true })
     .eq("id", leadId)
 
   return NextResponse.json({ success: true })

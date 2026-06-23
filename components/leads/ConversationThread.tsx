@@ -164,6 +164,9 @@ export function ConversationThread({
         const data = await res.json()
         setError(data.error ?? "Failed to send")
         setDraft(body)
+      } else {
+        // Server paused the AI when human sent — reflect that in UI immediately
+        setAiSmsPaused(true)
       }
     } catch {
       setError("Network error — message not sent")
