@@ -916,7 +916,7 @@ export async function processAndSave(
           await notifyTechnician(supabase, companyId, leadId, scheduled_at, address, notes,
             techResult.technician.id, techResult.technician.name, techResult.technician.phone)
         } else {
-          await flagNoTechAvailable(apt.id, techResult.reason)
+          await flagNoTechAvailable(apt.id, techResult.reason, companyId)
         }
       } else if (preSelected && apt) {
         // Pre-selected path — look up tech phone for notification
@@ -1001,6 +1001,7 @@ export async function processAndSave(
         .from("appointments")
         .select("scheduled_at, google_event_id")
         .eq("id", appointment_id)
+        .eq("company_id", companyId)
         .single()
 
       await supabase
@@ -1100,7 +1101,7 @@ export async function processAndSave(
             .map((m) => `${m.direction === "inbound" ? "Lead" : "AI"}: ${m.body}`)
             .join(" | ")
 
-          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://leadcloser.app"
+          const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://fieldbuiltai.com"
           const twilio = getTwilioClient()
           await twilio.calls.create({
             to: leadData.phone,

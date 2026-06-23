@@ -3,23 +3,18 @@ import { getTwilioClient, formatPhone } from "@/lib/twilio"
 
 async function getCompanyNotificationConfig(companyId: string) {
   const supabase = createServiceRoleClient()
-  const [companyRes, phoneRes] = await Promise.all([
-    supabase
-      .from("companies")
-      .select("notification_phone, name")
-      .eq("id", companyId)
-      .single(),
-    supabase
-      .from("phone_numbers")
-      .select("phone_number")
-      .eq("company_id", companyId)
-      .eq("is_active", true)
-      .single(),
+  const [companyRes, phoneRes, agentRes] = await Promise.all([
+    supabase.from("companies").select("notification_phone, name").eq("id", companyId).single(),
+    supabase.from("phone_numbers").select("phone_number").eq("company_id", companyId).eq("is_active", true).single(),
+    supabase.from("ai_agent_config").select("timezone").eq("company_id", companyId).single(),
   ])
+  const fromNumber = phoneRes.data?.phone_number ?? process.env.TWILIO_PHONE_NUMBER ?? null
+  if (!fromNumber) console.error(`[notifications] No Twilio number for company ${companyId} and TWILIO_PHONE_NUMBER env var not set`)
   return {
     notificationPhone: companyRes.data?.notification_phone ?? null,
     companyName: companyRes.data?.name ?? "",
-    fromNumber: phoneRes.data?.phone_number ?? process.env.TWILIO_PHONE_NUMBER!,
+    fromNumber: fromNumber ?? "",
+    timezone: agentRes.data?.timezone ?? "America/New_York",
   }
 }
 
@@ -56,17 +51,25 @@ export async function notifyAppointmentBooked(
   scheduledAt: string,
   address: string
 ) {
+  const { notificationPhone, fromNumber, timezone } = await getCompanyNotificationConfig(companyId)
+  if (!notificationPhone || !fromNumber) return
   const name = leadName.trim() || "A lead"
   const when = new Date(scheduledAt).toLocaleString("en-US", {
-    weekday: "short",
-    month: "short",
-    day: "numeric",
-    hour: "numeric",
-    minute: "2-digit",
-    timeZone: "America/New_York",
+    weekday: "short", month: "short", day: "numeric",
+    hour: "numeric", minute: "2-digit",
+    timeZone: timezone,
   })
   const where = address || "address TBD"
-  await send(companyId, `✅ Appointment booked! ${name} — ${when} at ${where}`)
+  try {
+    const client = getTwilioClient()
+    await client.messages.create({
+      to: formatPhone(notificationPhone),
+      from: fromNumber,
+      body: `✅ Appointment booked! ${name} — ${when} at ${where}`,
+    })
+  } catch (err) {
+    console.error("[notifications] Appointment booked notification failed:", err)
+  }
 }
 
 export async function notifyNeedsAttention(

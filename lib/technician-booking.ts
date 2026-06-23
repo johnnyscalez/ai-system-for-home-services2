@@ -339,6 +339,7 @@ export async function selectTechnician(
     .from("appointments")
     .update({ technician_id: best.id, technician_name: best.name })
     .eq("id", appointmentId)
+    .eq("company_id", companyId)
 
   return { found: true, technician: best }
 }
@@ -349,7 +350,8 @@ export async function selectTechnician(
  */
 export async function flagNoTechAvailable(
   appointmentId: string,
-  reason: "no_technicians" | "no_specialization_match" | "no_zip_match" | "no_availability"
+  reason: "no_technicians" | "no_specialization_match" | "no_zip_match" | "no_availability",
+  companyId: string
 ): Promise<void> {
   const db = createServiceRoleClient()
   const reasonLabels: Record<string, string> = {
@@ -359,10 +361,12 @@ export async function flagNoTechAvailable(
     no_availability:       "No tech available at the booked time",
   }
   const label = reasonLabels[reason] ?? reason
-  const { data: apt } = await db.from("appointments").select("notes").eq("id", appointmentId).single()
+  const { data: apt } = await db.from("appointments").select("notes")
+    .eq("id", appointmentId).eq("company_id", companyId).single()
   const updatedNotes = [apt?.notes, `⚠️ Auto-dispatch failed: ${label}. Manual dispatch required.`]
     .filter(Boolean).join(" | ")
-  await db.from("appointments").update({ notes: updatedNotes }).eq("id", appointmentId)
+  await db.from("appointments").update({ notes: updatedNotes })
+    .eq("id", appointmentId).eq("company_id", companyId)
 }
 
 /**

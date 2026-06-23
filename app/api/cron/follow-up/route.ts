@@ -13,7 +13,8 @@ export async function GET(req: NextRequest) {
 
   const supabase = createServiceRoleClient()
   const now = new Date()
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://fieldbuiltai.com"
+  if (!process.env.NEXT_PUBLIC_APP_URL) console.error("[cron/follow-up] NEXT_PUBLIC_APP_URL not set — voice callbacks will use fallback domain")
 
   // ── Clear stale "active conversation" flags (> 2 hours since last inbound) ──
   await supabase
@@ -182,8 +183,8 @@ export async function GET(req: NextRequest) {
         // "following_up" stays for steps before the 7-day threshold
         const sevenDaysAgo = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString()
         const coldStatuses = ["just_came_in", "new", "contacted", "following_up", "active_conversation", "nurturing", "followed_up"]
-        if (step.step >= 1) {
-          // After the first follow-up fires, the lead is definitively cold
+        if (step.step > 1) {
+          // After the second+ follow-up fires without reply, lead is definitively cold
           await supabase
             .from("leads")
             .update({ status: "cold" })
