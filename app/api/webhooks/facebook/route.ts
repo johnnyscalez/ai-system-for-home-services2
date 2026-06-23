@@ -24,9 +24,13 @@ export async function GET(req: NextRequest) {
 export async function POST(req: NextRequest) {
   const rawBody = await req.text()
 
-  // Verify Facebook signature
-  const sig = req.headers.get("x-hub-signature-256")
-  if (sig && process.env.FACEBOOK_APP_SECRET) {
+  // Verify Facebook signature — required when FACEBOOK_APP_SECRET is configured.
+  // Reject requests with no signature too, not just wrong signatures.
+  if (process.env.FACEBOOK_APP_SECRET) {
+    const sig = req.headers.get("x-hub-signature-256")
+    if (!sig) {
+      return NextResponse.json({ error: "Missing signature" }, { status: 401 })
+    }
     const expected =
       "sha256=" +
       crypto
