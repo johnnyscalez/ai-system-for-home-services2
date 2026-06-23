@@ -422,7 +422,7 @@ ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
 
   // ── Execute tool if any ─────────────────────────────────────────────────────
   if (toolBlock) {
-    const action = await executeTool(toolBlock, session, db)
+    const action = await executeTool(toolBlock, session, db, tz)
     if (action.type !== "continue") {
       return { text: responseText, action }
     }
@@ -436,7 +436,8 @@ ${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
 async function executeTool(
   tool: { name: string; id: string; input: Record<string, unknown> },
   session: VoiceSession,
-  db: ReturnType<typeof createServiceRoleClient>
+  db: ReturnType<typeof createServiceRoleClient>,
+  tz = "America/New_York"
 ): Promise<VoiceAction> {
   switch (tool.name) {
 
@@ -587,7 +588,7 @@ async function executeTool(
 
       // Append a timestamped note to the lead
       const { data: lead } = await db.from("leads").select("notes").eq("id", session.lead_id).single()
-      const ts      = new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
+      const ts      = new Date().toLocaleString("en-US", { timeZone: tz })
       const newNote = `[${ts}] Callback scheduled for ${new Date(scheduled_at).toLocaleString("en-US")}. Reason: ${reason}`
       const merged  = lead?.notes ? `${lead.notes}\n${newNote}` : newNote
       await db.from("leads").update({ notes: merged, status: "nurturing" }).eq("id", session.lead_id)
@@ -616,7 +617,7 @@ async function executeTool(
     case "add_note": {
       const { note } = tool.input as { note: string }
       const { data: lead } = await db.from("leads").select("notes").eq("id", session.lead_id).single()
-      const ts      = new Date().toLocaleString("en-US", { timeZone: "America/New_York" })
+      const ts      = new Date().toLocaleString("en-US", { timeZone: tz })
       const newNote = `[${ts}] ${note}`
       const merged  = lead?.notes ? `${lead.notes}\n${newNote}` : newNote
       await db.from("leads").update({ notes: merged }).eq("id", session.lead_id)

@@ -1496,10 +1496,11 @@ async function notifyTechnician(
 ): Promise<void> {
   if (!techPhone) return
   try {
-    const [leadRes, phoneRes, companyRes] = await Promise.all([
+    const [leadRes, phoneRes, companyRes, agentRes] = await Promise.all([
       db.from("leads").select("first_name, last_name, phone").eq("id", leadId).single(),
       db.from("phone_numbers").select("phone_number").eq("company_id", companyId).eq("is_active", true).limit(1).maybeSingle(),
       db.from("companies").select("name").eq("id", companyId).single(),
+      db.from("ai_agent_config").select("timezone").eq("company_id", companyId).single(),
     ])
 
     const fromPhone = phoneRes.data?.phone_number
@@ -1508,9 +1509,10 @@ async function notifyTechnician(
     const lead = leadRes.data
     const leadName = `${lead?.first_name ?? ""} ${lead?.last_name ?? ""}`.trim() || "New lead"
     const companyName = companyRes.data?.name ?? "your company"
+    const tz = agentRes.data?.timezone ?? "America/New_York"
 
     const dateLabel = new Date(scheduledAt).toLocaleString("en-US", {
-      timeZone: "America/New_York",
+      timeZone: tz,
       weekday: "short", month: "short", day: "numeric",
       hour: "numeric", minute: "2-digit",
     })
