@@ -130,7 +130,7 @@ export async function runConversation(
       .single(),
     supabase
       .from("knowledge_base")
-      .select("business_description, services_offered, service_areas, custom_ai_knowledge, financing_options")
+      .select("business_description, services_offered, service_areas, custom_ai_knowledge, financing_options, pricing_info")
       .eq("company_id", companyId)
       .single(),
     // Lead's own appointment history (past + upcoming) — include id for cancel/reschedule tools
@@ -246,6 +246,26 @@ export async function runConversation(
     ? `=== FINANCING OPTIONS (know this precisely — leads ask about this) ===\n${kb.financing_options}\n=== END FINANCING ===`
     : ""
 
+  // Dynamically extract service call / trip charge fee policy from knowledge base.
+  // NEVER hardcode whether a visit is free — it varies by company.
+  const pricingPolicyBlock = (() => {
+    const info = (kb as { pricing_info?: string } | null)?.pricing_info
+    if (!info) return ""
+    const feeLines = info.split("\n").map((l: string) => l.trim()).filter((l: string) =>
+      /service.?call|trip.?charge|trip.?fee|visit.?fee|diagnostic.?fee|call.?out|dispatch.?fee/i.test(l)
+    )
+    if (feeLines.length === 0) return ""
+    return [
+      "=== SERVICE CALL FEE POLICY — USE THIS WHEN LEADS ASK ABOUT COST TO COME OUT ===",
+      `When leads ask "Is it free?", "Do you charge to come out?", or "How much just to visit?", answer using ONLY the following — never assume or guess:`,
+      "",
+      ...feeLines.map((l: string) => `• ${l.replace(/^[•\-*]\s*/, "")}`),
+      "",
+      `Never say "free to come out" unless this policy explicitly says so. Never contradict this policy.`,
+      "=== END SERVICE CALL FEE POLICY ===",
+    ].join("\n")
+  })()
+
   const qualifyingQs = Array.isArray(agent?.qualifying_questions)
     ? (agent.qualifying_questions as Array<{ question: string }>).map(q => q.question)
     : []
@@ -270,6 +290,12 @@ CONVERSATION STYLE:
 • One thing per message. If you need an address, ask ONLY for the address. Nothing else.
 • Never use exclamation points after confirming what the lead already said.
 
+AFTER ANSWERING AN OBJECTION — PIVOT IMMEDIATELY:
+When a lead asks a question (cost, free visit, timeline, etc.) that you can answer without their input, end that same message with the next unanswered question. Do NOT stop and wait.
+  ✗ "Pricing depends on what the tech finds." [full stop — AI is now silent waiting]
+  ✓ "Pricing depends on what the tech finds — they give you the exact number on-site. What's the address we'd be coming to?"
+Exception: if the lead is venting frustration or describing a bad prior experience, lead with empathy first — that message is the acknowledgment. Ask the next question in your following message.
+
 BOOKING FLOW:
 • Lead confirms time → ask for address (if not on file) → book immediately.
 • If address IS already on file, book without asking for it again.
@@ -293,7 +319,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
 
 === END SMS HARD RULES ===`
 
-  const systemPrompt = [baseSystemPrompt, financingBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext, slotsBlock, leadContext, smsHardRules]
+  const systemPrompt = [baseSystemPrompt, financingBlock, pricingPolicyBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext, slotsBlock, leadContext, smsHardRules]
     .filter(Boolean)
     .join("\n\n")
 
@@ -1274,6 +1300,14 @@ function buildLeadContext(
     day: "numeric", year: "numeric", hour: "numeric", minute: "2-digit",
   })
 
+  // Pre-compute the next 7 days so Linda never has to do date math herself.
+  // "Saturday morning" means Linda looks up this table — no guessing.
+  const upcomingDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(now.getTime() + (i + 1) * 24 * 60 * 60 * 1000)
+    return d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: timezone })
+  })
+  const upcomingDaysBlock = `Upcoming dates (use THESE exact dates — do NOT compute dates yourself):\n${upcomingDays.map((d, i) => `  +${i + 1}: ${d}`).join("\n")}`
+
   let ctx = `=== LEAD FILE (READ THIS BEFORE EVERY RESPONSE) ===
 Name: ${`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Unknown"}
 Phone: ${lead.phone}
@@ -1282,6 +1316,7 @@ Lead source: ${lead.source ?? "unknown"}
 Current status: ${lead.status}
 Customer type: ${isReturning ? "⭐ RETURNING CUSTOMER — has history with this company" : "NEW LEAD — first contact, no prior jobs"}
 Today / current time: ${nowFmt}
+${upcomingDaysBlock}
 ${isReturning ? `
 === RETURNING CUSTOMER RULES — OVERRIDE STANDARD NEW-LEAD FLOW ===
 This person is an existing customer. They already trust the company. Your job is SERVICE, not qualification.
