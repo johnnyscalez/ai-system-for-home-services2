@@ -37,6 +37,7 @@ export async function middleware(request: NextRequest) {
   const isTechRoute   = (path === "/tech" || path.startsWith("/tech/")) && !isTechLogin
   const isPublicRoute =
     path === "/" ||
+    path === "/start" ||
     path === "/api/health" ||
     path.startsWith("/api/webhooks") ||
     path.startsWith("/api/voice") ||
