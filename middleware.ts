@@ -38,6 +38,8 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute =
     path === "/" ||
     path === "/start" ||
+    path === "/start/tab" ||
+    path === "/start/tech" ||
     path === "/api/health" ||
     path.startsWith("/api/webhooks") ||
     path.startsWith("/api/voice") ||
