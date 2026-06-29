@@ -65,10 +65,10 @@ function HeroSection() {
         <motion.h1 initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35, duration: 0.7 }}
           className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-[1.02] mb-8"
           style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em" }}>
-          Who&rsquo;s Your Best Closer?
+          Which Tech Actually Makes You Money?
           <br />
           <span className="relative" style={{ color: C.orange }}>
-            Not Busiest. Best.
+            Not Your Busiest — Your Most Profitable.
             <span className="absolute -bottom-1 left-0 right-0 h-[3px] rounded-full"
                   style={{ background: `linear-gradient(90deg, ${C.orange}, ${C.orangeDk})`,
                            transformOrigin: "left", animation: "underlineDraw 0.8s ease forwards 1.1s", transform: "scaleX(0)" }} />
