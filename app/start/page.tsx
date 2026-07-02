@@ -6,7 +6,11 @@
 //   fieldbuiltai.com/start
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { MinimalHeader, WoundHero, LandingBody } from "@/components/landing/shared"
+import {
+  MinimalHeader, WoundHero, TryFailSection, WatchItWorkSection,
+  ProofStatsSection, ReframeSection, ScopeSection, WedgeSection,
+  LeadFormSection, FaqSection, MinimalFooter, StickyBottomCta,
+} from "@/components/landing/shared"
 
 export default function StartPage() {
   return (
@@ -18,12 +22,21 @@ export default function StartPage() {
         sub={
           <>
             Take a second. Try to put a number on it.{" "}
-            <strong style={{ color: "#F5F3F0" }}>You can&rsquo;t</strong> — because a lead nobody
-            logged never shows up on a single report you&rsquo;ve got.
+            <strong style={{ color: "#F5F3F0" }}>You can&rsquo;t</strong>{" "}
+            — because a lead nobody logged never shows up on a single report you&rsquo;ve got.
           </>
         }
       />
-      <LandingBody source="flying-blind" />
+      <TryFailSection />
+      <WatchItWorkSection />
+      <ProofStatsSection />
+      <ReframeSection />
+      <ScopeSection />
+      <WedgeSection />
+      <LeadFormSection source="flying-blind" />
+      <FaqSection />
+      <MinimalFooter />
+      <StickyBottomCta />
     </main>
   )
 }

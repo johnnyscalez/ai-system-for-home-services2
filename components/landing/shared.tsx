@@ -20,7 +20,7 @@
 import { motion, useInView, useReducedMotion } from "framer-motion"
 import { useRef, useEffect, useState } from "react"
 import {
-  ArrowRight, Phone, Calendar, MessageSquare,
+  ArrowRight, Phone, Calendar, MessageSquare, Shield,
 } from "lucide-react"
 
 declare global {
@@ -300,6 +300,170 @@ export function TryFailSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// TECH DASHBOARD PREVIEW — compact, reusable product visual.
+// Always shown with an honest "product view" caption — never presented as
+// a real customer's numbers.
+// ─────────────────────────────────────────────────────────────────────────────
+export function TechDashboardPreview({ caption }: { caption: string }) {
+  const techRows = [
+    { name: "Marcus T.", closes: "81%", bar: 0.81, revenue: "$118K", best: true },
+    { name: "Jake R.",   closes: "68%", bar: 0.68, revenue: "$92K",  best: false },
+    { name: "Danny P.",  closes: "73%", bar: 0.73, revenue: "$87K",  best: false },
+    { name: "Chris W.",  closes: "61%", bar: 0.61, revenue: "$74K",  best: false },
+  ]
+
+  return (
+    <div className="max-w-xl mx-auto">
+      <div className="rounded-2xl overflow-hidden"
+           style={{ border: "1px solid rgba(249,115,22,0.18)", boxShadow: "0 24px 60px rgba(0,0,0,0.40)" }}>
+        <div className="flex items-center gap-1.5 px-4 py-3"
+             style={{ background: "#141210", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
+          <span className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
+          <span className="w-2.5 h-2.5 rounded-full bg-amber-400/70" />
+          <span className="w-2.5 h-2.5 rounded-full bg-green-400/70" />
+          <div className="flex-1 mx-4 h-5 rounded px-2 flex items-center" style={{ background: "rgba(255,255,255,0.04)" }}>
+            <span className="text-xs truncate" style={{ color: "rgba(250,250,248,0.28)", fontFamily: "var(--font-jetbrains)" }}>
+              FieldBuilt AI · Technician Performance
+            </span>
+          </div>
+        </div>
+        <div className="p-4 sm:p-5" style={{ background: "#1C1712" }}>
+          <div className="space-y-3">
+            {techRows.map((t, i) => (
+              <div key={i} className="flex items-center gap-2.5">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
+                     style={{ background: t.best ? C.orange : "rgba(255,255,255,0.08)", color: t.best ? "#fff" : "rgba(250,250,248,0.45)" }}>
+                  {t.name[0]}
+                </div>
+                <span className="text-xs w-[3.7rem] shrink-0 truncate" style={{ color: "rgba(250,250,248,0.60)" }}>{t.name}</span>
+                <div className="flex-1 h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
+                  <div className="h-full rounded-full" style={{ width: `${t.bar * 100}%`, background: t.best ? C.orange : "rgba(249,115,22,0.35)" }} />
+                </div>
+                <span className="text-xs w-8 text-right shrink-0 font-semibold"
+                      style={{ color: t.best ? C.orange : "rgba(250,250,248,0.45)" }}>{t.closes}</span>
+                {t.best && (
+                  <span className="hidden sm:inline text-[10px] px-1.5 py-0.5 rounded-full shrink-0"
+                        style={{ background: "rgba(249,115,22,0.12)", color: C.orange }}>Best</span>
+                )}
+              </div>
+            ))}
+          </div>
+        </div>
+      </div>
+      <p className="text-xs text-center mt-3 leading-relaxed" style={{ color: "rgba(250,250,248,0.35)" }}>
+        {caption}{" "}
+        <span style={{ color: "rgba(250,250,248,0.22)" }}>— a product view, not one customer&rsquo;s actual results.</span>
+      </p>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WATCH IT WORK — SMS chat-thread demonstration. Used on /start and /start/tab.
+// The timestamps ARE the proof: shows a lead answered, qualified, and booked
+// in minutes, with nobody on the team touching it.
+// ─────────────────────────────────────────────────────────────────────────────
+export function WatchItWorkSection() {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: "-80px" })
+
+  const messages: { time: string; from: "system" | "sarah"; text: string }[] = [
+    { time: "8:17 PM", from: "system", text: "Hey Sarah, saw your form about the AC not keeping up. Is it running at all, or totally off?" },
+    { time: "8:21 PM", from: "sarah",  text: "running but won't get below 78. been like this 2 weeks" },
+    { time: "8:23 PM", from: "sarah",  text: "non stop, never shuts off" },
+    { time: "8:24 PM", from: "system", text: "Got it — what's the address so I can see which tech is closest?" },
+    { time: "8:25 PM", from: "sarah",  text: "btw I'm just getting a few quotes, not sure what I need yet" },
+    { time: "8:25 PM", from: "system", text: "No worries at all — our tech comes out, tells you exactly what's going on, you decide from there. What's Monday look like?" },
+    { time: "8:28 PM", from: "sarah",  text: "11 is better" },
+    { time: "8:29 PM", from: "system", text: "Done — Monday 11am, locked in. You'll get a reminder Sunday night." },
+  ]
+
+  return (
+    <section ref={ref} className="relative py-20 px-6 overflow-hidden" style={{ background: "#201A17" }}>
+      <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
+           style={{
+             backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.10) 1.2px, transparent 1.2px)",
+             backgroundSize: "30px 30px",
+             WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 75%)",
+             maskImage: "radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 75%)",
+           }} />
+      <div className="relative max-w-2xl mx-auto">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.6 }}
+          className="text-center mb-10">
+          <div className="flex items-center justify-center gap-3 mb-5">
+            <span className="w-8 h-px" style={{ background: C.orange }} />
+            <span className="text-xs font-semibold uppercase tracking-widest"
+                  style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>Watch it work</span>
+            <span className="w-8 h-px" style={{ background: C.orange }} />
+          </div>
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-5"
+              style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
+            8:17 on a Tuesday night.
+            <br /><span style={{ color: C.orange }}>Nobody on the team touched a thing.</span>
+          </h2>
+          <p className="text-base leading-relaxed max-w-md mx-auto" style={{ color: "rgba(250,250,248,0.52)" }}>
+            A homeowner fills out a form — &ldquo;AC&rsquo;s running but the house won&rsquo;t get
+            below 78.&rdquo; Here&rsquo;s what happened next:
+          </p>
+        </motion.div>
+
+        {/* Chat thread */}
+        <div className="max-w-md mx-auto mb-4 space-y-3">
+          {messages.map((m, i) => {
+            const isSystem = m.from === "system"
+            return (
+              <motion.div key={i}
+                initial={{ opacity: 0, y: 8 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+                transition={{ delay: 0.1 * i, duration: 0.4 }}
+                className={`flex flex-col ${isSystem ? "items-end" : "items-start"}`}>
+                <div className="max-w-[80%] rounded-2xl px-4 py-2.5 text-sm leading-snug"
+                     style={{
+                       background: isSystem ? C.orange : "rgba(255,255,255,0.06)",
+                       color: isSystem ? "#fff" : "rgba(250,250,248,0.85)",
+                       borderTopRightRadius: isSystem ? 4 : 16,
+                       borderTopLeftRadius: isSystem ? 16 : 4,
+                     }}>
+                  {m.text}
+                </div>
+                <span className="text-[11px] mt-1 px-1"
+                      style={{ color: "rgba(250,250,248,0.32)", fontFamily: "var(--font-jetbrains)" }}>
+                  {isSystem ? "AI" : "Sarah"} &middot; {m.time}
+                </span>
+              </motion.div>
+            )
+          })}
+        </div>
+
+        {/* Payoff */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+          transition={{ delay: 0.9, duration: 0.5 }}
+          className="rounded-2xl p-6 text-center mb-3"
+          style={{ background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.20)" }}>
+          <p className="text-lg font-bold leading-snug mb-2" style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>
+            Twelve minutes. Booked. Routed to the right tech. Logged in the CRM. The owner was at dinner.
+          </p>
+          <p className="text-sm" style={{ color: "rgba(250,250,248,0.50)" }}>
+            If she&rsquo;d gone quiet, it would have called her to follow up. That&rsquo;s the office running itself.
+          </p>
+        </motion.div>
+
+        <div className="text-center mb-14">
+          <a href="#form" className="inline-flex items-center gap-1.5 text-sm font-bold hover:underline underline-offset-4" style={{ color: C.orange }}>
+            Get this answering my leads
+            <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
+          </a>
+        </div>
+
+        {/* Dashboard tie-in */}
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ delay: 1, duration: 0.6 }}>
+          <TechDashboardPreview caption="And every job, tech, and dollar lands on one dashboard — so you finally see which tech closes and which jobs make you money." />
+        </motion.div>
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // 3. PROOF STATS — 61% vs 79% · ~$500K/yr · 7 months
 // ─────────────────────────────────────────────────────────────────────────────
 export function ProofStatsSection() {
@@ -309,7 +473,7 @@ export function ProofStatsSection() {
   const stats = [
     {
       num: <>61% <span style={{ color: C.orange }}>vs</span> 79%</>,
-      txt: "In shops that finally pull close rates by tech, the “busiest guy” routinely isn’t the best closer — and every big replacement sent to the wrong one is money gone. Most owners have never seen this number for their own crew.",
+      txt: "In shops that finally pull close rates by tech, the “busiest guy” routinely isn’t the best at closing — and every big replacement sent to the wrong one is money gone. Most owners have never seen this number for their own crew.",
     },
     {
       num: <><span style={{ color: C.orange }}>~$500K</span> a year</>,
@@ -403,10 +567,21 @@ export function ReframeSection() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 // 5. SCOPE — "An entire back office, run by AI" + dark→warm bridge
+// Accepts an optional intro override so /start/tab can fold the ServiceTitan
+// wedge beat into this section's opener instead of repeating it in a
+// standalone wedge section.
 // ─────────────────────────────────────────────────────────────────────────────
-export function ScopeSection() {
+export function ScopeSection({
+  intro,
+}: {
+  intro?: { eyebrow?: string; heading: string; sub: string }
+} = {}) {
   const ref = useRef(null)
   const inView = useInView(ref, { once: true, margin: "-60px" })
+
+  const eyebrow = intro?.eyebrow ?? "What actually gets installed"
+  const heading = intro?.heading ?? "An entire back office, run by AI."
+  const sub = intro?.sub ?? "Not a texting widget. The whole front-of-house — built around what you already run, set up for you."
 
   const cells = [
     {
@@ -445,14 +620,14 @@ export function ScopeSection() {
           <div className="flex items-center gap-3 mb-4">
             <span className="w-8 h-px" style={{ background: C.orange }} />
             <span className="text-xs font-semibold uppercase tracking-widest"
-                  style={{ color: C.orangeDk, fontFamily: "var(--font-jetbrains)" }}>What actually gets installed</span>
+                  style={{ color: C.orangeDk, fontFamily: "var(--font-jetbrains)" }}>{eyebrow}</span>
           </div>
           <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3"
               style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
-            An entire back office, run by AI.
+            {heading}
           </h2>
           <p className="text-lg leading-relaxed mb-10" style={{ color: C.muted }}>
-            Not a texting widget. The whole front-of-house — built around what you already run, set up for you.
+            {sub}
           </p>
         </motion.div>
 
@@ -471,6 +646,141 @@ export function ScopeSection() {
             </motion.div>
           ))}
         </div>
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// ENTERPRISE COST ROW — /start/tab only. His gut did the math right;
+// this makes it explicit right after the hero, before anything else.
+// ─────────────────────────────────────────────────────────────────────────────
+export function EnterpriseCostRow() {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: "-60px" })
+
+  const items = [
+    { value: "~$58K",       label: "Per year" },
+    { value: "$20K+",       label: "To get started" },
+    { value: "6–12 mo", label: "To go live" },
+    { value: "A lawyer",    label: "To exit the contract" },
+  ]
+
+  return (
+    <section ref={ref} className="relative py-14 px-6" style={{ background: "#1A1614" }}>
+      <div className="relative max-w-2xl mx-auto">
+        <motion.h2 initial={{ opacity: 0, y: 16 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.55 }}
+          className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-8 text-center"
+          style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+          Your gut did the math right.
+        </motion.h2>
+        <div className="grid grid-cols-2 gap-3">
+          {items.map((it, i) => (
+            <motion.div key={i}
+              initial={{ opacity: 0, scale: 0.95 }} animate={inView ? { opacity: 1, scale: 1 } : {}}
+              transition={{ delay: 0.1 + i * 0.08, duration: 0.4 }}
+              className="text-center p-5 rounded-xl"
+              style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
+              <div className="text-xl sm:text-2xl font-black mb-1"
+                   style={{ color: "rgba(250,250,248,0.32)", fontFamily: "var(--font-jetbrains)", textDecoration: "line-through", textDecorationColor: "rgba(239,68,68,0.40)" }}>
+                {it.value}
+              </div>
+              <div className="text-xs" style={{ color: "rgba(250,250,248,0.42)" }}>{it.label}</div>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// BRIDGE — /start/tab only. Two lines: the wound didn't leave with ServiceTitan.
+// ─────────────────────────────────────────────────────────────────────────────
+export function BridgeSection() {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: "-60px" })
+
+  return (
+    <section ref={ref} className="relative py-14 px-6" style={{ background: "#1A1614" }}>
+      <div className="relative max-w-2xl mx-auto text-center">
+        <motion.p initial={{ opacity: 0, y: 14 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.55 }}
+          className="text-xl sm:text-2xl font-bold leading-snug mb-5"
+          style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>
+          But the problem you wanted it to fix is still sitting there.
+        </motion.p>
+        <motion.p initial={{ opacity: 0, y: 14 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.1, duration: 0.55 }}
+          className="text-base leading-relaxed max-w-xl mx-auto" style={{ color: "rgba(250,250,248,0.55)" }}>
+          Leads still slip through when the desk is slammed. You still can&rsquo;t say which
+          tech makes you money and which one costs you jobs. You&rsquo;re still running a
+          multi-million-dollar company on gut feel and whatever you remember from last week.
+        </motion.p>
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// DASHBOARD SHOWCASE — /start/tech only. The whole page is about not being
+// able to name your best tech; this shows the screen that answers it.
+// ─────────────────────────────────────────────────────────────────────────────
+export function DashboardShowcaseSection() {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: "-60px" })
+
+  return (
+    <section ref={ref} className="relative py-16 px-6" style={{ background: C.bg }}>
+      <div className="relative max-w-2xl mx-auto text-center">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.6 }}
+          className="mb-8">
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-3"
+              style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+            This is the number you&rsquo;re missing.
+          </h2>
+          <p className="text-base leading-relaxed" style={{ color: C.muted }}>
+            Not who&rsquo;s running the most calls. Who&rsquo;s actually winning them.
+          </p>
+        </motion.div>
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ delay: 0.15, duration: 0.6 }}>
+          <TechDashboardPreview caption="Every tech, every close rate, every dollar — one screen." />
+        </motion.div>
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FOUNDER TRUST — /start/tech only. Replaces fabricated testimonials with an
+// honest, verifiable trust mechanism: watch it work on your own leads.
+// ─────────────────────────────────────────────────────────────────────────────
+export function FounderTrustSection() {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: "-60px" })
+
+  return (
+    <section ref={ref} className="relative py-20 px-6" style={{ background: C.subtle }}>
+      <div className="relative max-w-2xl mx-auto">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.6 }}
+          className="rounded-2xl p-7 sm:p-8"
+          style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(249,115,22,0.06)" }}>
+          <div className="flex items-center gap-2.5 mb-5">
+            <Shield className="w-4 h-4" style={{ color: C.orangeDk }} aria-hidden="true" />
+            <span className="text-xs font-semibold uppercase tracking-widest"
+                  style={{ color: C.orangeDk, fontFamily: "var(--font-jetbrains)" }}>The honest version</span>
+          </div>
+          <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-4"
+              style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+            No fake logos. Here&rsquo;s the honest version.
+          </h2>
+          <p className="text-base leading-relaxed" style={{ color: C.muted }}>
+            FieldBuilt is new — and I&rsquo;m not going to rent credibility with stock-photo
+            testimonials. Instead: the system runs free in your shop for two weeks, on your
+            real leads, and the numbers make the case or they don&rsquo;t. I build every
+            install myself, which is why I only take a couple of shops a month. You watch it
+            work before you pay a dime, and if it doesn&rsquo;t, you walk — no contract, your
+            data stays yours.
+          </p>
+        </motion.div>
       </div>
     </section>
   )
@@ -679,7 +989,7 @@ export function LeadFormSection({ source }: { source: string }) {
                   <ArrowRight className="w-5 h-5" aria-hidden="true" />
                 </button>
                 <p className="text-center text-xs mt-3" style={{ color: C.muted }}>
-                  Free two-week trial after the call if it&rsquo;s a fit · No contract · No card
+                  Free for two weeks · I set it up · No contract · No card
                 </p>
               </form>
             </div>
@@ -707,7 +1017,8 @@ export function LeadFormSection({ source }: { source: string }) {
                    style={{ background: "rgba(249,115,22,0.07)", border: "1px solid rgba(249,115,22,0.20)" }}>
                 <Phone className="w-5 h-5 mt-0.5 shrink-0" style={{ color: C.orangeDk }} aria-hidden="true" />
                 <p className="text-sm leading-relaxed" style={{ color: C.text }}>
-                  <strong>Check your phone.</strong> You&rsquo;ll get a text from me in about 60
+                  <strong>Check your phone.</strong>{" "}
+                  You&rsquo;ll get a text from me in about 60
                   seconds — that&rsquo;s the same system that&rsquo;ll be answering{" "}
                   <em>your</em> leads. Consider it the first demo.
                 </p>
@@ -728,8 +1039,8 @@ export function LeadFormSection({ source }: { source: string }) {
                 tell you that now than waste your time on a call.
               </p>
               <p className="text-base leading-relaxed mb-7" style={{ color: C.muted }}>
-                <strong style={{ color: C.text }}>What I&rsquo;d do in your seat:</strong> nail
-                response speed first. Answer every lead inside 5 minutes — even with a simple
+                <strong style={{ color: C.text }}>What I&rsquo;d do in your seat:</strong>{" "}
+                nail response speed first. Answer every lead inside 5 minutes — even with a simple
                 auto-text — and you&rsquo;ll out-book most shops your size. When you&rsquo;re at 5
                 trucks and the front desk starts drowning, come back. I&rsquo;ll remember you.
               </p>
