@@ -561,24 +561,14 @@ export function LeadFormSection({ source }: { source: string }) {
       trucks === "5-9" || trucks === "10+" ||
       (trucks === "3-4" && QUALIFYING_REVENUE.includes(revenue))
 
-    // Send the lead to the CRM. This endpoint also fires the AI SMS —
-    // that's the "text from me in 60 seconds" first demo.
-    fetch("/api/webhooks/lead", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        first_name: firstName,
-        phone,
-        email,
-        source: "webhook",
-        source_form_id: `landing-${source}`,
-        notes: `Landing form (${source}) — trucks: ${trucks}, revenue: ${revenue}, qualified: ${qualified}`,
-        trucks,
-        revenue,
-        qualified,
-        angle: source,
-      }),
-    }).catch(() => {})
+    // TODO: wire lead delivery to the separate opt-in system when it's built.
+    // Payload ready to send: { first_name: firstName, phone, email, trucks,
+    // revenue, qualified, angle: source }
+    // Example:
+    // fetch("YOUR_OPTIN_SYSTEM_URL", { method: "POST",
+    //   headers: { "Content-Type": "application/json" },
+    //   body: JSON.stringify({ first_name: firstName, phone, email, trucks, revenue, qualified, angle: source }),
+    // }).catch(() => {})
 
     // Meta Pixel: fire QualifiedLead ONLY for qualified submissions.
     // TODO: install the Meta Pixel base code (fbq init) in app/layout.tsx —
