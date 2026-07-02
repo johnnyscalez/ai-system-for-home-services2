@@ -1,16 +1,36 @@
 "use client"
 
-import { motion, useInView } from "framer-motion"
+// ─────────────────────────────────────────────────────────────────────────────
+// SHARED LANDING PAGE SYSTEM — all /start/* ad-funnel pages
+//
+// Architecture (same on every variant, only the hero headline changes):
+//   1. WoundHero        — eyebrow + ad-matched headline + leak counter + CTA
+//   2. TryFailSection   — the unlogged leads he can't see
+//   3. ProofStatsSection— 61% vs 79% · ~$500K/yr gap · 7-month season
+//   4. ReframeSection   — owner who IS the system vs owner who BUILT one
+//   5. ScopeSection     — "An entire back office, run by AI" (6 items)
+//   6. WedgeSection     — the big platform, without naming it
+//   7. LeadFormSection  — 5-field qualify form → qualified / not-a-fit states
+//   8. FaqSection       — the 3 real objections
+//
+// Visual temperature: wound sections dark (#1A1614 family), solution sections
+// warm cream (#FAFAF8 family). The ScopeSection carries the dark→warm bridge.
+// ─────────────────────────────────────────────────────────────────────────────
+
+import { motion, useInView, useReducedMotion } from "framer-motion"
 import { useRef, useEffect, useState } from "react"
 import {
-  ArrowRight, Check, Star, Phone,
-  Shield, Clock, TrendingUp, BarChart3,
-  Users, ChevronRight, Zap, CheckCircle2,
-  Calendar, Award,
+  ArrowRight, Phone, Calendar, MessageSquare,
 } from "lucide-react"
 
+declare global {
+  interface Window {
+    fbq?: (...args: unknown[]) => void
+  }
+}
+
 // ─────────────────────────────────────────────────────────────────────────────
-// DESIGN TOKENS — exported so variant pages can use them
+// DESIGN TOKENS
 // ─────────────────────────────────────────────────────────────────────────────
 export const C = {
   bg:         "#FAFAF8",
@@ -42,7 +62,7 @@ export function FieldFMark({ size = 18 }: { size?: number }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CALENDLY WIDGET
+// CALENDLY WIDGET  (shown inside the qualified form state)
 // ─────────────────────────────────────────────────────────────────────────────
 export function CalendlyWidget() {
   useEffect(() => {
@@ -53,10 +73,6 @@ export function CalendlyWidget() {
     script.src = "https://assets.calendly.com/assets/external/widget.js"
     script.async = true
     document.head.appendChild(script)
-    return () => {
-      const el = document.getElementById("calendly-script")
-      if (el) el.remove()
-    }
   }, [])
 
   return (
@@ -64,7 +80,7 @@ export function CalendlyWidget() {
       className="calendly-inline-widget w-full rounded-2xl overflow-hidden"
       // Replace with your actual Calendly URL
       data-url="https://calendly.com/fieldbuiltai/setup-call?hide_landing_page_details=1&hide_gdpr_banner=1&primary_color=F97316"
-      style={{ height: 720, minWidth: 320, border: `1px solid ${C.border}`, background: C.surface }}
+      style={{ height: 640, minWidth: 300, border: `1px solid ${C.border}`, background: C.surface }}
     />
   )
 }
@@ -99,98 +115,183 @@ export function MinimalHeader() {
           </span>
         </span>
       </div>
-      <div className="flex items-center gap-2">
-        <Phone className="w-3.5 h-3.5" style={{ color: C.orange }} aria-hidden="true" />
-        <span className="text-xs font-semibold" style={{ color: "rgba(250,250,248,0.55)" }}>
-          Questions?{" "}
-          <a href="tel:+1-800-FIELDAI" className="underline underline-offset-2 hover:text-white transition-colors" style={{ color: C.orange }}>
-            Call us direct
-          </a>
-        </span>
-      </div>
+      <a
+        href="#form"
+        className="text-xs font-bold px-4 py-2 rounded-lg transition-colors hover:bg-orange-600"
+        style={{ background: C.orange, color: "#fff" }}
+      >
+        See my leak map
+      </a>
     </header>
   )
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PACE — BEING SEEN  (same across all variants)
+// LEAK COUNTER — the signature hero element
+// Ticks +$0.10 every 900ms. Reduced motion → static $8–15K/mo note.
 // ─────────────────────────────────────────────────────────────────────────────
-export function PaceSection() {
+function LeakCounter() {
+  const reduced = useReducedMotion()
+  const [value, setValue] = useState(0)
+
+  useEffect(() => {
+    if (reduced) return
+    const id = setInterval(() => setValue((v) => v + 0.1), 900)
+    return () => clearInterval(id)
+  }, [reduced])
+
+  return (
+    <div
+      className="rounded-2xl px-6 py-5 text-left"
+      style={{ background: "rgba(250,250,248,0.03)", border: "1px solid rgba(249,115,22,0.18)", boxShadow: "0 0 40px rgba(249,115,22,0.05)" }}
+    >
+      <div
+        className="text-xs font-semibold uppercase tracking-widest mb-2"
+        style={{ color: "rgba(250,250,248,0.40)", fontFamily: "var(--font-jetbrains)" }}
+      >
+        What the average shop your size leaks while reading this page
+      </div>
+      <div
+        aria-hidden="true"
+        className="font-black leading-none mb-2"
+        style={{
+          color: C.orange,
+          fontFamily: "var(--font-jetbrains)",
+          fontSize: "clamp(2.1rem, 8vw, 3rem)",
+          fontVariantNumeric: "tabular-nums",
+        }}
+      >
+        {reduced
+          ? "$8–15K/mo"
+          : "$" + value.toLocaleString("en-US", { minimumFractionDigits: 2, maximumFractionDigits: 2 })}
+      </div>
+      <span className="sr-only">The average shop this size leaks eight to fifteen thousand dollars per month.</span>
+      <div className="text-sm" style={{ color: "rgba(250,250,248,0.38)" }}>
+        Based on $8–15K/mo in unlogged, unanswered, un-followed-up leads during season.
+      </div>
+    </div>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// WOUND HERO — shared shell; each page passes its ad-matched headline
+// ─────────────────────────────────────────────────────────────────────────────
+export function WoundHero({
+  eyebrow = "For HVAC shops running 5+ trucks",
+  line1,
+  line2,
+  sub,
+}: {
+  eyebrow?: string
+  line1: string
+  line2: string
+  sub: React.ReactNode
+}) {
+  return (
+    <section
+      className="relative flex flex-col justify-center pt-28 pb-16 px-6 overflow-hidden"
+      style={{ background: "linear-gradient(180deg, #141110 0%, #1A1614 100%)" }}
+    >
+      {/* Blueprint crosshatch */}
+      <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
+           style={{
+             backgroundImage: "linear-gradient(rgba(249,115,22,1) 1px, transparent 1px), linear-gradient(90deg, rgba(249,115,22,1) 1px, transparent 1px)",
+             backgroundSize: "44px 44px", opacity: 0.055,
+             WebkitMaskImage: "radial-gradient(ellipse 90% 80% at 50% 40%, #000 20%, transparent 80%)",
+             maskImage: "radial-gradient(ellipse 90% 80% at 50% 40%, #000 20%, transparent 80%)",
+           }} />
+      <motion.div animate={{ y: [0, -20, 0], x: [0, 10, 0] }} transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
+        className="absolute rounded-full blur-3xl pointer-events-none"
+        style={{ width: 700, height: 700, background: "rgba(249,115,22,0.08)", top: "-20%", left: "-10%" }} aria-hidden="true" />
+      <motion.div animate={{ y: [0, 14, 0] }} transition={{ duration: 12, repeat: Infinity, ease: "easeInOut", delay: 3 }}
+        className="absolute rounded-full blur-3xl pointer-events-none"
+        style={{ width: 400, height: 400, background: "rgba(251,191,36,0.05)", bottom: "5%", right: "5%" }} aria-hidden="true" />
+
+      <div className="relative max-w-2xl mx-auto w-full text-center">
+        {/* Eyebrow — sizes the buyer immediately */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.15, duration: 0.5 }}
+          className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-8"
+          style={{ background: "rgba(249,115,22,0.10)", border: "1px solid rgba(249,115,22,0.20)" }}>
+          <span className="w-1.5 h-1.5 rounded-full" style={{ background: C.orange }} />
+          <span className="text-xs font-semibold tracking-widest uppercase"
+                style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>
+            {eyebrow}
+          </span>
+        </motion.div>
+
+        {/* Ad-matched wound headline */}
+        <motion.h1 initial={{ opacity: 0, y: 28 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3, duration: 0.7 }}
+          className="font-extrabold tracking-tight mb-6"
+          style={{
+            color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
+            fontSize: "clamp(2.3rem, 8vw, 4rem)", lineHeight: 1.05,
+          }}>
+          {line1}
+          <br />
+          <span className="relative" style={{ color: C.orange }}>
+            {line2}
+            <span className="absolute -bottom-1 left-0 right-0 h-[3px] rounded-full"
+                  style={{ background: `linear-gradient(90deg, ${C.orange}, ${C.orangeDk})`,
+                           transformOrigin: "left", animation: "underlineDraw 0.8s ease forwards 1s", transform: "scaleX(0)" }} />
+          </span>
+        </motion.h1>
+
+        {/* Try-and-fail subhead */}
+        <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.6 }}
+          className="text-lg sm:text-xl leading-relaxed max-w-xl mx-auto mb-10"
+          style={{ color: "rgba(250,250,248,0.62)" }}>
+          {sub}
+        </motion.p>
+
+        {/* Live leak counter */}
+        <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.65, duration: 0.6 }}
+          className="mb-8">
+          <LeakCounter />
+        </motion.div>
+
+        {/* CTA → form */}
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.5 }}>
+          <a href="#form"
+             className="flex sm:inline-flex items-center justify-center gap-2 font-bold text-white px-8 py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5 w-full sm:w-auto"
+             style={{ background: C.orange, boxShadow: "0 8px 28px rgba(249,115,22,0.35)", fontSize: "1.05rem" }}>
+            Show me where mine are leaking
+            <ArrowRight className="w-5 h-5" aria-hidden="true" />
+          </a>
+          <span className="block mt-3 text-sm" style={{ color: "rgba(250,250,248,0.35)" }}>
+            Free for two weeks · I set it up, not you · No contract
+          </span>
+        </motion.div>
+      </div>
+
+      <style>{`@keyframes underlineDraw { from { transform: scaleX(0); } to { transform: scaleX(1); } }`}</style>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 2. TRY AND FAIL — the unlogged leads he can't see
+// ─────────────────────────────────────────────────────────────────────────────
+export function TryFailSection() {
   const ref = useRef(null)
   const inView = useInView(ref, { once: true, margin: "-80px" })
 
-  const worldItems = [
-    { label: "Your dispatcher",  detail: "juggling service calls and installs, rerouting techs mid-day" },
-    { label: "Your front desk",  detail: "slammed with inbound, putting new leads on hold" },
-    { label: "Your best techs",  detail: "booked 3 weeks out — good problem, terrible bottleneck" },
-    { label: "Your follow-up",   detail: "manual, inconsistent, dependent on whoever has five minutes" },
-    { label: "Your reports",     detail: "show revenue, show bookings — silent on what got away" },
-  ]
-
   return (
-    <section ref={ref} className="relative py-24 px-6 overflow-hidden" style={{ background: "#201A17" }}>
-      <div
-        className="absolute inset-0 pointer-events-none"
-        aria-hidden="true"
-        style={{
-          backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.10) 1.2px, transparent 1.2px)",
-          backgroundSize: "30px 30px",
-          opacity: 0.6,
-          WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 75%)",
-          maskImage: "radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 75%)",
-        }}
-      />
-      <div className="relative max-w-4xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6 }} className="text-center mb-14"
-        >
-          <div className="flex items-center justify-center gap-3 mb-5">
-            <span className="w-8 h-px" style={{ background: C.orange }} />
-            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>Sound familiar?</span>
-            <span className="w-8 h-px" style={{ background: C.orange }} />
-          </div>
-          <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-6"
-              style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
-            You came off the tools to
-            <br /><span style={{ color: C.orange }}>build something real.</span>
-          </h2>
-          <p className="text-lg max-w-2xl mx-auto leading-relaxed" style={{ color: "rgba(250,250,248,0.55)" }}>
-            Trucks. Techs. A front office. On paper, you&rsquo;re winning.
-            But the bigger the operation, the more the cracks widen — and the harder they are to see.
+    <section ref={ref} className="relative py-16 px-6" style={{ background: C.dark }}>
+      <div className="relative max-w-2xl mx-auto">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.6 }}>
+          <p className="text-lg leading-relaxed mb-5" style={{ color: "rgba(250,250,248,0.60)" }}>
+            Not the leads you talked to. The call that rang out while both CSRs were slammed.
+            The 9pm form nobody saw till the next afternoon. The caller who hung up and dialed
+            the next company on the list.
           </p>
-        </motion.div>
-
-        <div className="grid gap-3 mb-14">
-          {worldItems.map((item, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, x: -20 }} animate={inView ? { opacity: 1, x: 0 } : {}}
-              transition={{ delay: 0.1 + i * 0.08, duration: 0.5 }}
-              className="flex items-start gap-4 p-5 rounded-xl"
-              style={{ background: C.darkCard, border: `1px solid ${C.darkBorder}` }}
-            >
-              <div className="w-2 h-2 rounded-full mt-1.5 shrink-0" style={{ background: C.orange }} />
-              <div>
-                <span className="font-semibold text-sm" style={{ color: "#F5F3F0" }}>{item.label}</span>
-                <span className="text-sm ml-2" style={{ color: "rgba(250,250,248,0.45)" }}>— {item.detail}</span>
-              </div>
-            </motion.div>
-          ))}
-        </div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ delay: 0.55, duration: 0.6 }}
-          className="rounded-2xl p-8 text-center"
-          style={{ background: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.16)" }}
-        >
-          <p className="text-xl font-semibold leading-relaxed" style={{ color: "#F5F3F0" }}>
-            &ldquo;Why am I still the one holding this together at this size?&rdquo;
+          <p className="text-lg leading-relaxed mb-8" style={{ color: "rgba(250,250,248,0.60)" }}>
+            They&rsquo;re not on a report. They&rsquo;re not in your CRM. They just quietly became
+            somebody else&rsquo;s install.
           </p>
-          <p className="mt-3 text-sm" style={{ color: "rgba(250,250,248,0.45)" }}>
-            That&rsquo;s the specific tired. You didn&rsquo;t come off the tools to become the human switchboard.
-            You came off to lead. The gap between those two things is what we close.
+          <p className="text-xl sm:text-2xl font-bold leading-snug"
+             style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>
+            That&rsquo;s not a slow month you can see and fix.{" "}
+            <span style={{ color: C.orange }}>That&rsquo;s money walking out of a building you thought you had locked.</span>
           </p>
         </motion.div>
       </div>
@@ -199,84 +300,100 @@ export function PaceSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// REFRAME — SERVICETITAN WEDGE
+// 3. PROOF STATS — 61% vs 79% · ~$500K/yr · 7 months
+// ─────────────────────────────────────────────────────────────────────────────
+export function ProofStatsSection() {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: "-80px" })
+
+  const stats = [
+    {
+      num: <>61% <span style={{ color: C.orange }}>vs</span> 79%</>,
+      txt: "In shops that finally pull close rates by tech, the “busiest guy” routinely isn’t the best closer — and every big replacement sent to the wrong one is money gone. Most owners have never seen this number for their own crew.",
+    },
+    {
+      num: <><span style={{ color: C.orange }}>~$500K</span> a year</>,
+      txt: "The gap between the average shop (2.5–5% net margin) and a systematized one (15%+) on a $3M operation. Same trucks. Same techs. Different visibility.",
+    },
+    {
+      num: <><span style={{ color: C.orange }}>7</span> months</>,
+      txt: "Roughly how long peak season lasts. Your whole year gets made in that window — and every leaked lead comes straight out of it.",
+    },
+  ]
+
+  return (
+    <section ref={ref} className="relative py-20 px-6 overflow-hidden"
+             style={{ background: "linear-gradient(180deg, #1A1614 0%, #231E1B 25%, #231E1B 100%)" }}>
+      <div className="absolute inset-0 pointer-events-none opacity-50" aria-hidden="true"
+           style={{
+             backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.10) 1.2px, transparent 1.2px)",
+             backgroundSize: "30px 30px",
+             WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 75%)",
+             maskImage: "radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 75%)",
+           }} />
+      <div className="relative max-w-2xl mx-auto">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.6 }}>
+          <div className="flex items-center gap-3 mb-4">
+            <span className="w-8 h-px" style={{ background: C.orange }} />
+            <span className="text-xs font-semibold uppercase tracking-widest"
+                  style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>The part you can&rsquo;t see</span>
+          </div>
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-10"
+              style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
+            The numbers are brutal — and none of them show up on gut feel.
+          </h2>
+        </motion.div>
+
+        <div>
+          {stats.map((s, i) => (
+            <motion.div key={i}
+              initial={{ opacity: 0, y: 16 }} animate={inView ? { opacity: 1, y: 0 } : {}}
+              transition={{ delay: 0.15 + i * 0.12, duration: 0.55 }}
+              className="py-6"
+              style={{ borderTop: "1px solid rgba(249,115,22,0.14)", borderBottom: i === stats.length - 1 ? "1px solid rgba(249,115,22,0.14)" : "none" }}>
+              <div className="font-black mb-2"
+                   style={{ color: "#F5F3F0", fontFamily: "var(--font-jetbrains)", fontSize: "clamp(1.8rem, 6vw, 2.5rem)", lineHeight: 1.1 }}>
+                {s.num}
+              </div>
+              <p className="text-base leading-relaxed" style={{ color: "rgba(250,250,248,0.52)" }}>{s.txt}</p>
+            </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 4. REFRAME — owner who IS the system vs owner who BUILT one
 // ─────────────────────────────────────────────────────────────────────────────
 export function ReframeSection() {
   const ref = useRef(null)
   const inView = useInView(ref, { once: true, margin: "-80px" })
 
   return (
-    <section ref={ref} className="relative py-24 px-6 overflow-hidden" style={{ background: "#2A211C" }}>
-      <motion.div
-        animate={{ y: [0, -15, 0] }}
-        transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
+    <section ref={ref} className="relative py-20 px-6 overflow-hidden"
+             style={{ background: "linear-gradient(180deg, #231E1B 0%, #2A211C 50%, #3A2B22 100%)" }}>
+      <motion.div animate={{ y: [0, -15, 0] }} transition={{ duration: 10, repeat: Infinity, ease: "easeInOut" }}
         className="absolute rounded-full blur-3xl pointer-events-none"
-        style={{ width: 500, height: 500, background: "rgba(249,115,22,0.05)", top: "0%", right: "-10%" }}
-        aria-hidden="true"
-      />
-      <div className="relative max-w-4xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6 }} className="text-center mb-14"
-        >
-          <div className="flex items-center justify-center gap-3 mb-5">
-            <span className="w-8 h-px" style={{ background: C.orange }} />
-            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>You already know the problem</span>
-            <span className="w-8 h-px" style={{ background: C.orange }} />
-          </div>
-          <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-6"
+        style={{ width: 500, height: 500, background: "rgba(249,115,22,0.06)", top: "10%", right: "-10%" }} aria-hidden="true" />
+      <div className="relative max-w-2xl mx-auto">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.6 }}>
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-6"
               style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
-            You looked at ServiceTitan.
-            <br /><span style={{ color: C.orange }}>You were right to walk.</span>
+            This isn&rsquo;t an effort problem.
+            <br /><span style={{ color: C.orange }}>You already out-hustle everyone.</span>
           </h2>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ delay: 0.2, duration: 0.6 }}
-          className="rounded-2xl p-8 mb-8"
-          style={{ background: C.darkCard, border: "1px solid rgba(255,255,255,0.05)" }}
-        >
-          <p className="text-lg leading-relaxed mb-6" style={{ color: "rgba(250,250,248,0.65)" }}>
-            You sat through the demo. The dispatch routing looked good. The performance dashboard looked good.
-            Then you saw the number.
+          <p className="text-lg leading-relaxed mb-5" style={{ color: "rgba(250,250,248,0.65)" }}>
+            There&rsquo;s a line between an owner who{" "}
+            <strong style={{ color: "#F5F3F0" }}>is</strong> the system — the one every lead, every
+            schedule change, every fire runs through — and an owner who finally{" "}
+            <strong style={{ color: "#F5F3F0" }}>built</strong> one.
           </p>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 mb-6">
-            {[
-              { label: "Per year",     value: "~$58K" },
-              { label: "To get started", value: "$20K+" },
-              { label: "To go live",   value: "12 months" },
-              { label: "To exit",      value: "A lawyer" },
-            ].map((item, i) => (
-              <div key={i} className="text-center p-4 rounded-xl"
-                   style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                <div className="text-2xl font-black mb-1"
-                     style={{ color: "rgba(250,250,248,0.25)", fontFamily: "var(--font-jetbrains)" }}>{item.value}</div>
-                <div className="text-xs" style={{ color: "rgba(250,250,248,0.35)" }}>{item.label}</div>
-              </div>
-            ))}
-          </div>
-          <p className="text-base leading-relaxed" style={{ color: "rgba(250,250,248,0.55)" }}>
-            You&rsquo;re not a 300-tech enterprise. You don&rsquo;t need an enterprise platform built for one.
-            You needed the same intelligence — the automatic dispatch routing, the performance data, the lead dashboard —
-            without the year of onboarding, the enterprise bill, and the contract your lawyer would charge you to read.
-          </p>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ delay: 0.35, duration: 0.6 }}
-          className="rounded-2xl p-8 text-center"
-          style={{ background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.20)" }}
-        >
-          <div className="flex items-center justify-center gap-2 mb-3">
-            <Check className="w-5 h-5" style={{ color: C.orange }} aria-hidden="true" />
-            <span className="font-bold text-lg" style={{ color: "#F5F3F0" }}>That&rsquo;s what FieldBuilt AI is.</span>
-          </div>
-          <p className="text-base leading-relaxed" style={{ color: "rgba(250,250,248,0.58)" }}>
-            Everything ServiceTitan promised — dispatch intelligence, performance tracking, lead automation —
-            without the enterprise bill, the year of setup, or the contract you&rsquo;d need a lawyer to escape.
-            Built around what you already run. Running in 48 hours.
+          <p className="text-lg leading-relaxed" style={{ color: "rgba(250,250,248,0.65)" }}>
+            What&rsquo;s keeping you on the wrong side of it isn&rsquo;t work ethic. It&rsquo;s that
+            everything still depends on a human being free at the exact second it matters.
+            And in July, nobody&rsquo;s free.
           </p>
         </motion.div>
       </div>
@@ -285,250 +402,71 @@ export function ReframeSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// PRODUCT VISION — DISPATCH + DASHBOARD
+// 5. SCOPE — "An entire back office, run by AI" + dark→warm bridge
 // ─────────────────────────────────────────────────────────────────────────────
-export function ProductSection() {
+export function ScopeSection() {
   const ref = useRef(null)
   const inView = useInView(ref, { once: true, margin: "-60px" })
 
-  const features = [
+  const cells = [
     {
-      icon: <Users className="w-5 h-5" aria-hidden="true" />,
-      title: "Intelligent Dispatch — Every Lead to the Right Tech",
-      body: "Not the closest tech. Not the first available. The tech most likely to close that specific job — by skill, by history, by win rate. Automatic. Every time.",
-      accent: C.orange,
-      accentBg: "rgba(249,115,22,0.10)",
+      title: "Every lead answered in under 60 seconds",
+      body: "Calls, texts, forms — nights, weekends, mid-rush. Qualified in a real conversation and booked on the spot.",
     },
     {
-      icon: <BarChart3 className="w-5 h-5" aria-hidden="true" />,
-      title: "The Dashboard You've Never Had",
-      body: "Which tech is your best closer — not just busiest. Which job types actually make you money. Where your leads come from and which ones convert. All live. All in one place.",
-      accent: "#FBBF24",
-      accentBg: "rgba(251,191,36,0.10)",
+      title: "AI voice agent on the phones",
+      body: "When nobody can grab the line, it answers, handles the caller like a sharp CSR, and books the visit.",
     },
     {
-      icon: <Zap className="w-5 h-5" aria-hidden="true" />,
-      title: "Every Lead Reached — In Seconds",
-      body: "Every lead that comes in gets an AI response in under 4 seconds. SMS, voice call, 14-day follow-up sequence. 24/7. Whether you're on a roof or asleep.",
-      accent: "#0EA5E9",
-      accentBg: "rgba(14,165,233,0.10)",
+      title: "Dispatch to the right tech — automatically",
+      body: "By skill and by area. The $14K change-out doesn’t go to whoever happens to be free.",
     },
     {
-      icon: <Calendar className="w-5 h-5" aria-hidden="true" />,
-      title: "Appointments Book Themselves",
-      body: "The AI qualifies the lead, handles objections, offers time slots, confirms the appointment, and sends reminders. Your calendar fills. You check it in the morning.",
-      accent: C.success,
-      accentBg: "rgba(22,163,74,0.10)",
+      title: "One calendar for the whole crew",
+      body: "Every appointment, every tech, live. Scheduling, rescheduling, reminders — handled without a human touching it.",
+    },
+    {
+      title: "CRM + tech portal",
+      body: "Every lead profiled and logged. Your techs get their jobs, addresses, and details in their own portal — no group-text chaos.",
+    },
+    {
+      title: "The dashboard you’ve never had",
+      body: "Which tech actually makes you money. Which jobs are worth your trucks. Where every lead came from. Pipeline and revenue, live — numbers instead of gut.",
     },
   ]
 
   return (
-    <section ref={ref} className="relative py-24 px-6 overflow-hidden" style={{ background: "#3A2B22" }}>
-      <div className="absolute bottom-0 left-0 right-0 h-32 pointer-events-none"
-           style={{ background: "linear-gradient(to bottom, transparent, rgba(250,250,248,0.12))" }} aria-hidden="true" />
-      <div className="relative max-w-5xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6 }} className="text-center mb-14"
-        >
-          <div className="flex items-center justify-center gap-3 mb-5">
+    <section ref={ref} className="relative px-6 overflow-hidden" style={{ background: C.bg }}>
+      {/* Dark → warm bridge */}
+      <div className="absolute top-0 left-0 right-0 h-40 pointer-events-none" aria-hidden="true"
+           style={{ background: "linear-gradient(180deg, #3A2B22 0%, rgba(250,250,248,0) 100%)" }} />
+      <div className="relative max-w-2xl mx-auto pt-32 pb-20">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.6 }}>
+          <div className="flex items-center gap-3 mb-4">
             <span className="w-8 h-px" style={{ background: C.orange }} />
-            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>What you stop being</span>
-            <span className="w-8 h-px" style={{ background: C.orange }} />
+            <span className="text-xs font-semibold uppercase tracking-widest"
+                  style={{ color: C.orangeDk, fontFamily: "var(--font-jetbrains)" }}>What actually gets installed</span>
           </div>
-          <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-6"
-              style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
-            You stop being the switchboard.
-            <br /><span style={{ color: C.orange }}>You start being the owner who built one.</span>
-          </h2>
-          <p className="text-lg max-w-2xl mx-auto" style={{ color: "rgba(250,250,248,0.52)" }}>
-            Intelligent dispatch routing. Real-time performance data. Automated lead follow-up.
-            Every call. Every lead. Every appointment — handled.
-          </p>
-        </motion.div>
-
-        <div className="grid md:grid-cols-2 gap-5 mb-12">
-          {features.map((f, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ delay: 0.1 + i * 0.1, duration: 0.6 }}
-              whileHover={{ y: -3 }}
-              className="rounded-2xl p-7"
-              style={{ background: C.darkCard, border: `1px solid ${C.darkBorder}`, boxShadow: "0 4px 24px rgba(0,0,0,0.25)" }}
-            >
-              <div className="w-10 h-10 rounded-xl flex items-center justify-center mb-5"
-                   style={{ background: f.accentBg, color: f.accent }}>{f.icon}</div>
-              <h3 className="font-bold text-base mb-3 leading-snug" style={{ color: "#F5F3F0" }}>{f.title}</h3>
-              <p className="text-sm leading-relaxed" style={{ color: "rgba(250,250,248,0.50)" }}>{f.body}</p>
-            </motion.div>
-          ))}
-        </div>
-
-        {/* Dashboard mockup */}
-        <motion.div
-          initial={{ opacity: 0, y: 32 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ delay: 0.55, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          className="rounded-2xl overflow-hidden"
-          style={{ border: "1px solid rgba(249,115,22,0.15)", boxShadow: "0 40px 80px rgba(0,0,0,0.5), 0 0 60px rgba(249,115,22,0.06)" }}
-        >
-          <div className="flex items-center gap-1.5 px-4 py-3"
-               style={{ background: "#141210", borderBottom: "1px solid rgba(255,255,255,0.05)" }}>
-            <span className="w-2.5 h-2.5 rounded-full bg-red-500/70" />
-            <span className="w-2.5 h-2.5 rounded-full bg-amber-400/70" />
-            <span className="w-2.5 h-2.5 rounded-full bg-green-400/70" />
-            <div className="flex-1 mx-4 h-5 rounded px-2 flex items-center"
-                 style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.05)" }}>
-              <span className="text-xs" style={{ color: "rgba(250,250,248,0.28)", fontFamily: "var(--font-jetbrains)" }}>
-                FieldBuilt AI · Performance Dashboard
-              </span>
-            </div>
-          </div>
-          <div className="p-6" style={{ background: "#1C1712" }}>
-            <div className="grid grid-cols-4 gap-3 mb-5">
-              {[
-                { label: "Leads This Month",    value: "147",   sub: "+23 vs last mo",    color: C.orange },
-                { label: "Appointments Booked", value: "89",    sub: "91% show rate",     color: C.success },
-                { label: "Revenue Recovered",   value: "$284K", sub: "from AI follow-up", color: "#FBBF24" },
-                { label: "Avg Response Time",   value: "3.7s",  sub: "24/7 coverage",     color: "#0EA5E9" },
-              ].map((m, i) => (
-                <div key={i} className="rounded-xl p-4"
-                     style={{ background: "rgba(255,255,255,0.04)", border: "1px solid rgba(255,255,255,0.06)" }}>
-                  <div className="text-xl font-black mb-0.5" style={{ color: m.color, fontFamily: "var(--font-jetbrains)" }}>{m.value}</div>
-                  <div className="text-xs font-semibold mb-0.5" style={{ color: "rgba(250,250,248,0.55)" }}>{m.label}</div>
-                  <div className="text-xs" style={{ color: "rgba(250,250,248,0.28)" }}>{m.sub}</div>
-                </div>
-              ))}
-            </div>
-            <div className="rounded-xl p-4" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.05)" }}>
-              <div className="flex items-center justify-between mb-3">
-                <span className="text-xs font-semibold uppercase tracking-wider"
-                      style={{ color: "rgba(250,250,248,0.35)", fontFamily: "var(--font-jetbrains)" }}>
-                  Technician Performance — This Month
-                </span>
-                <span className="text-xs px-2 py-0.5 rounded-full" style={{ background: "rgba(249,115,22,0.12)", color: C.orange }}>Live</span>
-              </div>
-              <div className="space-y-2">
-                {[
-                  { name: "Marcus T.", jobs: 34, closes: "81%", revenue: "$118K", bar: 0.81, best: true },
-                  { name: "Jake R.",   jobs: 41, closes: "68%", revenue: "$92K",  bar: 0.68, best: false },
-                  { name: "Danny P.",  jobs: 29, closes: "73%", revenue: "$87K",  bar: 0.73, best: false },
-                  { name: "Chris W.",  jobs: 38, closes: "61%", revenue: "$74K",  bar: 0.61, best: false },
-                ].map((t, i) => (
-                  <div key={i} className="flex items-center gap-3">
-                    <div className="w-6 h-6 rounded-full flex items-center justify-center text-xs font-bold shrink-0"
-                         style={{ background: t.best ? C.orange : "rgba(255,255,255,0.08)", color: t.best ? "#fff" : "rgba(250,250,248,0.45)" }}>
-                      {t.name[0]}
-                    </div>
-                    <span className="text-xs w-20 shrink-0" style={{ color: "rgba(250,250,248,0.60)" }}>{t.name}</span>
-                    <div className="flex-1 h-1.5 rounded-full" style={{ background: "rgba(255,255,255,0.06)" }}>
-                      <div className="h-full rounded-full"
-                           style={{ width: `${t.bar * 100}%`, background: t.best ? C.orange : "rgba(249,115,22,0.35)" }} />
-                    </div>
-                    <span className="text-xs w-10 text-right shrink-0 font-semibold"
-                          style={{ color: t.best ? C.orange : "rgba(250,250,248,0.45)" }}>{t.closes}</span>
-                    <span className="text-xs w-14 text-right shrink-0"
-                          style={{ color: "rgba(250,250,248,0.35)", fontFamily: "var(--font-jetbrains)" }}>{t.revenue}</span>
-                    {t.best && (
-                      <span className="text-xs px-1.5 py-0.5 rounded-full shrink-0"
-                            style={{ background: "rgba(249,115,22,0.12)", color: C.orange }}>Best closer</span>
-                    )}
-                  </div>
-                ))}
-              </div>
-              <p className="text-xs mt-3 pt-3"
-                 style={{ color: "rgba(250,250,248,0.22)", borderTop: "1px solid rgba(255,255,255,0.05)" }}>
-                Not who&rsquo;s running the most calls. Who&rsquo;s actually winning them.
-              </p>
-            </div>
-          </div>
-        </motion.div>
-      </div>
-    </section>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// SOCIAL PROOF
-// ─────────────────────────────────────────────────────────────────────────────
-export function ProofSection() {
-  const ref = useRef(null)
-  const inView = useInView(ref, { once: true, margin: "-60px" })
-
-  const testimonials = [
-    {
-      quote: "I was the dispatcher, the follow-up guy, and the one my CSR called when things got weird. Now I open my dashboard in the morning, see what booked overnight, and brief the guys. That's it. That's my whole morning.",
-      name:  "Dave K.",
-      role:  "Owner, ProTemp HVAC — Dallas, TX · 12 trucks",
-      stars: 5,
-      result: "$284K recovered from ad spend in 60 days",
-    },
-    {
-      quote: "We looked at the big platforms. Walked. FieldBuilt was running inside our stack in two days. Booked an $8,400 replacement job on an AI follow-up call while I was on a roof. That's the whole pitch, right there.",
-      name:  "James M.",
-      role:  "Owner, Arctic Air Services — Phoenix, AZ · 8 trucks",
-      stars: 5,
-      result: "First week: 11 appointments booked by AI",
-    },
-    {
-      quote: "I finally know which tech is my best closer. Not who has the most calls — who's actually winning them. That single number changed how I dispatch. Cost per booked job dropped 40%.",
-      name:  "Carlos R.",
-      role:  "Owner, Premier Comfort — Miami, FL · 17 trucks",
-      stars: 5,
-      result: "Cost per booked job down 40% in 30 days",
-    },
-  ]
-
-  return (
-    <section ref={ref} className="relative py-24 px-6 overflow-hidden" style={{ background: C.bg }}>
-      <div className="absolute inset-0 pointer-events-none opacity-35" aria-hidden="true"
-           style={{
-             backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.20) 1.2px, transparent 1.2px)",
-             backgroundSize: "28px 28px",
-             WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 50% 50%, #000 30%, transparent 80%)",
-             maskImage: "radial-gradient(ellipse 80% 70% at 50% 50%, #000 30%, transparent 80%)",
-           }} />
-      <div className="relative max-w-5xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6 }} className="text-center mb-14"
-        >
-          <div className="flex items-center justify-center gap-3 mb-5">
-            <span className="w-8 h-px" style={{ background: C.orange }} />
-            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>Owners like you</span>
-            <span className="w-8 h-px" style={{ background: C.orange }} />
-          </div>
-          <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight"
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-3"
               style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
-            The owners who made the call.
+            An entire back office, run by AI.
           </h2>
+          <p className="text-lg leading-relaxed mb-10" style={{ color: C.muted }}>
+            Not a texting widget. The whole front-of-house — built around what you already run, set up for you.
+          </p>
         </motion.div>
-        <div className="grid md:grid-cols-3 gap-5">
-          {testimonials.map((t, i) => (
-            <motion.div
-              key={i}
-              initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ delay: 0.1 + i * 0.1, duration: 0.6 }}
-              whileHover={{ y: -4, boxShadow: "0 16px 48px rgba(249,115,22,0.12)" }}
-              className="flex flex-col rounded-2xl p-7"
-              style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(249,115,22,0.06)" }}
-            >
-              <div className="flex gap-0.5 mb-4">
-                {Array.from({ length: 5 }).map((_, s) => (
-                  <Star key={s} className="w-4 h-4" style={{ color: C.orange }} fill={C.orange} aria-hidden="true" />
-                ))}
-              </div>
-              <p className="text-sm leading-relaxed flex-1 mb-5" style={{ color: C.muted }}>
-                &ldquo;{t.quote}&rdquo;
-              </p>
-              <div className="flex items-center gap-2 p-3 rounded-xl mb-4"
-                   style={{ background: "rgba(22,163,74,0.06)", border: "1px solid rgba(22,163,74,0.12)" }}>
-                <TrendingUp className="w-3.5 h-3.5 shrink-0" style={{ color: C.success }} aria-hidden="true" />
-                <span className="text-xs font-semibold" style={{ color: C.success }}>{t.result}</span>
-              </div>
+
+        <div style={{ borderTop: `1px solid ${C.border}` }}>
+          {cells.map((cell, i) => (
+            <motion.div key={i}
+              initial={{ opacity: 0, x: -16 }} animate={inView ? { opacity: 1, x: 0 } : {}}
+              transition={{ delay: 0.1 + i * 0.07, duration: 0.5 }}
+              className="flex items-start gap-4 py-5"
+              style={{ borderBottom: `1px solid ${C.border}` }}>
+              <div className="w-2.5 h-2.5 rounded-full mt-2 shrink-0" style={{ background: C.orange }} />
               <div>
-                <div className="text-sm font-bold" style={{ color: C.text }}>{t.name}</div>
-                <div className="text-xs mt-0.5" style={{ color: C.muted }}>{t.role}</div>
+                <h3 className="font-bold text-base mb-1" style={{ color: C.text }}>{cell.title}</h3>
+                <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{cell.body}</p>
               </div>
             </motion.div>
           ))}
@@ -539,342 +477,330 @@ export function ProofSection() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// THE OFFER
+// 6. WEDGE — the big platform, without naming it
 // ─────────────────────────────────────────────────────────────────────────────
-export function OfferSection() {
+export function WedgeSection() {
   const ref = useRef(null)
   const inView = useInView(ref, { once: true, margin: "-60px" })
 
-  const included = [
-    "AI back-office built inside your existing tools in 48 hours",
-    "Intelligent dispatch routing — right tech to right job, automatically",
-    "Performance dashboard — which tech closes best, which jobs pay most",
-    "Lead capture + AI SMS response in under 4 seconds",
-    "14-day automated follow-up sequence (SMS + voice calls)",
-    "Appointment booking, confirmation, and 4-step reminders",
-    "Full lead CRM with live pipeline tracking",
-    "Your Business Performance Report — yours to keep, regardless",
-  ]
-
-  const notIncluded = [
-    "Credit card required",
-    "Long-term contract",
-    "Months of onboarding",
-    "Replacing your existing tools",
-    "Extra staff to run it",
-  ]
-
-  return (
-    <section ref={ref} className="relative py-24 px-6 overflow-hidden" style={{ background: "#F5F4F1" }}>
-      <div className="absolute inset-0 flex items-center justify-center pointer-events-none" aria-hidden="true">
-        <div className="w-[600px] h-[400px] rounded-full blur-3xl" style={{ background: "rgba(249,115,22,0.05)" }} />
-      </div>
-      <div className="relative max-w-3xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6 }} className="text-center mb-12"
-        >
-          <div className="flex items-center justify-center gap-3 mb-5">
-            <span className="w-8 h-px" style={{ background: C.orange }} />
-            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>The offer</span>
-            <span className="w-8 h-px" style={{ background: C.orange }} />
-          </div>
-          <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
-              style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
-            Free 14-Day AI Back-Office Setup.
-            <br /><span style={{ color: C.orange }}>We build it. You watch it work.</span>
-          </h2>
-          <p className="text-lg max-w-xl mx-auto leading-relaxed" style={{ color: C.muted }}>
-            Book a 30-minute call. We set up your entire AI back office inside your existing tools.
-            You get 14 days to watch it route real dispatches and book real jobs. Then you decide.
-          </p>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 28 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ delay: 0.2, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          className="rounded-3xl overflow-hidden"
-          style={{ boxShadow: "0 24px 60px rgba(249,115,22,0.12), 0 4px 20px rgba(0,0,0,0.06)" }}
-        >
-          <div className="px-8 py-6 text-center"
-               style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDk})` }}>
-            <div className="text-sm font-semibold text-white/80 mb-1 uppercase tracking-wider">What you get — starting day one</div>
-            <div className="text-3xl font-black text-white">Free 14-Day Trial</div>
-            <div className="text-white/75 text-sm mt-1">Fully set up for you · Works with your existing stack</div>
-          </div>
-          <div className="p-8" style={{ background: C.surface }}>
-            <div className="grid md:grid-cols-2 gap-8">
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: C.muted }}>What&rsquo;s included</div>
-                <div className="space-y-3">
-                  {included.map((item, i) => (
-                    <motion.div key={i} initial={{ opacity: 0, x: -12 }} animate={inView ? { opacity: 1, x: 0 } : {}}
-                      transition={{ delay: 0.3 + i * 0.05 }} className="flex items-start gap-3">
-                      <CheckCircle2 className="w-4 h-4 mt-0.5 shrink-0" style={{ color: C.success }} aria-hidden="true" />
-                      <span className="text-sm" style={{ color: C.text }}>{item}</span>
-                    </motion.div>
-                  ))}
-                </div>
-              </div>
-              <div>
-                <div className="text-xs font-bold uppercase tracking-wider mb-4" style={{ color: C.muted }}>What&rsquo;s not required</div>
-                <div className="space-y-3">
-                  {notIncluded.map((item, i) => (
-                    <motion.div key={i} initial={{ opacity: 0, x: 12 }} animate={inView ? { opacity: 1, x: 0 } : {}}
-                      transition={{ delay: 0.35 + i * 0.06 }} className="flex items-start gap-3">
-                      <div className="w-4 h-4 mt-0.5 rounded-full border-2 shrink-0 flex items-center justify-center"
-                           style={{ borderColor: "rgba(239,68,68,0.40)" }}>
-                        <div className="w-1.5 h-0.5 rounded-full" style={{ background: "rgba(239,68,68,0.50)" }} />
-                      </div>
-                      <span className="text-sm" style={{ color: C.muted }}>{item}</span>
-                    </motion.div>
-                  ))}
-                </div>
-                <div className="mt-6 p-4 rounded-xl"
-                     style={{ background: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.14)" }}>
-                  <div className="flex items-start gap-3">
-                    <Award className="w-5 h-5 mt-0.5 shrink-0" style={{ color: C.orange }} aria-hidden="true" />
-                    <div>
-                      <div className="text-sm font-bold mb-1" style={{ color: C.text }}>The Business Performance Report</div>
-                      <div className="text-xs leading-relaxed" style={{ color: C.muted }}>
-                        After 14 days, we hand you a map of your business — which techs are your best closers,
-                        which jobs pay most, where your leads convert. Yours to keep, whether we work together or not.
-                      </div>
-                    </div>
-                  </div>
-                </div>
-              </div>
-            </div>
-            <div className="mt-8 pt-6" style={{ borderTop: `1px solid ${C.border}` }}>
-              <a
-                href="#book"
-                className="flex items-center justify-center gap-2 w-full font-bold text-white py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5 text-lg"
-                style={{ background: C.orange, boxShadow: "0 8px 28px rgba(249,115,22,0.30)" }}
-              >
-                Book My Free Setup Call
-                <ArrowRight className="w-5 h-5" aria-hidden="true" />
-              </a>
-              <p className="text-center text-xs mt-3" style={{ color: C.muted }}>
-                30 minutes · Free forever if you decide it&rsquo;s not for you · No pressure, no pitch
-              </p>
-            </div>
-          </div>
-        </motion.div>
-
-        <motion.div
-          initial={{ opacity: 0, y: 16 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ delay: 0.55, duration: 0.6 }}
-          className="grid grid-cols-3 gap-4 mt-8"
-        >
-          {[
-            { icon: <Clock className="w-4 h-4" aria-hidden="true" />,  label: "Live in 48 hours",  sub: "We do the setup, not you" },
-            { icon: <Shield className="w-4 h-4" aria-hidden="true" />, label: "No lock-in",         sub: "Cancel any time, zero friction" },
-            { icon: <Phone className="w-4 h-4" aria-hidden="true" />,  label: "Works with your stack", sub: "Jobber, HCP, ServiceTitan, anything" },
-          ].map((item, i) => (
-            <div key={i} className="text-center p-4 rounded-xl"
-                 style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-              <div className="flex justify-center mb-2" style={{ color: C.orange }}>{item.icon}</div>
-              <div className="text-xs font-bold mb-0.5" style={{ color: C.text }}>{item.label}</div>
-              <div className="text-xs" style={{ color: C.muted }}>{item.sub}</div>
-            </div>
-          ))}
-        </motion.div>
-      </div>
-    </section>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// BOOKING SECTION
-// ─────────────────────────────────────────────────────────────────────────────
-export function BookingSection() {
-  const ref = useRef(null)
-  const inView = useInView(ref, { once: true, margin: "-60px" })
-
-  const whatToExpect = [
-    { step: "01", label: "We learn how your shop runs today",   detail: "Trucks, techs, tools, and where leads are slipping through" },
-    { step: "02", label: "We build your AI back office live",   detail: "Dispatch routing, lead AI, CRM — configured for your operation, not a template" },
-    { step: "03", label: "You get your Business Performance Map", detail: "Where you're winning, where you're bleeding, and what it's costing you — yours to keep" },
-  ]
-
-  return (
-    <section ref={ref} id="book" className="relative py-24 px-6 overflow-hidden" style={{ background: C.bg }}>
-      <motion.div animate={{ y: [0, -18, 0], x: [0, 12, 0] }}
-        transition={{ duration: 11, repeat: Infinity, ease: "easeInOut" }}
-        className="absolute rounded-full blur-3xl pointer-events-none"
-        style={{ width: 600, height: 600, background: "rgba(249,115,22,0.07)", top: "-10%", right: "-5%" }}
-        aria-hidden="true" />
-      <motion.div animate={{ y: [0, 20, 0] }}
-        transition={{ duration: 14, repeat: Infinity, ease: "easeInOut", delay: 2 }}
-        className="absolute rounded-full blur-3xl pointer-events-none"
-        style={{ width: 400, height: 400, background: "rgba(251,191,36,0.05)", bottom: "5%", left: "0%" }}
-        aria-hidden="true" />
-
-      <div className="relative max-w-6xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 24 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6 }} className="text-center mb-14"
-        >
-          <div className="flex items-center justify-center gap-3 mb-5">
-            <span className="w-8 h-px" style={{ background: C.orange }} />
-            <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>One call</span>
-            <span className="w-8 h-px" style={{ background: C.orange }} />
-          </div>
-          <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
-              style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
-            One call, and you&rsquo;ll finally
-            <br /><span style={{ color: C.orange }}>know your number.</span>
-          </h2>
-          <p className="text-lg max-w-xl mx-auto leading-relaxed" style={{ color: C.muted }}>
-            How many leads you&rsquo;re actually losing. Which tech is your best closer.
-            What your operation looks like when it runs without you.
-            Thirty minutes. You keep the map.
-          </p>
-        </motion.div>
-
-        <div className="grid lg:grid-cols-2 gap-10 items-start">
-          <motion.div
-            initial={{ opacity: 0, x: -24 }} animate={inView ? { opacity: 1, x: 0 } : {}}
-            transition={{ delay: 0.15, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <div className="rounded-2xl p-8 mb-6"
-                 style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(249,115,22,0.07)" }}>
-              <h3 className="font-bold text-lg mb-6" style={{ color: C.text }}>What happens on the call</h3>
-              <div className="space-y-6">
-                {whatToExpect.map((item, i) => (
-                  <motion.div key={i} initial={{ opacity: 0, x: -16 }} animate={inView ? { opacity: 1, x: 0 } : {}}
-                    transition={{ delay: 0.25 + i * 0.1 }} className="flex gap-5">
-                    <div className="w-8 h-8 rounded-full flex items-center justify-center text-xs font-black shrink-0"
-                         style={{ background: "rgba(249,115,22,0.10)", color: C.orange, fontFamily: "var(--font-jetbrains)" }}>
-                      {item.step}
-                    </div>
-                    <div>
-                      <div className="font-semibold text-sm mb-1" style={{ color: C.text }}>{item.label}</div>
-                      <div className="text-sm leading-relaxed" style={{ color: C.muted }}>{item.detail}</div>
-                    </div>
-                  </motion.div>
-                ))}
-              </div>
-            </div>
-
-            <div className="grid grid-cols-2 gap-3">
-              {[
-                { value: "48hrs",   label: "From call to live system" },
-                { value: "$0",      label: "To start — no card needed" },
-                { value: "14 days", label: "To see real results" },
-                { value: "100%",    label: "Setup done for you" },
-              ].map((t, i) => (
-                <motion.div key={i} initial={{ opacity: 0, scale: 0.95 }} animate={inView ? { opacity: 1, scale: 1 } : {}}
-                  transition={{ delay: 0.5 + i * 0.08 }}
-                  className="rounded-xl p-4 text-center"
-                  style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-                  <div className="text-2xl font-black mb-0.5" style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>{t.value}</div>
-                  <div className="text-xs" style={{ color: C.muted }}>{t.label}</div>
-                </motion.div>
-              ))}
-            </div>
-
-            <motion.div
-              initial={{ opacity: 0, y: 12 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ delay: 0.7, duration: 0.5 }}
-              className="mt-6 p-6 rounded-2xl"
-              style={{ background: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.14)" }}
-            >
-              <p className="text-sm leading-relaxed font-medium" style={{ color: C.text }}>
-                You already hustle. That&rsquo;s how you got to this size. But the next level
-                isn&rsquo;t more hustle — it&rsquo;s building the system instead of being it.
-                One call to find out what that looks like for your shop.
-              </p>
-              <div className="flex items-center gap-2 mt-4">
-                <div className="w-1.5 h-1.5 rounded-full" style={{ background: C.orange }} />
-                <span className="text-xs font-semibold" style={{ color: C.orange }}>
-                  You leave with a map of your business — regardless of what you decide.
-                </span>
-              </div>
-            </motion.div>
-          </motion.div>
-
-          <motion.div
-            initial={{ opacity: 0, x: 24 }} animate={inView ? { opacity: 1, x: 0 } : {}}
-            transition={{ delay: 0.25, duration: 0.7, ease: [0.22, 1, 0.36, 1] }}
-          >
-            <div className="rounded-2xl overflow-hidden"
-                 style={{ boxShadow: "0 12px 48px rgba(249,115,22,0.10), 0 4px 16px rgba(0,0,0,0.06)" }}>
-              <div className="px-6 py-4 flex items-center gap-3"
-                   style={{ background: C.dark, borderBottom: "1px solid rgba(249,115,22,0.12)" }}>
-                <div className="w-8 h-8 rounded-lg flex items-center justify-center"
-                     style={{ background: "rgba(249,115,22,0.15)" }}>
-                  <Calendar className="w-4 h-4" style={{ color: C.orange }} aria-hidden="true" />
-                </div>
-                <div>
-                  <div className="text-sm font-bold" style={{ color: "#F5F3F0" }}>Book Your Free Setup Call</div>
-                  <div className="text-xs" style={{ color: "rgba(250,250,248,0.45)" }}>30 min · Pick a time that works for you</div>
-                </div>
-                <div className="ml-auto flex items-center gap-1.5 px-3 py-1.5 rounded-full"
-                     style={{ background: "rgba(22,163,74,0.12)", border: "1px solid rgba(22,163,74,0.20)" }}>
-                  <div className="w-1.5 h-1.5 rounded-full" style={{ background: C.success }} />
-                  <span className="text-xs font-medium" style={{ color: C.success }}>Spots available today</span>
-                </div>
-              </div>
-              <CalendlyWidget />
-            </div>
-          </motion.div>
-        </div>
-      </div>
-    </section>
-  )
-}
-
-// ─────────────────────────────────────────────────────────────────────────────
-// FAQ
-// ─────────────────────────────────────────────────────────────────────────────
-export function FaqSection() {
-  const ref = useRef(null)
-  const inView = useInView(ref, { once: true, margin: "-60px" })
-  const [open, setOpen] = useState<number | null>(null)
-
-  const faqs = [
-    { q: "We already use [tool]. Does this replace it?", a: "No. We build around what you already run — Jobber, HouseCall Pro, ServiceTitan, Google Calendar, whatever it is. We integrate into your existing stack. Nothing gets ripped out." },
-    { q: "How long does setup actually take?", a: "48 hours from the setup call to a live system. We do the configuration — you don't touch anything technical. By day 3, your AI is responding to real leads." },
-    { q: "What if my team doesn't like it?", a: "Your dispatcher keeps control. The AI routes intelligently — your team can override any dispatch decision instantly. It's a tool that works for your team, not around them." },
-    { q: "How is this different from a missed-call texter?", a: "Missed-call texters send a single auto-reply. This is a full AI back office — intelligent dispatch routing, performance tracking, 14-day follow-up sequences, lead qualification, appointment booking, CRM. The dispatch and data dashboard alone are in a different category." },
-    { q: "What happens after the 14 days?", a: "You decide. If you see the value, we talk about the plan that fits your operation. If you don't, you cancel, keep your Business Performance Report, and owe us nothing. No awkward sales call. No guilt." },
-    { q: "We already have a dispatcher. Does this replace her?", a: "No — it makes her faster. Manual dispatching still happens; the AI handles the routing recommendations and lead triage so she's not juggling 40 inbound inquiries. Most dispatchers love it." },
+  const items = [
+    { yes: false, txt: "No $50–60K/year enterprise bill" },
+    { yes: false, txt: "No 6–12 month implementation" },
+    { yes: false, txt: "No contract you’d need a lawyer to escape" },
+    { yes: true,  txt: "Built around what you already run — I do the setup, not you" },
+    { yes: true,  txt: "Free for two weeks — watch it book real jobs before you pay a dime" },
+    { yes: true,  txt: "Walk anytime. Your data stays yours." },
   ]
 
   return (
     <section ref={ref} className="relative py-20 px-6" style={{ background: C.bg }}>
-      <div className="relative max-w-3xl mx-auto">
-        <motion.div
-          initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-          transition={{ duration: 0.6 }} className="text-center mb-12"
-        >
-          <h2 className="text-3xl font-extrabold tracking-tight"
-              style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
-            Quick answers
+      <div className="relative max-w-2xl mx-auto">
+        <motion.div initial={{ opacity: 0, y: 20 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.6 }}>
+          <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-4"
+              style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
+            Everything the big platform promised.
+            <br /><span style={{ color: C.orange }}>None of what made you close the tab.</span>
           </h2>
+          <p className="text-lg leading-relaxed mb-8" style={{ color: C.muted }}>
+            You&rsquo;ve seen the enterprise demo. You saw the quote, the year of onboarding,
+            the contract — and you walked. You were right. This is the other way:
+          </p>
         </motion.div>
-        <div className="space-y-2">
-          {faqs.map((faq, i) => (
-            <motion.div key={i} initial={{ opacity: 0, y: 12 }} animate={inView ? { opacity: 1, y: 0 } : {}}
-              transition={{ delay: i * 0.07, duration: 0.5 }}
-              className="rounded-xl overflow-hidden"
-              style={{ border: `1px solid ${open === i ? "rgba(249,115,22,0.25)" : C.border}`, background: C.surface }}
-            >
-              <button className="w-full flex items-center justify-between px-6 py-4 text-left"
-                      onClick={() => setOpen(open === i ? null : i)} aria-expanded={open === i}>
-                <span className="text-sm font-semibold pr-4" style={{ color: C.text }}>{faq.q}</span>
-                <ChevronRight className="w-4 h-4 shrink-0 transition-transform duration-200"
-                              style={{ color: C.orange, transform: open === i ? "rotate(90deg)" : "rotate(0deg)" }}
-                              aria-hidden="true" />
-              </button>
-              {open === i && (
-                <motion.div initial={{ opacity: 0, height: 0 }} animate={{ opacity: 1, height: "auto" }}
-                  exit={{ opacity: 0, height: 0 }} transition={{ duration: 0.25 }} className="px-6 pb-5">
-                  <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{faq.a}</p>
-                </motion.div>
-              )}
+
+        <div style={{ borderTop: `1px solid ${C.border}` }}>
+          {items.map((item, i) => (
+            <motion.div key={i}
+              initial={{ opacity: 0, x: -12 }} animate={inView ? { opacity: 1, x: 0 } : {}}
+              transition={{ delay: 0.1 + i * 0.07, duration: 0.45 }}
+              className="flex items-baseline gap-4 py-4"
+              style={{ borderBottom: `1px solid ${C.border}` }}>
+              <span className="font-black text-sm shrink-0"
+                    style={{ color: item.yes ? C.success : "#DC2626", fontFamily: "var(--font-jetbrains)" }}>
+                {item.yes ? "✓" : "✕"}
+              </span>
+              <span className="text-base" style={{ color: C.text }}>{item.txt}</span>
             </motion.div>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 7. LEAD FORM — 5 fields, client-side qualification, 3 states
+// ─────────────────────────────────────────────────────────────────────────────
+type FormPhase = "form" | "qualified" | "noqual"
+
+const QUALIFYING_REVENUE = ["2-5M", "5-10M", "10M+"]
+
+const inputStyle: React.CSSProperties = {
+  background: "#FFFFFF",
+  border: `1.5px solid ${C.border}`,
+  borderRadius: 10,
+  color: C.text,
+  fontSize: 16, // 16px prevents iOS zoom-on-focus
+  padding: "13px 14px",
+  width: "100%",
+}
+
+export function LeadFormSection({ source }: { source: string }) {
+  const reduced = useReducedMotion()
+  const [phase, setPhase] = useState<FormPhase>("form")
+  const [firstName, setFirstName] = useState("")
+  const [phone, setPhone] = useState("")
+  const [email, setEmail] = useState("")
+  const [trucks, setTrucks] = useState("")
+  const [revenue, setRevenue] = useState("")
+
+  function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault()
+    if (!e.currentTarget.reportValidity()) return
+
+    const qualified =
+      trucks === "5-9" || trucks === "10+" ||
+      (trucks === "3-4" && QUALIFYING_REVENUE.includes(revenue))
+
+    // Send the lead to the CRM. This endpoint also fires the AI SMS —
+    // that's the "text from me in 60 seconds" first demo.
+    fetch("/api/webhooks/lead", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        first_name: firstName,
+        phone,
+        email,
+        source: "webhook",
+        source_form_id: `landing-${source}`,
+        notes: `Landing form (${source}) — trucks: ${trucks}, revenue: ${revenue}, qualified: ${qualified}`,
+        trucks,
+        revenue,
+        qualified,
+        angle: source,
+      }),
+    }).catch(() => {})
+
+    // Meta Pixel: fire QualifiedLead ONLY for qualified submissions.
+    // TODO: install the Meta Pixel base code (fbq init) in app/layout.tsx —
+    // until then this is a safe no-op.
+    if (qualified && typeof window !== "undefined" && typeof window.fbq === "function") {
+      window.fbq("trackCustom", "QualifiedLead", { trucks, revenue, source })
+    }
+
+    setPhase(qualified ? "qualified" : "noqual")
+    document.getElementById("form")?.scrollIntoView({ behavior: reduced ? "auto" : "smooth" })
+  }
+
+  return (
+    <section id="form" className="relative py-20 px-6" style={{ background: C.subtle }}>
+      <div className="relative max-w-2xl mx-auto">
+        <div className="rounded-3xl p-6 sm:p-9"
+             style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 24px 60px rgba(249,115,22,0.10), 0 4px 20px rgba(0,0,0,0.05)" }}>
+
+          {/* ── STATE 1: the form ── */}
+          {phase === "form" && (
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-3"
+                  style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+                See exactly where your leads are leaking.
+              </h2>
+              <p className="text-base leading-relaxed mb-7" style={{ color: C.muted }}>
+                20 minutes. I&rsquo;ll map how leads move through your shop right now — where they
+                come in, where they stall, where the money&rsquo;s going.{" "}
+                <strong style={{ color: C.text }}>You keep the map whether we ever work together or not.</strong>
+              </p>
+
+              <form onSubmit={handleSubmit} noValidate>
+                <div className="mb-4">
+                  <label htmlFor="lf-name" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
+                    First name
+                  </label>
+                  <input id="lf-name" type="text" autoComplete="given-name" required
+                         value={firstName} onChange={(e) => setFirstName(e.target.value)}
+                         className="focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500"
+                         style={inputStyle} />
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4 mb-4">
+                  <div>
+                    <label htmlFor="lf-phone" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
+                      Mobile phone
+                    </label>
+                    <input id="lf-phone" type="tel" autoComplete="tel" inputMode="tel" required
+                           value={phone} onChange={(e) => setPhone(e.target.value)}
+                           className="focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500"
+                           style={inputStyle} />
+                  </div>
+                  <div>
+                    <label htmlFor="lf-email" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
+                      Email
+                    </label>
+                    <input id="lf-email" type="email" autoComplete="email" required
+                           value={email} onChange={(e) => setEmail(e.target.value)}
+                           className="focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500"
+                           style={inputStyle} />
+                  </div>
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4 mb-5">
+                  <div>
+                    <label htmlFor="lf-trucks" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
+                      How many service trucks do you run?
+                    </label>
+                    <select id="lf-trucks" required value={trucks} onChange={(e) => setTrucks(e.target.value)}
+                            className="focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500"
+                            style={inputStyle}>
+                      <option value="" disabled>Select</option>
+                      <option value="1-2">1&ndash;2</option>
+                      <option value="3-4">3&ndash;4</option>
+                      <option value="5-9">5&ndash;9</option>
+                      <option value="10+">10+</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label htmlFor="lf-revenue" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
+                      Annual revenue
+                    </label>
+                    <select id="lf-revenue" required value={revenue} onChange={(e) => setRevenue(e.target.value)}
+                            className="focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500"
+                            style={inputStyle}>
+                      <option value="" disabled>Select</option>
+                      <option value="<1M">Under $1M</option>
+                      <option value="1-2M">$1M &ndash; $2M</option>
+                      <option value="2-5M">$2M &ndash; $5M</option>
+                      <option value="5-10M">$5M &ndash; $10M</option>
+                      <option value="10M+">$10M+</option>
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-start gap-2.5 mb-5">
+                  <MessageSquare className="w-4 h-4 mt-0.5 shrink-0" style={{ color: C.success }} aria-hidden="true" />
+                  <p className="text-sm" style={{ color: C.muted }}>
+                    No spam, no list. You&rsquo;ll get{" "}
+                    <strong style={{ color: C.text }}>one text from me</strong> within a minute to lock in your time.
+                  </p>
+                </div>
+
+                <button type="submit"
+                        className="flex items-center justify-center gap-2 w-full font-bold text-white py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5 text-lg focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-orange-600 focus-visible:outline-offset-2"
+                        style={{ background: C.orange, boxShadow: "0 8px 28px rgba(249,115,22,0.30)" }}>
+                  Show me my leak map
+                  <ArrowRight className="w-5 h-5" aria-hidden="true" />
+                </button>
+                <p className="text-center text-xs mt-3" style={{ color: C.muted }}>
+                  Free two-week trial after the call if it&rsquo;s a fit · No contract · No card
+                </p>
+              </form>
+            </div>
+          )}
+
+          {/* ── STATE 2: qualified — booking ── */}
+          {phase === "qualified" && (
+            <div>
+              <span className="inline-flex items-center gap-2 px-4 py-2 rounded-full text-sm font-bold mb-4"
+                    style={{ background: "rgba(22,163,74,0.10)", color: "#15803D", border: "1px solid rgba(22,163,74,0.20)" }}>
+                &#10003; You&rsquo;re in — pick your time
+              </span>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-3"
+                  style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+                {firstName ? `${firstName} — grab 20 minutes below.` : "Grab 20 minutes below."}
+              </h2>
+              <p className="text-base leading-relaxed mb-6" style={{ color: C.muted }}>
+                Lock in the call now while you&rsquo;re here — takes 10 seconds. I&rsquo;ll come
+                prepared with where shops your size usually leak first.
+              </p>
+
+              <CalendlyWidget />
+
+              <div className="flex items-start gap-3 mt-5 p-4 rounded-xl"
+                   style={{ background: "rgba(249,115,22,0.07)", border: "1px solid rgba(249,115,22,0.20)" }}>
+                <Phone className="w-5 h-5 mt-0.5 shrink-0" style={{ color: C.orangeDk }} aria-hidden="true" />
+                <p className="text-sm leading-relaxed" style={{ color: C.text }}>
+                  <strong>Check your phone.</strong> You&rsquo;ll get a text from me in about 60
+                  seconds — that&rsquo;s the same system that&rsquo;ll be answering{" "}
+                  <em>your</em> leads. Consider it the first demo.
+                </p>
+              </div>
+            </div>
+          )}
+
+          {/* ── STATE 3: not a fit — gracious exit ── */}
+          {phase === "noqual" && (
+            <div>
+              <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-4"
+                  style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+                Straight answer: we&rsquo;re not the right fit yet.
+              </h2>
+              <p className="text-base leading-relaxed mb-4" style={{ color: C.muted }}>
+                FieldBuilt is built for shops running 5+ trucks — at your size, the dispatch and
+                tech-tracking half of the system wouldn&rsquo;t earn its keep, and I&rsquo;d rather
+                tell you that now than waste your time on a call.
+              </p>
+              <p className="text-base leading-relaxed mb-7" style={{ color: C.muted }}>
+                <strong style={{ color: C.text }}>What I&rsquo;d do in your seat:</strong> nail
+                response speed first. Answer every lead inside 5 minutes — even with a simple
+                auto-text — and you&rsquo;ll out-book most shops your size. When you&rsquo;re at 5
+                trucks and the front desk starts drowning, come back. I&rsquo;ll remember you.
+              </p>
+              <a href="https://fieldbuiltai.com"
+                 className="flex items-center justify-center gap-2 w-full font-bold text-white py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5 text-lg"
+                 style={{ background: C.text }}>
+                Take me to the main site
+                <ArrowRight className="w-5 h-5" aria-hidden="true" />
+              </a>
+            </div>
+          )}
+
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+// 8. FAQ — the 3 real objections
+// ─────────────────────────────────────────────────────────────────────────────
+export function FaqSection() {
+  const ref = useRef(null)
+  const inView = useInView(ref, { once: true, margin: "-60px" })
+
+  const faqs = [
+    {
+      q: "Does this replace what I’m already running?",
+      a: "No rip-and-replace. It’s built around your existing stack — your number, your calendar, your workflow. I do the wiring myself during setup, which takes days, not months. You keep working exactly how you work; the system just stops things from slipping.",
+    },
+    {
+      q: "How long until it’s actually running?",
+      a: "Days. I set it up personally — that’s why I only take a couple of shops a month. You don’t configure anything, you don’t train anyone. You’ll see it answering and booking real leads inside the first week of the free trial.",
+    },
+    {
+      q: "What’s the catch on “free for two weeks”?",
+      a: "There isn’t one — it’s how I earn trust from owners who’ve been burned by software before. The system runs on your real leads for two weeks. You watch what it catches and books. If the numbers don’t make it obvious, you walk, and you keep everything we mapped. No card up front, no contract either way.",
+    },
+  ]
+
+  return (
+    <section ref={ref} className="relative py-16 px-6" style={{ background: C.bg }}>
+      <div className="relative max-w-2xl mx-auto">
+        <motion.h2
+          initial={{ opacity: 0, y: 16 }} animate={inView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.55 }}
+          className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-8"
+          style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+          The three things everyone asks
+        </motion.h2>
+        <div style={{ borderTop: `1px solid ${C.border}` }}>
+          {faqs.map((faq, i) => (
+            <details key={i} className="group py-5" style={{ borderBottom: `1px solid ${C.border}` }}>
+              <summary className="flex items-center justify-between gap-4 cursor-pointer list-none text-base font-bold focus-visible:outline focus-visible:outline-2 focus-visible:outline-orange-600 focus-visible:outline-offset-4 rounded"
+                       style={{ color: C.text }}>
+                {faq.q}
+                <span aria-hidden="true"
+                      className="shrink-0 font-black text-xl transition-transform duration-200 group-open:rotate-45"
+                      style={{ color: C.orange }}>+</span>
+              </summary>
+              <p className="mt-3 text-sm leading-relaxed" style={{ color: C.muted }}>{faq.a}</p>
+            </details>
           ))}
         </div>
       </div>
@@ -901,10 +827,10 @@ export function StickyBottomCta() {
       className="fixed bottom-0 left-0 right-0 z-50 md:hidden px-4"
       style={{ paddingBottom: "max(16px, env(safe-area-inset-bottom))" }}
     >
-      <a href="#book"
+      <a href="#form"
          className="flex items-center justify-center gap-2 w-full font-bold text-white py-4 rounded-xl text-base"
          style={{ background: C.orange, boxShadow: "0 8px 28px rgba(249,115,22,0.35)" }}>
-        Get My Free Business Map
+        Show me my leak map
         <ArrowRight className="w-4 h-4" aria-hidden="true" />
       </a>
     </motion.div>
@@ -942,3 +868,25 @@ export function MinimalFooter() {
     </footer>
   )
 }
+
+// ─────────────────────────────────────────────────────────────────────────────
+// FULL PAGE BODY — everything below the hero, identical on every variant
+// ─────────────────────────────────────────────────────────────────────────────
+export function LandingBody({ source }: { source: string }) {
+  return (
+    <>
+      <TryFailSection />
+      <ProofStatsSection />
+      <ReframeSection />
+      <ScopeSection />
+      <WedgeSection />
+      <LeadFormSection source={source} />
+      <FaqSection />
+      <MinimalFooter />
+      <StickyBottomCta />
+    </>
+  )
+}
+
+// Kept for back-compat with any page still importing it.
+export { CalendlyWidget as BookingCalendar }
