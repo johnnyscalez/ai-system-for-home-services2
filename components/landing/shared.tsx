@@ -62,26 +62,32 @@ export function FieldFMark({ size = 18 }: { size?: number }) {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
-// CALENDLY WIDGET  (shown inside the qualified form state)
+// GHL BOOKING WIDGET  (shown inside the qualified form state)
+// The "Book Your AI System Walkthrough!" calendar in the scalez sub-account.
+// form_embed.js auto-resizes the iframe to fit the widget's content.
 // ─────────────────────────────────────────────────────────────────────────────
-export function CalendlyWidget() {
+export function GhlBookingWidget() {
   useEffect(() => {
-    const existing = document.getElementById("calendly-script")
+    const existing = document.getElementById("ghl-form-embed-script")
     if (existing) return
     const script = document.createElement("script")
-    script.id = "calendly-script"
-    script.src = "https://assets.calendly.com/assets/external/widget.js"
+    script.id = "ghl-form-embed-script"
+    script.src = "https://link.scalezz.com/js/form_embed.js"
     script.async = true
-    document.head.appendChild(script)
+    document.body.appendChild(script)
   }, [])
 
   return (
-    <div
-      className="calendly-inline-widget w-full rounded-2xl overflow-hidden"
-      // Replace with your actual Calendly URL
-      data-url="https://calendly.com/fieldbuiltai/setup-call?hide_landing_page_details=1&hide_gdpr_banner=1&primary_color=F97316"
-      style={{ height: 640, minWidth: 300, border: `1px solid ${C.border}`, background: C.surface }}
-    />
+    <div className="w-full rounded-2xl overflow-hidden"
+         style={{ border: `1px solid ${C.border}`, background: C.surface }}>
+      <iframe
+        src="https://link.scalezz.com/widget/booking/YS45wLm4sIyR9lFZfBe3"
+        id="YS45wLm4sIyR9lFZfBe3_landing"
+        title="Book your walkthrough call"
+        scrolling="no"
+        style={{ width: "100%", minHeight: 640, border: "none", overflow: "hidden" }}
+      />
+    </div>
   )
 }
 
@@ -1046,7 +1052,7 @@ export function LeadFormSection({ source }: { source: string }) {
                 prepared with where shops your size usually leak first.
               </p>
 
-              <CalendlyWidget />
+              <GhlBookingWidget />
 
               <div className="flex items-start gap-3 mt-5 p-4 rounded-xl"
                    style={{ background: "rgba(249,115,22,0.07)", border: "1px solid rgba(249,115,22,0.20)" }}>
@@ -1150,8 +1156,18 @@ export function FaqSection() {
 export function StickyBottomCta() {
   const [visible, setVisible] = useState(false)
   useEffect(() => {
-    const onScroll = () => setVisible(window.scrollY > 600)
+    // Hidden until the visitor scrolls past the hero, and hidden again while
+    // the form section itself is on screen — no point pushing someone to the
+    // form they're already looking at (and it would cover the booking widget).
+    const onScroll = () => {
+      const form = document.getElementById("form")
+      const formOnScreen = form
+        ? form.getBoundingClientRect().top < window.innerHeight && form.getBoundingClientRect().bottom > 0
+        : false
+      setVisible(window.scrollY > 600 && !formOnScreen)
+    }
     window.addEventListener("scroll", onScroll, { passive: true })
+    onScroll()
     return () => window.removeEventListener("scroll", onScroll)
   }, [])
 
@@ -1225,4 +1241,4 @@ export function LandingBody({ source }: { source: string }) {
 }
 
 // Kept for back-compat with any page still importing it.
-export { CalendlyWidget as BookingCalendar }
+export { GhlBookingWidget as BookingCalendar }
