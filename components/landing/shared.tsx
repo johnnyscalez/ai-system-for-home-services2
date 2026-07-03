@@ -126,7 +126,7 @@ export function MinimalHeader() {
         className="text-xs font-bold px-4 py-2 rounded-lg transition-colors hover:bg-orange-600"
         style={{ background: C.orange, color: "#fff" }}
       >
-        Start free
+        Claim Free Trial
       </a>
     </header>
   )
@@ -278,7 +278,7 @@ export function WoundHero({
           <a href="#form"
              className="flex sm:inline-flex items-center justify-center gap-2 font-bold text-white px-8 py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5 w-full sm:w-auto"
              style={{ background: C.orange, boxShadow: "0 8px 28px rgba(249,115,22,0.35)", fontSize: "1.05rem" }}>
-            Start My Free 14 Days
+            Claim My Free 14 Days
             <ArrowRight className="w-5 h-5" aria-hidden="true" />
           </a>
           <span className="block mt-3 text-sm" style={{ color: "rgba(250,250,248,0.38)" }}>
@@ -923,67 +923,33 @@ export function LeadFormSection({ source }: { source: string }) {
   return (
     <section id="form" className="relative py-20 px-6" style={{ background: C.subtle }}>
       <div className="relative max-w-2xl mx-auto">
-        {/* Offer banner — the trial terms, loud, right where the decision happens */}
-        <div className="rounded-2xl px-6 py-5 mb-5 text-center"
-             style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDk})`, boxShadow: "0 12px 36px rgba(249,115,22,0.30)" }}>
-          <div className="text-xl sm:text-2xl font-black text-white tracking-tight"
-               style={{ fontFamily: "var(--font-jakarta)" }}>
-            14 days free. No card. No contract.
-          </div>
-          <p className="text-sm text-white/85 mt-1">
-            I build it in your shop and you watch it book real jobs. If the numbers don&rsquo;t convince you, you walk.
-          </p>
-        </div>
-
         <div className="rounded-3xl p-6 sm:p-9"
              style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 24px 60px rgba(249,115,22,0.10), 0 4px 20px rgba(0,0,0,0.05)" }}>
 
           {/* ── STATE 1: the form ── */}
           {phase === "form" && (
             <div>
+              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full mb-4"
+                   style={{ background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.20)" }}>
+                <span className="w-1.5 h-1.5 rounded-full" style={{ background: C.orange }} />
+                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: C.orangeDk }}>
+                  Free 14-day trial available
+                </span>
+              </div>
+
               <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-3"
                   style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
-                See exactly where your leads are leaking.
+                Get your leak map — free, on a 20-minute call.
               </h2>
               <p className="text-base leading-relaxed mb-7" style={{ color: C.muted }}>
-                20 minutes. I&rsquo;ll map how leads move through your shop right now — where they
-                come in, where they stall, where the money&rsquo;s going.{" "}
-                <strong style={{ color: C.text }}>You keep the map whether we ever work together or not.</strong>
+                I&rsquo;ll map exactly where leads slip through your shop, then set the
+                same AI system up live in your shop — answering every lead, booking
+                the job, showing you which tech makes you money — free for 14 days.{" "}
+                <strong style={{ color: C.text }}>You keep the map either way.</strong>
               </p>
 
               <form onSubmit={handleSubmit} noValidate>
-                <div className="mb-4">
-                  <label htmlFor="lf-name" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
-                    First name
-                  </label>
-                  <input id="lf-name" type="text" autoComplete="given-name" required
-                         value={firstName} onChange={(e) => setFirstName(e.target.value)}
-                         className="focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500"
-                         style={inputStyle} />
-                </div>
-
                 <div className="grid sm:grid-cols-2 gap-4 mb-4">
-                  <div>
-                    <label htmlFor="lf-phone" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
-                      Mobile phone
-                    </label>
-                    <input id="lf-phone" type="tel" autoComplete="tel" inputMode="tel" required
-                           value={phone} onChange={(e) => setPhone(e.target.value)}
-                           className="focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500"
-                           style={inputStyle} />
-                  </div>
-                  <div>
-                    <label htmlFor="lf-email" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
-                      Email
-                    </label>
-                    <input id="lf-email" type="email" autoComplete="email" required
-                           value={email} onChange={(e) => setEmail(e.target.value)}
-                           className="focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500"
-                           style={inputStyle} />
-                  </div>
-                </div>
-
-                <div className="grid sm:grid-cols-2 gap-4 mb-5">
                   <div>
                     <label htmlFor="lf-trucks" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
                       How many service trucks do you run?
@@ -1015,6 +981,37 @@ export function LeadFormSection({ source }: { source: string }) {
                   </div>
                 </div>
 
+                <div className="mb-4">
+                  <label htmlFor="lf-name" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
+                    First name
+                  </label>
+                  <input id="lf-name" type="text" autoComplete="given-name" required
+                         value={firstName} onChange={(e) => setFirstName(e.target.value)}
+                         className="focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500"
+                         style={inputStyle} />
+                </div>
+
+                <div className="grid sm:grid-cols-2 gap-4 mb-5">
+                  <div>
+                    <label htmlFor="lf-phone" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
+                      Mobile phone
+                    </label>
+                    <input id="lf-phone" type="tel" autoComplete="tel" inputMode="tel" required
+                           value={phone} onChange={(e) => setPhone(e.target.value)}
+                           className="focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500"
+                           style={inputStyle} />
+                  </div>
+                  <div>
+                    <label htmlFor="lf-email" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
+                      Email
+                    </label>
+                    <input id="lf-email" type="email" autoComplete="email" required
+                           value={email} onChange={(e) => setEmail(e.target.value)}
+                           className="focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500"
+                           style={inputStyle} />
+                  </div>
+                </div>
+
                 <div className="flex items-start gap-2.5 mb-5">
                   <MessageSquare className="w-4 h-4 mt-0.5 shrink-0" style={{ color: C.success }} aria-hidden="true" />
                   <p className="text-sm" style={{ color: C.muted }}>
@@ -1023,10 +1020,22 @@ export function LeadFormSection({ source }: { source: string }) {
                   </p>
                 </div>
 
+                {/* Offer reinforcement — right before the click, where risk-reversal does its best work */}
+                <div className="rounded-2xl px-5 py-4 mb-5 text-center"
+                     style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDk})`, boxShadow: "0 8px 24px rgba(249,115,22,0.25)" }}>
+                  <div className="text-base sm:text-lg font-black text-white tracking-tight"
+                       style={{ fontFamily: "var(--font-jakarta)" }}>
+                    14 days free. No card. No contract.
+                  </div>
+                  <p className="text-xs text-white/85 mt-1">
+                    I build it in your shop and you watch it book real jobs. If the numbers don&rsquo;t convince you, you walk.
+                  </p>
+                </div>
+
                 <button type="submit"
                         className="flex items-center justify-center gap-2 w-full font-bold text-white py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5 text-lg focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-orange-600 focus-visible:outline-offset-2"
                         style={{ background: C.orange, boxShadow: "0 8px 28px rgba(249,115,22,0.30)" }}>
-                  Start My Free 14 Days
+                  Claim My Free 14 Days
                   <ArrowRight className="w-5 h-5" aria-hidden="true" />
                 </button>
                 <p className="text-center text-xs mt-3" style={{ color: C.muted }}>
@@ -1182,7 +1191,7 @@ export function StickyBottomCta() {
       <a href="#form"
          className="flex items-center justify-center gap-2 w-full font-bold text-white py-4 rounded-xl text-base"
          style={{ background: C.orange, boxShadow: "0 8px 28px rgba(249,115,22,0.35)" }}>
-        Start My Free 14 Days
+        Claim My Free 14 Days
         <ArrowRight className="w-4 h-4" aria-hidden="true" />
       </a>
     </motion.div>
