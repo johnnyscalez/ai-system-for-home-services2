@@ -43,6 +43,7 @@ export async function middleware(request: NextRequest) {
     path === "/start/hire" ||
     path === "/start/booked" ||
     path === "/api/health" ||
+    path === "/api/lead-intake" ||
     path.startsWith("/api/webhooks") ||
     path.startsWith("/api/voice") ||
     path.startsWith("/api/cron") ||
