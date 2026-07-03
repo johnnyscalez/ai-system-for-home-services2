@@ -13,15 +13,14 @@ export default function StartHirePage() {
     <main style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
       <MinimalHeader />
       <WoundHero
-        eyebrow="For HVAC owners convinced they need to hire"
+        eyebrow="For HVAC owners trying to hire"
         line1="You don't need another tech."
-        line2="You need every lead answered in seconds."
+        line2="You need leads answered in seconds."
         sub={
           <>
-            You&rsquo;ve run the hiring ads, raised the pay, interviewed guys who never showed.
-            It&rsquo;s not you — there&rsquo;s a 100,000-tech shortage.{" "}
+            You&rsquo;ve run the ads, raised the pay, chased the no-shows. It&rsquo;s not you.{" "}
             <strong style={{ color: "#F5F3F0" }}>
-              But the leads dying while your crew is slammed? That&rsquo;s not a staffing problem.
+              The leads dying while your crew is slammed? That&rsquo;s not a staffing problem.
             </strong>
           </>
         }

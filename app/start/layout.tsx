@@ -6,7 +6,7 @@ import type { Metadata } from "next"
 // show, matching the on-page copy.
 export const metadata: Metadata = {
   title: "How Many Leads Did You Lose Last Month? — FieldBuilt AI",
-  description: "Most HVAC shops can't answer that — a lead nobody logs never shows up on a report. Free for two weeks. I set it up.",
+  description: "Most HVAC shops can't answer that — a lead nobody logs never shows up on a report. Try the fix free for 14 days. No card. I set it up.",
 }
 
 export default function StartLayout({ children }: { children: React.ReactNode }) {

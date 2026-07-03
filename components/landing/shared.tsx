@@ -120,7 +120,7 @@ export function MinimalHeader() {
         className="text-xs font-bold px-4 py-2 rounded-lg transition-colors hover:bg-orange-600"
         style={{ background: C.orange, color: "#fff" }}
       >
-        See my leak map
+        Start free
       </a>
     </header>
   )
@@ -189,7 +189,7 @@ export function WoundHero({
 }) {
   return (
     <section
-      className="relative flex flex-col justify-center pt-28 pb-16 px-6 overflow-hidden"
+      className="relative flex flex-col justify-center pt-24 pb-16 px-6 overflow-hidden"
       style={{ background: "linear-gradient(180deg, #141110 0%, #1A1614 100%)" }}
     >
       {/* Blueprint crosshatch */}
@@ -238,28 +238,51 @@ export function WoundHero({
 
         {/* Try-and-fail subhead */}
         <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.6 }}
-          className="text-lg sm:text-xl leading-relaxed max-w-xl mx-auto mb-10"
+          className="text-lg sm:text-xl leading-relaxed max-w-xl mx-auto mb-7"
           style={{ color: "rgba(250,250,248,0.62)" }}>
           {sub}
         </motion.p>
 
-        {/* Live leak counter */}
-        <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.65, duration: 0.6 }}
-          className="mb-8">
-          <LeakCounter />
+        {/* The offer card — product promise + trial terms, right on screen 1.
+            Most visitors never scroll; the hero has to close on its own. */}
+        <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.55 }}
+          className="rounded-2xl px-6 py-5 mb-5 text-left"
+          style={{ background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.28)", boxShadow: "0 0 40px rgba(249,115,22,0.08)" }}>
+          <div className="text-xs font-bold uppercase tracking-widest mb-2.5"
+               style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>
+            What you get — free for 14 days
+          </div>
+          <p className="text-base sm:text-lg font-semibold leading-snug mb-3.5" style={{ color: "#F5F3F0" }}>
+            An AI office that answers every lead in under 60 seconds, books the job,
+            and shows you which tech makes you money. Nights, weekends, mid-rush.
+          </p>
+          <div className="flex flex-wrap gap-x-5 gap-y-1.5">
+            {["No credit card", "No contract", "I set it up, not you"].map((t) => (
+              <span key={t} className="inline-flex items-center gap-1.5 text-sm" style={{ color: "rgba(250,250,248,0.72)" }}>
+                <span className="font-black text-xs" style={{ color: C.success }} aria-hidden="true">✓</span>
+                {t}
+              </span>
+            ))}
+          </div>
         </motion.div>
 
-        {/* CTA → form */}
-        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.8, duration: 0.5 }}>
+        {/* CTA — above the counter so the button lands on screen 1 at 390px */}
+        <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.5 }}
+          className="mb-8">
           <a href="#form"
              className="flex sm:inline-flex items-center justify-center gap-2 font-bold text-white px-8 py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5 w-full sm:w-auto"
              style={{ background: C.orange, boxShadow: "0 8px 28px rgba(249,115,22,0.35)", fontSize: "1.05rem" }}>
-            Show me where mine are leaking
+            Start My Free 14 Days
             <ArrowRight className="w-5 h-5" aria-hidden="true" />
           </a>
-          <span className="block mt-3 text-sm" style={{ color: "rgba(250,250,248,0.35)" }}>
-            Free for two weeks · I set it up, not you · No contract
+          <span className="block mt-3 text-sm" style={{ color: "rgba(250,250,248,0.38)" }}>
+            One 20-minute call, then I build it in your shop. You watch it book real jobs before you pay a dime.
           </span>
+        </motion.div>
+
+        {/* Live leak counter — bridges scrollers into the pain sections below */}
+        <motion.div initial={{ opacity: 0, scale: 0.96 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.85, duration: 0.6 }}>
+          <LeakCounter />
         </motion.div>
       </div>
 
@@ -449,7 +472,7 @@ export function WatchItWorkSection() {
 
         <div className="text-center mb-14">
           <a href="#form" className="inline-flex items-center gap-1.5 text-sm font-bold hover:underline underline-offset-4" style={{ color: C.orange }}>
-            Get this answering my leads
+            Run this in my shop free for 14 days
             <ArrowRight className="w-3.5 h-3.5" aria-hidden="true" />
           </a>
         </div>
@@ -774,7 +797,7 @@ export function FounderTrustSection() {
           </h2>
           <p className="text-base leading-relaxed" style={{ color: C.muted }}>
             FieldBuilt is new — and I&rsquo;m not going to rent credibility with stock-photo
-            testimonials. Instead: the system runs free in your shop for two weeks, on your
+            testimonials. Instead: the system runs free in your shop for 14 days, on your
             real leads, and the numbers make the case or they don&rsquo;t. I build every
             install myself, which is why I only take a couple of shops a month. You watch it
             work before you pay a dime, and if it doesn&rsquo;t, you walk — no contract, your
@@ -798,7 +821,7 @@ export function WedgeSection() {
     { yes: false, txt: "No 6–12 month implementation" },
     { yes: false, txt: "No contract you’d need a lawyer to escape" },
     { yes: true,  txt: "Built around what you already run — I do the setup, not you" },
-    { yes: true,  txt: "Free for two weeks — watch it book real jobs before you pay a dime" },
+    { yes: true,  txt: "Free for 14 days — watch it book real jobs before you pay a dime" },
     { yes: true,  txt: "Walk anytime. Your data stays yours." },
   ]
 
@@ -894,6 +917,18 @@ export function LeadFormSection({ source }: { source: string }) {
   return (
     <section id="form" className="relative py-20 px-6" style={{ background: C.subtle }}>
       <div className="relative max-w-2xl mx-auto">
+        {/* Offer banner — the trial terms, loud, right where the decision happens */}
+        <div className="rounded-2xl px-6 py-5 mb-5 text-center"
+             style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDk})`, boxShadow: "0 12px 36px rgba(249,115,22,0.30)" }}>
+          <div className="text-xl sm:text-2xl font-black text-white tracking-tight"
+               style={{ fontFamily: "var(--font-jakarta)" }}>
+            14 days free. No card. No contract.
+          </div>
+          <p className="text-sm text-white/85 mt-1">
+            I build it in your shop and you watch it book real jobs. If the numbers don&rsquo;t convince you, you walk.
+          </p>
+        </div>
+
         <div className="rounded-3xl p-6 sm:p-9"
              style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 24px 60px rgba(249,115,22,0.10), 0 4px 20px rgba(0,0,0,0.05)" }}>
 
@@ -985,11 +1020,11 @@ export function LeadFormSection({ source }: { source: string }) {
                 <button type="submit"
                         className="flex items-center justify-center gap-2 w-full font-bold text-white py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5 text-lg focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-orange-600 focus-visible:outline-offset-2"
                         style={{ background: C.orange, boxShadow: "0 8px 28px rgba(249,115,22,0.30)" }}>
-                  Show me my leak map
+                  Start My Free 14 Days
                   <ArrowRight className="w-5 h-5" aria-hidden="true" />
                 </button>
                 <p className="text-center text-xs mt-3" style={{ color: C.muted }}>
-                  Free for two weeks · I set it up · No contract · No card
+                  14 days free · I set it up · No contract · No card
                 </p>
               </form>
             </div>
@@ -1076,8 +1111,8 @@ export function FaqSection() {
       a: "Days. I set it up personally — that’s why I only take a couple of shops a month. You don’t configure anything, you don’t train anyone. You’ll see it answering and booking real leads inside the first week of the free trial.",
     },
     {
-      q: "What’s the catch on “free for two weeks”?",
-      a: "There isn’t one — it’s how I earn trust from owners who’ve been burned by software before. The system runs on your real leads for two weeks. You watch what it catches and books. If the numbers don’t make it obvious, you walk, and you keep everything we mapped. No card up front, no contract either way.",
+      q: "What’s the catch on “free for 14 days”?",
+      a: "There isn’t one — it’s how I earn trust with owners who’ve been burned by software before. The system runs on your real leads for 14 days. You watch what it catches and books. If the numbers don’t make it obvious, you walk, and you keep everything we mapped. No card up front, no contract either way.",
     },
   ]
 
@@ -1131,7 +1166,7 @@ export function StickyBottomCta() {
       <a href="#form"
          className="flex items-center justify-center gap-2 w-full font-bold text-white py-4 rounded-xl text-base"
          style={{ background: C.orange, boxShadow: "0 8px 28px rgba(249,115,22,0.35)" }}>
-        Show me my leak map
+        Start My Free 14 Days
         <ArrowRight className="w-4 h-4" aria-hidden="true" />
       </a>
     </motion.div>
