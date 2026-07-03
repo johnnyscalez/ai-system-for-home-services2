@@ -900,18 +900,16 @@ export function LeadFormSection({ source }: { source: string }) {
       trucks === "5-9" || trucks === "10+" ||
       (trucks === "3-4" && QUALIFYING_REVENUE.includes(revenue))
 
-    // TODO: wire lead delivery to the separate opt-in system when it's built.
-    // Payload ready to send: { first_name: firstName, phone, email, trucks,
-    // revenue, qualified, angle: source }
-    // Example:
-    // fetch("YOUR_OPTIN_SYSTEM_URL", { method: "POST",
-    //   headers: { "Content-Type": "application/json" },
-    //   body: JSON.stringify({ first_name: firstName, phone, email, trucks, revenue, qualified, angle: source }),
-    // }).catch(() => {})
+    // Same-origin proxy — see app/api/lead-intake/route.ts for why this
+    // doesn't call the agent directly (the agent's shared secret must never
+    // ship to the browser).
+    fetch("/api/lead-intake", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ first_name: firstName, phone, email, trucks, revenue, qualified, angle: source }),
+    }).catch(() => {})
 
     // Meta Pixel: fire QualifiedLead ONLY for qualified submissions.
-    // TODO: install the Meta Pixel base code (fbq init) in app/layout.tsx —
-    // until then this is a safe no-op.
     if (qualified && typeof window !== "undefined" && typeof window.fbq === "function") {
       window.fbq("trackCustom", "QualifiedLead", { trucks, revenue, source })
     }
