@@ -35,6 +35,19 @@ const SCENARIOS: Record<string, { notes: string; phone: string; name: string; re
       "morning works",
     ],
   },
+  vague: {
+    notes: null as unknown as string,
+    phone: "+17045550996",
+    name: "SimVague",
+    replies: [
+      "hey yeah, its about our AC situation",
+      "well the current one is super old, we want to swap it for a new one",
+      "we own the house",
+      "soon as possible honestly",
+      "1400 Providence Rd, Charlotte, NC 28211",
+      "first one",
+    ],
+  },
   gas: {
     notes: "furnace making weird smell",
     phone: "+17045550994",

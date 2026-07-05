@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
-import { processAndSave } from "@/lib/ai-engine"
+import { processAndSave, inferJobType } from "@/lib/ai-engine"
 import { sendSMS, formatPhone } from "@/lib/twilio"
 import { notifyNewLead } from "@/lib/notifications"
 import { buildNoReplySchedule } from "@/lib/sequences"
@@ -186,6 +186,10 @@ export async function POST(req: NextRequest) {
             status: "just_came_in",
             notes: formNotes,
             metadata: { leadgen_id, page_id, form_id, job_type: jobType },
+            // Pre-classify the job_type COLUMN (the metadata job_type above is
+            // the raw form field text) so the first AI turn runs the focused
+            // job playbook instead of the identify module
+            job_type: inferJobType([jobType, formNotes].filter(Boolean).join(" ")),
           })
           .select("id")
           .single()

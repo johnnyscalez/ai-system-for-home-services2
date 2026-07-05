@@ -241,7 +241,7 @@ export async function runConversation(
   const leadContext = buildLeadContext(lead, appointments, tz)
 
   // Build service-specific conversation flow playbook
-  const conversationFlow = getConversationFlow(lead.service_type as string | null)
+  const conversationFlow = getConversationFlow(lead.service_type as string | null, lead.job_type as string | null)
 
   // Format available slots block — AI offers ONLY these real times, never invents them
   const slotsBlock = formatSlotsForPrompt(availableSlots)
@@ -333,6 +333,7 @@ CONVERSATION STYLE:
 • One thing per message. If you need an address, ask ONLY for the address. Nothing else.
 • Never use exclamation points after confirming what the lead already said.
 • NEVER show self-correction in a message — no "actually scratch that", "wait", "let me rephrase", no correcting yourself mid-text. Decide what to say BEFORE writing; the lead only ever sees the final, single version. If you realize mid-thought the lead already answered something, simply don't ask it.
+• NO DEAD-END MESSAGES: until a booking is confirmed, EVERY message you send must end with your next question or a slot offer. A bare acknowledgment ("Perfect.", "Got it.", "That makes sense.") with nothing after it stalls the conversation and loses the lead. Acknowledge AND ask, in the same message — this applies even when you're also calling a tool in the same turn.
 
 AFTER ANSWERING AN OBJECTION — PIVOT IMMEDIATELY:
 When a lead asks a question (cost, free visit, timeline, etc.) that you can answer without their input, end that same message with the next unanswered question. Do NOT stop and wait.
@@ -364,9 +365,16 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
 
 === END SMS HARD RULES ===`
 
-  const systemPrompt = [baseSystemPrompt, financingBlock, pricingPolicyBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext, slotsBlock, leadContext, reasoningBlock, smsHardRules]
+  const staticPrefix = [baseSystemPrompt, financingBlock, pricingPolicyBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext]
     .filter(Boolean)
     .join("\n\n")
+  const dynamicTail = [slotsBlock, leadContext, reasoningBlock, smsHardRules]
+    .filter(Boolean)
+    .join("\n\n")
+  const systemPrompt: Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }> = [
+    { type: "text", text: staticPrefix, cache_control: { type: "ephemeral" } },
+    { type: "text", text: dynamicTail },
+  ]
 
   // Build message history for Claude
   const messages: Parameters<typeof anthropic.messages.create>[0]["messages"] = []
@@ -655,7 +663,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         tool_use_id: b.id!,
         content: b.id === findSlotsToolId
           ? toolResultText
-          : b.name === "update_lead_details" ? "Details saved to the lead file." : "Status updated.",
+          : b.name === "update_lead_details" ? "Details saved. Your reply must still move the conversation forward — a question or a slot offer, never a bare acknowledgment." : "Status updated.",
       }))
 
     const slotMessages = [
@@ -791,9 +799,9 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         type: "tool_result" as const,
         tool_use_id: b.id!,
         content: b.name === "update_lead_details"
-          ? "Details saved to the lead file. Now continue the conversation — send the lead your next SMS."
+          ? "Details saved to the lead file. Now send the lead your next SMS — it MUST move the conversation forward: your next unanswered gate question, or a slot offer. Never a bare acknowledgment like 'Perfect.' or 'Got it.'"
           : b.name === "update_lead_status"
-          ? "Status updated. Now continue the conversation — send the lead your next SMS."
+          ? "Status updated. Now send the lead your next SMS — it MUST move the conversation forward: your next unanswered gate question, or a slot offer. Never a bare acknowledgment."
           : action?.type === "cancel_appointment"
           ? "Appointment cancelled. Send a brief, warm confirmation to the lead that it's been cancelled."
           : action?.type === "reschedule_appointment"
@@ -1743,7 +1751,7 @@ function extractZip(address: string): string | null {
  * This allows technician specialization matching to work correctly even when
  * the lead record had no job_type set during conversation.
  */
-function inferJobType(notes: string): string | null {
+export function inferJobType(notes: string): string | null {
   if (!notes) return null
   const n = notes.toLowerCase()
   if (/commercial/.test(n))                                                  return "commercial_hvac"

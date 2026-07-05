@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
-import { processAndSave } from "@/lib/ai-engine"
+import { processAndSave, inferJobType } from "@/lib/ai-engine"
 import { sendSMS, validateTwilioSignature, formatPhone } from "@/lib/twilio"
 import { notifyAppointmentBooked, notifyNeedsAttention } from "@/lib/notifications"
 import { buildRepliedNotBookedSchedule } from "@/lib/sequences"
@@ -187,6 +187,7 @@ export async function POST(req: NextRequest) {
         source: "webhook",
         status: "new",
         metadata: { inbound_first_message: messageBody },
+        job_type: inferJobType(messageBody ?? ""),
       })
       .select("id, status, ai_paused, first_name, last_name")
       .single()

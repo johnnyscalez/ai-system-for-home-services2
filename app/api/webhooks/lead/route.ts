@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
-import { processAndSave } from "@/lib/ai-engine"
+import { processAndSave, inferJobType } from "@/lib/ai-engine"
 import { sendSMS, formatPhone } from "@/lib/twilio"
 import { notifyNewLead } from "@/lib/notifications"
 import { normalizeLead } from "@/lib/normalize-lead"
@@ -190,6 +190,9 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
         source_form_id: lead.source_form_id,
         metadata: lead.metadata,
         status: "just_came_in",
+        // Pre-classify from the form notes so the very first AI turn already
+        // runs the focused job-type playbook instead of the identify module
+        job_type: inferJobType(lead.notes ?? ""),
       })
       .select("id")
       .single()

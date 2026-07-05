@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
-import { processAndSave } from "@/lib/ai-engine"
+import { processAndSave, inferJobType } from "@/lib/ai-engine"
 import { sendSMS, formatPhone } from "@/lib/twilio"
 
 // Receives leads from Google Ads Lead Form Extensions.
@@ -97,6 +97,9 @@ export async function POST(req: NextRequest) {
         source_form_id: body.form_id || null,
         status: "just_came_in",
         metadata: { google_lead_id: body.lead_id, campaign_id: body.campaign_id },
+        // Google lead forms put custom question answers in user_column_data —
+        // classify from all field values (identity fields don't match keywords)
+        job_type: inferJobType(Object.values(fields).join(" ")),
       })
       .select("id")
       .single()
