@@ -5,7 +5,7 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import {
   Users, CalendarCheck, TrendingUp, DollarSign,
   ArrowUpRight, ArrowDownRight, Minus,
-  BarChart3, PieChart, GitMerge, HardHat,
+  BarChart3, PieChart, GitMerge, HardHat, Wrench,
   RefreshCw, Edit2, Check, X, ChevronDown,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
@@ -17,6 +17,8 @@ type TechRow = {
   id: string; name: string; status: string
   appointments: number; closedJobs: number; revenue: number
 }
+
+type JobTypeRow = { name: string; jobs: number; revenue: number; avgJob: number }
 
 type Deal = {
   id: string
@@ -53,6 +55,7 @@ type Props = {
   sourceCounts: Record<string, number>
   funnel: { stage: string; count: number }[]
   techPerformance: TechRow[]
+  jobTypePerformance: JobTypeRow[]
   technicians: Technician[]
   initialDeals: Deal[]
 }
@@ -221,6 +224,7 @@ export function ReportsClient({
   sourceCounts: initialSourceCounts,
   funnel: initialFunnel,
   techPerformance: initialTechPerf,
+  jobTypePerformance: initialJobTypePerf,
   technicians,
   initialDeals,
 }: Props) {
@@ -242,6 +246,7 @@ export function ReportsClient({
   const [sourceCounts, setSourceCounts]     = useState(initialSourceCounts)
   const [funnel, setFunnel]                 = useState(initialFunnel)
   const [techPerformance, setTechPerf]      = useState(initialTechPerf)
+  const [jobTypePerf, setJobTypePerf]       = useState(initialJobTypePerf)
   const [deals, setDeals]                   = useState<Deal[]>(initialDeals)
   const [editingDeal, setEditingDeal]       = useState<string | null>(null)
   const [editForm, setEditForm]             = useState<{ dealValue: string; closedJobType: string; closedTechnicianId: string; closedTechnicianName: string }>({ dealValue: "", closedJobType: "", closedTechnicianId: "", closedTechnicianName: "" })
@@ -268,6 +273,7 @@ export function ReportsClient({
       setSourceCounts(d.sourceCounts)
       setFunnel(d.funnel)
       setTechPerf(d.techPerformance)
+      setJobTypePerf(d.jobTypePerformance ?? [])
       // Also refresh deals for the new range
       const dr = await fetch(`/api/reports/deals?since=${r.from}&until=${r.until}`)
       if (dr.ok) { const dd = await dr.json(); setDeals(dd.deals ?? []) }
@@ -677,6 +683,82 @@ export function ReportsClient({
                   </tfoot>
                 )}
               </table>
+            </div>
+          )}
+        </motion.div>
+
+        {/* Revenue by Job Type — ranked most → least profitable */}
+        <motion.div
+          initial={{ opacity: 0, y: 20 }}
+          animate={{ opacity: 1, y: 0 }}
+          transition={{ duration: 0.4, delay: 0.5 }}
+          className="bg-white rounded-2xl border border-border/60 overflow-hidden mb-6"
+          style={{ boxShadow: "0 4px 24px rgba(77,124,15,0.06)" }}
+        >
+          <div className="px-6 py-4 border-b border-border/60 flex items-center gap-2">
+            <div className="w-7 h-7 rounded-lg bg-[#4D7C0F]/10 flex items-center justify-center">
+              <Wrench className="w-3.5 h-3.5 text-[#4D7C0F]" />
+            </div>
+            <h2 className="font-semibold text-sm">Revenue by Job Type</h2>
+            <span className="text-xs text-muted-foreground ml-1">— which jobs actually make you money, most to least</span>
+          </div>
+
+          {jobTypePerf.length === 0 ? (
+            <div className="px-6 py-10 text-center">
+              <Wrench className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
+              <p className="text-sm text-muted-foreground">No closed jobs in this period.</p>
+              <p className="text-xs text-muted-foreground mt-1">
+                Job types are recorded when a deal is closed — they&apos;ll rank here automatically.
+              </p>
+            </div>
+          ) : (
+            <div className="p-6 space-y-4">
+              {jobTypePerf.map((jt, i) => {
+                const maxRevenue = jobTypePerf[0]?.revenue || 1
+                return (
+                  <motion.div
+                    key={jt.name}
+                    initial={{ opacity: 0, x: -10 }}
+                    animate={{ opacity: 1, x: 0 }}
+                    transition={{ delay: 0.55 + i * 0.05 }}
+                    className="flex items-center gap-4"
+                  >
+                    <span className="w-6 text-center text-xs font-bold font-mono text-[#78716C] shrink-0">{i + 1}</span>
+                    <div className="flex-1 min-w-0">
+                      <div className="flex items-center justify-between gap-3 mb-1.5">
+                        <div className="flex items-center gap-2 min-w-0">
+                          <span className="text-sm font-semibold text-[#1C1917] truncate">{jt.name}</span>
+                          {i === 0 && jobTypePerf.length > 1 && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-[#4D7C0F]/10 text-[#4D7C0F] shrink-0">
+                              Top earner
+                            </span>
+                          )}
+                          {i === jobTypePerf.length - 1 && jobTypePerf.length > 2 && (
+                            <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full bg-slate-100 text-slate-500 shrink-0">
+                              Lowest
+                            </span>
+                          )}
+                        </div>
+                        <div className="flex items-baseline gap-3 shrink-0">
+                          <span className="text-xs text-[#78716C] whitespace-nowrap">
+                            {jt.jobs} job{jt.jobs === 1 ? "" : "s"} · avg ${jt.avgJob.toLocaleString()}
+                          </span>
+                          <span className="text-sm font-bold font-mono text-[#4D7C0F]">${jt.revenue.toLocaleString()}</span>
+                        </div>
+                      </div>
+                      <div className="h-2 rounded-full bg-[#F5F4F2] overflow-hidden">
+                        <div
+                          className="h-full rounded-full transition-all"
+                          style={{
+                            width: `${Math.max(3, Math.round((jt.revenue / maxRevenue) * 100))}%`,
+                            background: i === 0 ? "#4D7C0F" : "rgba(77,124,15,0.45)",
+                          }}
+                        />
+                      </div>
+                    </div>
+                  </motion.div>
+                )
+              })}
             </div>
           )}
         </motion.div>

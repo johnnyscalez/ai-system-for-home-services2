@@ -205,6 +205,21 @@ export default async function ReportsPage() {
     }
   }).sort((a, b) => b.revenue - a.revenue)
 
+  // Revenue by job type — same aggregation as /api/reports/stats (which
+  // recomputes this timeline-filtered when the user changes the range).
+  // Free-text field: group case-insensitively, blanks become Unspecified.
+  const jobTypeMap: Record<string, { name: string; jobs: number; revenue: number }> = {}
+  for (const d of closedDeals) {
+    const raw = (d.closed_job_type ?? "").trim()
+    const key = raw ? raw.toLowerCase() : "__unspecified__"
+    if (!jobTypeMap[key]) jobTypeMap[key] = { name: raw || "Unspecified", jobs: 0, revenue: 0 }
+    jobTypeMap[key].jobs++
+    jobTypeMap[key].revenue += Math.max(0, (Number(d.deal_value) || 0) - (Number(d.refund_amount) || 0))
+  }
+  const jobTypePerformance = Object.values(jobTypeMap)
+    .map(j => ({ ...j, avgJob: j.jobs > 0 ? Math.round(j.revenue / j.jobs) : 0 }))
+    .sort((a, b) => b.revenue - a.revenue)
+
   return (
     <ReportsClient
       leadsThisMonth={leadsThisMonth.length}
@@ -224,6 +239,7 @@ export default async function ReportsPage() {
       sourceCounts={sourceCounts}
       funnel={funnel}
       techPerformance={techPerformance}
+      jobTypePerformance={jobTypePerformance}
       technicians={allTechnicians}
       initialDeals={initialDeals}
     />

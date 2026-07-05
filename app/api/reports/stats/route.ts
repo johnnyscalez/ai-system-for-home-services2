@@ -189,6 +189,22 @@ export async function GET(req: NextRequest) {
     }
   }).sort((a, b) => b.revenue - a.revenue)
 
+  // Revenue by job type — closed_job_type is free text set when a deal is
+  // closed, so group case-insensitively on the trimmed value ("AC Install"
+  // and "ac install" are the same job) and bucket blanks as Unspecified.
+  // Revenue is net of refunds, same as everywhere else on this page.
+  const jobTypeMap: Record<string, { name: string; jobs: number; revenue: number }> = {}
+  for (const d of closedDeals) {
+    const raw = (d.closed_job_type ?? "").trim()
+    const key = raw ? raw.toLowerCase() : "__unspecified__"
+    if (!jobTypeMap[key]) jobTypeMap[key] = { name: raw || "Unspecified", jobs: 0, revenue: 0 }
+    jobTypeMap[key].jobs++
+    jobTypeMap[key].revenue += Math.max(0, (Number(d.deal_value) || 0) - (Number(d.refund_amount) || 0))
+  }
+  const jobTypePerformance = Object.values(jobTypeMap)
+    .map(j => ({ ...j, avgJob: j.jobs > 0 ? Math.round(j.revenue / j.jobs) : 0 }))
+    .sort((a, b) => b.revenue - a.revenue)
+
   return NextResponse.json({
     leadsInPeriod: leadsInPeriod.length,
     totalLeads: allLeads.length,
@@ -205,5 +221,6 @@ export async function GET(req: NextRequest) {
     sourceCounts,
     funnel,
     techPerformance,
+    jobTypePerformance,
   })
 }
