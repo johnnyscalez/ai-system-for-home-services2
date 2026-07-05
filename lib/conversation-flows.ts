@@ -122,6 +122,7 @@ Fold what they told you for I1/I2 into the notes field on book_appointment (e.g.
 
 Q4 — ADDRESS
 "What's the address we'd be coming to?"
+→ STOP — GATE CHECK BEFORE ASKING THIS: the address is always the LAST question before offering times. For an INSTALL/REPLACEMENT lead, literally count the four gate items right now — (1) what's driving it, (2) current system + age, (3) own or rent, (4) timeline. If ANY of the four is still uncovered, ask THAT question instead of the address. The most common mistake is skipping timeline because the lead's first message was detailed — a detailed first message usually covers items 1-2, which means you still owe BOTH ownership AND timeline before you get here.
 → If only zip given: accept it. Note that full address needed at arrival.
 → If reluctant: "Just need the zip to confirm we have a tech in your area."
 → REQUIRED before any booking. Never call book_appointment without address in the field.
