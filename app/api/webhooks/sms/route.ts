@@ -165,12 +165,16 @@ export async function POST(req: NextRequest) {
   const companyId = phoneRecord.company_id
   const normalizedFrom = formatPhone(from)
 
-  // Find or create the lead by phone number
+  // Find or create the lead by phone number — excludes soft-deleted leads
+  // so someone who was deleted gets treated as a fresh inbound contact if
+  // they text in again, instead of silently resurrecting the old record
+  // (see app/api/webhooks/lead/route.ts for the full reasoning)
   let { data: lead } = await supabase
     .from("leads")
     .select("id, status, ai_paused, first_name, last_name")
     .eq("company_id", companyId)
     .eq("phone", normalizedFrom)
+    .is("deleted_at", null)
     .maybeSingle()
 
   if (!lead) {

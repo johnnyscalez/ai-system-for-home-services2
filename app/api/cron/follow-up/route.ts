@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   // ── Process pending sequence steps ─────────────────────────────────────────
   const { data: dueSteps } = await supabase
     .from("sequences")
-    .select("*, leads(id, phone, status, ai_paused, ai_voice_paused, first_name, last_name, service_type)")
+    .select("*, leads(id, phone, status, ai_paused, ai_voice_paused, first_name, last_name, service_type, deleted_at)")
     .eq("status", "pending")
     .lte("scheduled_at", now.toISOString())
     .order("scheduled_at", { ascending: true })  // oldest-first so no step is skipped
@@ -37,12 +37,20 @@ export async function GET(req: NextRequest) {
   for (const step of dueSteps ?? []) {
     const lead = step.leads as {
       id: string; phone: string; status: string; ai_paused: boolean; ai_voice_paused: boolean;
-      first_name: string | null; last_name: string | null; service_type: string | null;
+      first_name: string | null; last_name: string | null; service_type: string | null; deleted_at: string | null;
     } | null
 
     if (!lead) continue
 
     const stepIsVoice = isVoiceStep(step.sequence_type, step.step)
+
+    // A deleted lead should never receive further automated outreach —
+    // deleting is meant to stop the relationship, not just hide it from
+    // the UI while the cron keeps texting on schedule underneath.
+    if (lead.deleted_at) {
+      await supabase.from("sequences").update({ status: "cancelled" }).eq("id", step.id)
+      continue
+    }
 
     // Cancel steps for terminal leads
     if (

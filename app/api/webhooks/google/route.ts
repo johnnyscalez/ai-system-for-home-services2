@@ -63,12 +63,15 @@ export async function POST(req: NextRequest) {
     fields["last_name"] ||
     (fullName.includes(" ") ? fullName.split(" ").slice(1).join(" ") : null)
 
-  // Upsert lead
+  // Upsert lead — excludes soft-deleted leads so a deleted lead's phone
+  // number gets a clean slate instead of silently resurrecting old history
+  // (see app/api/webhooks/lead/route.ts for the full reasoning)
   const { data: existing } = await supabase
     .from("leads")
     .select("id, status")
     .eq("company_id", company.id)
     .eq("phone", phone)
+    .is("deleted_at", null)
     .maybeSingle()
 
   let leadId: string

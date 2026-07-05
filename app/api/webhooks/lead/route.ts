@@ -150,12 +150,18 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
   }
   const phone = formatPhone(lead.phone)
 
-  // Upsert lead — idempotent on phone + company_id
+  // Upsert lead — idempotent on phone + company_id. Excludes soft-deleted
+  // leads (deleted_at set): a contractor who deletes a lead expects that
+  // person to get a clean slate if they reach out again, not to silently
+  // resurrect the deleted record and its old conversation history — which
+  // also meant the AI would take the "follow-up" path instead of writing a
+  // fresh opener, and could come back with nothing to send at all.
   const { data: existing } = await supabase
     .from("leads")
     .select("id, status")
     .eq("company_id", company.id)
     .eq("phone", phone)
+    .is("deleted_at", null)
     .maybeSingle()
 
   let leadId: string
