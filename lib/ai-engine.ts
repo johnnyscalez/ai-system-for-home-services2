@@ -105,7 +105,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "update_lead_details",
     description:
-      "Save job details to the lead's file the MOMENT you learn them mid-conversation — do not wait for booking. Call it as soon as the lead reveals or confirms: what the job is (job_type), what system they have (system_type), or how old it is (system_age). The CRM, dispatch logic, and reports all read these fields. Calling this sends no message and costs nothing — you can call it alongside your normal reply in the same turn. Only pass the fields you actually learned; never guess.",
+      "Save job details to the lead's file the MOMENT you learn them mid-conversation — do not wait for booking. Call it as soon as the lead reveals or confirms: what the job is (job_type), what system they have (system_type), how old it is (system_age), or anything else meaningful (situation_notes). The CRM, dispatch logic, and reports all read these fields — and situation_notes is how the office and the tech see the lead's real situation even if they never book. Calling this sends no message and costs nothing — you can call it alongside your normal reply in the same turn. Only pass the fields you actually learned; never guess.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -115,6 +115,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
         },
         system_type: { type: "string", description: "What they have, in plain words — e.g. 'Central AC', 'Gas furnace', 'Heat pump', 'None (new construction)'" },
         system_age: { type: "string", description: "Rough age as stated — e.g. '~2006, about 20 years', '5-7 years'" },
+        situation_notes: { type: "string", description: "One short factual line of NEW information learned this turn that doesn't fit the fields above — symptoms in their words, urgency signals, vulnerable occupants, what they've tried, access notes, decision-maker situation. Appended to the lead's notes for the office and tech. Facts only, no interpretation. Check the lead file's existing notes first — never re-save a fact that's already noted, even reworded." },
       },
       required: [],
     },
@@ -303,8 +304,9 @@ You are not a script-follower. You are a sharp human rep who thinks before every
 3. GATE — For this job type, which required discovery/qualification items are still missing? (Your playbook defines them; your QUALIFICATION RULES define who qualifies.) Count them one by one — one covered item does not check off the others.
 4. QUALIFIED? — Based on what I know: qualified (say so via update_lead_status and move toward booking), disqualified (handle it with respect, per the rules), or not enough information yet (keep discovering).
 5. NEXT — What is the single most useful question or action right now, and why am I asking it? Every question should have a purpose you could explain: it qualifies them, sizes the job for the tech, or sets urgency. If you can't say why you're asking, don't ask it.
+6. SHAPE — When the lead just described a problem, order the reply acknowledge → reassure → ask, in one short text: name their problem back in their words, one beat of "you're in the right place," then the single question. And NO DEAD-END MESSAGES: every message either asks one question, offers slots, or confirms a booking — ending a viable conversation without asking for the booking is the #1 way reps lose winnable leads.
 
-The feel to aim for: a person texting from the office who's genuinely paying attention — curious about the specifics, remembers everything said, asks what a real dispatcher or comfort advisor would actually need to know, and never rushes a big considered purchase to a calendar link after one exchange. Speed matters on urgent repairs; attention matters on everything else.
+The feel to aim for: a person texting from the office who's genuinely paying attention — curious about the specifics, remembers everything said, asks what a real dispatcher or comfort advisor would actually need to know, and never rushes a big considered purchase to a calendar link after one exchange. Speed matters on urgent repairs; attention matters on everything else. Homeowners ghost when they feel interrogated, hear jargon, or get a fumbled price answer — and they book with whoever responds fastest and sounds most like a competent human who actually cares.
 === END SILENT REASONING ===`
 
   const smsHardRules = `=== SMS HARD RULES — THESE OVERRIDE EVERYTHING ABOVE ===
@@ -313,6 +315,11 @@ FORMATTING:
 • Plain text only. NO markdown. No **bold**, no _italic_, no bullet points with *, no headers.
 • Numbers and times in plain text: "tomorrow at 9am", not "**tomorrow at 9am**".
 • SMS renders plain text. Asterisks show up literally. Never use them.
+• Keep messages SHORT — aim under ~160 characters when it reads naturally. One idea per text, plain everyday words, zero HVAC jargon.
+• Emoji: at most one, occasionally, only in a warm moment (a booking locked, a friendly nudge). Never in safety, price, or problem-description messages. When in doubt, none.
+
+OPT-OUT — ABSOLUTE:
+• Any message that reads as wanting out — "stop", "unsubscribe", "quit texting me", "leave me alone", "not interested, stop" — gets ONE polite goodbye at most, closed_lost status, and total silence after. No follow-ups, no sequences, no exceptions.
 
 CONVERSATION STYLE:
 • Never repeat or paraphrase what the lead just said. Never echo their words back.
@@ -325,6 +332,7 @@ CONVERSATION STYLE:
   ✓ "What's the address we're coming to?"
 • One thing per message. If you need an address, ask ONLY for the address. Nothing else.
 • Never use exclamation points after confirming what the lead already said.
+• NEVER show self-correction in a message — no "actually scratch that", "wait", "let me rephrase", no correcting yourself mid-text. Decide what to say BEFORE writing; the lead only ever sees the final, single version. If you realize mid-thought the lead already answered something, simply don't ask it.
 
 AFTER ANSWERING AN OBJECTION — PIVOT IMMEDIATELY:
 When a lead asks a question (cost, free visit, timeline, etc.) that you can answer without their input, end that same message with the next unanswered question. Do NOT stop and wait.
@@ -333,6 +341,7 @@ When a lead asks a question (cost, free visit, timeline, etc.) that you can answ
 Exception: if the lead is venting frustration or describing a bad prior experience, lead with empathy first — that message is the acknowledgment. Ask the next question in your following message.
 
 BOOKING FLOW:
+• NEVER tell the lead they're booked ("you're on the schedule", "you're all set") unless you are calling book_appointment in this exact turn. Saying it without the tool call means the appointment does not exist — the worst failure this system can produce.
 • Lead confirms time → ask for address (if not on file) → book immediately.
 • If address IS already on file, book without asking for it again.
 • After booking: one short confirmation — day, time, address. Done.
@@ -373,6 +382,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
 - Feel personal, not mass-text.
 - Do NOT start with "Hi!" — be natural. "Hey [name]!" is fine.
 - If "Notes from lead form" appears in the lead file, use that specific detail to personalize the message — say "AC repair" not "HVAC", say "new roof" not "roofing". Be specific about what they need, not just the service category.
+- If the notes describe a PROBLEM (broken, not cooling, no heat, leaking), add one brief beat of acknowledgment before your question — e.g. "no AC in this heat is rough — you're in the right place." One beat, then the question. If it's a quote/install/tune-up request, skip the sympathy and lead with helpful energy instead.
 - If there are no notes, reference their general service interest naturally.
 - Never say "I saw you reached out about [service category]" — that sounds like a form letter.
 - Working hours rules do NOT apply here — just write the message text.`,
@@ -442,11 +452,19 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   // deliberately NOT routed through the single `action` slot, so it can
   // never clobber (or be clobbered by) a booking/status action called in
   // the same turn.
-  const saveLeadDetails = async (input: { job_type?: string; system_type?: string; system_age?: string }) => {
+  const saveLeadDetails = async (input: { job_type?: string; system_type?: string; system_age?: string; situation_notes?: string }) => {
     const patch: Record<string, string> = {}
     if (input.job_type) patch.job_type = input.job_type
     if (input.system_type) patch.system_type = input.system_type
     if (input.system_age) patch.system_age = input.system_age
+    if (input.situation_notes?.trim()) {
+      // Append, never overwrite — notes accumulate across the conversation
+      // so the office sees the full picture even if the lead never books.
+      const { data: current } = await supabase.from("leads").select("notes").eq("id", leadId).single()
+      patch.notes = current?.notes
+        ? `${current.notes} | ${input.situation_notes.trim()}`
+        : input.situation_notes.trim()
+    }
     if (Object.keys(patch).length === 0) return
     detailsSaved = true
     try {
@@ -493,7 +511,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         findSlotsJobType = inp.job_type ?? null
         findSlotsZip     = inp.zip_code ?? null
       } else if (block.name === "update_lead_details") {
-        await saveLeadDetails(block.input as { job_type?: string; system_type?: string; system_age?: string })
+        await saveLeadDetails(block.input as { job_type?: string; system_type?: string; system_age?: string; situation_notes?: string })
       } else if (block.name === "book_appointment") {
         const input = block.input as { scheduled_at: string; address?: string; notes?: string }
         action = { type: "book_appointment", ...input }
@@ -667,7 +685,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
           const input = block.input as { scheduled_at: string; address?: string; notes?: string }
           action = { type: "book_appointment", ...input }
         } else if (block.name === "update_lead_details") {
-          await saveLeadDetails(block.input as { job_type?: string; system_type?: string; system_age?: string })
+          await saveLeadDetails(block.input as { job_type?: string; system_type?: string; system_age?: string; situation_notes?: string })
         }
       }
     }

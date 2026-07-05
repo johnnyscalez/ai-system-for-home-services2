@@ -35,6 +35,26 @@ const SCENARIOS: Record<string, { notes: string; phone: string; name: string; re
       "morning works",
     ],
   },
+  gas: {
+    notes: "furnace making weird smell",
+    phone: "+17045550994",
+    name: "SimGas",
+    replies: [
+      "theres kind of a rotten egg smell coming from near the furnace",
+    ],
+  },
+  maintenance: {
+    notes: "yearly AC tune up",
+    phone: "+17045550995",
+    name: "SimTune",
+    replies: [
+      "just the AC, before it gets really hot",
+      "unit is maybe 8 years old, honestly dont remember the last service",
+      "no plan with you guys yet",
+      "5000 Park Rd, Charlotte, NC 28209",
+      "second one works",
+    ],
+  },
   impatient: {
     notes: "Looking to install a new unit",
     phone: "+17045550993",
@@ -82,7 +102,7 @@ async function main() {
 
   // Final state assertions
   const { data: final } = await db.from("leads")
-    .select("status, job_type, system_type, system_age, address")
+    .select("status, job_type, system_type, system_age, address, notes")
     .eq("id", lead.id).single()
   console.log("── final lead state ──")
   console.log(final)
