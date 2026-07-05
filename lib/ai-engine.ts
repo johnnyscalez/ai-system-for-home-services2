@@ -24,7 +24,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "find_available_slots",
     description:
-      "Call this the moment you have BOTH (1) job type from conversation AND (2) a zip code or full address from the lead — regardless of what other questions are still unanswered. Do not wait. Do not ask another question first. If the lead volunteers their address mid-conversation, this is your trigger. Returns real slots filtered by technician availability and zip coverage. Never offer times without calling this first.",
+      "Look up real available appointment slots, filtered by technician availability and zip coverage. Call this when your playbook's BOOKING GATE for this lead's job type is satisfied (the required discovery questions answered — or the lead explicitly pushed to book immediately) AND you have a zip code or address. Do NOT call it just because you happen to have an address early — an address in hand does not mean discovery is done; finish the gate first. Never offer times without calling this first, and never invent times.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -93,13 +93,30 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "update_lead_status",
     description:
-      "Update the lead's status. Use 'qualified' the moment the lead has answered the discover-stage questions (what's wrong, how old the unit is, whether they own the home). Call this DURING Stage 2–3, NOT after booking — it moves them into the qualified pipeline. Do not wait until after the appointment is booked. Use 'closed_lost' when they explicitly say they're not interested or already chose someone else. Use 'needs_attention' when they seem frustrated, it's a renter without landlord auth, or a commercial property. Use 'returning_client' when an existing customer (RETURNING CUSTOMER in the lead file) initiates a new service request — this re-enters them into the active pipeline.",
+      "Update the lead's status. Use 'qualified' the moment the lead has answered the BOOKING GATE questions for their job type with nothing disqualifying. Call this DURING discovery, NOT after booking — it moves them into the qualified pipeline. Do not wait until after the appointment is booked. Use 'closed_lost' when they explicitly say they're not interested or already chose someone else. Use 'needs_attention' when they seem frustrated, it's a renter without landlord auth, or a commercial property. Use 'returning_client' when an existing customer (RETURNING CUSTOMER in the lead file) initiates a new service request — this re-enters them into the active pipeline.",
     input_schema: {
       type: "object" as const,
       properties: {
         status: { type: "string", enum: ["qualified", "closed_lost", "needs_attention", "returning_client"] },
       },
       required: ["status"],
+    },
+  },
+  {
+    name: "update_lead_details",
+    description:
+      "Save job details to the lead's file the MOMENT you learn them mid-conversation — do not wait for booking. Call it as soon as the lead reveals or confirms: what the job is (job_type), what system they have (system_type), or how old it is (system_age). The CRM, dispatch logic, and reports all read these fields. Calling this sends no message and costs nothing — you can call it alongside your normal reply in the same turn. Only pass the fields you actually learned; never guess.",
+    input_schema: {
+      type: "object" as const,
+      properties: {
+        job_type: {
+          type: "string",
+          description: "One of: ac_repair, ac_installation, ac_not_cooling, furnace_repair, furnace_not_working, heat_pump_repair, heat_pump_installation, mini_split_repair, mini_split_installation, duct_cleaning, duct_repair, boiler_repair, commercial_hvac, hvac_tune_up, hvac_replacement, air_quality, electrical, plumbing, general",
+        },
+        system_type: { type: "string", description: "What they have, in plain words — e.g. 'Central AC', 'Gas furnace', 'Heat pump', 'None (new construction)'" },
+        system_age: { type: "string", description: "Rough age as stated — e.g. '~2006, about 20 years', '5-7 years'" },
+      },
+      required: [],
     },
   },
 ]
@@ -278,6 +295,18 @@ export async function runConversation(
     : []
   const qualificationBlock = buildQualificationBlock(agent?.disqualifiers ?? null, qualifyingQs)
 
+  const reasoningBlock = `=== BEFORE EVERY REPLY — SILENT REASONING (never show any of this to the lead) ===
+You are not a script-follower. You are a sharp human rep who thinks before every message. Run through this, in order, every single turn:
+
+1. JOB — What exactly does this lead need? If you can't name the job type yet, your next message asks it — nothing else matters until you know. The moment you learn it (or any system details), call update_lead_details so it's saved to their file.
+2. KNOWN — What has this lead already told me, anywhere? Re-read the lead file and the whole conversation, including things they volunteered without being asked. Never re-ask any of it. Volunteered info counts as captured.
+3. GATE — For this job type, which required discovery/qualification items are still missing? (Your playbook defines them; your QUALIFICATION RULES define who qualifies.) Count them one by one — one covered item does not check off the others.
+4. QUALIFIED? — Based on what I know: qualified (say so via update_lead_status and move toward booking), disqualified (handle it with respect, per the rules), or not enough information yet (keep discovering).
+5. NEXT — What is the single most useful question or action right now, and why am I asking it? Every question should have a purpose you could explain: it qualifies them, sizes the job for the tech, or sets urgency. If you can't say why you're asking, don't ask it.
+
+The feel to aim for: a person texting from the office who's genuinely paying attention — curious about the specifics, remembers everything said, asks what a real dispatcher or comfort advisor would actually need to know, and never rushes a big considered purchase to a calendar link after one exchange. Speed matters on urgent repairs; attention matters on everything else.
+=== END SILENT REASONING ===`
+
   const smsHardRules = `=== SMS HARD RULES — THESE OVERRIDE EVERYTHING ABOVE ===
 
 FORMATTING:
@@ -326,7 +355,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
 
 === END SMS HARD RULES ===`
 
-  const systemPrompt = [baseSystemPrompt, financingBlock, pricingPolicyBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext, slotsBlock, leadContext, smsHardRules]
+  const systemPrompt = [baseSystemPrompt, financingBlock, pricingPolicyBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext, slotsBlock, leadContext, reasoningBlock, smsHardRules]
     .filter(Boolean)
     .join("\n\n")
 
@@ -407,6 +436,25 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   let findSlotsToolId:    string | null = null
   let findSlotsJobType:   string | null = null
   let findSlotsZip:       string | null = null
+  let detailsSaved = false
+
+  // update_lead_details is a pure side-effect write, executed immediately —
+  // deliberately NOT routed through the single `action` slot, so it can
+  // never clobber (or be clobbered by) a booking/status action called in
+  // the same turn.
+  const saveLeadDetails = async (input: { job_type?: string; system_type?: string; system_age?: string }) => {
+    const patch: Record<string, string> = {}
+    if (input.job_type) patch.job_type = input.job_type
+    if (input.system_type) patch.system_type = input.system_type
+    if (input.system_age) patch.system_age = input.system_age
+    if (Object.keys(patch).length === 0) return
+    detailsSaved = true
+    try {
+      await supabase.from("leads").update(patch).eq("id", leadId)
+    } catch (err) {
+      console.error("[ai-engine] update_lead_details write failed:", err)
+    }
+  }
 
   for (const block of claudeResponse.content) {
     if (block.type === "text") {
@@ -417,6 +465,8 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         const inp = block.input as { job_type?: string; zip_code?: string }
         findSlotsJobType = inp.job_type ?? null
         findSlotsZip     = inp.zip_code ?? null
+      } else if (block.name === "update_lead_details") {
+        await saveLeadDetails(block.input as { job_type?: string; system_type?: string; system_age?: string })
       } else if (block.name === "book_appointment") {
         const input = block.input as { scheduled_at: string; address?: string; notes?: string }
         action = { type: "book_appointment", ...input }
@@ -551,7 +601,9 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       .map(b => ({
         type: "tool_result" as const,
         tool_use_id: b.id!,
-        content: b.id === findSlotsToolId ? toolResultText : "Status updated.",
+        content: b.id === findSlotsToolId
+          ? toolResultText
+          : b.name === "update_lead_details" ? "Details saved to the lead file." : "Status updated.",
       }))
 
     const slotMessages = [
@@ -577,6 +629,8 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         } else if (block.name === "book_appointment") {
           const input = block.input as { scheduled_at: string; address?: string; notes?: string }
           action = { type: "book_appointment", ...input }
+        } else if (block.name === "update_lead_details") {
+          await saveLeadDetails(block.input as { job_type?: string; system_type?: string; system_age?: string })
         }
       }
     }
@@ -664,15 +718,21 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   // If Claude used a tool and needs to continue to get the text response,
   // send tool result back and get the final text.
   // Provide tool_results for ALL tool_use blocks — Claude sometimes calls multiple
-  // tools in one turn (e.g. update_lead_status + book_appointment). Every tool_use
-  // must have a corresponding tool_result or the API returns a 400.
-  if (action && !responseText) {
+  // tools in one turn (e.g. update_lead_details + update_lead_status). Every tool_use
+  // must have a corresponding tool_result or the API returns a 400. This also covers
+  // the details/status-only turn (no action-slot tool, no text): the model saved data
+  // but still owes the lead an actual reply.
+  if ((action || detailsSaved) && !responseText) {
     const actionToolResults = (claudeResponse.content as Array<{ type: string; id?: string; name?: string }>)
       .filter(b => b.type === "tool_use")
       .map(b => ({
         type: "tool_result" as const,
         tool_use_id: b.id!,
-        content: action?.type === "cancel_appointment"
+        content: b.name === "update_lead_details"
+          ? "Details saved to the lead file. Now continue the conversation — send the lead your next SMS."
+          : b.name === "update_lead_status"
+          ? "Status updated. Now continue the conversation — send the lead your next SMS."
+          : action?.type === "cancel_appointment"
           ? "Appointment cancelled. Send a brief, warm confirmation to the lead that it's been cancelled."
           : action?.type === "reschedule_appointment"
           ? "Appointment rescheduled. Confirm the new date and time to the lead in a short, friendly text."
