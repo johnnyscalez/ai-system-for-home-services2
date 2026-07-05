@@ -276,8 +276,14 @@ export async function runConversation(
   const pricingPolicyBlock = (() => {
     const info = (kb as { pricing_info?: string } | null)?.pricing_info
     if (!info) return ""
-    const feeLines = info.split("\n").map((l: string) => l.trim()).filter((l: string) =>
-      /service.?call|trip.?charge|trip.?fee|visit.?fee|diagnostic.?fee|call.?out|dispatch.?fee/i.test(l)
+    // Split on sentences as well as newlines — companies often write their
+    // whole pricing blurb as one line, and grabbing the full line dragged
+    // repair/replacement price RANGES into the fee policy block, which the
+    // model then dutifully quoted to a lead (observed live: "repairs
+    // typically run $250-$1,400"). Quoting ranges is the #1 banned move.
+    const feeLines = info.split(/\n|(?<=\.)\s+/).map((l: string) => l.trim()).filter((l: string) =>
+      /service.?call|trip.?charge|trip.?fee|visit.?fee|diagnostic.?fee|call.?out|dispatch.?fee/i.test(l) &&
+      !/repair.{0,30}\$|replacement.{0,30}\$|install.{0,30}\$/i.test(l)
     )
     if (feeLines.length === 0) return ""
     return [
@@ -287,6 +293,7 @@ export async function runConversation(
       ...feeLines.map((l: string) => `• ${l.replace(/^[•\-*]\s*/, "")}`),
       "",
       `Never say "free to come out" unless this policy explicitly says so. Never contradict this policy.`,
+      `NEVER quote repair, replacement, or install price ranges — even if they appear in company materials. The visit/diagnostic fee above is the ONLY number you may state.`,
       "=== END SERVICE CALL FEE POLICY ===",
     ].join("\n")
   })()
