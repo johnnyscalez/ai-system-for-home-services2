@@ -183,7 +183,7 @@ function LeakCounter() {
 // WOUND HERO — shared shell; each page passes its ad-matched headline
 // ─────────────────────────────────────────────────────────────────────────────
 export function WoundHero({
-  eyebrow = "For HVAC shops running 5+ trucks",
+  eyebrow = "For HVAC shops running 5+ techs",
   line1,
   line2,
   sub,
@@ -871,7 +871,44 @@ export function WedgeSection() {
 // ─────────────────────────────────────────────────────────────────────────────
 type FormPhase = "form" | "qualified" | "noqual"
 
-const QUALIFYING_REVENUE = ["2-5M", "5-10M", "10M+"]
+// Qualification is a function of BOTH fields, not techs alone — revenue is
+// doing double duty as "can he afford it" and, divided by techs, "is this a
+// well-run shop or a drowning one." See REVENUE_ORDER below for the exact
+// per-tier floors.
+const REVENUE_ORDER = ["<1M", "1-2M", "2-5M", "5-10M", "10M+"] as const
+function revenueAtLeast(revenue: string, floor: (typeof REVENUE_ORDER)[number]): boolean {
+  return REVENUE_ORDER.indexOf(revenue as (typeof REVENUE_ORDER)[number]) >= REVENUE_ORDER.indexOf(floor)
+}
+
+// 1-2 techs: never — no team to dispatch between, no per-tech performance
+//   to compare, the differentiator half of the product is dead weight.
+// 3-4 techs: needs $2M+ revenue — below that, price is a painful slice of
+//   a shop netting ~8% on an $800K-$1M business; the front-office pains
+//   this solves mostly don't exist yet. At $2M+ it's the exceptional
+//   operator ($500K+/tech) worth every minute of a call.
+// 5-9 techs: needs $1-2M+ revenue (i.e. anything but "Under $1M") — below
+//   $1M the per-tech economics don't pencil for a high-ticket product.
+// 10+ techs: needs $2M+ revenue — more techs need proportionally MORE
+//   revenue to clear the ~$200K/tech viability floor, not less; 10+ techs
+//   on only $1-2M is a worse ratio than a 5-tech shop at the same revenue.
+function isQualified(techs: string, revenue: string): boolean {
+  if (techs === "5-9") return revenueAtLeast(revenue, "1-2M")
+  if (techs === "3-4" || techs === "10+") return revenueAtLeast(revenue, "2-5M")
+  return false // 1-2 techs
+}
+
+// Priority signal only — never gates qualification, just tells the CRM and
+// the SMS agent who to fight hardest for. Revenue-per-tech, estimated from
+// bucket midpoints (open-ended top buckets use a representative value, not
+// a true midpoint): $300K+/tech = A, $200-300K/tech = B, else C.
+const TECH_ESTIMATE: Record<string, number> = { "1-2": 1.5, "3-4": 3.5, "5-9": 7, "10+": 12 }
+const REVENUE_ESTIMATE: Record<string, number> = { "<1M": 0.75, "1-2M": 1.5, "2-5M": 3.5, "5-10M": 7.5, "10M+": 12 }
+function leadTier(techs: string, revenue: string): "A" | "B" | "C" {
+  const perTech = (REVENUE_ESTIMATE[revenue] * 1_000_000) / TECH_ESTIMATE[techs]
+  if (perTech >= 300_000) return "A"
+  if (perTech >= 200_000) return "B"
+  return "C"
+}
 
 const inputStyle: React.CSSProperties = {
   background: "#FFFFFF",
@@ -891,14 +928,20 @@ export function LeadFormSection({ source }: { source: string }) {
   const [email, setEmail] = useState("")
   const [trucks, setTrucks] = useState("")
   const [revenue, setRevenue] = useState("")
+  // Only 1-2 techs disqualifies on headcount alone; every other unqualified
+  // combination fails on revenue-for-that-headcount instead — a single
+  // "come back at 5 techs" message would be factually wrong for e.g. a
+  // 6-tech shop under $1M, so the not-a-fit copy branches on which one
+  // actually applied.
+  const [noqualReason, setNoqualReason] = useState<"headcount" | "revenue">("headcount")
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     if (!e.currentTarget.reportValidity()) return
 
-    const qualified =
-      trucks === "5-9" || trucks === "10+" ||
-      (trucks === "3-4" && QUALIFYING_REVENUE.includes(revenue))
+    const qualified = isQualified(trucks, revenue)
+    const tier = qualified ? leadTier(trucks, revenue) : undefined
+    if (!qualified) setNoqualReason(trucks === "1-2" ? "headcount" : "revenue")
 
     // Same-origin proxy — see app/api/lead-intake/route.ts for why this
     // doesn't call the agent directly (the agent's shared secret must never
@@ -906,7 +949,7 @@ export function LeadFormSection({ source }: { source: string }) {
     fetch("/api/lead-intake", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ first_name: firstName, phone, email, trucks, revenue, qualified, angle: source }),
+      body: JSON.stringify({ first_name: firstName, phone, email, trucks, revenue, qualified, tier, angle: source }),
     }).catch(() => {})
 
     // Meta Pixel: fire QualifiedLead ONLY for qualified submissions.
@@ -950,7 +993,7 @@ export function LeadFormSection({ source }: { source: string }) {
                 <div className="grid sm:grid-cols-2 gap-4 mb-4">
                   <div>
                     <label htmlFor="lf-trucks" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
-                      How many service trucks do you run?
+                      How many techs do you run?
                     </label>
                     <select id="lf-trucks" required value={trucks} onChange={(e) => setTrucks(e.target.value)}
                             className="focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500"
@@ -1081,17 +1124,39 @@ export function LeadFormSection({ source }: { source: string }) {
                   style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
                 Straight answer: we&rsquo;re not the right fit yet.
               </h2>
-              <p className="text-base leading-relaxed mb-4" style={{ color: C.muted }}>
-                FieldBuilt is built for shops running 5+ trucks — at your size, the dispatch and
-                tech-tracking half of the system wouldn&rsquo;t earn its keep, and I&rsquo;d rather
-                tell you that now than waste your time on a call.
-              </p>
-              <p className="text-base leading-relaxed mb-7" style={{ color: C.muted }}>
-                <strong style={{ color: C.text }}>What I&rsquo;d do in your seat:</strong>{" "}
-                nail response speed first. Answer every lead inside 5 minutes — even with a simple
-                auto-text — and you&rsquo;ll out-book most shops your size. When you&rsquo;re at 5
-                trucks and the front desk starts drowning, come back. I&rsquo;ll remember you.
-              </p>
+              {noqualReason === "headcount" ? (
+                <>
+                  <p className="text-base leading-relaxed mb-4" style={{ color: C.muted }}>
+                    FieldBuilt is built for shops with a team big enough to dispatch and track
+                    between — at your size there&rsquo;s no schedule to optimize and no per-tech
+                    performance to compare, so the differentiator half of the system would sit
+                    unused. I&rsquo;d rather tell you that now than waste your time on a call.
+                  </p>
+                  <p className="text-base leading-relaxed mb-7" style={{ color: C.muted }}>
+                    <strong style={{ color: C.text }}>What I&rsquo;d do in your seat:</strong>{" "}
+                    nail response speed first. Answer every lead inside 5 minutes — even with a
+                    simple auto-text — and you&rsquo;ll out-book most shops your size. When
+                    you&rsquo;re running a real team and the front desk starts drowning, come
+                    back. I&rsquo;ll remember you.
+                  </p>
+                </>
+              ) : (
+                <>
+                  <p className="text-base leading-relaxed mb-4" style={{ color: C.muted }}>
+                    FieldBuilt is built for shops where the revenue already backs up the team
+                    size — at your numbers, the math is tight enough that a new system cost would
+                    eat into margin instead of protecting it. I&rsquo;d rather tell you that now
+                    than waste your time on a call.
+                  </p>
+                  <p className="text-base leading-relaxed mb-7" style={{ color: C.muted }}>
+                    <strong style={{ color: C.text }}>What I&rsquo;d do in your seat:</strong>{" "}
+                    nail response speed first — answer every lead inside 5 minutes, even with a
+                    simple auto-text — and tighten up pricing before adding a new system cost on
+                    top. When the revenue catches up to the team, come back. I&rsquo;ll remember
+                    you.
+                  </p>
+                </>
+              )}
               <a href="https://fieldbuiltai.com"
                  className="flex items-center justify-center gap-2 w-full font-bold text-white py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5 text-lg"
                  style={{ background: C.text }}>
