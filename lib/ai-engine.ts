@@ -456,6 +456,33 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     }
   }
 
+  // update_lead_status is also executed immediately, for the same reason —
+  // the model is coached to call it DURING discovery, which means it now
+  // routinely co-occurs with book_appointment in the same turn. When both
+  // shared the single `action` slot, whichever block came last silently
+  // clobbered the other: observed live as the lead being told "you're on
+  // the schedule" while no appointment was ever created, because
+  // update_lead_status arrived after book_appointment and overwrote it.
+  // The status write happens here; the action slot only carries it when
+  // nothing more important claimed the slot (the SMS webhook still reads
+  // the action for its needs_attention owner notification).
+  const saveLeadStatus = async (status: string) => {
+    const legacyMap: Record<string, string> = {
+      qualified: "qualified",
+      closed_lost: "lost",
+      needs_attention: "needs_attention",
+      returning_client: "contacted",
+    }
+    try {
+      await supabase
+        .from("leads")
+        .update({ status: legacyMap[status] ?? status, last_message_at: new Date().toISOString() })
+        .eq("id", leadId)
+    } catch (err) {
+      console.error("[ai-engine] update_lead_status write failed:", err)
+    }
+  }
+
   for (const block of claudeResponse.content) {
     if (block.type === "text") {
       responseText = block.text.trim()
@@ -478,7 +505,10 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         action = { type: "reschedule_appointment", ...input }
       } else if (block.name === "update_lead_status") {
         const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention" }
-        action = { type: "update_status", status: input.status }
+        await saveLeadStatus(input.status)
+        // Only claim the action slot when nothing more important has —
+        // a status update must never displace a booking from the same turn.
+        if (!action) action = { type: "update_status", status: input.status }
       } else if (block.name === "request_callback") {
         action = { type: "request_callback" }
       }
@@ -489,6 +519,10 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   // That text is always "thinking out loud" (e.g. "Let me check...") — the real SMS
   // comes from the slot-flow response below, never from the same turn as the tool call.
   if (findSlotsToolId) responseText = ""
+
+  // Bracket-only text is the model narrating an action instead of writing
+  // the SMS — never send stage directions to a lead's phone.
+  if (/^\s*\[[^\]]*\]\s*$/.test(responseText)) responseText = ""
 
   // ── find_available_slots: run the lookup, save slot→tech map, get Claude's slot-offer text ──
   if (findSlotsToolId) {
@@ -625,7 +659,10 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       else if (block.type === "tool_use") {
         if (block.name === "update_lead_status") {
           const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention" }
-          action = { type: "update_status", status: input.status }
+          await saveLeadStatus(input.status)
+          if (!action || action.type === "update_status") {
+            action = { type: "update_status", status: input.status }
+          }
         } else if (block.name === "book_appointment") {
           const input = block.input as { scheduled_at: string; address?: string; notes?: string }
           action = { type: "book_appointment", ...input }
@@ -634,6 +671,13 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         }
       }
     }
+
+    // A response that is ONLY a bracketed meta line (observed live:
+    // "[calling find_available_slots for new install / zip 28211]") is the
+    // model narrating a tool call instead of writing the SMS. Sending it
+    // would put literal stage directions on a lead's phone — treat it as
+    // no response so the forced-reply fallback below kicks in.
+    if (/^\s*\[[^\]]*\]\s*$/.test(responseText)) responseText = ""
 
     // Fallback: if Claude called a tool but produced no text, force a text-only reply.
     // Provide tool_results for ALL tool_use blocks in slotReply — not just the first.
