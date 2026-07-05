@@ -48,6 +48,17 @@ const SCENARIOS: Record<string, { notes: string; phone: string; name: string; re
       "first one",
     ],
   },
+  price: {
+    notes: "AC not cooling",
+    phone: "+17045550997",
+    name: "SimPrice",
+    replies: [
+      "its blowing warm air since this morning",
+      "before we go further how much is this gonna run me?",
+      "cant you just gimme a rough range?",
+      "fine. 2200 Monroe Rd, Charlotte NC 28205",
+    ],
+  },
   gas: {
     notes: "furnace making weird smell",
     phone: "+17045550994",

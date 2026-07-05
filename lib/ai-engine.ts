@@ -271,29 +271,28 @@ export async function runConversation(
     ? `=== FINANCING OPTIONS (know this precisely — leads ask about this) ===\n${kb.financing_options}\n=== END FINANCING ===`
     : ""
 
-  // Dynamically extract service call / trip charge fee policy from knowledge base.
-  // NEVER hardcode whether a visit is free — it varies by company.
+  // Give the model the company's RAW pricing info plus hard rules, and let
+  // it identify the visit fee semantically — whatever the company calls it.
+  // The previous regex extractor failed both ways: synonyms it didn't know
+  // ("consultation fee", "$79 to come out") silently dropped the entire
+  // policy block, and its dollar-range filter could nuke legitimate lines
+  // like "Service call $89, repairs from $250". Phrasing recognition is a
+  // language task — the model's job, not a regex's. The block now ALWAYS
+  // exists (even with no pricing info at all) so the never-assume /
+  // never-quote rules are always in force.
   const pricingPolicyBlock = (() => {
-    const info = (kb as { pricing_info?: string } | null)?.pricing_info
-    if (!info) return ""
-    // Split on sentences as well as newlines — companies often write their
-    // whole pricing blurb as one line, and grabbing the full line dragged
-    // repair/replacement price RANGES into the fee policy block, which the
-    // model then dutifully quoted to a lead (observed live: "repairs
-    // typically run $250-$1,400"). Quoting ranges is the #1 banned move.
-    const feeLines = info.split(/\n|(?<=\.)\s+/).map((l: string) => l.trim()).filter((l: string) =>
-      /service.?call|trip.?charge|trip.?fee|visit.?fee|diagnostic.?fee|call.?out|dispatch.?fee/i.test(l) &&
-      !/repair.{0,30}\$|replacement.{0,30}\$|install.{0,30}\$/i.test(l)
-    )
-    if (feeLines.length === 0) return ""
+    const info = (kb as { pricing_info?: string } | null)?.pricing_info?.trim()
     return [
-      "=== SERVICE CALL FEE POLICY — USE THIS WHEN LEADS ASK ABOUT COST TO COME OUT ===",
-      `When leads ask "Is it free?", "Do you charge to come out?", or "How much just to visit?", answer using ONLY the following — never assume or guess:`,
-      "",
-      ...feeLines.map((l: string) => `• ${l.replace(/^[•\-*]\s*/, "")}`),
-      "",
-      `Never say "free to come out" unless this policy explicitly says so. Never contradict this policy.`,
-      `NEVER quote repair, replacement, or install price ranges — even if they appear in company materials. The visit/diagnostic fee above is the ONLY number you may state.`,
+      "=== SERVICE CALL FEE POLICY — THE ONLY PRICES YOU MAY EVER DISCUSS ===",
+      info
+        ? "The company's raw pricing information is below. From it, the ONLY number you may ever state to a lead is the fee for the visit itself — whatever the company calls it: service call, service fee, trip charge, visit fee, diagnostic fee, dispatch fee, call-out fee, consultation, assessment, \"$X to come out\", or any similar wording. If that fee is waived or credited toward the work and the info says so, always say that too — it's your strongest line."
+        : "This company has not provided any pricing information.",
+      ...(info ? ["--- COMPANY PRICING INFO (raw, verbatim from the company) ---", info, "--- END COMPANY PRICING INFO ---"] : []),
+      "HARD RULES, NO EXCEPTIONS:",
+      "• Any job, repair, replacement, or install prices/ranges in the info above are INTERNAL REFERENCE ONLY — never state them, never hint at them, never confirm or deny a number the lead floats (\"is it more than $500?\" still gets no number). The tech gives the exact, honest price on-site before any work happens.",
+      "• If no visit/service-call fee appears above: do NOT assume the visit is free, and do NOT invent or estimate a fee. Say the tech provides an exact price on-site before any work; if the lead pushes specifically on what the visit itself costs, say the office confirms that when the appointment is set — never a guess.",
+      "• Never say \"free to come out\" or \"free estimate\" unless the info above explicitly says so (and if free applies only to estimates/replacements but not service calls, keep that distinction exact).",
+      "• Make ZERO assumptions beyond what is written above. Raw information only.",
       "=== END SERVICE CALL FEE POLICY ===",
     ].join("\n")
   })()
