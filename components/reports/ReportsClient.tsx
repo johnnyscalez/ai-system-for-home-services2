@@ -574,11 +574,22 @@ export function ReportsClient({
                     <th className="text-left px-6 py-3">Technician</th>
                     <th className="text-center px-4 py-3">Appointments booked</th>
                     <th className="text-center px-4 py-3">Jobs closed</th>
+                    <th className="text-center px-4 py-3">Close rate</th>
                     <th className="text-right px-6 py-3">Revenue generated</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-border/40">
-                  {techPerformance.map((tech, i) => (
+                  {techPerformance.map((tech, i) => {
+                    // Close rate = jobs closed ÷ AI-booked appointments, both
+                    // within the selected period. Capped at 100% for display:
+                    // a deal closed this period from an appointment booked in
+                    // a previous period can push the raw ratio over 100%,
+                    // which reads as a bug — the raw counts are right beside
+                    // it either way. Null when there's no denominator.
+                    const closeRate = tech.appointments > 0
+                      ? Math.min(100, Math.round((tech.closedJobs / tech.appointments) * 100))
+                      : null
+                    return (
                     <motion.tr
                       key={tech.id}
                       initial={{ opacity: 0, x: -10 }}
@@ -611,16 +622,19 @@ export function ReportsClient({
                         </div>
                       </td>
                       <td className="px-4 py-4 text-center">
-                        <div className="flex flex-col items-center">
-                          <span className="text-lg font-bold text-[#1C1917] font-mono">{tech.closedJobs}</span>
-                          <div className="flex items-center gap-1 mt-0.5">
-                            {tech.appointments > 0 && (
-                              <span className="text-[10px] text-[#78716C]">
-                                {Math.round((tech.closedJobs / tech.appointments) * 100)}% close rate
-                              </span>
-                            )}
+                        <span className="text-lg font-bold text-[#1C1917] font-mono">{tech.closedJobs}</span>
+                      </td>
+                      <td className="px-4 py-4 text-center">
+                        {closeRate !== null ? (
+                          <div className="flex flex-col items-center gap-1">
+                            <span className="text-lg font-bold font-mono text-[#1C1917]">{closeRate}%</span>
+                            <div className="w-16 h-1.5 rounded-full bg-[#E7E5E4] overflow-hidden">
+                              <div className="h-full rounded-full bg-[#4D7C0F]" style={{ width: `${closeRate}%` }} />
+                            </div>
                           </div>
-                        </div>
+                        ) : (
+                          <span className="text-sm text-[#78716C]" title="No AI-booked appointments in this period">—</span>
+                        )}
                       </td>
                       <td className="px-6 py-4 text-right">
                         <span className={cn(
@@ -636,7 +650,8 @@ export function ReportsClient({
                         )}
                       </td>
                     </motion.tr>
-                  ))}
+                    )
+                  })}
                 </tbody>
                 {techPerformance.length > 1 && (
                   <tfoot>
@@ -647,6 +662,13 @@ export function ReportsClient({
                       </td>
                       <td className="px-4 py-3 text-center text-sm font-bold text-[#1C1917] font-mono">
                         {techPerformance.reduce((s, t) => s + t.closedJobs, 0)}
+                      </td>
+                      <td className="px-4 py-3 text-center text-sm font-bold text-[#1C1917] font-mono">
+                        {(() => {
+                          const apts = techPerformance.reduce((s, t) => s + t.appointments, 0)
+                          const closed = techPerformance.reduce((s, t) => s + t.closedJobs, 0)
+                          return apts > 0 ? `${Math.min(100, Math.round((closed / apts) * 100))}%` : "—"
+                        })()}
                       </td>
                       <td className="px-6 py-3 text-right text-sm font-bold text-[#4D7C0F] font-mono">
                         ${techPerformance.reduce((s, t) => s + t.revenue, 0).toLocaleString()}
