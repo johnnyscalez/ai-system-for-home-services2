@@ -196,7 +196,7 @@ export async function runVoiceTurn(
 ): Promise<VoiceEngineResult> {
   const db = createServiceRoleClient()
 
-  const [leadRes, agentRes, kbRes, appointmentsRes, technicianContext] = await Promise.all([
+  const [leadRes, agentRes, kbRes, appointmentsRes, technicianContext, companyRes] = await Promise.all([
     db.from("leads").select("*").eq("id", session.lead_id).single(),
     db.from("ai_agent_config")
       .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, disqualifiers")
@@ -209,12 +209,17 @@ export async function runVoiceTurn(
       .eq("lead_id", session.lead_id)
       .order("scheduled_at", { ascending: false }),
     getTechnicianContextForCompany(session.company_id),
+    // Same fallback-identity bug as lib/ai-engine.ts: without this, the
+    // inline fallback prompt below has no company name and the model can
+    // invent one when introducing itself on the call.
+    db.from("companies").select("name").eq("id", session.company_id).single(),
   ])
 
   const lead        = leadRes.data
   const agent       = agentRes.data
   const kb          = kbRes.data
   const appointments = appointmentsRes.data ?? []
+  const company      = companyRes.data
 
   if (!lead) throw new Error("Lead not found")
 
@@ -228,11 +233,17 @@ export async function runVoiceTurn(
   const agentPrompt = getAgentPrompt(agentType, agentName)
 
   // ── Build system prompt layers ──────────────────────────────────────────────
+  const companyName = company?.name ?? "the company"
   const basePrompt = agent?.generated_system_prompt ||
-    `You are ${agentName}, a sales rep for a ${lead.service_type ?? "HVAC"} company.
+    `You are ${agentName}, a sales rep for ${companyName}, a ${lead.service_type ?? "HVAC"} company.
 ${kb?.business_description ? `About us: ${kb.business_description}` : ""}
 ${kb?.services_offered ? `Services: ${kb.services_offered}` : ""}
-${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}`
+${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}
+
+IDENTITY RULE — NEVER BREAK THIS: The company you work for is "${companyName}".
+Every time you say who you're calling from, use exactly this name. Never invent,
+guess, or substitute a different company name, even one that sounds plausible
+from the description above.`
 
   const leadContext = buildVoiceLeadContext(lead, appointments, session.collected, tz)
 

@@ -115,7 +115,7 @@ export async function runConversation(
   const horizonMs = 14 * 24 * 60 * 60 * 1000
 
   // Load everything in parallel — lead history, agent config, availability, company schedule, technicians
-  const [leadRes, historyRes, agentRes, kbRes, appointmentsRes, companyAptsRes, technicianContext] = await Promise.all([
+  const [leadRes, historyRes, agentRes, kbRes, appointmentsRes, companyAptsRes, technicianContext, companyRes] = await Promise.all([
     supabase.from("leads").select("*").eq("id", leadId).single(),
     supabase
       .from("conversations")
@@ -149,6 +149,11 @@ export async function runConversation(
       .lte("scheduled_at", new Date(Date.now() + horizonMs).toISOString()),
     // Technician context block for system prompt
     getTechnicianContextForCompany(companyId),
+    // Company name — the fallback prompt path (used when generated_system_prompt
+    // hasn't been produced yet) has no other source for this and the model will
+    // invent a plausible-sounding one otherwise (observed: "Family HVAC", pulled
+    // from the word "Family" in an unrelated business_description sentence).
+    supabase.from("companies").select("name").eq("id", companyId).single(),
   ])
 
   const lead = leadRes.data
@@ -157,6 +162,7 @@ export async function runConversation(
   const kb = kbRes.data
   const appointments = appointmentsRes.data ?? []
   const companyApts = companyAptsRes.data ?? []
+  const company = companyRes.data
 
   if (!lead) throw new Error("Lead not found")
 
@@ -227,6 +233,7 @@ export async function runConversation(
     agent?.generated_system_prompt ||
     buildFallbackSystemPrompt(
       agent?.agent_name ?? "Linda",
+      company?.name ?? "the company",
       kb?.business_description ?? "",
       kb?.services_offered ?? "",
       lead.service_type ?? "home services"
@@ -1400,13 +1407,20 @@ If they want to CANCEL, confirm first then use cancel_appointment with the appoi
 
 function buildFallbackSystemPrompt(
   agentName: string,
+  companyName: string,
   businessDescription: string,
   services: string,
   serviceType: string
 ): string {
-  return `You are ${agentName}, a scheduling coordinator for a ${serviceType} company.
-${businessDescription ? `Company: ${businessDescription}` : ""}
+  return `You are ${agentName}, a scheduling coordinator for ${companyName}, a ${serviceType} company.
+${businessDescription ? `About the company: ${businessDescription}` : ""}
 ${services ? `Services: ${services}` : ""}
+
+IDENTITY RULE — NEVER BREAK THIS:
+The company you work for is "${companyName}". Every time you introduce yourself or
+mention who you're texting from, use exactly this name. Never invent, guess, or
+substitute a different company name — including one that sounds plausible from the
+description above. If you are ever unsure what to call the company, use "${companyName}".
 
 ═══════════════════════════════════════════════════
 YOUR ONE JOB: COLLECT INFORMATION AND BOOK THE APPOINTMENT.
