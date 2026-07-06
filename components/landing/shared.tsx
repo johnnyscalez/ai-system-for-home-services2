@@ -954,6 +954,12 @@ export function LeadFormSection({ source }: { source: string }) {
 
     // Meta Pixel: fire QualifiedLead ONLY for qualified submissions.
     if (qualified && typeof window !== "undefined" && typeof window.fbq === "function") {
+      // Standard Lead event = what the ad set optimizes on. Because this only
+      // fires for QUALIFIED submissions, "optimize for Leads" in Ads Manager
+      // trains Meta's delivery on qualified leads only — unqualified opt-ins
+      // never enter the training signal. The custom event stays alongside for
+      // granular reporting (trucks/revenue/angle breakdowns).
+      window.fbq("track", "Lead", { content_name: source })
       window.fbq("trackCustom", "QualifiedLead", { trucks, revenue, source })
     }
 

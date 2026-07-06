@@ -15,7 +15,7 @@
 // Both are optional — the page reads fine without them.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { Suspense } from "react"
+import { Suspense, useEffect } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion } from "framer-motion"
 import { Phone, Calendar, Map, PencilLine, ArrowUpRight } from "lucide-react"
@@ -40,6 +40,16 @@ function googleCalendarLink(start: Date): string {
 
 function BookedContent() {
   const params = useSearchParams()
+
+  // Meta pixel Schedule event — this page is the GHL calendar's post-booking
+  // redirect target, so landing here = a booked call. Tracked for measurement
+  // and future optimization switching; the ad set optimizes on Lead for now
+  // (booking volume is nowhere near Meta's ~50/week learning threshold).
+  useEffect(() => {
+    if (typeof window !== "undefined" && typeof window.fbq === "function") {
+      window.fbq("track", "Schedule")
+    }
+  }, [])
   const name = params.get("name")
   const timeRaw = params.get("time")
   const parsed = timeRaw ? new Date(timeRaw) : null
