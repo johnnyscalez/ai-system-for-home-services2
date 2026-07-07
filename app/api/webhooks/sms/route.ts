@@ -298,18 +298,26 @@ export async function POST(req: NextRequest) {
         }))
       )
     } else {
-      // Appointment booked — cancel all pending sequences
+      // Lead is in a terminal status (booked, closed, cold, …) — no follow-up
+      // sequences; cancel anything still pending.
       await supabase
         .from("sequences")
         .update({ status: "cancelled" })
         .eq("lead_id", lead.id)
         .eq("status", "pending")
+    }
 
-      // Send confirmation email + SMS to lead
+    // Confirmation SMS + email and the contractor notification fire ONLY on
+    // the turn an appointment was actually booked (or moved) — keyed off this
+    // turn's action, NOT off the lead's status. Keying off status made every
+    // later message from a booked lead ("thanks!") re-send the confirmation
+    // SMS + email and re-notify the contractor, because status stays
+    // "appointment_booked" forever.
+    if (result.action?.type === "book_appointment" || result.action?.type === "reschedule_appointment") {
       const { sendConfirmations } = await import("@/lib/appointment-reminders")
       const { data: bookedApt } = await supabase
         .from("appointments")
-        .select("id")
+        .select("id, scheduled_at, address")
         .eq("lead_id", lead.id)
         .eq("status", "scheduled")
         .order("created_at", { ascending: false })
@@ -317,25 +325,17 @@ export async function POST(req: NextRequest) {
         .single()
       if (bookedApt) {
         sendConfirmations(bookedApt.id).catch(() => {})
-      }
 
-      // Notify contractor
-      const { data: leadData } = await supabase
-        .from("leads")
-        .select("first_name, last_name, phone")
-        .eq("id", lead.id)
-        .single()
-      const { data: apt } = await supabase
-        .from("appointments")
-        .select("scheduled_at, address")
-        .eq("lead_id", lead.id)
-        .eq("status", "scheduled")
-        .order("created_at", { ascending: false })
-        .limit(1)
-        .single()
-      if (leadData && apt) {
-        const name = `${leadData.first_name ?? ""} ${leadData.last_name ?? ""}`.trim() || leadData.phone
-        notifyAppointmentBooked(companyId, name, apt.scheduled_at, apt.address ?? "").catch(() => {})
+        // Notify contractor
+        const { data: leadData } = await supabase
+          .from("leads")
+          .select("first_name, last_name, phone")
+          .eq("id", lead.id)
+          .single()
+        if (leadData) {
+          const name = `${leadData.first_name ?? ""} ${leadData.last_name ?? ""}`.trim() || leadData.phone
+          notifyAppointmentBooked(companyId, name, bookedApt.scheduled_at, bookedApt.address ?? "").catch(() => {})
+        }
       }
     }
 
