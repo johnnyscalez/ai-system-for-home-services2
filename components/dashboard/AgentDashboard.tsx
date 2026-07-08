@@ -7,6 +7,7 @@ import {
   Moon, CalendarCheck, MessagesSquare, UserPlus, PhoneCall,
   DollarSign, TrendingUp, Sparkles, ArrowRight, Phone, MessageSquare,
   Megaphone, MessageCircle, Globe, Webhook as WebhookIcon, CheckCircle2, PencilLine, CircleDashed,
+  Building2, Bot,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -207,6 +208,7 @@ export type AgentBooking = {
   id: string
   scheduled_at: string
   status: string
+  origin: string
   address: string | null
   notes: string | null
   technician_name: string | null
@@ -268,10 +270,11 @@ export function AgentDashboard({
 }: Props) {
   const [range, setRange] = useState<RangeKey>("30d")
   const [sourceFilter, setSourceFilter] = useState<string | null>(null)
+  const [originFilter, setOriginFilter] = useState<"all" | "ai" | "hcp">("all")
 
   const rangeDays = RANGES.find(r => r.key === range)?.days ?? 30
 
-  const { filteredBookings, money, bars, barUnit, sources, callbacks, totalLeadsInRange } = useMemo(() => {
+  const { filteredBookings, money, bars, barUnit, sources, callbacks, totalLeadsInRange, aiBookedCount, officeBookedCount } = useMemo(() => {
     const now = Date.now()
     const cutoff = range === "today"
       ? new Date(new Date().setHours(0, 0, 0, 0)).getTime()
@@ -293,8 +296,13 @@ export function AgentDashboard({
     const inRangeLeads = leadsAll.filter(l => new Date(l.created_at).getTime() >= cutoff)
     const totalLeadsInRange = inRangeLeads.filter(l => matchesSource(l.source)).length
 
-    const filteredBookings = bookings.filter(b =>
+    const rangeSourceBookings = bookings.filter(b =>
       new Date(b.created_at).getTime() >= cutoff && matchesSource(b.leads?.source ?? null)
+    )
+    const aiBookedCount = rangeSourceBookings.filter(b => b.origin !== "hcp").length
+    const officeBookedCount = rangeSourceBookings.filter(b => b.origin === "hcp").length
+    const filteredBookings = rangeSourceBookings.filter(b =>
+      originFilter === "all" ? true : originFilter === "hcp" ? b.origin === "hcp" : b.origin !== "hcp"
     )
 
     // Money — revenue events in range, source-matched via the lead they belong to
@@ -362,8 +370,10 @@ export function AgentDashboard({
       sources,
       callbacks,
       totalLeadsInRange,
+      aiBookedCount,
+      officeBookedCount,
     }
-  }, [bookings, leadsAll, revenueEvents, range, sourceFilter, rangeDays, avgJobValueCents])
+  }, [bookings, leadsAll, revenueEvents, range, sourceFilter, originFilter, rangeDays, avgJobValueCents])
 
   const fmtTime = (iso: string) =>
     new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
@@ -472,7 +482,7 @@ export function AgentDashboard({
             className="lg:col-span-2 bg-white rounded-2xl border border-[#E7E5E4]/60 overflow-hidden self-start"
             style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.07), 0 1px 3px rgba(0,0,0,0.03)" }}
           >
-            <div className="flex items-center justify-between px-5 pt-5 pb-3">
+            <div className="flex items-center justify-between gap-3 flex-wrap px-5 pt-5 pb-3">
               <div className="flex items-center gap-2">
                 <div className="w-8 h-8 rounded-lg bg-orange-50 flex items-center justify-center">
                   <Sparkles className="w-4 h-4 text-[#F97316]" />
@@ -480,12 +490,31 @@ export function AgentDashboard({
                 <div>
                   <h2 className="text-[15px] font-bold text-[#1C1917]"
                     style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
-                    Booked by your AI
+                    Jobs on the books
                   </h2>
                   <p className="text-[11px] text-[#78716C]">
-                    {sourceFilter ? `${sourceMeta(sourceFilter).label} leads only · ` : ""}Every appointment, with the lead and where it came from
+                    {sourceFilter ? `${sourceMeta(sourceFilter).label} leads only · ` : ""}Every appointment, who booked it, and where the lead came from
                   </p>
                 </div>
+              </div>
+              {/* Who-booked-it stat pills — click to filter */}
+              <div className="flex items-center gap-1.5">
+                <button onClick={() => setOriginFilter(originFilter === "ai" ? "all" : "ai")}
+                  className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                    originFilter === "ai"
+                      ? "bg-[#F97316] text-white border-[#F97316]"
+                      : "bg-orange-50 text-[#EA580C] border-orange-100 hover:border-[#F97316]/50")}>
+                  <Bot className="w-3 h-3" /> AI booked
+                  <span className="tabular-nums">{aiBookedCount}</span>
+                </button>
+                <button onClick={() => setOriginFilter(originFilter === "hcp" ? "all" : "hcp")}
+                  className={cn("inline-flex items-center gap-1.5 px-2.5 py-1 rounded-full text-[11px] font-bold border transition-colors",
+                    originFilter === "hcp"
+                      ? "bg-[#1C1917] text-white border-[#1C1917]"
+                      : "bg-stone-100 text-stone-600 border-stone-200 hover:border-stone-400")}>
+                  <Building2 className="w-3 h-3" /> Office booked
+                  <span className="tabular-nums">{officeBookedCount}</span>
+                </button>
               </div>
             </div>
             <div className="divide-y divide-[#F5F4F2]">
@@ -519,6 +548,15 @@ export function AgentDashboard({
                         {b.technician_name && (
                           <span className="text-[11px] font-semibold text-[#4D7C0F] bg-lime-50 border border-lime-100 px-2 py-0.5 rounded-full">
                             {b.technician_name}
+                          </span>
+                        )}
+                        {b.origin === "hcp" ? (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-stone-100 text-stone-600 border border-stone-200">
+                            <Building2 className="w-3 h-3" /> Booked by office
+                          </span>
+                        ) : (
+                          <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold bg-orange-50 text-[#EA580C] border border-orange-100">
+                            <Bot className="w-3 h-3" /> Booked by AI
                           </span>
                         )}
                         <HcpChip jobId={b.hcp_job_id} edited={b.hcp_manually_edited} />

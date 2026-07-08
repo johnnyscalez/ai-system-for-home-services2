@@ -1098,6 +1098,15 @@ export async function processAndSave(
           preSelected.tech_id, preSelected.tech_name, tech?.phone ?? null)
       }
 
+      // HCP-mode companies: mirror the booking into Housecall Pro as a real job.
+      // Fire-and-forget so the lead's confirmation SMS is never delayed by HCP
+      // latency; failed pushes are retried by the reconciliation cron.
+      if (apt) {
+        import("@/lib/housecall-sync")
+          .then(({ pushBookingToHcp }) => pushBookingToHcp(apt.id))
+          .catch((err) => console.error("[hcp-sync] booking push failed:", err))
+      }
+
       // Try to create Google Calendar event
       if (apt) {
         try {

@@ -199,7 +199,7 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase }: {
       .eq("company_id", companyId)
       .eq("status", "needs_attention"),
     supabase.from("appointments")
-      .select("id, scheduled_at, status, address, notes, technician_name, hcp_job_id, hcp_manually_edited, created_at, leads(id, first_name, last_name, phone, source, channel, job_type)")
+      .select("id, scheduled_at, status, origin, address, notes, technician_name, hcp_job_id, hcp_manually_edited, created_at, leads(id, first_name, last_name, phone, source, channel, job_type)")
       .eq("company_id", companyId)
       .neq("status", "cancelled")
       .gte("created_at", since90d)
