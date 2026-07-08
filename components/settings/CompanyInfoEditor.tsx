@@ -122,10 +122,19 @@ export function CompanyInfoEditor({ companyId, initialName, initialServiceType, 
 }
 
 function Row({ label, value }: { label: string; value: string }) {
+  const isLong = value.length > 60
+  if (isLong) {
+    return (
+      <div className="space-y-0.5">
+        <span className="text-sm text-muted-foreground">{label}</span>
+        <p className="text-sm font-medium line-clamp-2 text-right">{value}</p>
+      </div>
+    )
+  }
   return (
-    <div className="flex items-center justify-between">
-      <span className="text-sm text-muted-foreground">{label}</span>
-      <span className="text-sm font-medium">{value}</span>
+    <div className="flex items-center justify-between gap-4">
+      <span className="text-sm text-muted-foreground shrink-0">{label}</span>
+      <span className="text-sm font-medium text-right">{value}</span>
     </div>
   )
 }
