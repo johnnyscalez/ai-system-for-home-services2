@@ -3,7 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave, inferJobType } from "@/lib/ai-engine"
 import { sendSMS, formatPhone } from "@/lib/twilio"
 import { notifyNewLead } from "@/lib/notifications"
-import { normalizeLead } from "@/lib/normalize-lead"
+import { normalizeLead, normalizeSource, channelForSource } from "@/lib/normalize-lead"
 import { buildNoReplySchedule } from "@/lib/sequences"
 
 const CORS_HEADERS = {
@@ -186,7 +186,8 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
         address: lead.address,
         notes: lead.notes,
         service_type: lead.service_type ?? company.service_type ?? null,
-        source: (body.source as "facebook" | "webhook" | "manual") ?? "webhook",
+        source: normalizeSource(body.source),
+        channel: channelForSource(normalizeSource(body.source)),
         source_form_id: lead.source_form_id,
         metadata: lead.metadata,
         status: "just_came_in",

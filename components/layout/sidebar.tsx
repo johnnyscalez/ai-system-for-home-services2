@@ -11,7 +11,8 @@ import {
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
-const nav = [
+// Full CRM navigation — standalone mode (we are the system of record)
+const CRM_NAV = [
   { href: "/dashboard",      icon: LayoutDashboard, label: "Dashboard" },
   { href: "/leads",          icon: Users,           label: "Leads" },
   { href: "/conversations",  icon: MessageSquare,   label: "Conversations" },
@@ -22,6 +23,15 @@ const nav = [
   { href: "/email",          icon: Mail,            label: "Email & SMS" },
   { href: "/integrations",   icon: Plug,            label: "Integrations" },
   { href: "/reports",        icon: TrendingUp,      label: "Reports" },
+]
+
+// Agent-product navigation — Housecall Pro mode. Their CRM owns the pipeline,
+// calendar, invoicing, and reporting; we only surface the AI agent itself.
+const AGENT_NAV = [
+  { href: "/dashboard",     icon: LayoutDashboard, label: "AI Performance" },
+  { href: "/conversations", icon: MessageSquare,   label: "Conversations" },
+  { href: "/technicians",   icon: HardHat,         label: "Dispatch Setup" },
+  { href: "/integrations",  icon: Plug,            label: "Integrations" },
 ]
 
 function FieldFMark({ size = 28 }: { size?: number }) {
@@ -57,7 +67,7 @@ function LogoLockup({ size = 20 }: { size?: number }) {
   )
 }
 
-function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
+function NavLinks({ onNavigate, items }: { onNavigate?: () => void; items: typeof CRM_NAV }) {
   const pathname = usePathname()
   const router   = useRouter()
   const supabase = createClient()
@@ -71,7 +81,7 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   return (
     <div className="flex flex-col h-full overflow-y-auto">
       <nav className="flex-1 px-3 py-4 space-y-0.5" aria-label="Main navigation">
-        {nav.map(({ href, icon: Icon, label }) => {
+        {items.map(({ href, icon: Icon, label }) => {
           const active = pathname === href || (href !== "/dashboard" && pathname.startsWith(href))
           return (
             <Link
@@ -121,9 +131,10 @@ function NavLinks({ onNavigate }: { onNavigate?: () => void }) {
   )
 }
 
-export function Sidebar() {
+export function Sidebar({ integrationMode }: { integrationMode?: string | null }) {
   const [mobileOpen, setMobileOpen] = useState(false)
   const pathname = usePathname()
+  const items = integrationMode === "housecall_pro" ? AGENT_NAV : CRM_NAV
 
   // Close drawer whenever route changes
   useEffect(() => { setMobileOpen(false) }, [pathname])
@@ -157,7 +168,7 @@ export function Sidebar() {
             <LogoLockup />
           </Link>
         </div>
-        <NavLinks />
+        <NavLinks items={items} />
       </aside>
 
       {/* ── Mobile slide-out drawer ── */}
@@ -184,7 +195,7 @@ export function Sidebar() {
               </button>
             </div>
             <div className="flex-1 overflow-y-auto">
-              <NavLinks onNavigate={() => setMobileOpen(false)} />
+              <NavLinks items={items} onNavigate={() => setMobileOpen(false)} />
             </div>
           </aside>
         </div>

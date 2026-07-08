@@ -182,6 +182,7 @@ export async function POST(req: NextRequest) {
             email: fields["email"] || null,
             address: leadAddress,
             source: "facebook",
+            channel: "sms",
             source_form_id: form_id,
             status: "just_came_in",
             notes: formNotes,

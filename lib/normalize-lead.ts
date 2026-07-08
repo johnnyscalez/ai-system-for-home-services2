@@ -152,3 +152,54 @@ export function normalizeLead(raw: Record<string, unknown>): NormalizedLead {
 
   return { phone, first_name: firstName, last_name: lastName, email, address, notes, service_type: serviceType, source_form_id: formId, metadata }
 }
+
+// ── Source & channel taxonomy ─────────────────────────────────────────────────
+// source  = where the lead came FROM (acquisition)
+// channel = the medium we're TALKING to them on (conversation)
+
+const SOURCE_ALIASES: Record<string, string> = {
+  facebook: "facebook",
+  facebook_lead_ads: "facebook",
+  fb: "facebook",
+  fb_lead_ads: "facebook",
+  lead_ads: "facebook",
+  messenger: "messenger",
+  facebook_messenger: "messenger",
+  whatsapp: "whatsapp",
+  wa: "whatsapp",
+  website: "website",
+  web: "website",
+  webform: "website",
+  website_form: "website",
+  form: "website",
+  typeform: "typeform",
+  google: "google",
+  google_ads: "google",
+  gmb: "google",
+  sms: "sms_inbound",
+  sms_inbound: "sms_inbound",
+  text: "sms_inbound",
+  phone: "voice_inbound",
+  call: "voice_inbound",
+  voice: "voice_inbound",
+  voice_inbound: "voice_inbound",
+  webhook: "webhook",
+  manual: "manual",
+}
+
+export function normalizeSource(raw: unknown): string {
+  if (typeof raw !== "string" || !raw.trim()) return "webhook"
+  const key = raw.trim().toLowerCase().replace(/[\s-]+/g, "_")
+  return SOURCE_ALIASES[key] ?? key
+}
+
+// The default conversation medium for a given source. Messenger/WhatsApp leads
+// are spoken to on their own channel; everything else starts over SMS.
+export function channelForSource(source: string): string {
+  switch (source) {
+    case "messenger":     return "messenger"
+    case "whatsapp":      return "whatsapp"
+    case "voice_inbound": return "voice"
+    default:              return "sms"
+  }
+}
