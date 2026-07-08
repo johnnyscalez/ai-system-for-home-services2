@@ -1,7 +1,7 @@
 "use client"
 
 import { motion, useInView } from "framer-motion"
-import { useEffect, useRef, useState } from "react"
+import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import {
   Moon, CalendarCheck, MessagesSquare, UserPlus, PhoneCall,
@@ -13,17 +13,20 @@ import { cn } from "@/lib/utils"
 // ─────────────────────────────────────────────────────────────────────────────
 // Agent Performance Dashboard — HCP integration mode.
 // Not a CRM. One job: show the owner what the AI made them while they slept.
+// The night hero is fixed to last night; everything below obeys the
+// source + time-range filters.
 // ─────────────────────────────────────────────────────────────────────────────
 
-function useCountUp(target: number, duration = 1400, delay = 0) {
+function useCountUp(target: number, duration = 1200, delay = 0) {
   const [value, setValue] = useState(0)
   const ref = useRef<HTMLSpanElement>(null)
   const inView = useInView(ref, { once: true })
 
   useEffect(() => {
-    if (!inView || target === 0) { setValue(target); return }
+    if (!inView) return
+    if (target === 0) { setValue(0); return }
     const timeout = setTimeout(() => {
-      const steps = 50
+      const steps = 40
       const increment = target / steps
       const interval = duration / steps
       let current = 0
@@ -37,27 +40,40 @@ function useCountUp(target: number, duration = 1400, delay = 0) {
     return () => clearTimeout(timeout)
   }, [inView, target, duration, delay])
 
+  // When the target changes after the initial animation (filters), snap to it
+  const animated = useRef(false)
+  useEffect(() => {
+    if (animated.current) setValue(target)
+    const t = setTimeout(() => { animated.current = true }, duration + delay + 100)
+    return () => clearTimeout(t)
+  }, [target, duration, delay])
+
   return { value, ref }
 }
 
 // ── Source + channel badges ────────────────────────────────────────────────────
 
-const SOURCE_BADGE: Record<string, { label: string; cls: string; icon?: React.ElementType }> = {
-  facebook:          { label: "FB Lead Ad", cls: "bg-blue-50 text-blue-700 border-blue-100", icon: Megaphone },
-  facebook_lead_ads: { label: "FB Lead Ad", cls: "bg-blue-50 text-blue-700 border-blue-100", icon: Megaphone },
-  messenger:         { label: "Messenger", cls: "bg-violet-50 text-violet-700 border-violet-100", icon: MessageCircle },
-  whatsapp:          { label: "WhatsApp", cls: "bg-emerald-50 text-emerald-700 border-emerald-100", icon: MessageSquare },
-  website:           { label: "Website form", cls: "bg-stone-100 text-stone-700 border-stone-200", icon: Globe },
+const SOURCE_META: Record<string, { label: string; cls: string; icon?: React.ElementType }> = {
+  facebook:            { label: "FB Lead Ad", cls: "bg-blue-50 text-blue-700 border-blue-100", icon: Megaphone },
+  facebook_lead_ads:   { label: "FB Lead Ad", cls: "bg-blue-50 text-blue-700 border-blue-100", icon: Megaphone },
+  messenger:           { label: "Messenger", cls: "bg-violet-50 text-violet-700 border-violet-100", icon: MessageCircle },
+  whatsapp:            { label: "WhatsApp", cls: "bg-emerald-50 text-emerald-700 border-emerald-100", icon: MessageSquare },
+  website:             { label: "Website form", cls: "bg-stone-100 text-stone-700 border-stone-200", icon: Globe },
   "hvac-lead-capture": { label: "Website form", cls: "bg-stone-100 text-stone-700 border-stone-200", icon: Globe },
-  typeform:          { label: "Typeform", cls: "bg-stone-100 text-stone-700 border-stone-200", icon: Globe },
-  google:            { label: "Google", cls: "bg-amber-50 text-amber-700 border-amber-100", icon: Globe },
-  webhook:           { label: "Webhook", cls: "bg-stone-100 text-stone-700 border-stone-200", icon: WebhookIcon },
-  voice_inbound:     { label: "Phone call", cls: "bg-orange-50 text-orange-700 border-orange-100", icon: Phone },
-  sms:               { label: "Text in", cls: "bg-orange-50 text-orange-700 border-orange-100", icon: MessageSquare },
+  typeform:            { label: "Typeform", cls: "bg-stone-100 text-stone-700 border-stone-200", icon: Globe },
+  google:              { label: "Google", cls: "bg-amber-50 text-amber-700 border-amber-100", icon: Globe },
+  webhook:             { label: "Webhook", cls: "bg-stone-100 text-stone-700 border-stone-200", icon: WebhookIcon },
+  voice_inbound:       { label: "Phone call", cls: "bg-orange-50 text-orange-700 border-orange-100", icon: Phone },
+  sms_inbound:         { label: "Text in", cls: "bg-orange-50 text-orange-700 border-orange-100", icon: MessageSquare },
+  sms:                 { label: "Text in", cls: "bg-orange-50 text-orange-700 border-orange-100", icon: MessageSquare },
+}
+
+function sourceMeta(source: string | null) {
+  return SOURCE_META[source ?? ""] ?? { label: source ?? "Direct", cls: "bg-stone-100 text-stone-600 border-stone-200" }
 }
 
 function SourceBadge({ source }: { source: string | null }) {
-  const b = SOURCE_BADGE[source ?? ""] ?? { label: source ?? "Direct", cls: "bg-stone-100 text-stone-600 border-stone-200" }
+  const b = sourceMeta(source)
   const Icon = b.icon
   return (
     <span className={cn("inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-[11px] font-semibold border", b.cls)}>
@@ -90,7 +106,7 @@ function HcpChip({ jobId, edited }: { jobId: string | null; edited: boolean }) {
   )
 }
 
-// ── Night stat tile ────────────────────────────────────────────────────────────
+// ── Night stat tile (fixed hero) ───────────────────────────────────────────────
 
 function NightStat({ label, value, icon: Icon, accent, delay = 0 }: {
   label: string; value: number; icon: React.ElementType; accent: string; delay?: number
@@ -116,7 +132,7 @@ function MoneyCard({ label, subLabel, cents, count, delay = 0, estimated = false
   label: string; subLabel: string; cents: number; count?: number; delay?: number; estimated?: boolean
 }) {
   const dollars = Math.round(cents / 100)
-  const { value: displayed, ref } = useCountUp(dollars, 1500, delay)
+  const { value: displayed, ref } = useCountUp(dollars, 1400, delay)
   return (
     <motion.div
       variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
@@ -146,17 +162,20 @@ function MoneyCard({ label, subLabel, cents, count, delay = 0, estimated = false
   )
 }
 
-// ── Bookings-by-night bar chart ────────────────────────────────────────────────
+// ── Bookings bar chart ─────────────────────────────────────────────────────────
 
-function NightBars({ data }: { data: Array<{ day: string; label: string; count: number }> }) {
+function BookingBars({ data, unitLabel }: {
+  data: Array<{ key: string; label: string; count: number }>
+  unitLabel: string
+}) {
   const max = Math.max(1, ...data.map(d => d.count))
+  const labelEvery = data.length > 16 ? 4 : data.length > 8 ? 2 : 1
   return (
     <div>
-      <div className="flex items-end gap-[6px] h-[120px]" role="img"
-        aria-label={`Bookings per night, last ${data.length} nights`}>
+      <div className="flex items-end gap-[5px] h-[120px]" role="img"
+        aria-label={`Bookings per ${unitLabel}`}>
         {data.map((d) => (
-          <div key={d.day} className="group relative flex-1 flex flex-col items-center justify-end h-full">
-            {/* hover tooltip */}
+          <div key={d.key} className="group relative flex-1 flex flex-col items-center justify-end h-full min-w-0">
             <div className="pointer-events-none absolute -top-8 left-1/2 -translate-x-1/2 opacity-0 group-hover:opacity-100 transition-opacity z-10
               bg-[#1C1917] text-white text-[11px] font-semibold px-2 py-1 rounded-md whitespace-nowrap">
               {d.label}: {d.count} {d.count === 1 ? "job" : "jobs"}
@@ -171,10 +190,10 @@ function NightBars({ data }: { data: Array<{ day: string; label: string; count: 
           </div>
         ))}
       </div>
-      <div className="flex gap-[6px] mt-1.5 border-t border-[#E7E5E4] pt-1.5">
+      <div className="flex gap-[5px] mt-1.5 border-t border-[#E7E5E4] pt-1.5">
         {data.map((d, i) => (
-          <span key={d.day} className="flex-1 text-center text-[9px] text-[#A8A29E] font-medium tabular-nums">
-            {i % 2 === 0 ? d.label.split(" ")[1] : ""}
+          <span key={d.key} className="flex-1 text-center text-[9px] text-[#A8A29E] font-medium tabular-nums truncate">
+            {i % labelEvery === 0 ? d.label : ""}
           </span>
         ))}
       </div>
@@ -187,6 +206,7 @@ function NightBars({ data }: { data: Array<{ day: string; label: string; count: 
 export type AgentBooking = {
   id: string
   scheduled_at: string
+  status: string
   address: string | null
   notes: string | null
   technician_name: string | null
@@ -199,9 +219,23 @@ export type AgentBooking = {
   } | null
 }
 
-export type CallbackLead = {
-  id: string; first_name: string | null; last_name: string | null
-  phone: string; source: string | null; last_message_at: string | null
+export type LeadRow = {
+  id: string
+  first_name: string | null
+  last_name: string | null
+  phone: string
+  source: string | null
+  channel: string | null
+  status: string
+  created_at: string
+  last_message_at: string | null
+}
+
+export type RevenueEventRow = {
+  lead_id: string | null
+  amount_cents: number | null
+  attribution: string | null
+  created_at: string
 }
 
 type Props = {
@@ -209,19 +243,128 @@ type Props = {
   companyName: string
   nightLabel: string
   night: { booked: number; conversations: number; newLeads: number; callbacks: number }
-  money: { bookedCents: number; bookedCount: number; sourcedCents: number; pipelineCents: number; pipelineCount: number }
-  bookings: AgentBooking[]
-  callbacks: CallbackLead[]
-  bars: Array<{ day: string; label: string; count: number }>
-  sources: Array<{ source: string; count: number }>
+  avgJobValueCents: number
+  bookings: AgentBooking[]        // last 90 days
+  leadsAll: LeadRow[]             // last 90 days + all current needs_attention
+  revenueEvents: RevenueEventRow[] // last 90 days
   hcpConnected: boolean
 }
+
+// ── Filters ────────────────────────────────────────────────────────────────────
+
+const RANGES = [
+  { key: "today", label: "Today", days: 1 },
+  { key: "7d",    label: "7 days", days: 7 },
+  { key: "30d",   label: "30 days", days: 30 },
+  { key: "90d",   label: "90 days", days: 90 },
+] as const
+type RangeKey = typeof RANGES[number]["key"]
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 export function AgentDashboard({
-  firstName, companyName, nightLabel, night, money, bookings, callbacks, bars, sources, hcpConnected,
+  firstName, companyName, nightLabel, night, avgJobValueCents,
+  bookings, leadsAll, revenueEvents, hcpConnected,
 }: Props) {
+  const [range, setRange] = useState<RangeKey>("30d")
+  const [sourceFilter, setSourceFilter] = useState<string | null>(null)
+
+  const rangeDays = RANGES.find(r => r.key === range)?.days ?? 30
+
+  const { filteredBookings, money, bars, barUnit, sources, callbacks, totalLeadsInRange } = useMemo(() => {
+    const now = Date.now()
+    const cutoff = range === "today"
+      ? new Date(new Date().setHours(0, 0, 0, 0)).getTime()
+      : now - rangeDays * 24 * 60 * 60 * 1000
+
+    // Group facebook aliases for filter matching
+    const norm = (s: string | null) => {
+      if (!s) return "direct"
+      if (s === "facebook_lead_ads") return "facebook"
+      if (s === "hvac-lead-capture") return "website"
+      if (s === "sms") return "sms_inbound"
+      return s
+    }
+    const matchesSource = (s: string | null) => !sourceFilter || norm(s) === sourceFilter
+
+    const leadSource = new Map<string, string | null>()
+    for (const l of leadsAll) leadSource.set(l.id, l.source)
+
+    const inRangeLeads = leadsAll.filter(l => new Date(l.created_at).getTime() >= cutoff)
+    const totalLeadsInRange = inRangeLeads.filter(l => matchesSource(l.source)).length
+
+    const filteredBookings = bookings.filter(b =>
+      new Date(b.created_at).getTime() >= cutoff && matchesSource(b.leads?.source ?? null)
+    )
+
+    // Money — revenue events in range, source-matched via the lead they belong to
+    const evMatches = (e: RevenueEventRow) => {
+      if (new Date(e.created_at).getTime() < cutoff) return false
+      if (!sourceFilter) return true
+      const src = e.lead_id ? leadSource.get(e.lead_id) ?? null : null
+      return norm(src) === sourceFilter
+    }
+    const inRangeEvents = revenueEvents.filter(evMatches)
+    const bookedEvents = inRangeEvents.filter(e => e.attribution === "booked_by_ai" && e.amount_cents)
+    const bookedCents = bookedEvents.reduce((s, e) => s + Number(e.amount_cents), 0)
+    const sourcedCents = inRangeEvents
+      .filter(e => e.attribution === "sourced_by_ai" && e.amount_cents)
+      .reduce((s, e) => s + Number(e.amount_cents), 0)
+
+    const upcoming = bookings.filter(b =>
+      b.status === "scheduled" &&
+      new Date(b.scheduled_at).getTime() > now &&
+      matchesSource(b.leads?.source ?? null)
+    )
+    const pipelineCents = upcoming.length * avgJobValueCents
+
+    // Bars — bucket by day (or by week for 90d)
+    const weekly = rangeDays > 35
+    const bucketCount = range === "today" ? 1 : weekly ? Math.ceil(rangeDays / 7) : rangeDays
+    const bucketMs = (weekly ? 7 : 1) * 24 * 60 * 60 * 1000
+    const buckets: Array<{ key: string; label: string; count: number; start: number }> = []
+    for (let i = bucketCount - 1; i >= 0; i--) {
+      const start = range === "today"
+        ? new Date(new Date().setHours(0, 0, 0, 0)).getTime()
+        : now - (i + 1) * bucketMs
+      const d = new Date(range === "today" ? start : start + bucketMs)
+      const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
+      buckets.push({ key: `${i}`, label, count: 0, start })
+    }
+    for (const b of filteredBookings) {
+      const t = new Date(b.created_at).getTime()
+      for (let i = buckets.length - 1; i >= 0; i--) {
+        if (t >= buckets[i].start) { buckets[i].count++; break }
+      }
+    }
+
+    // Source breakdown for the range (unfiltered by source — it IS the filter UI)
+    const srcMap = new Map<string, number>()
+    for (const l of inRangeLeads) {
+      const s = norm(l.source)
+      srcMap.set(s, (srcMap.get(s) ?? 0) + 1)
+    }
+    const sources = [...srcMap.entries()]
+      .map(([source, count]) => ({ source, count }))
+      .sort((a, b) => b.count - a.count)
+
+    // Callback queue — current state, source-filtered but not time-filtered
+    const callbacks = leadsAll
+      .filter(l => l.status === "needs_attention" && matchesSource(l.source))
+      .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? ""))
+      .slice(0, 6)
+
+    return {
+      filteredBookings: filteredBookings.slice(0, 15),
+      money: { bookedCents, bookedCount: bookedEvents.length, sourcedCents, pipelineCents, pipelineCount: upcoming.length },
+      bars: buckets,
+      barUnit: weekly ? "week" : "day",
+      sources,
+      callbacks,
+      totalLeadsInRange,
+    }
+  }, [bookings, leadsAll, revenueEvents, range, sourceFilter, rangeDays, avgJobValueCents])
+
   const fmtTime = (iso: string) =>
     new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
 
@@ -246,10 +389,10 @@ export function AgentDashboard({
         initial="hidden" animate="show"
         variants={{ show: { transition: { staggerChildren: 0.07 } } }}
       >
-        {/* ── Night hero ── */}
+        {/* ── Night hero (always last night — not affected by filters) ── */}
         <motion.div
           variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
-          className="relative rounded-3xl overflow-hidden mb-6 p-6 md:p-8"
+          className="relative rounded-3xl overflow-hidden mb-5 p-6 md:p-8"
           style={{ background: "linear-gradient(135deg, #1C1917 0%, #292420 100%)", boxShadow: "0 8px 40px rgba(28,25,23,0.25)" }}
         >
           <div className="absolute inset-0 pointer-events-none opacity-60" style={{
@@ -277,21 +420,56 @@ export function AgentDashboard({
           </div>
         </motion.div>
 
+        {/* ── Filter bar ── */}
+        <motion.div
+          variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
+          className="flex flex-wrap items-center gap-2 mb-5"
+        >
+          <div className="flex items-center rounded-xl bg-white border border-[#E7E5E4]/80 p-1 shadow-sm">
+            {RANGES.map(r => (
+              <button key={r.key} onClick={() => setRange(r.key)}
+                className={cn("px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-colors",
+                  range === r.key ? "bg-[#1C1917] text-white" : "text-[#78716C] hover:text-[#1C1917]")}>
+                {r.label}
+              </button>
+            ))}
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button onClick={() => setSourceFilter(null)}
+              className={cn("px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-colors",
+                !sourceFilter ? "bg-[#F97316] text-white border-[#F97316]" : "bg-white text-[#78716C] border-[#E7E5E4] hover:border-[#F97316]/40")}>
+              All sources
+            </button>
+            {sources.map(s => {
+              const m = sourceMeta(s.source)
+              const active = sourceFilter === s.source
+              return (
+                <button key={s.source} onClick={() => setSourceFilter(active ? null : s.source)}
+                  className={cn("inline-flex items-center gap-1.5 px-3 py-1.5 rounded-full text-[12px] font-semibold border transition-colors",
+                    active ? "bg-[#F97316] text-white border-[#F97316]" : cn("bg-white hover:border-[#F97316]/40", m.cls.replace(/bg-\S+/, "").trim(), "border-[#E7E5E4]"))}>
+                  {m.label}
+                  <span className={cn("tabular-nums text-[11px] font-bold", active ? "text-white/80" : "text-[#A8A29E]")}>{s.count}</span>
+                </button>
+              )
+            })}
+          </div>
+          <span className="ml-auto text-[12px] text-[#78716C] font-medium tabular-nums">
+            {totalLeadsInRange} {totalLeadsInRange === 1 ? "lead" : "leads"} in this view
+          </span>
+        </motion.div>
+
         {/* ── Money row ── */}
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <MoneyCard label="Booked by your AI" subLabel="Closed revenue from jobs the AI booked — last 30 days"
-            cents={money.bookedCents} count={money.bookedCount} />
-          <MoneyCard label="Sourced by your AI" subLabel="Revenue from customers the AI brought in — last 30 days"
-            cents={money.sourcedCents} delay={120} />
-          <MoneyCard label="Pipeline on the calendar" subLabel={`${money.pipelineCount} upcoming jobs × your average ticket`}
-            cents={money.pipelineCents} count={money.pipelineCount} delay={240} estimated />
+          <MoneyCard label="Booked by your AI" subLabel="Closed revenue from jobs the AI booked" cents={money.bookedCents} count={money.bookedCount} />
+          <MoneyCard label="Sourced by your AI" subLabel="Revenue from customers the AI brought in" cents={money.sourcedCents} delay={100} />
+          <MoneyCard label="Pipeline on the calendar" subLabel={`${money.pipelineCount} upcoming jobs × your average ticket`} cents={money.pipelineCents} count={money.pipelineCount} delay={200} estimated />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
           {/* ── Booked appointments list ── */}
           <motion.div
             variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
-            className="lg:col-span-2 bg-white rounded-2xl border border-[#E7E5E4]/60 overflow-hidden"
+            className="lg:col-span-2 bg-white rounded-2xl border border-[#E7E5E4]/60 overflow-hidden self-start"
             style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.07), 0 1px 3px rgba(0,0,0,0.03)" }}
           >
             <div className="flex items-center justify-between px-5 pt-5 pb-3">
@@ -304,15 +482,19 @@ export function AgentDashboard({
                     style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
                     Booked by your AI
                   </h2>
-                  <p className="text-[11px] text-[#78716C]">Every appointment, with the lead and where it came from</p>
+                  <p className="text-[11px] text-[#78716C]">
+                    {sourceFilter ? `${sourceMeta(sourceFilter).label} leads only · ` : ""}Every appointment, with the lead and where it came from
+                  </p>
                 </div>
               </div>
             </div>
             <div className="divide-y divide-[#F5F4F2]">
-              {bookings.length === 0 && (
-                <p className="px-5 py-8 text-sm text-[#78716C] text-center">No AI bookings yet — they&apos;ll appear here the moment one lands.</p>
+              {filteredBookings.length === 0 && (
+                <p className="px-5 py-8 text-sm text-[#78716C] text-center">
+                  No bookings match this filter — try a wider time range or another source.
+                </p>
               )}
-              {bookings.map((b) => {
+              {filteredBookings.map((b) => {
                 const lead = b.leads
                 const name = [lead?.first_name, lead?.last_name].filter(Boolean).join(" ") || "Unknown lead"
                 return (
@@ -390,7 +572,7 @@ export function AgentDashboard({
               )}
             </motion.div>
 
-            {/* Bookings by night */}
+            {/* Bookings over time */}
             <motion.div
               variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
               className="bg-white rounded-2xl border border-[#E7E5E4]/60 p-5"
@@ -403,12 +585,14 @@ export function AgentDashboard({
                 <div>
                   <h2 className="text-[15px] font-bold text-[#1C1917]"
                     style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
-                    Bookings per day
+                    Bookings per {barUnit}
                   </h2>
-                  <p className="text-[11px] text-[#78716C]">Last 14 days</p>
+                  <p className="text-[11px] text-[#78716C]">
+                    {RANGES.find(r => r.key === range)?.label}{sourceFilter ? ` · ${sourceMeta(sourceFilter).label}` : ""}
+                  </p>
                 </div>
               </div>
-              <NightBars data={bars} />
+              <BookingBars data={bars} unitLabel={barUnit} />
             </motion.div>
 
             {/* Lead sources */}
@@ -417,21 +601,27 @@ export function AgentDashboard({
               className="bg-white rounded-2xl border border-[#E7E5E4]/60 p-5"
               style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.07), 0 1px 3px rgba(0,0,0,0.03)" }}
             >
-              <h2 className="text-[15px] font-bold text-[#1C1917] mb-3"
+              <h2 className="text-[15px] font-bold text-[#1C1917] mb-1"
                 style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
                 Where leads came from
               </h2>
-              <div className="space-y-2">
-                {sources.map((s) => (
-                  <div key={s.source} className="flex items-center justify-between">
-                    <SourceBadge source={s.source} />
-                    <span className="text-sm font-bold text-[#1C1917] tabular-nums"
-                      style={{ fontFamily: "var(--font-mono), 'JetBrains Mono', monospace" }}>
-                      {s.count}
-                    </span>
-                  </div>
-                ))}
-                {sources.length === 0 && <p className="text-sm text-[#78716C]">No leads in the last 30 days.</p>}
+              <p className="text-[11px] text-[#78716C] mb-3">Click a source to filter the whole page</p>
+              <div className="space-y-1">
+                {sources.map((s) => {
+                  const active = sourceFilter === s.source
+                  return (
+                    <button key={s.source} onClick={() => setSourceFilter(active ? null : s.source)}
+                      className={cn("w-full flex items-center justify-between rounded-lg px-2 py-1.5 transition-colors",
+                        active ? "bg-orange-50 ring-1 ring-[#F97316]/30" : "hover:bg-[#FAFAF8]")}>
+                      <SourceBadge source={s.source} />
+                      <span className="text-sm font-bold text-[#1C1917] tabular-nums"
+                        style={{ fontFamily: "var(--font-mono), 'JetBrains Mono', monospace" }}>
+                        {s.count}
+                      </span>
+                    </button>
+                  )
+                })}
+                {sources.length === 0 && <p className="text-sm text-[#78716C]">No leads in this range.</p>}
               </div>
             </motion.div>
 

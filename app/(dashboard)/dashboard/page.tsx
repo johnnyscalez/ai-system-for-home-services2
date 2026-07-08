@@ -1,7 +1,7 @@
 import { redirect } from "next/navigation"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { DashboardClient } from "@/components/dashboard/DashboardClient"
-import { AgentDashboard, type AgentBooking, type CallbackLead } from "@/components/dashboard/AgentDashboard"
+import { AgentDashboard, type AgentBooking, type LeadRow, type RevenueEventRow } from "@/components/dashboard/AgentDashboard"
 
 export default async function DashboardPage() {
   const supabase = await createServerSupabaseClient()
@@ -168,8 +168,8 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase }: {
 
   const nightLabel = officeOpen ? "Last night, while you were closed" : "Tonight, while your office is closed"
 
-  const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const since14d = new Date(now.getTime() - 14 * 24 * 60 * 60 * 1000).toISOString()
+  // Raw 90-day window — the client filters by source + time range without refetching
+  const since90d = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
 
   const [
     { count: nightBooked },
@@ -177,11 +177,9 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase }: {
     { count: nightNewLeads },
     { count: callbackCount },
     { data: bookingsData },
-    { data: callbacksData },
+    { data: leads90d },
+    { data: leadsAttention },
     { data: revenueEvents },
-    { count: upcomingCount },
-    { data: bars14 },
-    { data: sourceRows },
     { data: hcpConn },
   ] = await Promise.all([
     supabase.from("appointments").select("*", { count: "exact", head: true })
@@ -201,34 +199,27 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase }: {
       .eq("company_id", companyId)
       .eq("status", "needs_attention"),
     supabase.from("appointments")
-      .select("id, scheduled_at, address, notes, technician_name, hcp_job_id, hcp_manually_edited, created_at, leads(id, first_name, last_name, phone, source, channel, job_type)")
+      .select("id, scheduled_at, status, address, notes, technician_name, hcp_job_id, hcp_manually_edited, created_at, leads(id, first_name, last_name, phone, source, channel, job_type)")
       .eq("company_id", companyId)
       .neq("status", "cancelled")
-      .gte("created_at", since30d)
+      .gte("created_at", since90d)
       .order("created_at", { ascending: false })
-      .limit(12),
+      .limit(300),
     supabase.from("leads")
-      .select("id, first_name, last_name, phone, source, last_message_at")
+      .select("id, first_name, last_name, phone, source, channel, status, created_at, last_message_at")
+      .eq("company_id", companyId)
+      .gte("created_at", since90d)
+      .order("created_at", { ascending: false })
+      .limit(2000),
+    supabase.from("leads")
+      .select("id, first_name, last_name, phone, source, channel, status, created_at, last_message_at")
       .eq("company_id", companyId)
       .eq("status", "needs_attention")
-      .order("last_message_at", { ascending: false })
-      .limit(6),
+      .limit(50),
     supabase.from("hcp_revenue_events")
-      .select("amount_cents, attribution")
+      .select("lead_id, amount_cents, attribution, created_at")
       .eq("company_id", companyId)
-      .gte("created_at", since30d),
-    supabase.from("appointments").select("*", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .eq("status", "scheduled")
-      .gte("scheduled_at", now.toISOString()),
-    supabase.from("appointments")
-      .select("created_at")
-      .eq("company_id", companyId)
-      .gte("created_at", since14d),
-    supabase.from("leads")
-      .select("source")
-      .eq("company_id", companyId)
-      .gte("created_at", since30d),
+      .gte("created_at", since90d),
     supabase.from("hcp_connections")
       .select("id")
       .eq("company_id", companyId)
@@ -238,36 +229,10 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase }: {
 
   const nightConversations = new Set((nightConvoLeads ?? []).map((c) => c.lead_id)).size
 
-  const events = revenueEvents ?? []
-  const bookedEvents = events.filter((e) => e.attribution === "booked_by_ai" && e.amount_cents)
-  const bookedCents = bookedEvents.reduce((s, e) => s + Number(e.amount_cents), 0)
-  const sourcedCents = events
-    .filter((e) => e.attribution === "sourced_by_ai" && e.amount_cents)
-    .reduce((s, e) => s + Number(e.amount_cents), 0)
-  const pipelineCents = (upcomingCount ?? 0) * (company.avg_job_value ?? 0) * 100
-
-  // Bookings per day, last 14 days
-  const dayKey = (d: Date) => d.toLocaleDateString("en-US", { timeZone: tz, month: "short", day: "numeric" })
-  const barMap = new Map<string, number>()
-  for (let i = 13; i >= 0; i--) {
-    const d = new Date(now.getTime() - i * 24 * 60 * 60 * 1000)
-    barMap.set(dayKey(d), 0)
-  }
-  for (const a of bars14 ?? []) {
-    const k = dayKey(new Date(a.created_at))
-    if (barMap.has(k)) barMap.set(k, (barMap.get(k) ?? 0) + 1)
-  }
-  const bars = [...barMap.entries()].map(([label, count]) => ({ day: label, label, count }))
-
-  // Source breakdown
-  const srcMap = new Map<string, number>()
-  for (const r of sourceRows ?? []) {
-    const s = r.source ?? "direct"
-    srcMap.set(s, (srcMap.get(s) ?? 0) + 1)
-  }
-  const sources = [...srcMap.entries()]
-    .map(([source, count]) => ({ source, count }))
-    .sort((a, b) => b.count - a.count)
+  // Merge 90d leads with any needs_attention leads older than the window
+  const leadMap = new Map<string, LeadRow>()
+  for (const l of (leads90d ?? []) as LeadRow[]) leadMap.set(l.id, l)
+  for (const l of (leadsAttention ?? []) as LeadRow[]) leadMap.set(l.id, l)
 
   return (
     <AgentDashboard
@@ -280,17 +245,10 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase }: {
         newLeads: nightNewLeads ?? 0,
         callbacks: callbackCount ?? 0,
       }}
-      money={{
-        bookedCents,
-        bookedCount: bookedEvents.length,
-        sourcedCents,
-        pipelineCents,
-        pipelineCount: upcomingCount ?? 0,
-      }}
+      avgJobValueCents={(company.avg_job_value ?? 0) * 100}
       bookings={(bookingsData ?? []) as unknown as AgentBooking[]}
-      callbacks={(callbacksData ?? []) as CallbackLead[]}
-      bars={bars}
-      sources={sources}
+      leadsAll={[...leadMap.values()]}
+      revenueEvents={(revenueEvents ?? []) as RevenueEventRow[]}
       hcpConnected={!!hcpConn}
     />
   )
