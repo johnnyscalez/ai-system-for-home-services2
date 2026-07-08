@@ -30,7 +30,7 @@ export default async function IntegrationsPage({
 
   const { data: whatsapp } = await supabase
     .from("whatsapp_connections")
-    .select("status, status_detail, phone_number, display_name")
+    .select("status, status_detail, phone_number, display_name, sender_type")
     .eq("company_id", profile.company_id)
     .maybeSingle()
 

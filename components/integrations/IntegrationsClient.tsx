@@ -25,6 +25,7 @@ interface WhatsAppConnection {
   status_detail: string | null
   phone_number: string
   display_name: string
+  sender_type?: string | null
 }
 
 interface Props {
@@ -589,6 +590,11 @@ function WhatsAppIcon({ className }: { className?: string }) {
 function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null }) {
   const router = useRouter()
   const [displayName, setDisplayName] = useState(connection?.display_name ?? "")
+  const [mode, setMode] = useState<"fieldbuilt" | "byon">(
+    (connection?.sender_type as "fieldbuilt" | "byon") ?? "fieldbuilt"
+  )
+  const [ownNumber, setOwnNumber] = useState("")
+  const [otpCode, setOtpCode] = useState("")
   const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(
     connection?.status === "action_required" ? connection.status_detail : null
@@ -597,17 +603,35 @@ function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null })
   const status = connection?.status ?? "none"
   const connected = status === "online"
   const pending = status === "pending"
+  const verifyOtp = status === "verify_otp"
 
   async function connect() {
     setBusy(true); setError(null)
     const res = await fetch("/api/integrations/whatsapp/connect", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ display_name: displayName }),
+      body: JSON.stringify({
+        display_name: displayName,
+        sender_type: mode,
+        own_number: mode === "byon" ? ownNumber : undefined,
+      }),
     })
     const data = await res.json().catch(() => ({}))
     setBusy(false)
     if (!res.ok) { setError(data.error ?? "Connection failed"); return }
+    router.refresh()
+  }
+
+  async function submitOtp() {
+    setBusy(true); setError(null)
+    const res = await fetch("/api/integrations/whatsapp/verify", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ code: otpCode }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setBusy(false)
+    if (!res.ok) { setError(data.error ?? "Verification failed"); return }
     router.refresh()
   }
 
@@ -648,6 +672,8 @@ function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null })
                 ? `Live on ${connection!.phone_number} as "${connection!.display_name}"`
                 : pending
                 ? "Registration submitted — Meta is reviewing your display name"
+                : verifyOtp
+                ? `Verification code sent to ${connection!.phone_number}`
                 : "Let leads message you on WhatsApp — the AI answers there too"}
             </p>
           </div>
@@ -670,6 +696,31 @@ function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null })
         </div>
       )}
 
+
+      {/* OTP verification state (own-number connections) */}
+      {verifyOtp && (
+        <div className="mt-5 rounded-xl border border-[#E7E5E4] bg-[#FAFAF8] p-4">
+          <p className="text-sm text-[#1C1917] mb-3">
+            <strong>Enter the code</strong> Meta just sent by SMS to {connection!.phone_number} to prove you own the number.
+          </p>
+          <div className="flex gap-2 flex-wrap">
+            <input
+              value={otpCode}
+              onChange={(e) => setOtpCode(e.target.value)}
+              placeholder="6-digit code"
+              inputMode="numeric"
+              className="w-40 rounded-xl border border-[#E7E5E4] bg-white px-4 py-2.5 text-sm tracking-widest text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#25D366]/40"
+            />
+            <button onClick={submitOtp} disabled={busy || otpCode.replace(/\D/g, "").length < 4}
+              className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
+              style={{ background: "#16A34A" }}>
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
+              Verify
+            </button>
+          </div>
+          {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
+        </div>
+      )}
       {/* Connected state */}
       {connected && (
         <div className="mt-5 flex items-center justify-between gap-3 flex-wrap">
@@ -685,8 +736,52 @@ function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null })
       )}
 
       {/* Setup state */}
-      {!connected && !pending && (
+      {!connected && !pending && !verifyOtp && (
         <div className="mt-5">
+          {/* Which number becomes the WhatsApp line */}
+          <div className="grid sm:grid-cols-2 gap-2 mb-4">
+            <button onClick={() => setMode("fieldbuilt")}
+              className="text-left rounded-xl border p-3.5 transition-colors"
+              style={{
+                borderColor: mode === "fieldbuilt" ? "#16A34A" : "#E7E5E4",
+                background: mode === "fieldbuilt" ? "#F0FDF4" : "white",
+              }}>
+              <p className="text-sm font-bold text-[#1C1917]">Use your FieldBuilt number <span className="text-[10px] font-bold text-[#16A34A] uppercase ml-1">Recommended</span></p>
+              <p className="text-xs text-[#78716C] mt-1">Instant. Your existing WhatsApp app keeps working untouched — this adds WhatsApp to the number that already texts your leads.</p>
+            </button>
+            <button onClick={() => setMode("byon")}
+              className="text-left rounded-xl border p-3.5 transition-colors"
+              style={{
+                borderColor: mode === "byon" ? "#16A34A" : "#E7E5E4",
+                background: mode === "byon" ? "#F0FDF4" : "white",
+              }}>
+              <p className="text-sm font-bold text-[#1C1917]">Use your own WhatsApp Business number</p>
+              <p className="text-xs text-[#78716C] mt-1">Customers keep messaging the number they know. Verified with a code sent to that number.</p>
+            </button>
+          </div>
+
+          {mode === "byon" && (
+            <>
+              <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
+                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                <p className="text-xs text-amber-800">
+                  <strong>Important:</strong> if this number currently runs the WhatsApp Business app on a phone,
+                  it will STOP working in that app once connected here — all WhatsApp messages will flow to your
+                  AI and the FieldBuilt inbox instead. Your regular calls and SMS on the number are not affected.
+                </p>
+              </div>
+              <label className="block text-xs font-semibold uppercase tracking-wider text-[#78716C] mb-1.5">
+                Your WhatsApp Business number
+              </label>
+              <input
+                value={ownNumber}
+                onChange={(e) => setOwnNumber(e.target.value)}
+                placeholder="+1 555 123 4567"
+                className="w-full mb-3 rounded-xl border border-[#E7E5E4] bg-white px-4 py-2.5 text-sm text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#25D366]/40"
+              />
+            </>
+          )}
+
           <label className="block text-xs font-semibold uppercase tracking-wider text-[#78716C] mb-1.5">
             Business display name (what customers see on WhatsApp)
           </label>
@@ -699,7 +794,7 @@ function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null })
             />
             <button
               onClick={connect}
-              disabled={busy || displayName.trim().length < 3}
+              disabled={busy || displayName.trim().length < 3 || (mode === "byon" && ownNumber.replace(/\D/g, "").length < 8)}
               className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
               style={{ background: "#16A34A", boxShadow: "0 4px 16px rgba(22,163,74,0.3)" }}
             >
@@ -708,7 +803,9 @@ function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null })
             </button>
           </div>
           <p className="mt-2 text-xs text-[#78716C]">
-            Uses your existing FieldBuilt number — no new number needed. Approval by Meta usually takes minutes to a day.
+            {mode === "fieldbuilt"
+              ? "Uses your existing FieldBuilt number — no new number needed. Approval by Meta usually takes minutes to a day."
+              : "Meta texts a verification code to your number, then reviews the display name — usually minutes to a day."}
           </p>
           {error && (
             <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3">
