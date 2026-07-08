@@ -167,11 +167,11 @@ export async function GET(req: NextRequest) {
         const result = await processAndSave(lead.id, step.company_id, null, undefined, followUpAngle)
 
         if (result.response) {
-          const { msg, channel: sentVia } = await sendToLead(lead, result.response, phoneRecord.phone_number)
+          const { sid, channel: sentVia } = await sendToLead(lead, result.response, phoneRecord.phone_number, step.company_id)
           if (result.outboundConversationId) {
             await supabase
               .from("conversations")
-              .update({ twilio_sid: msg.sid, channel: sentVia })
+              .update({ twilio_sid: sid, channel: sentVia })
               .eq("id", result.outboundConversationId)
           }
         }

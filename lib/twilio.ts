@@ -36,22 +36,35 @@ export async function sendWhatsApp(to: string, body: string, from: string) {
 export async function sendToLead(
   lead: { phone: string; channel?: string | null; last_inbound_at?: string | null },
   body: string,
-  from: string
-): Promise<{ msg: Awaited<ReturnType<typeof sendSMS>>; channel: "whatsapp" | "sms" }> {
+  from: string,
+  companyId?: string
+): Promise<{ sid: string | null; channel: "whatsapp" | "sms" }> {
   const inWindow =
     lead.last_inbound_at &&
     Date.now() - new Date(lead.last_inbound_at).getTime() < 23 * 60 * 60 * 1000
 
   if (lead.channel === "whatsapp" && inWindow) {
+    // Level 3 first: the company's own WABA via Meta Cloud API
+    if (companyId) {
+      try {
+        const { getCloudConnection, sendCloudText } = await import("@/lib/whatsapp-cloud")
+        const conn = await getCloudConnection(companyId)
+        if (conn) {
+          const wamid = await sendCloudText(conn, lead.phone, body)
+          if (wamid) return { sid: wamid, channel: "whatsapp" }
+        }
+      } catch { /* fall through */ }
+    }
+    // Twilio-hosted WhatsApp sender
     try {
       const msg = await sendWhatsApp(lead.phone, body, from)
-      return { msg, channel: "whatsapp" }
+      return { sid: msg.sid, channel: "whatsapp" }
     } catch {
       // fall through to SMS
     }
   }
   const msg = await sendSMS(lead.phone, body, from)
-  return { msg, channel: "sms" }
+  return { sid: msg.sid, channel: "sms" }
 }
 
 export function validateTwilioSignature(

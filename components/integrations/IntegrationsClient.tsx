@@ -590,8 +590,8 @@ function WhatsAppIcon({ className }: { className?: string }) {
 function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null }) {
   const router = useRouter()
   const [displayName, setDisplayName] = useState(connection?.display_name ?? "")
-  const [mode, setMode] = useState<"fieldbuilt" | "byon">(
-    (connection?.sender_type as "fieldbuilt" | "byon") ?? "fieldbuilt"
+  const [mode, setMode] = useState<"fieldbuilt" | "byon" | "own_waba">(
+    (connection?.sender_type as "fieldbuilt" | "byon" | "own_waba") ?? "fieldbuilt"
   )
   const [ownNumber, setOwnNumber] = useState("")
   const [otpCode, setOtpCode] = useState("")
@@ -620,6 +620,77 @@ function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null })
     setBusy(false)
     if (!res.ok) { setError(data.error ?? "Connection failed"); return }
     router.refresh()
+  }
+
+  // Level 3: Meta embedded signup — connect their existing WABA (coexistence).
+  // Requires NEXT_PUBLIC_FACEBOOK_APP_ID + NEXT_PUBLIC_META_ES_CONFIG_ID.
+  const fbAppId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID
+  const esConfigId = process.env.NEXT_PUBLIC_META_ES_CONFIG_ID
+
+  async function connectOwnWaba() {
+    if (!fbAppId || !esConfigId) {
+      setError("Embedded signup isn't configured yet (missing Meta app config). Use one of the other two options, or contact support.")
+      return
+    }
+    setBusy(true); setError(null)
+
+    // Load the Facebook JS SDK once
+    if (!(window as unknown as { FB?: unknown }).FB) {
+      await new Promise<void>((resolve, reject) => {
+        const js = document.createElement("script")
+        js.src = "https://connect.facebook.net/en_US/sdk.js"
+        js.onload = () => resolve()
+        js.onerror = () => reject(new Error("Failed to load Facebook SDK"))
+        document.body.appendChild(js)
+      }).catch(() => null)
+      const FB = (window as unknown as { FB?: { init: (o: object) => void } }).FB
+      FB?.init({ appId: fbAppId, autoLogAppEvents: true, xfbml: false, version: "v21.0" })
+    }
+
+    // Session info (waba_id + phone_number_id) arrives via postMessage
+    const sessionInfo: { waba_id?: string; phone_number_id?: string } = {}
+    const listener = (event: MessageEvent) => {
+      if (!String(event.origin).endsWith("facebook.com")) return
+      try {
+        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data
+        if (data?.type === "WA_EMBEDDED_SIGNUP" && data?.data) {
+          sessionInfo.waba_id = data.data.waba_id ?? sessionInfo.waba_id
+          sessionInfo.phone_number_id = data.data.phone_number_id ?? sessionInfo.phone_number_id
+        }
+      } catch { /* not our message */ }
+    }
+    window.addEventListener("message", listener)
+
+    const FB = (window as unknown as {
+      FB?: { login: (cb: (r: { authResponse?: { code?: string } }) => void, opts: object) => void }
+    }).FB
+
+    FB?.login(
+      async (response) => {
+        window.removeEventListener("message", listener)
+        const code = response?.authResponse?.code
+        if (!code || !sessionInfo.waba_id || !sessionInfo.phone_number_id) {
+          setBusy(false)
+          setError("The Meta popup didn't complete — make sure you finish all steps including selecting your WhatsApp number.")
+          return
+        }
+        const res = await fetch("/api/integrations/whatsapp/cloud-connect", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ code, waba_id: sessionInfo.waba_id, phone_number_id: sessionInfo.phone_number_id }),
+        })
+        const data = await res.json().catch(() => ({}))
+        setBusy(false)
+        if (!res.ok) { setError(data.error ?? "Connection failed"); return }
+        router.refresh()
+      },
+      {
+        config_id: esConfigId,
+        response_type: "code",
+        override_default_response_type: true,
+        extras: { setup: {}, featureType: "whatsapp_business_app_onboarding", sessionInfoVersion: "3" },
+      }
+    )
   }
 
   async function submitOtp() {
@@ -739,7 +810,7 @@ function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null })
       {!connected && !pending && !verifyOtp && (
         <div className="mt-5">
           {/* Which number becomes the WhatsApp line */}
-          <div className="grid sm:grid-cols-2 gap-2 mb-4">
+          <div className="grid sm:grid-cols-3 gap-2 mb-4">
             <button onClick={() => setMode("fieldbuilt")}
               className="text-left rounded-xl border p-3.5 transition-colors"
               style={{
@@ -749,16 +820,50 @@ function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null })
               <p className="text-sm font-bold text-[#1C1917]">Use your FieldBuilt number <span className="text-[10px] font-bold text-[#16A34A] uppercase ml-1">Recommended</span></p>
               <p className="text-xs text-[#78716C] mt-1">Instant. Your existing WhatsApp app keeps working untouched — this adds WhatsApp to the number that already texts your leads.</p>
             </button>
+            <button onClick={() => setMode("own_waba")}
+              className="text-left rounded-xl border p-3.5 transition-colors"
+              style={{
+                borderColor: mode === "own_waba" ? "#16A34A" : "#E7E5E4",
+                background: mode === "own_waba" ? "#F0FDF4" : "white",
+              }}>
+              <p className="text-sm font-bold text-[#1C1917]">Connect your existing WhatsApp Business</p>
+              <p className="text-xs text-[#78716C] mt-1">Keep your number AND keep using WhatsApp on your phones — the AI joins the same account.</p>
+            </button>
             <button onClick={() => setMode("byon")}
               className="text-left rounded-xl border p-3.5 transition-colors"
               style={{
                 borderColor: mode === "byon" ? "#16A34A" : "#E7E5E4",
                 background: mode === "byon" ? "#F0FDF4" : "white",
               }}>
-              <p className="text-sm font-bold text-[#1C1917]">Use your own WhatsApp Business number</p>
-              <p className="text-xs text-[#78716C] mt-1">Customers keep messaging the number they know. Verified with a code sent to that number.</p>
+              <p className="text-sm font-bold text-[#1C1917]">Move your number to FieldBuilt</p>
+              <p className="text-xs text-[#78716C] mt-1">Your number, fully AI-operated. The phone app stops working for it. Verified by SMS code.</p>
             </button>
           </div>
+
+          {mode === "own_waba" && (
+            <div className="mb-3">
+              <div className="mb-3 flex items-start gap-2 rounded-xl border border-green-200 bg-green-50 p-3">
+                <Info className="w-4 h-4 text-green-700 shrink-0 mt-0.5" />
+                <p className="text-xs text-green-800">
+                  You&apos;ll sign in with the Facebook account that manages your WhatsApp Business.
+                  Your team keeps using WhatsApp on their phones exactly as today — the AI answers
+                  new leads, and the moment a human replies from the app, the AI steps back on that conversation.
+                </p>
+              </div>
+              <button onClick={connectOwnWaba} disabled={busy}
+                className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 disabled:opacity-50"
+                style={{ background: "#1877F2", boxShadow: "0 4px 16px rgba(24,119,242,0.3)" }}>
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
+                Continue with Facebook
+              </button>
+              {error && (
+                <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3">
+                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+                  <p className="text-xs text-red-700">{error}</p>
+                </div>
+              )}
+            </div>
+          )}
 
           {mode === "byon" && (
             <>
@@ -782,6 +887,7 @@ function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null })
             </>
           )}
 
+          {mode !== "own_waba" && (<>
           <label className="block text-xs font-semibold uppercase tracking-wider text-[#78716C] mb-1.5">
             Business display name (what customers see on WhatsApp)
           </label>
@@ -807,6 +913,7 @@ function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null })
               ? "Uses your existing FieldBuilt number — no new number needed. Approval by Meta usually takes minutes to a day."
               : "Meta texts a verification code to your number, then reviews the display name — usually minutes to a day."}
           </p>
+          </>)}
           {error && (
             <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3">
               <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
