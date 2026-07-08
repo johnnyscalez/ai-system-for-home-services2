@@ -42,6 +42,8 @@ export async function middleware(request: NextRequest) {
     path === "/start/tech" ||
     path === "/start/hire" ||
     path === "/start/booked" ||
+    path === "/privacy" ||
+    path === "/terms" ||
     path === "/api/health" ||
     path === "/api/lead-intake" ||
     path.startsWith("/api/webhooks") ||
