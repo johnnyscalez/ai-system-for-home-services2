@@ -16,6 +16,44 @@ export async function sendSMS(to: string, body: string, from?: string, statusCal
   })
 }
 
+// WhatsApp messages ride the same Twilio Messages API with a channel prefix.
+export async function sendWhatsApp(to: string, body: string, from: string) {
+  const client = getTwilioClient()
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ""
+  return client.messages.create({
+    to: to.startsWith("whatsapp:") ? to : `whatsapp:${to}`,
+    from: from.startsWith("whatsapp:") ? from : `whatsapp:${from}`,
+    body,
+    statusCallback: appUrl ? `${appUrl}/api/webhooks/sms-status` : undefined,
+  })
+}
+
+/**
+ * Channel-aware outbound: WhatsApp leads get WhatsApp replies while Meta's
+ * 24-hour session window is open; outside the window (or if WhatsApp fails)
+ * we fall back to plain SMS — the WhatsApp number IS a phone number.
+ */
+export async function sendToLead(
+  lead: { phone: string; channel?: string | null; last_inbound_at?: string | null },
+  body: string,
+  from: string
+): Promise<{ msg: Awaited<ReturnType<typeof sendSMS>>; channel: "whatsapp" | "sms" }> {
+  const inWindow =
+    lead.last_inbound_at &&
+    Date.now() - new Date(lead.last_inbound_at).getTime() < 23 * 60 * 60 * 1000
+
+  if (lead.channel === "whatsapp" && inWindow) {
+    try {
+      const msg = await sendWhatsApp(lead.phone, body, from)
+      return { msg, channel: "whatsapp" }
+    } catch {
+      // fall through to SMS
+    }
+  }
+  const msg = await sendSMS(lead.phone, body, from)
+  return { msg, channel: "sms" }
+}
+
 export function validateTwilioSignature(
   signature: string,
   url: string,

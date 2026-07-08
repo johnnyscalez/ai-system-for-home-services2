@@ -28,6 +28,12 @@ export default async function IntegrationsPage({
     .select("type, is_active, setup_complete, fb_page_name, fb_page_id, fb_selected_form_ids, lead_count, last_lead_at, created_at")
     .eq("company_id", profile.company_id)
 
+  const { data: whatsapp } = await supabase
+    .from("whatsapp_connections")
+    .select("status, status_detail, phone_number, display_name")
+    .eq("company_id", profile.company_id)
+    .maybeSingle()
+
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ""
   const webhookSecret = company?.webhook_secret ?? ""
   const params = await searchParams
@@ -35,6 +41,7 @@ export default async function IntegrationsPage({
   return (
     <IntegrationsClient
       integrations={integrations ?? []}
+      whatsapp={whatsapp?.status === "disconnected" ? null : whatsapp ?? null}
       webhookSecret={webhookSecret}
       appUrl={appUrl}
       toast={params.success ?? params.error ?? null}

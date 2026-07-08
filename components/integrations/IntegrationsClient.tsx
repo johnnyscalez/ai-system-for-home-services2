@@ -20,12 +20,20 @@ interface Integration {
   created_at: string
 }
 
+interface WhatsAppConnection {
+  status: string
+  status_detail: string | null
+  phone_number: string
+  display_name: string
+}
+
 interface Props {
   integrations: Integration[]
   webhookSecret: string
   appUrl: string
   toast: string | null
   toastType: "success" | "error" | null
+  whatsapp: WhatsAppConnection | null
 }
 
 function DotGrid() {
@@ -567,9 +575,156 @@ const TOAST_MESSAGES: Record<string, string> = {
   save_failed: "Failed to save integration — please try again",
 }
 
+
+// ─── WhatsApp card ────────────────────────────────────────────────────────────
+
+function WhatsAppIcon({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.297-.497.1-.198.05-.371-.025-.52-.074-.149-.668-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
+    </svg>
+  )
+}
+
+function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null }) {
+  const router = useRouter()
+  const [displayName, setDisplayName] = useState(connection?.display_name ?? "")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(
+    connection?.status === "action_required" ? connection.status_detail : null
+  )
+
+  const status = connection?.status ?? "none"
+  const connected = status === "online"
+  const pending = status === "pending"
+
+  async function connect() {
+    setBusy(true); setError(null)
+    const res = await fetch("/api/integrations/whatsapp/connect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ display_name: displayName }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setBusy(false)
+    if (!res.ok) { setError(data.error ?? "Connection failed"); return }
+    router.refresh()
+  }
+
+  async function refreshStatus() {
+    setBusy(true)
+    await fetch("/api/integrations/whatsapp/status").catch(() => null)
+    setBusy(false)
+    router.refresh()
+  }
+
+  async function disconnect() {
+    if (!confirm("Disconnect WhatsApp? Leads will no longer be able to reach you there.")) return
+    setBusy(true)
+    await fetch("/api/integrations/whatsapp/disconnect", { method: "POST" }).catch(() => null)
+    setBusy(false)
+    router.refresh()
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 16 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ duration: 0.5, delay: 0.15 }}
+      className="bg-white rounded-2xl border border-[#E7E5E4] p-6"
+      style={{ boxShadow: "0 4px 24px rgba(37,211,102,0.08)" }}
+    >
+      <div className="flex items-start justify-between gap-4 flex-wrap">
+        <div className="flex items-center gap-3">
+          <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: "#DCFCE7" }}>
+            <WhatsAppIcon className="w-6 h-6 text-[#16A34A]" />
+          </div>
+          <div>
+            <h2 className="text-lg font-bold text-[#1C1917]" style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
+              WhatsApp Business
+            </h2>
+            <p className="text-sm text-[#78716C]">
+              {connected
+                ? `Live on ${connection!.phone_number} as "${connection!.display_name}"`
+                : pending
+                ? "Registration submitted — Meta is reviewing your display name"
+                : "Let leads message you on WhatsApp — the AI answers there too"}
+            </p>
+          </div>
+        </div>
+        <StatusBadge connected={connected} />
+      </div>
+
+      {/* Pending state */}
+      {pending && (
+        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
+          <p className="text-sm text-amber-800">
+            <strong>In review at Meta.</strong> Display name approval usually takes minutes to a day.
+            Your number ({connection!.phone_number}) will start receiving WhatsApp messages the moment it clears.
+          </p>
+          <button onClick={refreshStatus} disabled={busy}
+            className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-amber-800 hover:text-amber-900">
+            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
+            Check status
+          </button>
+        </div>
+      )}
+
+      {/* Connected state */}
+      {connected && (
+        <div className="mt-5 flex items-center justify-between gap-3 flex-wrap">
+          <div className="flex items-center gap-2 text-sm font-medium text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-2.5">
+            <Check className="w-4 h-4" />
+            WhatsApp messages flow into the same AI conversations as SMS
+          </div>
+          <button onClick={disconnect} disabled={busy}
+            className="text-sm font-semibold text-red-600 hover:text-red-700">
+            Disconnect
+          </button>
+        </div>
+      )}
+
+      {/* Setup state */}
+      {!connected && !pending && (
+        <div className="mt-5">
+          <label className="block text-xs font-semibold uppercase tracking-wider text-[#78716C] mb-1.5">
+            Business display name (what customers see on WhatsApp)
+          </label>
+          <div className="flex gap-2 flex-wrap">
+            <input
+              value={displayName}
+              onChange={(e) => setDisplayName(e.target.value)}
+              placeholder="e.g. Berg's Heating & Air"
+              className="flex-1 min-w-[220px] rounded-xl border border-[#E7E5E4] bg-white px-4 py-2.5 text-sm text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#25D366]/40"
+            />
+            <button
+              onClick={connect}
+              disabled={busy || displayName.trim().length < 3}
+              className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
+              style={{ background: "#16A34A", boxShadow: "0 4px 16px rgba(22,163,74,0.3)" }}
+            >
+              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <WhatsAppIcon className="w-4 h-4" />}
+              Connect WhatsApp
+            </button>
+          </div>
+          <p className="mt-2 text-xs text-[#78716C]">
+            Uses your existing FieldBuilt number — no new number needed. Approval by Meta usually takes minutes to a day.
+          </p>
+          {error && (
+            <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3">
+              <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
+              <p className="text-xs text-red-700">{error}</p>
+            </div>
+          )}
+        </div>
+      )}
+    </motion.div>
+  )
+}
+
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast, toastType }: Props) {
+export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast, toastType, whatsapp }: Props) {
   const [showToast, setShowToast] = useState(!!toast)
 
   useEffect(() => {
@@ -655,6 +810,7 @@ export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast,
         {/* Cards */}
         <div className="space-y-5">
           <FacebookCard integration={byType("facebook")} errorCode={toast === "no_pages" ? "no_pages" : null} />
+          <WhatsAppCard connection={whatsapp} />
           <GoogleAdsCard webhookUrl={googleWebhookUrl} />
           <WebsiteFormCard
             webhookUrl={genericWebhookUrl}

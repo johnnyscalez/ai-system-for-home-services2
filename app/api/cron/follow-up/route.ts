@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave } from "@/lib/ai-engine"
-import { sendSMS, getTwilioClient } from "@/lib/twilio"
+import { sendSMS, sendToLead, getTwilioClient } from "@/lib/twilio"
 import { isVoiceStep, LAST_STEP, FOLLOW_UP_ANGLE } from "@/lib/sequences"
 
 // Called by Vercel Cron every 5 minutes.
@@ -167,11 +167,11 @@ export async function GET(req: NextRequest) {
         const result = await processAndSave(lead.id, step.company_id, null, undefined, followUpAngle)
 
         if (result.response) {
-          const msg = await sendSMS(lead.phone, result.response, phoneRecord.phone_number)
+          const { msg, channel: sentVia } = await sendToLead(lead, result.response, phoneRecord.phone_number)
           if (result.outboundConversationId) {
             await supabase
               .from("conversations")
-              .update({ twilio_sid: msg.sid })
+              .update({ twilio_sid: msg.sid, channel: sentVia })
               .eq("id", result.outboundConversationId)
           }
         }

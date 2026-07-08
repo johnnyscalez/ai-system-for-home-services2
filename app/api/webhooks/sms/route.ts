@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave, inferJobType } from "@/lib/ai-engine"
-import { sendSMS, validateTwilioSignature, formatPhone } from "@/lib/twilio"
+import { sendSMS, sendWhatsApp, validateTwilioSignature, formatPhone } from "@/lib/twilio"
 import { notifyAppointmentBooked, notifyNeedsAttention } from "@/lib/notifications"
 import { buildRepliedNotBookedSchedule } from "@/lib/sequences"
 import { notifyTechnicianConfirmed } from "@/lib/appointment-reminders"
@@ -45,7 +45,8 @@ async function handleConfirmationReply(
   messageBody: string,
   leadPhone: string,
   fromNumber: string,
-  supabase: ReturnType<typeof createServiceRoleClient>
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  channel: "sms" | "whatsapp" = "sms"
 ): Promise<boolean> {
   // Find the most recent appointment pending confirmation for this lead
   const { data: apt } = await supabase
@@ -89,7 +90,9 @@ async function handleConfirmationReply(
 
     const reply = `Perfect${firstName ? `, ${firstName}` : ""}! You're all set — our technician will be there ${timeLabel}. See you then!`
 
-    const msg = await sendSMS(leadPhone, reply, fromNumber)
+    const msg = channel === "whatsapp"
+      ? await sendWhatsApp(leadPhone, reply, fromNumber)
+      : await sendSMS(leadPhone, reply, fromNumber)
     await supabase.from("conversations").insert({
       lead_id:    leadId,
       company_id: companyId,
@@ -97,7 +100,7 @@ async function handleConfirmationReply(
       sent_by:    "reminder",
       body:       reply,
       twilio_sid: msg.sid,
-      channel:    "sms",
+      channel,
     })
 
     // Notify technician
@@ -140,8 +143,12 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  const from = params["From"] ?? ""
-  const to = params["To"] ?? ""
+  // WhatsApp traffic arrives on this same webhook with a channel prefix
+  const rawFrom = params["From"] ?? ""
+  const isWhatsApp = rawFrom.startsWith("whatsapp:")
+  const channel = isWhatsApp ? "whatsapp" : "sms"
+  const from = rawFrom.replace(/^whatsapp:/, "")
+  const to = (params["To"] ?? "").replace(/^whatsapp:/, "")
   const messageBody = params["Body"]?.trim() ?? ""
   const twilioSid = params["MessageSid"] ?? undefined
 
@@ -184,7 +191,8 @@ export async function POST(req: NextRequest) {
       .insert({
         company_id: companyId,
         phone: normalizedFrom,
-        source: "webhook",
+        source: isWhatsApp ? "whatsapp" : "sms_inbound",
+        channel,
         status: "new",
         metadata: { inbound_first_message: messageBody },
         job_type: inferJobType(messageBody ?? ""),
@@ -203,14 +211,14 @@ export async function POST(req: NextRequest) {
   // Mark this lead as actively replying
   await supabase
     .from("leads")
-    .update({ last_inbound_at: new Date().toISOString(), is_active_conversation: true })
+    .update({ last_inbound_at: new Date().toISOString(), is_active_conversation: true, channel })
     .eq("id", lead.id)
 
   // ── Confirmation reply interception ───────────────────────────────────────
   // If this lead has a pending confirmation AND their message is a clear YES/NO,
   // handle it directly without burning an AI call.
   const wasConfirmationReply = await handleConfirmationReply(
-    lead.id, companyId, messageBody, normalizedFrom, to, supabase
+    lead.id, companyId, messageBody, normalizedFrom, to, supabase, channel
   ).catch(() => false)
 
   if (wasConfirmationReply) {
@@ -223,7 +231,7 @@ export async function POST(req: NextRequest) {
         sent_by:    "human",
         body:       messageBody,
         twilio_sid: twilioSid ?? null,
-        channel:    "sms",
+        channel,
       })
     } catch { /* non-critical */ }
     return twimlOk()
@@ -233,7 +241,9 @@ export async function POST(req: NextRequest) {
     const result = await processAndSave(lead.id, companyId, messageBody, twilioSid)
 
     if (result.response) {
-      const msg = await sendSMS(normalizedFrom, result.response, to)
+      const msg = isWhatsApp
+        ? await sendWhatsApp(normalizedFrom, result.response, to)
+        : await sendSMS(normalizedFrom, result.response, to)
       if (result.outboundConversationId) {
         await supabase
           .from("conversations")
@@ -355,14 +365,15 @@ export async function POST(req: NextRequest) {
     // Lead must never get silence — send a human fallback if the engine crashed entirely
     try {
       const fallback = "I can get a tech out to you this week — does morning or afternoon work better?"
-      await sendSMS(normalizedFrom, fallback, to)
+      if (isWhatsApp) await sendWhatsApp(normalizedFrom, fallback, to)
+      else await sendSMS(normalizedFrom, fallback, to)
       await supabase.from("conversations").insert({
         lead_id:    lead.id,
         company_id: companyId,
         direction:  "outbound",
         sent_by:    "ai",
         body:       fallback,
-        channel:    "sms",
+        channel,
       })
     } catch { /* absolute last resort — ignore */ }
   }
