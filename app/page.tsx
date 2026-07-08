@@ -60,7 +60,7 @@ const GUARDRAILS = [
   "Call or text outside your working hours",
   "Handle commercial properties — flags those for you",
   "Book for a renter without landlord authorization — flags it",
-  "Reveal it's an AI — deflects naturally if a lead asks",
+  "Pretend to be human — it introduces itself as your AI assistant, and books anyway",
 ]
 
 const TESTIMONIALS = [
@@ -474,13 +474,12 @@ function HeroSection() {
             <motion.h1
               initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4, duration: 0.65 }}
-              className="text-5xl sm:text-6xl md:text-7xl font-extrabold tracking-tight leading-[1.02] mb-7"
+              className="text-4xl sm:text-5xl md:text-[3.4rem] font-extrabold tracking-tight leading-[1.06] mb-7"
               style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em" }}
             >
-              Wake up with<br />
-              jobs on the<br />
-              <span className="relative inline-block" style={{ color: "#F97316" }}>
-                schedule.
+              Your 24/7 AI Rep Answers Every Lead, Qualifies, Books, Routes the Right Tech, and Logs It All in Your CRM.{" "}
+              <span className="relative inline-block whitespace-nowrap" style={{ color: "#F97316" }}>
+                In under 60 seconds.
                 <span className="absolute -bottom-1 left-0 right-0 h-[3px] rounded-full"
                       style={{ background: "linear-gradient(90deg, #F97316, #EA580C)",
                                transformOrigin: "left", animation: "underlineDraw 0.7s ease forwards 1.4s",
@@ -495,9 +494,9 @@ function HeroSection() {
               className="text-lg leading-relaxed mb-9 max-w-md"
               style={{ color: "rgba(250,250,248,0.58)" }}
             >
-              This isn&rsquo;t a chatbot. It&rsquo;s a full back office — receptionist, dispatcher, CRM,
-              and follow-up team — installed in one call and running 24/7.
-              Every lead gets a text in 3.7 seconds. Your schedule fills itself.
+              No new software to learn. No leads dying at 9 PM. It works inside the CRM
+              you already run — your team opens Housecall Pro in the morning and the
+              jobs are already on the board.
             </motion.p>
 
             {/* CTAs */}
