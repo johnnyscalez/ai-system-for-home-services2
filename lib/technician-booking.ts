@@ -14,6 +14,7 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 import { DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
 import type { AppointmentWindow } from "@/lib/availability"
 import type { Technician } from "@/types/database"
+import { zipToPoint, addressToPoint, insertionCostMin, returnOvertimeMin, sameLocalDay, ROUTE_SLACK_MIN, type LocatedJob, type GeoPoint } from "@/lib/routing"
 
 /**
  * Convert a local slot time (e.g. "08:00" on "2026-06-17" in "America/New_York")
@@ -121,40 +122,58 @@ export async function findSlotsForLead(
   const now        = new Date()
   const horizonEnd = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000)
 
-  const { data: existingApts } = await db
-    .from("appointments")
-    .select("scheduled_at, technician_id")
-    .eq("company_id", companyId)
-    .in("technician_id", techIds)
-    .gte("scheduled_at", now.toISOString())
-    .lte("scheduled_at", horizonEnd.toISOString())
-    .neq("status", "cancelled")
+  const [{ data: existingApts }, { data: companyRow }] = await Promise.all([
+    db.from("appointments")
+      .select("scheduled_at, technician_id, address")
+      .eq("company_id", companyId)
+      .in("technician_id", techIds)
+      .gte("scheduled_at", now.toISOString())
+      .lte("scheduled_at", horizonEnd.toISOString())
+      .neq("status", "cancelled"),
+    db.from("companies").select("office_address").eq("id", companyId).single(),
+  ])
+
+  const officePoint: GeoPoint | null = addressToPoint(companyRow?.office_address)
+  const leadPoint: GeoPoint | null = zipToPoint(zip)
 
   // The tech's REAL day = our appointments + every job booked directly in
   // Housecall Pro by the office. Both become busy intervals; a slot is taken
   // if any interval overlaps it — not just exact start-time matches.
   const JOB_MS = 2 * 60 * 60 * 1000
-  const busyIntervals = new Map<string, Array<{ s: number; e: number }>>()
-  const addBusy = (techId: string, s: number, e: number) => {
+  const busyIntervals = new Map<string, Array<LocatedJob>>()
+  const addBusy = (techId: string, startMs: number, endMs: number, point: GeoPoint | null) => {
     if (!busyIntervals.has(techId)) busyIntervals.set(techId, [])
-    busyIntervals.get(techId)!.push({ s, e })
+    busyIntervals.get(techId)!.push({ startMs, endMs, point })
   }
   for (const a of existingApts ?? []) {
     if (a.technician_id) {
-      const s = new Date(a.scheduled_at).getTime()
-      addBusy(a.technician_id, s, s + JOB_MS)
+      const startMs = new Date(a.scheduled_at).getTime()
+      addBusy(a.technician_id, startMs, startMs + JOB_MS, addressToPoint(a.address))
     }
   }
   try {
     const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
     const hcpBusy = await getHcpBusyIntervals(companyId, now.toISOString(), horizonEnd.toISOString())
-    for (const b of hcpBusy) addBusy(b.technicianId, b.startMs, b.endMs)
+    for (const b of hcpBusy) addBusy(b.technicianId, b.startMs, b.endMs, b.point)
   } catch (err) {
     // HCP unreachable — degrade to our own data rather than failing the booking
     console.warn("[slots] HCP availability unavailable, using local only:", err)
   }
   const isBusy = (techId: string, slotStartMs: number, slotEndMs: number) =>
-    (busyIntervals.get(techId) ?? []).some((b) => b.s < slotEndMs && b.e > slotStartMs)
+    (busyIntervals.get(techId) ?? []).some((b) => b.startMs < slotEndMs && b.endMs > slotStartMs)
+  // Insertion cost of THIS lead's job in THIS tech's day around the slot,
+  // plus the overtime penalty if it would strand him far from the office
+  // past his day end.
+  const routeCost = (techId: string, slotStartMs: number, slotEndMs: number, dayEndMs: number): number => {
+    const dayJobs = (busyIntervals.get(techId) ?? []).filter((j) =>
+      sameLocalDay(j.startMs, slotStartMs, tz)
+    )
+    const isLast = !dayJobs.some((j) => j.startMs >= slotEndMs)
+    return (
+      insertionCostMin(dayJobs, officePoint, leadPoint, slotStartMs, slotEndMs) +
+      returnOvertimeMin(leadPoint, officePoint, slotEndMs, dayEndMs, isLast)
+    )
+  }
 
   // weekly workload for tiebreaking
   const weekStart = new Date(now)
@@ -170,9 +189,9 @@ export async function findSlotsForLead(
   }
 
   // 4. Generate slots day by day, window by window — only include slots with an available tech
-  const slots: SlotWithTech[] = []
+  const scored: Array<{ slot: SlotWithTech; cost: number }> = []
 
-  for (let offset = 0; offset <= horizonDays && slots.length < 8; offset++) {
+  for (let offset = 0; offset <= horizonDays && scored.length < 16; offset++) {
     const day     = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000)
     const dayName = DAY_NAMES[day.getDay()] as string
     if (!availDays.includes(dayName)) continue
@@ -200,23 +219,43 @@ export async function findSlotsForLead(
           if (slotMinutes < sh * 60 + sm || slotMinutes >= eh * 60 + em) return false
           return !isBusy(t.id, slotStartMs, slotEndMs)
         })
-        .sort((a, b) => (weeklyCount[a.id] ?? 0) - (weeklyCount[b.id] ?? 0))
+        .map(t => {
+          const sched = t.schedule[dayName as keyof Technician["schedule"]] as { end: string }
+          const dayEndMs = new Date(localSlotToUtcIso(dateStr, sched.end, tz)).getTime()
+          return { t, cost: routeCost(t.id, slotStartMs, slotEndMs, dayEndMs) }
+        })
+        // Route-first ranking: least added drive wins; workload breaks ties
+        .sort((a, b) => (a.cost - b.cost) || ((weeklyCount[a.t.id] ?? 0) - (weeklyCount[b.t.id] ?? 0)))
 
       if (avail.length === 0) continue
 
-      const best     = avail[0]
+      const best     = avail[0].t
       const dayLabel = day.toLocaleDateString("en-US", { timeZone: tz, weekday: "long", month: "short", day: "numeric" })
-      slots.push({
-        label:    `${dayLabel} — ${win.label} (${fmt12(win.start)}–${fmt12(win.end)})`,
-        isoStart,
-        isoEnd,
-        techId:   best.id,
-        techName: best.name,
+      scored.push({
+        cost: avail[0].cost,
+        slot: {
+          label:    `${dayLabel} — ${win.label} (${fmt12(win.start)}–${fmt12(win.end)})`,
+          isoStart,
+          isoEnd,
+          techId:   best.id,
+          techName: best.name,
+        },
       })
     }
   }
 
-  return slots.length > 0 ? { found: true, slots } : { found: false, reason: "no_slots" }
+  if (scored.length === 0) return { found: false, reason: "no_slots" }
+
+  // Relative route filter: keep slots within ROUTE_SLACK_MIN of the lead's
+  // best-routed option. Unavoidable distance appears on every slot and cancels;
+  // only badly-sequenced slots (far job wedged between near jobs) get hidden.
+  const minCost = Math.min(...scored.map((c) => c.cost))
+  const slots = scored
+    .filter((c) => c.cost <= minCost + ROUTE_SLACK_MIN)
+    .slice(0, 8)
+    .map((c) => c.slot)
+
+  return { found: true, slots }
 }
 
 export type TechnicianMatchResult =
@@ -334,40 +373,54 @@ export async function selectTechnician(
   const dayFrom = new Date(aptStartMs - 12 * 60 * 60 * 1000).toISOString()
   const dayTo   = new Date(aptEndMs   + 12 * 60 * 60 * 1000).toISOString()
 
-  const busy = new Map<string, Array<{ s: number; e: number }>>()
-  const addBusy = (id: string, s: number, e: number) => {
+  const busy = new Map<string, Array<LocatedJob>>()
+  const addBusy = (id: string, startMs: number, endMs: number, point: GeoPoint | null) => {
     if (!busy.has(id)) busy.set(id, [])
-    busy.get(id)!.push({ s, e })
+    busy.get(id)!.push({ startMs, endMs, point })
   }
-  const { data: sameDayApts } = await db
-    .from("appointments")
-    .select("scheduled_at, technician_id")
-    .eq("company_id", companyId)
-    .in("technician_id", candidates.map(t => t.id))
-    .gte("scheduled_at", dayFrom)
-    .lte("scheduled_at", dayTo)
-    .neq("status", "cancelled")
-    .neq("id", appointmentId)
+  const [{ data: sameDayApts }, { data: companyRow2 }, { data: aptRow }, { data: cfgRow }] = await Promise.all([
+    db.from("appointments")
+      .select("scheduled_at, technician_id, address")
+      .eq("company_id", companyId)
+      .in("technician_id", candidates.map(t => t.id))
+      .gte("scheduled_at", dayFrom)
+      .lte("scheduled_at", dayTo)
+      .neq("status", "cancelled")
+      .neq("id", appointmentId),
+    db.from("companies").select("office_address").eq("id", companyId).single(),
+    db.from("appointments").select("address").eq("id", appointmentId).single(),
+    db.from("ai_agent_config").select("timezone").eq("company_id", companyId).single(),
+  ])
   for (const a of sameDayApts ?? []) {
     if (a.technician_id) {
-      const s = new Date(a.scheduled_at).getTime()
-      addBusy(a.technician_id, s, s + JOB_MS)
+      const startMs = new Date(a.scheduled_at).getTime()
+      addBusy(a.technician_id, startMs, startMs + JOB_MS, addressToPoint(a.address))
     }
   }
   try {
     const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
     for (const b of await getHcpBusyIntervals(companyId, dayFrom, dayTo)) {
-      addBusy(b.technicianId, b.startMs, b.endMs)
+      addBusy(b.technicianId, b.startMs, b.endMs, b.point)
     }
   } catch (err) {
     console.warn("[selectTechnician] HCP availability unavailable, using local only:", err)
   }
   const conflictFree = candidates.filter(t =>
-    !(busy.get(t.id) ?? []).some(b => b.s < aptEndMs && b.e > aptStartMs)
+    !(busy.get(t.id) ?? []).some(b => b.startMs < aptEndMs && b.endMs > aptStartMs)
   )
   // Prefer conflict-free techs; if literally everyone conflicts, keep original
   // candidates (someone assigned beats nobody — the office resolves it)
   if (conflictFree.length > 0) candidates = conflictFree
+
+  // 4.6 Route ranking — least added drive time wins the assignment.
+  const officePoint2: GeoPoint | null = addressToPoint(companyRow2?.office_address)
+  const jobPoint: GeoPoint | null = addressToPoint(aptRow?.address) ?? zipToPoint(leadZip)
+  const costOf = new Map<string, number>()
+  for (const t of candidates) {
+    const dayJobs = (busy.get(t.id) ?? []).filter(j => sameLocalDay(j.startMs, aptStartMs, (cfgRow?.timezone as string | null) ?? "America/New_York"))
+    costOf.set(t.id, insertionCostMin(dayJobs, officePoint2, jobPoint, aptStartMs, aptEndMs))
+  }
+  candidates = [...candidates].sort((a, b) => (costOf.get(a.id)! - costOf.get(b.id)!))
 
   // 5. Rank by fewest appointments this week → pick most available tech
   const weekStart = new Date(aptDate)

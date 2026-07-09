@@ -522,7 +522,7 @@ export async function reconcileCompany(companyId: string): Promise<{
 // The office books jobs in Housecall Pro that never touch our system. Slot
 // generation must see them, or the AI double-books technicians.
 
-export type BusyInterval = { technicianId: string; startMs: number; endMs: number }
+export type BusyInterval = { technicianId: string; startMs: number; endMs: number; point: { lat: number; lng: number } | null }
 
 export async function getHcpBusyIntervals(
   companyId: string,
@@ -554,9 +554,12 @@ export async function getHcpBusyIntervals(
       if (!start) continue
       const end = job.schedule?.scheduled_end ?? new Date(new Date(start).getTime() + 2 * 60 * 60 * 1000).toISOString()
       const employees = (job.assigned_employees ?? []).map((e) => e.id)
+      const jobZip = (job as { address?: { zip?: string } }).address?.zip ?? null
+      const { zipToPoint } = await import("@/lib/routing")
+      const point = zipToPoint(jobZip)
       for (const empId of employees) {
         const techId = byHcpId.get(empId)
-        if (techId) intervals.push({ technicianId: techId, startMs: new Date(start).getTime(), endMs: new Date(end).getTime() })
+        if (techId) intervals.push({ technicianId: techId, startMs: new Date(start).getTime(), endMs: new Date(end).getTime(), point })
       }
     }
     if (jobs.length < 100 || (res.total_pages && page >= res.total_pages)) break
