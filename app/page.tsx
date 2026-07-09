@@ -420,6 +420,108 @@ function LiveConversation() {
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// DREAM SECTION — the morning this buys you. Benefits and emotions, not features.
+// ─────────────────────────────────────────────────────────────────────────────
+function DreamSection() {
+  const moments = [
+    {
+      time: "7:12 AM",
+      title: "Three jobs you didn't book are on the board.",
+      body: "Booked at 9:41 PM, 11:26 PM, and 6:03 this morning. Qualified, confirmed, assigned to the right tech for the zip. Nobody in your company touched a phone. You sip your coffee and read the conversations like box scores.",
+    },
+    {
+      time: "7:30 AM",
+      title: "Your office starts the day ahead — not buried.",
+      body: "The notes are already in Housecall Pro. The customers are already confirmed. The callback list is short, labeled, and waiting — instead of a voicemail box full of people who already hired someone else.",
+    },
+    {
+      time: "8:00 PM",
+      title: "You silence your phone at dinner. Nothing bad happens.",
+      body: "That flinch every time it buzzed after hours — the job you might be losing — is gone. Every call answered. Every lead worked. Every ad dollar doing what you paid it to do. You'll read about it in the morning.",
+    },
+  ]
+
+  return (
+    <section className="relative py-20 md:py-28 px-4 md:px-6 overflow-hidden" style={{ zIndex: 10, background: "#FAFAF8" }}>
+      {/* Sunrise — the night hero above literally dawns into this section */}
+      <div className="absolute inset-0 pointer-events-none" aria-hidden="true">
+        <div className="absolute inset-0 opacity-40"
+          style={{ backgroundImage: "radial-gradient(rgba(249,115,22,0.13) 1px, transparent 1px)", backgroundSize: "28px 28px" }} />
+        <div className="absolute -top-32 left-1/2 -translate-x-1/2 w-[900px] h-[500px] rounded-full blur-3xl"
+          style={{ background: "radial-gradient(ellipse, rgba(249,115,22,0.13) 0%, rgba(251,191,36,0.07) 45%, transparent 70%)" }} />
+      </div>
+
+      <div className="relative max-w-6xl mx-auto">
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-80px" }}
+          transition={{ duration: 0.6 }}
+          className="text-center mb-12 md:mb-16"
+        >
+          <div className="flex items-center justify-center gap-3 mb-5">
+            <span className="block w-6 h-px" style={{ background: "#F97316" }} />
+            <span className="text-xs font-semibold uppercase tracking-[0.18em]"
+                  style={{ color: "#EA580C", fontFamily: "var(--font-jetbrains)" }}>
+              The morning this buys you
+            </span>
+            <span className="block w-6 h-px" style={{ background: "#F97316" }} />
+          </div>
+          <h2 className="text-4xl md:text-5xl font-extrabold tracking-tight mb-4"
+              style={{ color: "#1C1917", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em" }}>
+            Now picture next Tuesday.
+          </h2>
+          <p className="text-lg max-w-xl mx-auto" style={{ color: "#78716C" }}>
+            Not the technology — the Tuesday.
+          </p>
+        </motion.div>
+
+        <div className="grid md:grid-cols-3 gap-5">
+          {moments.map((m, i) => (
+            <motion.div
+              key={m.time}
+              initial={{ opacity: 0, y: 28 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }}
+              transition={{ duration: 0.55, delay: i * 0.15 }}
+              whileHover={{ y: -4, transition: { type: "spring", stiffness: 350, damping: 22 } }}
+              className="relative bg-white rounded-2xl p-7 border border-[#E7E5E4]/70"
+              style={{ boxShadow: "0 6px 32px rgba(249,115,22,0.10), 0 1px 3px rgba(0,0,0,0.04)" }}
+            >
+              <span className="inline-block mb-4 px-3 py-1 rounded-full text-[13px] font-bold tabular-nums"
+                    style={{ background: "#FFF3EC", color: "#EA580C", fontFamily: "var(--font-jetbrains)" }}>
+                {m.time}
+              </span>
+              <h3 className="text-xl font-extrabold leading-snug mb-3"
+                  style={{ color: "#1C1917", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.01em" }}>
+                {m.title}
+              </h3>
+              <p className="text-[15px] leading-relaxed" style={{ color: "#78716C" }}>
+                {m.body}
+              </p>
+            </motion.div>
+          ))}
+        </div>
+
+        <motion.div
+          initial={{ opacity: 0, y: 20 }} whileInView={{ opacity: 1, y: 0 }} viewport={{ once: true, margin: "-60px" }}
+          transition={{ duration: 0.6, delay: 0.2 }}
+          className="text-center mt-14"
+        >
+          <p className="text-2xl md:text-[1.8rem] font-extrabold max-w-2xl mx-auto leading-snug mb-7"
+             style={{ color: "#1C1917", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
+            We didn&rsquo;t build software.{" "}
+            <span style={{ color: "#EA580C" }}>We built the first full night of sleep your business has had in years.</span>
+          </p>
+          <Link href="/signup?new=1"
+                className="inline-flex items-center justify-center gap-2 font-semibold text-white px-7 py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5"
+                style={{ background: "#F97316", boxShadow: "0 8px 28px rgba(249,115,22,0.35)" }}>
+            Make Next Tuesday Look Like This
+            <ArrowRight className="w-4 h-4" aria-hidden="true" />
+          </Link>
+        </motion.div>
+      </div>
+    </section>
+  )
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // HERO SECTION
 // ─────────────────────────────────────────────────────────────────────────────
 function HeroSection() {
@@ -474,12 +576,12 @@ function HeroSection() {
             <motion.h1
               initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }}
               transition={{ delay: 0.4, duration: 0.65 }}
-              className="text-4xl sm:text-5xl md:text-[3.4rem] font-extrabold tracking-tight leading-[1.06] mb-7"
+              className="text-[2.6rem] sm:text-5xl md:text-[3.6rem] font-extrabold tracking-tight leading-[1.05] mb-8"
               style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em" }}
             >
-              Your 24/7 AI Rep Answers Every Lead, Qualifies, Books, Routes the Right Tech, and Logs It All in Your CRM.{" "}
-              <span className="relative inline-block whitespace-nowrap" style={{ color: "#F97316" }}>
-                In under 60 seconds.
+              You don&rsquo;t have a leads problem.{" "}
+              <span className="relative inline-block" style={{ color: "#F97316" }}>
+                You have a &ldquo;nobody answered&rdquo; problem.
                 <span className="absolute -bottom-1 left-0 right-0 h-[3px] rounded-full"
                       style={{ background: "linear-gradient(90deg, #F97316, #EA580C)",
                                transformOrigin: "left", animation: "underlineDraw 0.7s ease forwards 1.4s",
@@ -487,17 +589,30 @@ function HeroSection() {
               </span>
             </motion.h1>
 
-            {/* Subhead */}
-            <motion.p
-              initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.55, duration: 0.5 }}
-              className="text-lg leading-relaxed mb-9 max-w-md"
-              style={{ color: "rgba(250,250,248,0.58)" }}
-            >
-              No new software to learn. No leads dying at 9 PM. It works inside the CRM
-              you already run — your team opens Housecall Pro in the morning and the
-              jobs are already on the board.
-            </motion.p>
+            {/* The shocking numbers — designed to be READ, not skimmed */}
+            <div className="mb-9 space-y-3 max-w-lg">
+              {[
+                { num: "62% vs 28%", text: "of leads close when you answer in 2 minutes — vs the industry's 42-minute average", delay: 0.55 },
+                { num: "78%", text: "of homeowners hire the first company that responds. Speed IS the sale.", delay: 0.68 },
+                { num: "$381,000", text: "lost per year on 80 leads/month at average speed — money you already spent ads to create", delay: 0.81 },
+              ].map((s) => (
+                <motion.div
+                  key={s.num}
+                  initial={{ opacity: 0, x: -16 }} animate={{ opacity: 1, x: 0 }}
+                  transition={{ delay: s.delay, duration: 0.5 }}
+                  className="flex items-center gap-4 rounded-xl px-4 py-3"
+                  style={{ background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.22)" }}
+                >
+                  <span className="shrink-0 text-2xl sm:text-[1.7rem] font-bold tabular-nums leading-none"
+                        style={{ color: "#FB923C", fontFamily: "var(--font-jetbrains)" }}>
+                    {s.num}
+                  </span>
+                  <span className="text-[13.5px] sm:text-sm leading-snug font-medium" style={{ color: "rgba(250,250,248,0.85)" }}>
+                    {s.text}
+                  </span>
+                </motion.div>
+              ))}
+            </div>
 
             {/* CTAs */}
             <motion.div
@@ -3020,6 +3135,7 @@ export default function Page() {
       <Background />
       <Nav />
       <HeroSection />
+      <DreamSection />
       <AIOfficeSection />
       <ProblemSection />
       <HowItWorksSection />
