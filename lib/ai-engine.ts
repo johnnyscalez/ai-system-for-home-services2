@@ -1492,12 +1492,14 @@ This person is an existing customer. They already trust the company. Your job is
   // already known vs. must be collected — form leads arrive with everything,
   // WhatsApp implies the phone, Messenger implies neither phone nor email.
   {
-    const channel = (lead.channel as string | null) ?? "sms"
-    const hasRealPhone = /^\+\d{8,15}$/.test(lead.phone ?? "")
-    const hasName = !!(lead.first_name ?? "").trim()
-    const hasEmail = !!(lead.email ?? "").trim()
-    const hasAddress = !!(lead.address ?? "").trim()
-    const hasJobType = !!(lead.job_type ?? "").trim()
+    const L = lead as Record<string, unknown>
+    const channel = typeof L.channel === "string" && L.channel ? L.channel : "sms"
+    const hasRealPhone = /^\+\d{8,15}$/.test(String(L.phone ?? ""))
+    const hasName = !!String(L.first_name ?? "").trim()
+    const hasEmail = !!String(L.email ?? "").trim()
+    const hasAddress = !!String(L.address ?? "").trim()
+    const jobTypeStr = String(L.job_type ?? "").trim()
+    const hasJobType = !!jobTypeStr
 
     const mark = (ok: boolean, label: string, note?: string) =>
       `  ${label}: ${ok ? `✓ on file${note ? ` (${note})` : ""}` : "✗ MISSING — collect it"}`
@@ -1519,7 +1521,7 @@ ${mark(hasName, "Name")}
 ${mark(hasRealPhone, "Mobile phone", channel === "whatsapp" || channel === "sms" ? "this conversation IS their phone — never ask for it" : undefined)}
 ${mark(hasEmail, "Email")}
 ${mark(hasAddress, "Property address")}
-${mark(hasJobType, "Job type", lead.job_type ?? undefined)}
+${mark(hasJobType, "Job type", jobTypeStr || undefined)}
 
 REQUIRED BEFORE BOOKING: ${requiredMissing.length > 0 ? requiredMissing.join(", ") : "nothing — all booking fields are on file"}
 ${!hasEmail ? "NICE TO HAVE: email — ask ONCE, casually, for the confirmation email (\"Want the confirmation by email too?\"). If they skip it, book anyway. Never let email block a booking." : ""}
