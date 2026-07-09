@@ -35,6 +35,7 @@ interface Props {
   toast: string | null
   toastType: "success" | "error" | null
   whatsapp: WhatsAppConnection | null
+  companyName: string
 }
 
 function DotGrid() {
@@ -587,9 +588,10 @@ function WhatsAppIcon({ className }: { className?: string }) {
   )
 }
 
-function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null }) {
+function WhatsAppCard({ connection, companyName }: { connection: WhatsAppConnection | null; companyName: string }) {
   const router = useRouter()
-  const [displayName, setDisplayName] = useState(connection?.display_name ?? "")
+  // The display name customers see on WhatsApp — their company name, not ours
+  const [displayName, setDisplayName] = useState(connection?.display_name ?? companyName ?? "")
   const [mode, setMode] = useState<"fieldbuilt" | "byon" | "own_waba">(
     (connection?.sender_type as "fieldbuilt" | "byon" | "own_waba") ?? "fieldbuilt"
   )
@@ -895,7 +897,7 @@ function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null })
             <input
               value={displayName}
               onChange={(e) => setDisplayName(e.target.value)}
-              placeholder="e.g. Berg's Heating & Air"
+              placeholder={companyName || "Your company name"}
               className="flex-1 min-w-[220px] rounded-xl border border-[#E7E5E4] bg-white px-4 py-2.5 text-sm text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#25D366]/40"
             />
             <button
@@ -928,7 +930,7 @@ function WhatsAppCard({ connection }: { connection: WhatsAppConnection | null })
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast, toastType, whatsapp }: Props) {
+export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast, toastType, whatsapp, companyName }: Props) {
   const [showToast, setShowToast] = useState(!!toast)
 
   useEffect(() => {
@@ -1014,7 +1016,7 @@ export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast,
         {/* Cards */}
         <div className="space-y-5">
           <FacebookCard integration={byType("facebook")} errorCode={toast === "no_pages" ? "no_pages" : null} />
-          <WhatsAppCard connection={whatsapp} />
+          <WhatsAppCard connection={whatsapp} companyName={companyName} />
           <GoogleAdsCard webhookUrl={googleWebhookUrl} />
           <WebsiteFormCard
             webhookUrl={genericWebhookUrl}

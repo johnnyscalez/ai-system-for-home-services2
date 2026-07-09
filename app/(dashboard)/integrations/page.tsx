@@ -13,7 +13,7 @@ export default async function IntegrationsPage({
 
   const { data: profile } = await supabase
     .from("users")
-    .select("company_id, companies(webhook_secret)")
+    .select("company_id, companies(webhook_secret, name)")
     .eq("id", user.id)
     .single()
 
@@ -21,7 +21,7 @@ export default async function IntegrationsPage({
 
   const company = (
     Array.isArray(profile.companies) ? profile.companies[0] : profile.companies
-  ) as { webhook_secret: string } | null
+  ) as { webhook_secret: string; name: string | null } | null
 
   const { data: integrations } = await supabase
     .from("integrations")
@@ -42,6 +42,7 @@ export default async function IntegrationsPage({
     <IntegrationsClient
       integrations={integrations ?? []}
       whatsapp={whatsapp?.status === "disconnected" ? null : whatsapp ?? null}
+      companyName={company?.name ?? ""}
       webhookSecret={webhookSecret}
       appUrl={appUrl}
       toast={params.success ?? params.error ?? null}
