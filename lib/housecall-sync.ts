@@ -517,3 +517,49 @@ export async function reconcileCompany(companyId: string): Promise<{
 
   return { jobsProcessed, techsImported, pushRetries }
 }
+
+// ── Availability: the tech's REAL day includes jobs booked directly in HCP ────
+// The office books jobs in Housecall Pro that never touch our system. Slot
+// generation must see them, or the AI double-books technicians.
+
+export type BusyInterval = { technicianId: string; startMs: number; endMs: number }
+
+export async function getHcpBusyIntervals(
+  companyId: string,
+  fromIso: string,
+  toIso: string
+): Promise<BusyInterval[]> {
+  const client = await getHcpClient(companyId)
+  if (!client) return []
+
+  const db = createServiceRoleClient()
+  const { data: techs } = await db
+    .from("technicians")
+    .select("id, hcp_employee_id")
+    .eq("company_id", companyId)
+    .not("hcp_employee_id", "is", null)
+  const byHcpId = new Map<string, string>()
+  for (const t of techs ?? []) byHcpId.set(t.hcp_employee_id as string, t.id)
+  if (byHcpId.size === 0) return []
+
+  const intervals: BusyInterval[] = []
+  for (let page = 1; page <= 3; page++) {
+    const res = await client.get<{ jobs?: HcpJob[]; total_pages?: number }>(
+      `/jobs?scheduled_start_min=${encodeURIComponent(fromIso)}&scheduled_start_max=${encodeURIComponent(toIso)}&page=${page}&page_size=100`
+    )
+    const jobs = res.jobs ?? []
+    for (const job of jobs) {
+      if (/cancel/i.test(job.work_status ?? "")) continue
+      const start = job.schedule?.scheduled_start
+      if (!start) continue
+      const end = job.schedule?.scheduled_end ?? new Date(new Date(start).getTime() + 2 * 60 * 60 * 1000).toISOString()
+      const employees = (job.assigned_employees ?? []).map((e) => e.id)
+      for (const empId of employees) {
+        const techId = byHcpId.get(empId)
+        if (techId) intervals.push({ technicianId: techId, startMs: new Date(start).getTime(), endMs: new Date(end).getTime() })
+      }
+    }
+    if (jobs.length < 100 || (res.total_pages && page >= res.total_pages)) break
+  }
+  return intervals
+}

@@ -130,12 +130,31 @@ export async function findSlotsForLead(
     .lte("scheduled_at", horizonEnd.toISOString())
     .neq("status", "cancelled")
 
-  // busy set: `techId|YYYY-MM-DDTHH:MM` — normalize to UTC ISO so format is always consistent
-  const busyAt = new Set<string>()
-  for (const a of existingApts ?? []) {
-    if (a.technician_id)
-      busyAt.add(`${a.technician_id}|${new Date(a.scheduled_at).toISOString().substring(0, 16)}`)
+  // The tech's REAL day = our appointments + every job booked directly in
+  // Housecall Pro by the office. Both become busy intervals; a slot is taken
+  // if any interval overlaps it — not just exact start-time matches.
+  const JOB_MS = 2 * 60 * 60 * 1000
+  const busyIntervals = new Map<string, Array<{ s: number; e: number }>>()
+  const addBusy = (techId: string, s: number, e: number) => {
+    if (!busyIntervals.has(techId)) busyIntervals.set(techId, [])
+    busyIntervals.get(techId)!.push({ s, e })
   }
+  for (const a of existingApts ?? []) {
+    if (a.technician_id) {
+      const s = new Date(a.scheduled_at).getTime()
+      addBusy(a.technician_id, s, s + JOB_MS)
+    }
+  }
+  try {
+    const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
+    const hcpBusy = await getHcpBusyIntervals(companyId, now.toISOString(), horizonEnd.toISOString())
+    for (const b of hcpBusy) addBusy(b.technicianId, b.startMs, b.endMs)
+  } catch (err) {
+    // HCP unreachable — degrade to our own data rather than failing the booking
+    console.warn("[slots] HCP availability unavailable, using local only:", err)
+  }
+  const isBusy = (techId: string, slotStartMs: number, slotEndMs: number) =>
+    (busyIntervals.get(techId) ?? []).some((b) => b.s < slotEndMs && b.e > slotStartMs)
 
   // weekly workload for tiebreaking
   const weekStart = new Date(now)
@@ -169,7 +188,8 @@ export async function findSlotsForLead(
       const [slotH, slotM] = win.start.split(":").map(Number)
       const slotMinutes    = slotH * 60 + slotM
 
-      const isoStartKey = isoStart.substring(0, 16) // "YYYY-MM-DDTHH:MM" in UTC
+      const slotStartMs = new Date(isoStart).getTime()
+      const slotEndMs   = new Date(isoEnd).getTime()
       const avail = candidates
         .filter(t => {
           const sched = t.schedule[dayName as keyof Technician["schedule"]] as
@@ -178,7 +198,7 @@ export async function findSlotsForLead(
           const [sh, sm] = sched.start.split(":").map(Number)
           const [eh, em] = sched.end.split(":").map(Number)
           if (slotMinutes < sh * 60 + sm || slotMinutes >= eh * 60 + em) return false
-          return !busyAt.has(`${t.id}|${isoStartKey}`)
+          return !isBusy(t.id, slotStartMs, slotEndMs)
         })
         .sort((a, b) => (weeklyCount[a.id] ?? 0) - (weeklyCount[b.id] ?? 0))
 
@@ -305,6 +325,49 @@ export async function selectTechnician(
   } else {
     candidates = scheduleFiltered
   }
+
+  // 4.5 Conflict check — the tech's REAL day, from BOTH systems: our
+  // appointments and jobs the office booked directly in Housecall Pro.
+  const JOB_MS = 2 * 60 * 60 * 1000
+  const aptStartMs = aptDate.getTime()
+  const aptEndMs   = aptStartMs + JOB_MS
+  const dayFrom = new Date(aptStartMs - 12 * 60 * 60 * 1000).toISOString()
+  const dayTo   = new Date(aptEndMs   + 12 * 60 * 60 * 1000).toISOString()
+
+  const busy = new Map<string, Array<{ s: number; e: number }>>()
+  const addBusy = (id: string, s: number, e: number) => {
+    if (!busy.has(id)) busy.set(id, [])
+    busy.get(id)!.push({ s, e })
+  }
+  const { data: sameDayApts } = await db
+    .from("appointments")
+    .select("scheduled_at, technician_id")
+    .eq("company_id", companyId)
+    .in("technician_id", candidates.map(t => t.id))
+    .gte("scheduled_at", dayFrom)
+    .lte("scheduled_at", dayTo)
+    .neq("status", "cancelled")
+    .neq("id", appointmentId)
+  for (const a of sameDayApts ?? []) {
+    if (a.technician_id) {
+      const s = new Date(a.scheduled_at).getTime()
+      addBusy(a.technician_id, s, s + JOB_MS)
+    }
+  }
+  try {
+    const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
+    for (const b of await getHcpBusyIntervals(companyId, dayFrom, dayTo)) {
+      addBusy(b.technicianId, b.startMs, b.endMs)
+    }
+  } catch (err) {
+    console.warn("[selectTechnician] HCP availability unavailable, using local only:", err)
+  }
+  const conflictFree = candidates.filter(t =>
+    !(busy.get(t.id) ?? []).some(b => b.s < aptEndMs && b.e > aptStartMs)
+  )
+  // Prefer conflict-free techs; if literally everyone conflicts, keep original
+  // candidates (someone assigned beats nobody — the office resolves it)
+  if (conflictFree.length > 0) candidates = conflictFree
 
   // 5. Rank by fewest appointments this week → pick most available tech
   const weekStart = new Date(aptDate)
