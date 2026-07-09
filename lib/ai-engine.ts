@@ -1487,6 +1487,53 @@ This person is an existing customer. They already trust the company. Your job is
   if (lead.email) ctx += `Email: ${lead.email}\n`
   if (lead.notes) ctx += `Notes from lead form: ${lead.notes}\n`
 
+  // ── Channel & contact-file awareness ─────────────────────────────────────
+  // The AI must know which channel it's on and which contact fields are
+  // already known vs. must be collected — form leads arrive with everything,
+  // WhatsApp implies the phone, Messenger implies neither phone nor email.
+  {
+    const channel = (lead.channel as string | null) ?? "sms"
+    const hasRealPhone = /^\+\d{8,15}$/.test(lead.phone ?? "")
+    const hasName = !!(lead.first_name ?? "").trim()
+    const hasEmail = !!(lead.email ?? "").trim()
+    const hasAddress = !!(lead.address ?? "").trim()
+    const hasJobType = !!(lead.job_type ?? "").trim()
+
+    const mark = (ok: boolean, label: string, note?: string) =>
+      `  ${label}: ${ok ? `✓ on file${note ? ` (${note})` : ""}` : "✗ MISSING — collect it"}`
+
+    const requiredMissing: string[] = []
+    if (!hasAddress) requiredMissing.push("property address")
+    if (!hasRealPhone) requiredMissing.push("mobile phone number")
+    if (!hasName) requiredMissing.push("name")
+
+    const channelLabel =
+      channel === "whatsapp" ? "WHATSAPP" :
+      channel === "messenger" ? "FACEBOOK MESSENGER" :
+      channel === "voice" ? "VOICE CALL" : "SMS / TEXT"
+
+    ctx += `
+=== CHANNEL & CONTACT FILE ===
+You are talking on: ${channelLabel}
+${mark(hasName, "Name")}
+${mark(hasRealPhone, "Mobile phone", channel === "whatsapp" || channel === "sms" ? "this conversation IS their phone — never ask for it" : undefined)}
+${mark(hasEmail, "Email")}
+${mark(hasAddress, "Property address")}
+${mark(hasJobType, "Job type", lead.job_type ?? undefined)}
+
+REQUIRED BEFORE BOOKING: ${requiredMissing.length > 0 ? requiredMissing.join(", ") : "nothing — all booking fields are on file"}
+${!hasEmail ? "NICE TO HAVE: email — ask ONCE, casually, for the confirmation email (\"Want the confirmation by email too?\"). If they skip it, book anyway. Never let email block a booking." : ""}
+
+CONTACT COLLECTION RULES:
+• NEVER ask for anything marked ✓ — re-asking for info already on file destroys trust instantly.
+• Collect missing fields INSIDE the natural flow — one question per message, never an intake form.
+${channel === "messenger" ? `• MESSENGER SPECIFIC: you have NO phone number for this person. You MUST get a mobile number before booking — the technician calls it and confirmations are texted to it. Ask it right before the address: "Best mobile number for the tech to reach you?"` : ""}
+${channel === "whatsapp" ? `• WHATSAPP SPECIFIC: their phone number is this chat itself. Focus on address${hasEmail ? "" : " and a one-time casual email ask"}.` : ""}
+• If a required field is still missing, you may NOT call book_appointment yet — collect it first, then book in the same conversation.
+=== END CHANNEL & CONTACT FILE ===
+`
+  }
+
   // Pass through all custom form fields from metadata so AI has full lead context
   if (lead.metadata && typeof lead.metadata === "object" && lead.metadata !== null) {
     const meta = lead.metadata as Record<string, unknown>

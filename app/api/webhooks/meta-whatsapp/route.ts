@@ -137,6 +137,12 @@ export async function POST(req: NextRequest) {
           .update({ last_inbound_at: new Date().toISOString(), is_active_conversation: true, channel: "whatsapp" })
           .eq("id", lead.id)
 
+        // Capture email/address the moment they're shared in the conversation
+        const email = ev.text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0]
+        if (email) {
+          await db.from("leads").update({ email: email.toLowerCase() }).eq("id", lead.id).is("email", null)
+        }
+
         const result = await processAndSave(lead.id, conn.company_id, ev.text, ev.wamid)
         if (result.response) {
           const wamid = await sendCloudText(conn, phone, result.response)

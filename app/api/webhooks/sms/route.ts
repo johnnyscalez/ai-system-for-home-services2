@@ -264,6 +264,17 @@ export async function POST(req: NextRequest) {
         .is("address", null)
     }
 
+    // Same for email — the moment they share it, it's on file and the AI
+    // stops asking (the contact-file block marks it ✓ next turn)
+    const detectedEmail = messageBody.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0]
+    if (detectedEmail) {
+      await supabase
+        .from("leads")
+        .update({ email: detectedEmail.toLowerCase() })
+        .eq("id", lead.id)
+        .is("email", null)
+    }
+
     // Cancel any pending no-reply sequences since they replied
     await supabase
       .from("sequences")
