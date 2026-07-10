@@ -40,6 +40,8 @@ MANDATORY RULES — never break these:
 11. SERVICE AREA RULE: You MUST call find_available_slots after learning the lead's zip code. Say ONE short natural sentence before calling it — something like "Give me just a second to check who's available." or "Let me pull up what we've got." That's it — one sentence, then call the tool. The slot offer comes after the results return.
 12. TIMEZONE RULE: When booking, use the exact ISO 8601 datetime from the find_available_slots results. Never construct your own datetime string — the slots returned are already in the correct timezone.
 13. OUTSIDE SERVICE AREA: If find_available_slots says outside service area, say warmly that you don't serve that area, then call update_lead_status("closed_lost"), add_note with the zip, and end_call.
+14. PIVOT AFTER ANSWERING: When you answer a question the lead asked (cost, timeline, what's included) without needing their input, end that same response with your next qualifying question. Do NOT stop and wait silently after answering.
+15. VISIT FEE / TRIP CHARGE: If a SERVICE CALL FEE POLICY block appears in this system prompt, follow it exactly when asked about cost to come out. Never say "free" unless that policy says so. If no SERVICE CALL FEE POLICY block is present, say "It's completely free — no trip charge."
 === END VOICE RULES ===`
 
 // ─── Tool definitions ──────────────────────────────────────────────────────────
@@ -202,7 +204,7 @@ export async function runVoiceTurn(
       .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, disqualifiers")
       .eq("company_id", session.company_id).single(),
     db.from("knowledge_base")
-      .select("business_description, services_offered, service_areas, custom_ai_knowledge")
+      .select("business_description, services_offered, service_areas, custom_ai_knowledge, pricing_info")
       .eq("company_id", session.company_id).single(),
     db.from("appointments")
       .select("id, scheduled_at, status, address, notes, created_at")
@@ -251,12 +253,30 @@ from the description above.`
     ? `=== YOUR COMPANY-SPECIFIC KNOWLEDGE ===\n${kb.custom_ai_knowledge}\n=== END COMPANY-SPECIFIC KNOWLEDGE ===`
     : ""
 
+  const pricingPolicyBlock = (() => {
+    const info = (kb as Record<string, unknown> | null)?.pricing_info as string | null
+    if (!info) return ""
+    const feeLines = info.split("\n").map((l: string) => l.trim()).filter((l: string) =>
+      /service.?call|trip.?charge|trip.?fee|visit.?fee|diagnostic.?fee|call.?out|dispatch.?fee/i.test(l)
+    )
+    if (feeLines.length === 0) return ""
+    return [
+      "=== SERVICE CALL FEE POLICY — USE THIS WHEN LEADS ASK ABOUT COST TO COME OUT ===",
+      `When leads ask "Is it free?", "Do you charge to come out?", or "How much just to visit?", answer using ONLY the following — never assume or guess:`,
+      "",
+      ...feeLines.map((l: string) => `• ${l.replace(/^[•\-*]\s*/, "")}`),
+      "",
+      `Never say "free to come out" unless this policy explicitly says so. Never contradict this policy.`,
+      "=== END SERVICE CALL FEE POLICY ===",
+    ].join("\n")
+  })()
+
   const qualificationBlock = buildQualificationBlock(agent?.disqualifiers ?? null)
 
   const voiceRules = VOICE_RULES.replaceAll("[AgentName]", agentName)
 
   // Note: no pre-computed slots block — the agent calls find_available_slots after getting zip code.
-  const systemPrompt = [voiceRules, basePrompt, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext]
+  const systemPrompt = [voiceRules, basePrompt, pricingPolicyBlock, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext]
     .filter(Boolean)
     .join("\n\n")
 
@@ -685,12 +705,19 @@ function buildVoiceLeadContext(
 
   const _jobLabel = lead.job_type ? getJobTypeLabel(lead.job_type as string) : null
 
+  const upcomingDays = Array.from({ length: 7 }, (_, i) => {
+    const d = new Date(now.getTime() + (i + 1) * 24 * 60 * 60 * 1000)
+    return `  +${i + 1}: ${d.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", year: "numeric", timeZone: timezone })}`
+  }).join("\n")
+
   let ctx = `=== LEAD FILE ===
 Name: ${lead.first_name ?? ""} ${lead.last_name ?? ""}
 Phone: ${lead.phone}
 Service: ${lead.service_type ?? "HVAC"}
 Customer type: ${isReturning ? "RETURNING — has history with this company" : "NEW LEAD"}
-Current date/time: ${nowFmt}`
+Current date/time: ${nowFmt}
+Upcoming dates (use THESE exact dates — do NOT compute dates yourself):
+${upcomingDays}`
 
   if (_jobLabel)        ctx += `\nJob type: ${_jobLabel} (${lead.job_type})`
   if (lead.system_type) ctx += `\nSystem type: ${lead.system_type}`
