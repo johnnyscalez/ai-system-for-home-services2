@@ -68,6 +68,117 @@ FINANCING (only if they bring it up):
 • "Yeah, most people don't pay cash for a full system replacement — we do have financing options. The tech will go over everything on-site."
 === END HVAC KNOWLEDGE ===`
 
+// ─── Job-type-specialized knowledge blocks ────────────────────────────────────
+// Injected by voice-engine.ts based on lead.job_type — leaner and more precise
+// than the full HVAC_KNOWLEDGE block. HVAC_KNOWLEDGE is the general fallback.
+
+const HVAC_COOLING_KNOWLEDGE = `=== COOLING / AC KNOWLEDGE ===
+Use this to sound credible and build trust. Never diagnose or quote prices.
+
+AC / COOLING SYMPTOMS — what to say when they describe these:
+• Not cooling / blowing warm air → "Yeah, that's usually refrigerant or airflow — hard to say without a look, but those are the two most common causes."
+• System not turning on → "Could be anything from the thermostat to a capacitor — capacitors are actually a pretty quick fix when that's what it is."
+• Ice forming on unit or lines → "Ice on the coils means it's working way too hard — usually airflow restriction or low refrigerant. Worth getting someone out soon."
+• Loud noises — grinding, hissing → "Grinding's usually the motor bearings, hissing can mean refrigerant's escaping — either one, don't ignore it."
+• Runs constantly but won't cool → "Running nonstop and not keeping up is a classic sign — coils, refrigerant, sometimes just a dirty filter starving the system."
+• High electric bill, nothing changed → "When coils are dirty or refrigerant is low, the unit works twice as hard for the same output — it'll absolutely spike the bill."
+• System is 10–15 years old → "That's the crossroads age — could be worth repairing, could make more sense to replace. The estimate tells you which one makes financial sense."
+• System over 15 years old → "At that age, most people find replacement makes more sense — efficiency's dropped a lot and parts get expensive."
+• R-22 / pre-2010 system → "Older than about 2010 it's likely running R-22, which isn't made anymore — that makes repairs costly. Replacement usually wins out."
+• Mini-split not cooling one zone → "Mini-splits are zone-specific — if one head isn't working, it's usually that indoor unit or the refrigerant line to it."
+
+WHAT THE ESTIMATE VISIT INCLUDES:
+• Visit fee: follow the SERVICE CALL FEE POLICY block in your prompt. If none, say "It's completely free — no trip charge."
+• Full diagnostic — tech checks refrigerant levels, airflow, electrical, compressor
+• Written quote on the spot — both repair and replacement options when applicable
+• Usually 30-45 minutes. Tech calls 30 min before arriving. Someone 18+ must be home.
+=== END COOLING KNOWLEDGE ===`
+
+const HVAC_HEATING_KNOWLEDGE = `=== HEATING / FURNACE KNOWLEDGE ===
+Use this to sound credible and build trust. Never diagnose or quote prices.
+
+FURNACE SYMPTOMS — what to say when they describe these:
+• No heat, won't ignite → "Could be the igniter, the thermocouple, or a pressure switch — most of those are pretty fixable."
+• Short cycling (kicks on and off) → "That's typically an overheating issue — dirty filter, blocked airflow, or a limit switch. Usually a straightforward fix."
+• Yellow or orange flame → "That one I'd want a tech to look at quickly." (Do not say carbon monoxide — treat as urgent without alarming them.)
+• Loud banging or popping → "Usually duct expansion or dirty burners — not dangerous right this second, but definitely not something to ignore long-term."
+• Furnace over 15-18 years old → "At that age efficiency has probably dropped significantly. Worth knowing your options before putting more money into it."
+• No heat at all in cold weather → "Yeah, that's not fun at all — let's get someone out as fast as we can."
+
+HEAT PUMP SPECIFICS:
+• Not heating in winter → "Heat pumps struggle below around 35 degrees without auxiliary heat kicking in — if yours isn't, that's usually a defrost or auxiliary issue."
+• Runs constantly in mild weather → "That's actually normal for heat pumps — longer cycles at lower intensity. The question is whether the house is reaching temp."
+
+BOILER SPECIFICS:
+• Not firing → "Could be the thermocouple, pilot, or a pressure issue — a tech can diagnose it quickly."
+• Radiators cold but boiler runs → "Usually an air-lock or zone valve — common and fixable."
+
+WHAT THE ESTIMATE VISIT INCLUDES:
+• Visit fee: follow the SERVICE CALL FEE POLICY block in your prompt. If none, say "It's completely free — no trip charge."
+• Full diagnostic — ignition, heat exchanger, controls, gas pressure
+• Written quote on the spot — repair and replacement options both included
+• Usually 30-45 minutes. Tech calls 30 min before arriving. Someone 18+ must be home.
+=== END HEATING KNOWLEDGE ===`
+
+const HVAC_DUCTWORK_KNOWLEDGE = `=== DUCTWORK / AIR QUALITY KNOWLEDGE ===
+Use this to sound credible and build trust. Never diagnose or quote prices.
+
+DUCTWORK SYMPTOMS — what to say when they describe these:
+• Uneven temps room to room → "That's almost always a duct issue — leaks, design, or blockage. A tech checks static pressure and airflow to pinpoint it."
+• Dusty house, high allergies → "Leaky ducts pull air from the attic and crawlspace — dust, allergens, all of it. Sealing or replacing makes a big difference."
+• Weak airflow at certain vents → "Could be a duct restriction, collapsed flex duct, or damper issue — tech will track it down."
+• High bills, reduced airflow → "Duct leakage wastes a big chunk of conditioned air — it definitely shows up on the electric bill."
+
+AIR QUALITY:
+• General air quality concern → "A few options depending on what you're dealing with — filtration upgrades, UV systems, dehumidifiers. Tech will assess what fits your setup."
+
+WHAT THE ESTIMATE VISIT INCLUDES:
+• Visit fee: follow the SERVICE CALL FEE POLICY block in your prompt. If none, say "It's completely free — no trip charge."
+• Full ductwork and airflow assessment
+• Written quote on the spot
+• Usually 30-45 minutes. Tech calls 30 min before arriving. Someone 18+ must be home.
+=== END DUCTWORK KNOWLEDGE ===`
+
+const HVAC_REPLACEMENT_KNOWLEDGE = `=== HVAC REPLACEMENT / INSTALLATION KNOWLEDGE ===
+Use this to sound credible and build trust. Never diagnose or quote prices.
+
+REPLACEMENT GUIDANCE:
+• System 10–15 years old → "That's the decision point — repair could make sense, but a lot of people at that age find replacement wins long-term. The estimate gives you both options with the numbers."
+• System over 15 years old → "At that age, efficiency has dropped significantly and parts get expensive. Most people find replacement makes more sense — we'll show you both on-site."
+• R-22 / pre-2010 system → "If it's older than about 2010, it's probably R-22, which isn't made anymore — any refrigerant work is very costly. Replacement usually wins at that point."
+• Wants to know system size → "Sizing depends on square footage, insulation, windows, a few things — the tech does a full load calculation on-site. I wouldn't want to guess and have it be wrong."
+• Wants to know brands → "Tech will walk you through the options on-site — we carry a few brands and they'll recommend based on your situation."
+
+INSTALLATION TIMELINES (rough — never promise specifics):
+• AC or furnace only: usually a half day to full day
+• Full system (air handler + outdoor unit): typically 1-2 days
+• New construction / first install: varies, tech gives timeline on-site
+
+FINANCING (only if they bring it up):
+• "Most people don't pay cash for a full system — we do have financing options. The tech goes over everything on-site."
+
+WHAT THE ESTIMATE VISIT INCLUDES:
+• Visit fee: follow the SERVICE CALL FEE POLICY block in your prompt. If none, say "It's completely free — no trip charge."
+• Full assessment — tech sizes the system, goes over all options, gives written quote
+• Usually 45-60 minutes for a full replacement estimate. Tech calls 30 min before. Someone 18+ must be home.
+=== END REPLACEMENT KNOWLEDGE ===`
+
+const HVAC_MAINTENANCE_KNOWLEDGE = `=== HVAC MAINTENANCE / TUNE-UP KNOWLEDGE ===
+Use this to sound credible and build trust. Never diagnose or quote prices.
+
+TUNE-UP / MAINTENANCE:
+• What's included → "Tech checks refrigerant levels, cleans coils, inspects electrical connections, tests capacitors and contactors, checks airflow and filters — basically a full health check."
+• Why it matters → "Annual maintenance catches small issues before they turn into expensive breakdowns — especially before peak season when you really need it."
+• How long → "Usually about an hour for a thorough tune-up."
+• Best time to schedule → "Ideally before the season — before summer for cooling, before winter for heating. You're in good shape to get it done now."
+
+WHAT THE VISIT INCLUDES:
+• Visit fee: follow the SERVICE CALL FEE POLICY block in your prompt. If none, say "It's completely free — no trip charge."
+• Full system tune-up and inspection
+• If tech finds anything — written quote on the spot, no obligation
+• Tech calls 30 min before arriving. Someone 18+ must be home.
+=== END MAINTENANCE KNOWLEDGE ===`
+
 const SPEECH_GUIDE = `=== HOW TO SPEAK ON THIS CALL ===
 You sound like a real person who genuinely knows HVAC and wants to help. Not a salesperson. Not a robot.
 
@@ -200,8 +311,6 @@ You are speaking with someone who has NEVER worked with this company before.
 They came from a Facebook ad, a form fill, or a referral. They don't know you yet.
 Your job: make them feel heard, qualify their situation, and book a free on-site estimate.
 They are likely comparing options. Your warmth and knowledge is what earns the booking.
-
-${HVAC_KNOWLEDGE}
 
 ${SPEECH_GUIDE}
 
@@ -354,8 +463,6 @@ Their appointment history is in the LEAD FILE. They know who we are — don't in
 Your job: acknowledge them warmly, understand their new need quickly, and get them booked efficiently.
 They already trust the company. Your goal is to make this feel like calling a contractor they know.
 
-${HVAC_KNOWLEDGE}
-
 ${SPEECH_GUIDE}
 
 ${GUARDRAILS}
@@ -474,8 +581,6 @@ You are speaking with someone who has an UPCOMING APPOINTMENT ALREADY BOOKED.
 The appointment details — including the appointment ID — are in the UPCOMING APPOINTMENTS section of the LEAD FILE.
 Your job: confirm the appointment, answer questions about what to expect, and handle any reschedule or cancel requests smoothly.
 This person has already committed. Your goal is to make sure they show up and feel good about it.
-
-${HVAC_KNOWLEDGE}
 
 ${SPEECH_GUIDE}
 
@@ -607,8 +712,6 @@ They showed interest (filled out a form, replied at least once, or were contacte
 Your job: be warm, not pushy. Check if they still need help, find out what's in the way, and get them booked.
 Do NOT start from scratch — acknowledge you've reached out before.
 
-${HVAC_KNOWLEDGE}
-
 ${SPEECH_GUIDE}
 
 ${GUARDRAILS}
@@ -717,7 +820,32 @@ Linda: "Great — Saturday morning at 4321 Sunset Blvd in Garland. Tech will giv
 [update_lead_status("qualified") → book_appointment → end_call("booked")]
 === END FOLLOW-UP AGENT ===`
 
-// ─── Selector ─────────────────────────────────────────────────────────────────
+// ─── Job knowledge selector ───────────────────────────────────────────────────
+
+const COOLING_JOB_TYPES = new Set([
+  "ac_repair", "ac_not_cooling", "ac_frozen", "ac_maintenance", "ac_installation",
+  "mini_split_repair", "mini_split_installation",
+])
+const HEATING_JOB_TYPES = new Set([
+  "furnace_repair", "furnace_not_working", "heat_pump_repair", "heat_pump_installation", "boiler_repair",
+])
+const DUCTWORK_JOB_TYPES = new Set([
+  "duct_cleaning", "duct_repair", "air_quality",
+])
+const REPLACEMENT_JOB_TYPES = new Set(["hvac_replacement"])
+const MAINTENANCE_JOB_TYPES = new Set(["hvac_tune_up"])
+
+export function getJobKnowledgeBlock(jobType: string | null): string {
+  if (!jobType)                          return HVAC_KNOWLEDGE
+  if (COOLING_JOB_TYPES.has(jobType))     return HVAC_COOLING_KNOWLEDGE
+  if (HEATING_JOB_TYPES.has(jobType))     return HVAC_HEATING_KNOWLEDGE
+  if (DUCTWORK_JOB_TYPES.has(jobType))    return HVAC_DUCTWORK_KNOWLEDGE
+  if (REPLACEMENT_JOB_TYPES.has(jobType)) return HVAC_REPLACEMENT_KNOWLEDGE
+  if (MAINTENANCE_JOB_TYPES.has(jobType)) return HVAC_MAINTENANCE_KNOWLEDGE
+  return HVAC_KNOWLEDGE
+}
+
+// ─── Agent type selector ──────────────────────────────────────────────────────
 
 export function getAgentPrompt(agentType: AgentType, agentName = "Linda"): string {
   let prompt: string

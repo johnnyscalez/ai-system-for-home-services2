@@ -2,7 +2,7 @@ import { anthropic } from "@/lib/claude"
 import { buildQualificationBlock } from "@/lib/ai-engine"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { createCalendarEvent } from "@/lib/google-calendar"
-import { determineAgentType, getAgentPrompt } from "@/lib/voice-agents"
+import { determineAgentType, getAgentPrompt, getJobKnowledgeBlock } from "@/lib/voice-agents"
 import { updateSession, appendMessages } from "@/lib/voice-session"
 import { JOB_TYPES, JOB_TYPE_TOOL_DESCRIPTION, getJobTypeLabel } from "@/lib/job-types"
 import { selectTechnician, getTechnicianContextForCompany, findSlotsForLead } from "@/lib/technician-booking"
@@ -273,10 +273,15 @@ from the description above.`
 
   const qualificationBlock = buildQualificationBlock(agent?.disqualifiers ?? null)
 
+  // Job-type-specific knowledge — shorter and more focused than the full HVAC_KNOWLEDGE block.
+  // A lead calling about furnace repair gets heating knowledge only, reducing prompt size
+  // and improving Linda's attention on the content that actually matters for that call.
+  const jobKnowledgeBlock = getJobKnowledgeBlock(lead.job_type as string | null)
+
   const voiceRules = VOICE_RULES.replaceAll("[AgentName]", agentName)
 
   // Note: no pre-computed slots block — the agent calls find_available_slots after getting zip code.
-  const systemPrompt = [voiceRules, basePrompt, pricingPolicyBlock, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext]
+  const systemPrompt = [voiceRules, basePrompt, pricingPolicyBlock, jobKnowledgeBlock, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext]
     .filter(Boolean)
     .join("\n\n")
 
