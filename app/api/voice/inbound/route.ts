@@ -43,11 +43,14 @@ export async function POST(req: NextRequest) {
   const body = await req.formData().catch((e) => { console.error("[voice/inbound] formData parse failed:", e); return null })
   if (!body) return twiml(errorTwiML(appUrl))
 
-  const callSid = body.get("CallSid")?.toString()
-  const fromRaw = body.get("From")?.toString() ?? ""
-  const toRaw   = body.get("To")?.toString() ?? ""
+  const callSid       = body.get("CallSid")?.toString()
+  const fromRaw       = body.get("From")?.toString() ?? ""
+  const toRaw         = body.get("To")?.toString() ?? ""
+  // Twilio sets ForwardedFrom when the call reached us via carrier call forwarding —
+  // it holds the number the lead ORIGINALLY dialed (the contractor's business number).
+  const forwardedFrom = body.get("ForwardedFrom")?.toString() ?? null
 
-  console.log("[voice/inbound] callSid:", callSid, "from:", fromRaw, "to:", toRaw)
+  console.log("[voice/inbound] callSid:", callSid, "from:", fromRaw, "to:", toRaw, "forwardedFrom:", forwardedFrom)
 
   if (!callSid) return twiml(errorTwiML(appUrl))
 
@@ -59,6 +62,35 @@ export async function POST(req: NextRequest) {
   const isFollowUp       = url.searchParams.get("isFollowUp") === "true"
 
   const db = createServiceRoleClient()
+
+  // ── Forwarding verification test call ──────────────────────────────────────
+  // /api/voice/verify-forwarding places a call FROM the Twilio number TO the
+  // office number. If forwarding is set up, the unanswered call loops back
+  // here with From == To and ForwardedFrom == the office number. Mark the
+  // company verified and confirm out loud instead of starting an AI session.
+  if (forwardedFrom && fromRaw === toRaw) {
+    const { data: phoneRecord } = await db
+      .from("phone_numbers")
+      .select("company_id")
+      .eq("phone_number", toRaw)
+      .eq("is_active", true)
+      .maybeSingle()
+    if (phoneRecord?.company_id) {
+      await db.from("companies")
+        .update({
+          office_number: forwardedFrom,
+          forwarding_verified: true,
+          forwarding_verified_at: new Date().toISOString(),
+        })
+        .eq("id", phoneRecord.company_id)
+      console.log("[voice/inbound] Forwarding VERIFIED for company", phoneRecord.company_id, "office:", forwardedFrom)
+    }
+    return twiml(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Play>${speakUrl("Call forwarding is verified and working. Your AI agent is now answering this line. Goodbye!", appUrl)}</Play>
+  <Hangup/>
+</Response>`)
+  }
 
   let leadId: string
   let companyId: string
@@ -116,6 +148,19 @@ export async function POST(req: NextRequest) {
     leadId          = lead.id
     leadFirstName   = lead.first_name   ?? null
     leadServiceType = lead.service_type ?? null
+  }
+
+  // Any real forwarded call also proves forwarding works — self-verify silently.
+  if (forwardedFrom) {
+    db.from("companies")
+      .update({
+        office_number: forwardedFrom,
+        forwarding_verified: true,
+        forwarding_verified_at: new Date().toISOString(),
+      })
+      .eq("id", companyId)
+      .eq("forwarding_verified", false)
+      .then(() => {}, () => {})
   }
 
   try {

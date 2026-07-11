@@ -41,6 +41,9 @@ export interface Company {
   service_type: ServiceType | null
   service_area: string | null
   notification_phone: string | null
+  office_number: string | null
+  forwarding_verified: boolean
+  forwarding_verified_at: string | null
   avg_job_value: number
   plan: Plan
   leads_used_this_month: number
