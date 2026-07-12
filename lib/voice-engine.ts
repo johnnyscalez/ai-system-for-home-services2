@@ -37,11 +37,12 @@ MANDATORY RULES — never break these:
 8. When calling most tools: include your verbal response in the same message turn.
 9. Keep filler natural and brief: "Got it.", "Sure thing." — then continue.
 10. Never read out a list of slots — offer exactly two naturally: "I've got Thursday morning or Friday afternoon."
-11. SERVICE AREA RULE: You MUST call find_available_slots after learning the lead's zip code. Say ONE short natural sentence before calling it — something like "Give me just a second to check who's available." or "Let me pull up what we've got." That's it — one sentence, then call the tool. The slot offer comes after the results return.
+11. SERVICE AREA RULE: You MUST call find_available_slots after learning the lead's zip code. Say ONE short natural sentence AND call the tool in the SAME turn — saying "let me check" without actually calling the tool is a failure; the lead will be left waiting for nothing. The slot offer comes after the results return.
 12. TIMEZONE RULE: When booking, use the exact ISO 8601 datetime from the find_available_slots results. Never construct your own datetime string — the slots returned are already in the correct timezone.
 13. OUTSIDE SERVICE AREA: If find_available_slots says outside service area, say warmly that you don't serve that area, then call update_lead_status("closed_lost"), add_note with the zip, and end_call.
 14. PIVOT AFTER ANSWERING: When you answer a question the lead asked (cost, timeline, what's included) without needing their input, end that same response with your next qualifying question. Do NOT stop and wait silently after answering.
 15. VISIT FEE / TRIP CHARGE: If a SERVICE CALL FEE POLICY block appears in this system prompt, follow it exactly when asked about cost to come out. Never say "free" unless that policy says so. If no SERVICE CALL FEE POLICY block is present, say "It's completely free — no trip charge."
+16. BOOKING — NO DISAMBIGUATION LOOPS: When the lead accepts a day or day-part ("Monday morning works", "tomorrow's fine"), pick the EARLIEST matching slot from the find_available_slots results and book it immediately: confirm once with the specific window ("Perfect — Monday morning, eight to ten, at [Address]") and call book_appointment in that same turn. NEVER re-ask which window. NEVER say "I've got you down" without calling book_appointment.
 === END VOICE RULES ===`
 
 // ─── Tool definitions ──────────────────────────────────────────────────────────
@@ -286,6 +287,7 @@ from the description above.`
       ...feeLines.map((l: string) => `• ${l.replace(/^[•\-*]\s*/, "")}`),
       "",
       `Never say "free to come out" unless this policy explicitly says so. Never contradict this policy.`,
+      `If the policy is CONDITIONAL (e.g. "$0 with repair", "waived if you proceed"), you MUST say the condition out loud — "There's no service call fee as long as we do the repair." NEVER shorten a conditional policy to just "free" or "no trip charge".`,
       "=== END SERVICE CALL FEE POLICY ===",
     ].join("\n")
   })()
@@ -344,10 +346,29 @@ from the description above.`
   // and improving Linda's attention on the content that actually matters for that call.
   const jobKnowledgeBlock = getJobKnowledgeBlock(lead.job_type as string | null)
 
-  const voiceRules = VOICE_RULES.replaceAll("[AgentName]", agentName)
+  let voiceRules = VOICE_RULES.replaceAll("[AgentName]", agentName)
+  // When a fee policy exists, remove the parrot-able "completely free" fallback
+  // from rule 15 entirely — small models latch onto quoted sayable phrases even
+  // when told they're conditional.
+  if (pricingPolicyBlock) {
+    voiceRules = voiceRules.replace(
+      `15. VISIT FEE / TRIP CHARGE: If a SERVICE CALL FEE POLICY block appears in this system prompt, follow it exactly when asked about cost to come out. Never say "free" unless that policy says so. If no SERVICE CALL FEE POLICY block is present, say "It's completely free — no trip charge."`,
+      `15. VISIT FEE / TRIP CHARGE: A SERVICE CALL FEE POLICY block exists in this prompt. When asked what it costs to come out, answer ONLY from that policy and say its conditions out loud (e.g. "no service call fee as long as we do the repair"). The visit is NOT unconditionally free — never say "completely free" or "no trip charge" as a blanket statement.`
+    )
+  }
 
-  // Note: no pre-computed slots block — the agent calls find_available_slots after getting zip code.
-  const systemPrompt = [voiceRules, basePrompt, pricingPolicyBlock, jobKnowledgeBlock, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext, hcpBlock, historyBlock]
+  // Slots fetched earlier in THIS call — inject so the model books with the
+  // exact ISO instead of re-calling find_available_slots every turn.
+  const offeredSlotsBlock = session.collected?.available_slots
+    ? `=== SLOTS ALREADY CHECKED THIS CALL — DO NOT CHECK AGAIN ===
+These real slots were already fetched for the caller's zip (do NOT call find_available_slots again unless the address changes):
+${session.collected.available_slots}
+The moment the caller accepts a day or time, call book_appointment IMMEDIATELY with the matching ISO datetime and their address — in that same turn. If they accept a broad time like "Monday morning", use the EARLIEST matching slot.
+=== END SLOTS ===`
+    : ""
+
+  // Note: no pre-computed slots block on fresh calls — the agent calls find_available_slots after getting zip code.
+  const systemPrompt = [voiceRules, basePrompt, pricingPolicyBlock, jobKnowledgeBlock, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext, offeredSlotsBlock, hcpBlock, historyBlock]
     .filter(Boolean)
     .join("\n\n")
 
@@ -392,35 +413,81 @@ from the description above.`
   }
 
   // ── First Claude call ────────────────────────────────────────────────────────
+  // Haiku for speed during discovery/qualification. Once slots have been offered,
+  // the call is in the booking-critical stage — Sonnet reliably pairs the verbal
+  // confirmation with the actual book_appointment tool call; Haiku often says
+  // "you're all set" without booking. 1-2 turns per call, latency cost is minor.
+  const mainModel = session.collected?.slots_offered === "true"
+    ? "claude-sonnet-4-6"
+    : "claude-haiku-4-5-20251001"
   const response = await anthropic.messages.create({
-    model: "claude-haiku-4-5-20251001",
+    model: mainModel,
     max_tokens: 150,
     system: systemPrompt,
     tools: TOOLS,
     messages: messages as Parameters<typeof anthropic.messages.create>[0]["messages"],
   })
 
-  let responseText = ""
-  let toolBlock: { name: string; id: string; input: Record<string, unknown> } | null = null
-
-  for (const block of response.content) {
-    if (block.type === "text")     responseText = block.text.trim()
-    if (block.type === "tool_use") {
-      toolBlock = { name: block.name, id: block.id, input: block.input as Record<string, unknown> }
+  // The model can emit MULTIPLE tool_use blocks in one response (e.g.
+  // update_lead_details + book_appointment together). Every tool_use id MUST
+  // get a tool_result in the next message or the API 400s — so we always
+  // parse ALL blocks and answer ALL of them.
+  type ToolBlock = { name: string; id: string; input: Record<string, unknown> }
+  const parseResponse = (content: typeof response.content) => {
+    let text = ""
+    const tools: ToolBlock[] = []
+    for (const block of content) {
+      if (block.type === "text")     text = block.text.trim()
+      if (block.type === "tool_use") tools.push({ name: block.name, id: block.id, input: block.input as Record<string, unknown> })
     }
+    return { text, tools }
   }
+  const allResults = (tools: ToolBlock[], primaryId: string | null, primaryContent: string) =>
+    tools.map(t => ({
+      type: "tool_result" as const,
+      tool_use_id: t.id,
+      content: t.id === primaryId ? primaryContent : "Action recorded.",
+    }))
+
+  const first = parseResponse(response.content)
+  let responseText = first.text
+  // Tools queued for real execution at the end of the turn (find_available_slots
+  // is handled inline below and never queued).
+  const toolsToExecute: ToolBlock[] = first.tools.filter(t => t.name !== "find_available_slots")
+  const slotToolBlock = first.tools.find(t => t.name === "find_available_slots") ?? null
 
   // ── find_available_slots — run real lookup and feed results back to Claude ──
   // This is the voice equivalent of the SMS agent's find_available_slots tool.
-  // The agent calls it silently (no text) after learning the zip code.
   // We run findSlotsForLead(), pass real slot data or outside-area signal back,
   // then get Claude's verbal response (slot offer or warm rejection).
-  if (toolBlock?.name === "find_available_slots") {
+  //
+  // FORCED TRIGGER: the model sometimes says "let me check availability" WITHOUT
+  // calling the tool, leaving the lead waiting for slots that never come. If the
+  // lead's message contains a zip code and no slot check has run this call, run
+  // the lookup ourselves — deterministic, not dependent on model compliance.
+  const forcedZip = !slotToolBlock && first.tools.length === 0 && userMessage && session.collected?.slots_offered !== "true"
+    ? userMessage.match(/\b(\d{5})\b/)?.[1] ?? null
+    : null
+  const isRealSlotCall = slotToolBlock !== null
+
+  if (isRealSlotCall || forcedZip) {
     const bridgingPhrase = responseText.trim() // e.g. "Give me just a second to check who's available."
     responseText = ""
-    const { zip, job_type } = toolBlock.input as { zip: string; job_type?: string }
+    const { zip, job_type } = isRealSlotCall
+      ? slotToolBlock!.input as { zip: string; job_type?: string }
+      : { zip: forcedZip!, job_type: (lead.job_type as string | undefined) ?? undefined }
 
     const slotsResult = await findSlotsForLead(session.company_id, job_type ?? null, zip ?? null)
+
+    // Remember that slots were checked so the forced trigger never double-fires.
+    // Also capture the address text from this message — the booking safety net
+    // below needs it if the model later confirms verbally without booking.
+    session.collected = { ...session.collected, slots_offered: "true" }
+    if (userMessage) {
+      const addrStart = userMessage.search(/\d/)
+      if (addrStart >= 0) session.collected.candidate_address = userMessage.slice(addrStart).trim()
+    }
+    await updateSession(session.call_sid, { collected: session.collected })
 
     let toolResultContent: string
     if (!slotsResult.found) {
@@ -444,20 +511,33 @@ from the description above.`
         .join("\n")
       toolResultContent =
         `IN_SERVICE_AREA. Available slots (offer exactly 2 — use the ISO values when calling book_appointment):\n${slotLines}`
+      // Persist the slot list — future turns need the ISO datetimes to book.
+      // Without this the model re-calls find_available_slots every turn and
+      // never reaches book_appointment.
+      session.collected = { ...session.collected, available_slots: slotLines }
+      await updateSession(session.call_sid, { collected: session.collected })
     }
 
-    const slotMessages: VoiceMessage[] = [
-      ...messages,
-      { role: "assistant", content: response.content },
-      {
-        role: "user",
-        content: [{
-          type: "tool_result",
-          tool_use_id: toolBlock.id,
-          content: toolResultContent,
-        }],
-      },
-    ]
+    // Real tool call → proper tool_result exchange (answering EVERY tool_use id).
+    // Forced trigger → the model never emitted tool_use, so feed results as a
+    // system-style user note.
+    const slotMessages: VoiceMessage[] = isRealSlotCall
+      ? [
+          ...messages,
+          { role: "assistant", content: response.content },
+          {
+            role: "user",
+            content: allResults(first.tools, slotToolBlock!.id, toolResultContent),
+          },
+        ]
+      : [
+          ...messages,
+          ...(bridgingPhrase ? [{ role: "assistant" as const, content: bridgingPhrase }] : []),
+          {
+            role: "user",
+            content: `(SYSTEM — the availability check for zip ${zip} just completed automatically. ${toolResultContent}\nRespond to the caller now — do NOT say you'll check availability, it's already done.)`,
+          },
+        ]
 
     const slotResponse = await anthropic.messages.create({
       model:      "claude-sonnet-4-6",
@@ -467,13 +547,33 @@ from the description above.`
       messages:   slotMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],
     })
 
-    // Reset toolBlock — the follow-up may call a different tool (e.g. update_lead_status for outside area)
-    toolBlock = null
-    for (const block of slotResponse.content) {
-      if (block.type === "text")     responseText = block.text.trim()
-      if (block.type === "tool_use") {
-        toolBlock = { name: block.name, id: block.id, input: block.input as Record<string, unknown> }
-      }
+    const second = parseResponse(slotResponse.content)
+    responseText = second.text
+    toolsToExecute.push(...second.tools)
+
+    // The follow-up may call silent tools (update_lead_status, update_lead_details)
+    // instead of speaking — without this, the lead hears only the bridging phrase
+    // and then dead air. Force one more turn to get the verbal slot offer.
+    if (second.tools.length > 0 && !responseText) {
+      const nestedMessages: VoiceMessage[] = [
+        ...slotMessages,
+        { role: "assistant", content: slotResponse.content },
+        {
+          role: "user",
+          content: allResults(second.tools, second.tools[0].id,
+            "Action recorded. Now say your verbal response to the caller — offer two slots from the results (or the outcome of what just happened). 1-2 natural sentences."),
+        },
+      ]
+      const nested = await anthropic.messages.create({
+        model:      "claude-sonnet-4-6",
+        max_tokens: 150,
+        system:     systemPrompt,
+        tools:      TOOLS,
+        messages:   nestedMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],
+      })
+      const third = parseResponse(nested.content)
+      responseText = third.text
+      toolsToExecute.push(...third.tools)
     }
 
     // Prepend the bridging phrase so the lead hears one fluid response:
@@ -483,17 +583,14 @@ from the description above.`
     }
   }
   // ── Other tools called without verbal — get verbal response ─────────────────
-  else if (toolBlock && !responseText) {
+  else if (first.tools.length > 0 && !responseText) {
     const followUpMessages: VoiceMessage[] = [
       ...messages,
       { role: "assistant", content: response.content },
       {
         role: "user",
-        content: [{
-          type: "tool_result",
-          tool_use_id: toolBlock.id,
-          content: "Action recorded. Now respond verbally to confirm what just happened — 1-2 natural sentences.",
-        }],
+        content: allResults(first.tools, first.tools[0].id,
+          "Action recorded. Now respond verbally to confirm what just happened — 1-2 natural sentences."),
       },
     ]
 
@@ -505,8 +602,51 @@ from the description above.`
       messages:   followUpMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],
     })
 
-    for (const block of followUp.content) {
-      if (block.type === "text") responseText = block.text.trim()
+    const fu = parseResponse(followUp.content)
+    responseText = fu.text
+    toolsToExecute.push(...fu.tools)
+  }
+
+  // ── Never-silent guarantee ───────────────────────────────────────────────────
+  // A live call can never play empty text. If the model called tools without
+  // speaking, synthesize the confirmation from the most significant tool.
+  if (!responseText && toolsToExecute.length > 0) {
+    const names = toolsToExecute.map(t => t.name)
+    if (names.includes("end_call")) {
+      const ec = toolsToExecute.find(t => t.name === "end_call")!
+      responseText = (ec.input.farewell as string | undefined)?.trim() || "Thanks so much — take care!"
+    } else if (names.includes("book_appointment")) {
+      responseText = "Perfect — you're all set. Our tech will give you a call about thirty minutes before heading over. Anything else I can help with?"
+    } else if (names.includes("transfer_to_human")) {
+      responseText = "Let me get you over to someone on our team — one moment."
+    } else {
+      responseText = "Got it. Anything else I can help you with?"
+    }
+  }
+
+  // ── Booking safety net ───────────────────────────────────────────────────────
+  // Worst failure mode on a call: Linda TELLS the lead they're booked but never
+  // calls book_appointment — the lead waits for a tech who never comes. If the
+  // response reads as a booking confirmation, slots were offered, and nothing is
+  // booked yet, book the matching slot deterministically.
+  const alreadyBooking = toolsToExecute.some(t => t.name === "book_appointment")
+  const savedSlots = session.collected?.available_slots
+  if (!alreadyBooking && savedSlots && session.collected?.appointment_booked !== "true" &&
+      /got you down|you're all set|youre all set|all set for|booked (you |you're |for )|see you (then|on|tomorrow|monday|tuesday|wednesday|thursday|friday|saturday|sunday)|tech will (give you a call|call you) about (30|thirty) minutes/i.test(responseText)) {
+    const lines      = savedSlots.split("\n")
+    const respLower  = responseText.toLowerCase()
+    const dayNames   = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"]
+    const mentioned  = dayNames.filter(d => respLower.includes(d))
+    const dayLines   = lines.filter(l => mentioned.some(d => l.toLowerCase().includes(d)))
+    const wantsPm    = /afternoon|evening/i.test(responseText)
+    const wantsAm    = /morning/i.test(responseText)
+    const windowFit  = dayLines.filter(l => wantsPm ? /afternoon|evening/i.test(l) : wantsAm ? /morning/i.test(l) : true)
+    const chosen     = windowFit[0] ?? dayLines[0]
+    const iso        = chosen?.match(/ISO:\s*(\S+)/)?.[1]
+    const addr       = (lead.address as string | null) ?? session.collected?.candidate_address ?? null
+    if (iso && addr) {
+      console.log("[voice] booking safety net fired — model confirmed verbally without booking. Slot:", iso)
+      toolsToExecute.push({ name: "book_appointment", id: "safety_net_booking", input: { scheduled_at: iso, address: addr } })
     }
   }
 
@@ -522,15 +662,16 @@ from the description above.`
     .update({ last_message_at: new Date().toISOString() })
     .eq("id", session.lead_id)
 
-  // ── Execute tool if any ─────────────────────────────────────────────────────
-  if (toolBlock) {
-    const action = await executeTool(toolBlock, session, db, tz)
-    if (action.type !== "continue") {
-      return { text: responseText, action }
+  // ── Execute ALL queued tools; first terminal action wins ───────────────────
+  let finalAction: VoiceAction = { type: "continue" }
+  for (const tb of toolsToExecute) {
+    const action = await executeTool(tb, session, db, tz)
+    if (action.type !== "continue" && finalAction.type === "continue") {
+      finalAction = action
     }
   }
 
-  return { text: responseText, action: { type: "continue" } }
+  return { text: responseText, action: finalAction }
 }
 
 // ─── Tool execution ────────────────────────────────────────────────────────────
@@ -551,7 +692,14 @@ async function executeTool(
     case "book_appointment": {
       const { scheduled_at, address, notes } = tool.input as { scheduled_at: string; address: string; notes?: string }
 
-      const { data: apt } = await db.from("appointments").insert({
+      // Guard: the model must pass a parseable datetime. A bad value would
+      // fail the insert silently while the lead is told they're booked.
+      if (!scheduled_at || isNaN(new Date(scheduled_at).getTime())) {
+        console.error("[voice] book_appointment got invalid scheduled_at:", JSON.stringify(scheduled_at))
+        return { type: "continue" }
+      }
+
+      const { data: apt, error: aptErr } = await db.from("appointments").insert({
         lead_id:             session.lead_id,
         company_id:          session.company_id,
         scheduled_at,
@@ -560,6 +708,7 @@ async function executeTool(
         status:              "scheduled",
         confirmation_status: "pending_confirmation",
       }).select().single()
+      if (aptErr) console.error("[voice] appointment insert FAILED:", aptErr.message, "| scheduled_at:", scheduled_at)
 
       await db.from("leads").update({
         status:          "appointment_booked",
