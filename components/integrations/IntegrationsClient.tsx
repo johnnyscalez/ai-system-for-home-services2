@@ -111,11 +111,18 @@ function StatusBadge({ connected }: { connected: boolean }) {
 
 // ─── Facebook card ────────────────────────────────────────────────────────────
 
-function DisconnectButton() {
+function DisconnectButton({ label = "Cancel", requireConfirm = false }: { label?: string; requireConfirm?: boolean }) {
   const router = useRouter()
   const [loading, setLoading] = useState(false)
+  const [arming, setArming] = useState(false)
 
   async function handleDisconnect() {
+    // Destructive: first click arms, second click (within 4s) executes
+    if (requireConfirm && !arming) {
+      setArming(true)
+      setTimeout(() => setArming(false), 4000)
+      return
+    }
     setLoading(true)
     await fetch("/api/integrations/facebook/disconnect", { method: "POST" })
     router.refresh()
@@ -125,10 +132,14 @@ function DisconnectButton() {
     <button
       onClick={handleDisconnect}
       disabled={loading}
-      className="flex items-center gap-1.5 text-xs font-medium text-red-500 hover:text-red-700 px-3 py-2 rounded-xl border border-red-100 hover:border-red-200 hover:bg-red-50 transition-all disabled:opacity-50"
+      className={`flex items-center gap-1.5 text-xs font-medium px-3 py-2 rounded-xl border transition-all disabled:opacity-50 ${
+        arming
+          ? "text-white bg-red-500 border-red-500 hover:bg-red-600"
+          : "text-red-500 hover:text-red-700 border-red-100 hover:border-red-200 hover:bg-red-50"
+      }`}
     >
       {loading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <X className="w-3.5 h-3.5" />}
-      Cancel
+      {arming ? "Click again to confirm" : label}
     </button>
   )
 }
@@ -280,7 +291,8 @@ function FacebookCard({ integration, errorCode }: { integration: Integration | u
               <RefreshCw className="w-3.5 h-3.5" />
               Change page / forms
             </a>
-            <p className="text-xs text-[#78716C]">
+            <DisconnectButton label="Disconnect" requireConfirm />
+            <p className="text-xs text-[#78716C] ml-auto">
               Since {new Date(integration!.created_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
             </p>
           </>
