@@ -198,7 +198,11 @@ export async function runVoiceTurn(
 ): Promise<VoiceEngineResult> {
   const db = createServiceRoleClient()
 
-  const [leadRes, agentRes, kbRes, appointmentsRes, technicianContext, companyRes] = await Promise.all([
+  // HCP jobs are an external API lookup (~1-2s) — fetch once per call, cache
+  // the formatted summary in session.collected so later turns skip the fetch.
+  const hcpJobsCached = session.collected?.hcp_jobs_summary
+
+  const [leadRes, agentRes, kbRes, appointmentsRes, technicianContext, companyRes, historyRes, hcpJobs] = await Promise.all([
     db.from("leads").select("*").eq("id", session.lead_id).single(),
     db.from("ai_agent_config")
       .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, disqualifiers")
@@ -215,6 +219,20 @@ export async function runVoiceTurn(
     // inline fallback prompt below has no company name and the model can
     // invent one when introducing itself on the call.
     db.from("companies").select("name").eq("id", session.company_id).single(),
+    // Prior SMS + past-call history — everything BEFORE this call started,
+    // so Linda remembers the whole relationship, not just this conversation.
+    db.from("conversations")
+      .select("direction, body, channel, created_at")
+      .eq("lead_id", session.lead_id)
+      .eq("company_id", session.company_id)
+      .lt("created_at", session.created_at ?? new Date().toISOString())
+      .order("created_at", { ascending: false })
+      .limit(15),
+    hcpJobsCached !== undefined
+      ? Promise.resolve(null)
+      : import("@/lib/housecall-sync")
+          .then(m => m.findJobsForLead(session.company_id, session.lead_id))
+          .catch(() => []),
   ])
 
   const lead        = leadRes.data
@@ -222,6 +240,7 @@ export async function runVoiceTurn(
   const kb          = kbRes.data
   const appointments = appointmentsRes.data ?? []
   const company      = companyRes.data
+  const priorHistory = (historyRes.data ?? []).reverse() // oldest first
 
   if (!lead) throw new Error("Lead not found")
 
@@ -273,6 +292,53 @@ from the description above.`
 
   const qualificationBlock = buildQualificationBlock(agent?.disqualifiers ?? null)
 
+  // ── Prior conversation history (SMS + past calls) ───────────────────────────
+  const fmtHistDate = (iso: string) => new Date(iso).toLocaleDateString("en-US", {
+    timeZone: tz, month: "numeric", day: "numeric",
+  })
+  const historyBlock = priorHistory.length === 0 ? "" : [
+    "=== PRIOR CONVERSATION HISTORY — everything before this call. You remember ALL of this. ===",
+    ...priorHistory.map(m => {
+      const who     = m.direction === "inbound" ? "Lead" : "You"
+      const channel = m.channel === "voice" ? "call" : "SMS"
+      const body    = (m.body ?? "").slice(0, 200)
+      return `[${channel} ${fmtHistDate(m.created_at)}] ${who}: ${body}`
+    }),
+    "Never re-ask anything already answered above. Reference it naturally like a person who remembers.",
+    "=== END PRIOR HISTORY ===",
+  ].join("\n")
+
+  // ── HousecallPro jobs on file for this phone number ─────────────────────────
+  let hcpJobsSummary: string
+  if (hcpJobsCached !== undefined) {
+    hcpJobsSummary = hcpJobsCached
+  } else {
+    const jobs = (hcpJobs ?? []) as Array<{
+      work_status?: string
+      schedule?: { scheduled_start?: string }
+      total_amount?: number
+    }>
+    hcpJobsSummary = jobs.length === 0 ? "" : jobs.slice(0, 8).map(j => {
+      const when = j.schedule?.scheduled_start
+        ? new Date(j.schedule.scheduled_start).toLocaleString("en-US", {
+            timeZone: tz, weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
+          })
+        : "unscheduled"
+      const amount = typeof j.total_amount === "number" && j.total_amount > 0
+        ? ` — $${Math.round(j.total_amount / 100)}`
+        : ""
+      return `• ${j.work_status ?? "unknown"} — ${when}${amount}`
+    }).join("\n")
+    // Cache (including empty string) so later turns skip the HCP API call
+    await updateSession(session.call_sid, {
+      collected: { ...session.collected, hcp_jobs_summary: hcpJobsSummary },
+    })
+    session.collected = { ...session.collected, hcp_jobs_summary: hcpJobsSummary }
+  }
+  const hcpBlock = hcpJobsSummary
+    ? `=== HOUSECALL PRO — JOBS ON FILE FOR THIS CUSTOMER (office CRM, matched by phone number) ===\n${hcpJobsSummary}\nThis customer has real history with the company. Treat them as a known customer, not a stranger.\n=== END HOUSECALL PRO JOBS ===`
+    : ""
+
   // Job-type-specific knowledge — shorter and more focused than the full HVAC_KNOWLEDGE block.
   // A lead calling about furnace repair gets heating knowledge only, reducing prompt size
   // and improving Linda's attention on the content that actually matters for that call.
@@ -281,7 +347,7 @@ from the description above.`
   const voiceRules = VOICE_RULES.replaceAll("[AgentName]", agentName)
 
   // Note: no pre-computed slots block — the agent calls find_available_slots after getting zip code.
-  const systemPrompt = [voiceRules, basePrompt, pricingPolicyBlock, jobKnowledgeBlock, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext]
+  const systemPrompt = [voiceRules, basePrompt, pricingPolicyBlock, jobKnowledgeBlock, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext, hcpBlock, historyBlock]
     .filter(Boolean)
     .join("\n\n")
 
@@ -724,6 +790,10 @@ Current date/time: ${nowFmt}
 Upcoming dates (use THESE exact dates — do NOT compute dates yourself):
 ${upcomingDays}`
 
+  if (lead.status)      ctx += `\nCRM status: ${lead.status}`
+  if (lead.source)      ctx += `\nLead source: ${lead.source}`
+  if (lead.created_at)  ctx += `\nFirst came in: ${new Date(lead.created_at as string).toLocaleDateString("en-US", { timeZone: timezone, weekday: "long", month: "long", day: "numeric", year: "numeric" })}`
+  if (lead.last_message_at) ctx += `\nLast contact: ${fmt(lead.last_message_at as string)}`
   if (_jobLabel)        ctx += `\nJob type: ${_jobLabel} (${lead.job_type})`
   if (lead.system_type) ctx += `\nSystem type: ${lead.system_type}`
   if (lead.system_age)  ctx += `\nSystem age: ${lead.system_age}`

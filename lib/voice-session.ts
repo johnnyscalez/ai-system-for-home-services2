@@ -12,6 +12,7 @@ export type VoiceSession = {
   collected: Record<string, string>
   messages: VoiceMessage[]
   status: string
+  created_at?: string
 }
 
 export async function getOrCreateSession(
