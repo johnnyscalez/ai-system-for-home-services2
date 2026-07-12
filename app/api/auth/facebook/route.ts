@@ -10,6 +10,8 @@ export async function GET(req: NextRequest) {
   if (!appId) return NextResponse.json({ error: "Facebook app not configured" }, { status: 500 })
 
   const redirectUri = `${process.env.NEXT_PUBLIC_APP_URL}/api/auth/facebook/callback`
+  // Keep this list in exact sync with the permissions approved in Meta App
+  // Review — requesting an unapproved scope in Live mode fails the OAuth dialog.
   const scope = [
     "leads_retrieval",
     "pages_show_list",
@@ -17,7 +19,6 @@ export async function GET(req: NextRequest) {
     "pages_manage_metadata",
     "pages_manage_ads",
     "pages_messaging",
-    "ads_read",
     "business_management",
   ].join(",")
 
