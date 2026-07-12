@@ -82,14 +82,23 @@ export async function GET() {
   const { data: profile } = await db.from("users").select("company_id").eq("id", user.id).single()
   if (!profile?.company_id) return NextResponse.json({ error: "No company" }, { status: 400 })
 
-  const { data: company } = await db.from("companies")
-    .select("office_number, forwarding_verified, forwarding_verified_at")
-    .eq("id", profile.company_id)
-    .single()
+  const [{ data: company }, { data: phoneRecord }] = await Promise.all([
+    db.from("companies")
+      .select("office_number, forwarding_verified, forwarding_verified_at")
+      .eq("id", profile.company_id)
+      .single(),
+    db.from("phone_numbers")
+      .select("phone_number")
+      .eq("company_id", profile.company_id)
+      .eq("is_active", true)
+      .limit(1)
+      .maybeSingle(),
+  ])
 
   return NextResponse.json({
     officeNumber: company?.office_number ?? null,
     verified:     company?.forwarding_verified ?? false,
     verifiedAt:   company?.forwarding_verified_at ?? null,
+    aiNumber:     phoneRecord?.phone_number ?? null,
   })
 }

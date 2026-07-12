@@ -6,6 +6,8 @@ import { Badge } from "@/components/ui/badge"
 import { Phone, Link2, CreditCard, Database, ArrowRight, Sparkles, FlaskConical } from "lucide-react"
 import { TestLeadButton } from "@/components/settings/TestLeadButton"
 import { CompanyInfoEditor } from "@/components/settings/CompanyInfoEditor"
+import { CallForwardingCard } from "@/components/settings/CallForwardingCard"
+import { PhoneForwarded } from "lucide-react"
 
 export default async function SettingsPage() {
   const supabase = await createServerSupabaseClient()
@@ -70,6 +72,19 @@ export default async function SettingsPage() {
           <p className="text-xs text-muted-foreground mt-1">
             Your AI texts and calls every lead from this number. Replies go straight to your CRM.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Connect existing business number */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <PhoneForwarded className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-base">Connect Your Existing Business Number</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <CallForwardingCard />
         </CardContent>
       </Card>
 
