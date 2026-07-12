@@ -97,6 +97,9 @@ export async function POST(req: NextRequest) {
   }
 
   // ── Final DB state ─────────────────────────────────────────────────────
+  // selectTechnician runs non-blocking after booking — give it a moment to
+  // land so the harness reads the assigned tech instead of a race.
+  await new Promise(r => setTimeout(r, 3000))
   const [{ data: finalLead }, { data: apts }, { data: convs }] = await Promise.all([
     db.from("leads").select("status, address, job_type, system_type, system_age").eq("id", lead.id).single(),
     db.from("appointments").select("scheduled_at, address, status, technician_name, technician_id").eq("lead_id", lead.id),

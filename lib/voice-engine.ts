@@ -199,6 +199,30 @@ export async function runVoiceTurn(
 ): Promise<VoiceEngineResult> {
   const db = createServiceRoleClient()
 
+  // ── Do-not-call compliance — deterministic, never left to the model ─────────
+  // "Stop calling me" MUST end the call immediately: goodbye, closed_lost,
+  // voice AI paused for this lead (no future outbound), hang up.
+  if (userMessage && /stop calling|don'?t call( me)?|do not call|take me off|remove (me|my number)|leave me alone|unsubscribe|never call/i.test(userMessage)) {
+    const farewell = "Of course — I'll take you off our list right away. Sorry to bother you, take care."
+    const ts = new Date().toISOString()
+    const { data: dncLead } = await db.from("leads").select("notes").eq("id", session.lead_id).single()
+    const dncNote = `[${new Date().toLocaleString("en-US")}] Lead asked not to be called. Voice AI paused, marked closed_lost.`
+    await Promise.all([
+      db.from("leads").update({
+        status: "closed_lost",
+        ai_voice_paused: true,
+        last_message_at: ts,
+        notes: dncLead?.notes ? `${dncLead.notes}\n${dncNote}` : dncNote,
+      }).eq("id", session.lead_id),
+      updateSession(session.call_sid, { status: "completed" }),
+    ])
+    await appendMessages(session, [
+      { role: "user", content: userMessage },
+      { role: "assistant", content: farewell },
+    ])
+    return { text: farewell, action: { type: "end", reason: "not_interested" } }
+  }
+
   // HCP jobs are an external API lookup (~1-2s) — fetch once per call, cache
   // the formatted summary in session.collected so later turns skip the fetch.
   const hcpJobsCached = session.collected?.hcp_jobs_summary
@@ -892,6 +916,15 @@ async function executeTool(
     case "end_call": {
       const { reason } = tool.input as { reason: string }
       await updateSession(session.call_sid, { status: "completed" })
+      // CRM hygiene: models often end "not interested" calls without calling
+      // update_lead_status first — set it deterministically so the lead
+      // doesn't sit in the pipeline as "new" forever.
+      if (reason === "not_interested") {
+        await db.from("leads")
+          .update({ status: "closed_lost", last_message_at: new Date().toISOString() })
+          .eq("id", session.lead_id)
+          .in("status", ["new", "contacted", "nurturing"])
+      }
       return { type: "end", reason }
     }
 
