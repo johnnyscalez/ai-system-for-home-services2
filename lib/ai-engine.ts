@@ -936,7 +936,8 @@ export async function processAndSave(
   companyId: string,
   incomingMessage: string | null,
   incomingTwilioSid?: string,
-  followUpAngle?: string
+  followUpAngle?: string,
+  channel: "sms" | "messenger" = "sms"
 ): Promise<EngineResult> {
   const supabase = createServiceRoleClient()
 
@@ -949,6 +950,7 @@ export async function processAndSave(
       sent_by: "human",
       body: incomingMessage,
       twilio_sid: incomingTwilioSid ?? null,
+      channel,
     })
 
     // Move to active_conversation on first reply (from any "just came in" state)
@@ -1012,6 +1014,7 @@ export async function processAndSave(
       direction: "outbound",
       sent_by: "ai",
       body: result.response,
+      channel,
     }).select("id").single()
     outboundConversationId = conv?.id
   }
@@ -1460,9 +1463,10 @@ function buildLeadContext(
   })
   const upcomingDaysBlock = `Upcoming dates (use THESE exact dates — do NOT compute dates yourself):\n${upcomingDays.map((d, i) => `  +${i + 1}: ${d}`).join("\n")}`
 
+  const isMessengerOnly = typeof lead.phone === "string" && lead.phone.startsWith("msgr:")
   let ctx = `=== LEAD FILE (READ THIS BEFORE EVERY RESPONSE) ===
 Name: ${`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Unknown"}
-Phone: ${lead.phone}
+Phone: ${isMessengerOnly ? "NOT ON FILE — this lead is messaging on Facebook Messenger. You MUST collect their phone number naturally before booking (\"What's the best number for our tech to reach you on?\"). Do not book without it." : lead.phone}
 Service requested: ${lead.service_type ?? "home services"}
 Lead source: ${lead.source ?? "unknown"}
 Current status: ${lead.status}

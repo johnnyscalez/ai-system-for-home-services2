@@ -4,7 +4,102 @@ import { processAndSave, inferJobType } from "@/lib/ai-engine"
 import { sendSMS, formatPhone } from "@/lib/twilio"
 import { notifyNewLead } from "@/lib/notifications"
 import { buildNoReplySchedule } from "@/lib/sequences"
+import { sendMessengerMessage, getMessengerProfile, messengerPlaceholderPhone } from "@/lib/messenger"
 import crypto from "crypto"
+
+// ─── Messenger events (entry[].messaging[]) ───────────────────────────────────
+// A lead messages the contractor's Facebook Page → the same AI engine that
+// handles SMS replies on Messenger. Replies are always within Meta's 24h
+// window because every send here is a direct response to an inbound message.
+type MessagingEvent = {
+  sender: { id: string }
+  recipient: { id: string }
+  message?: { mid: string; text?: string; is_echo?: boolean; attachments?: unknown[] }
+  postback?: { title?: string; payload?: string }
+}
+
+async function handleMessagingEvent(pageId: string, event: MessagingEvent): Promise<void> {
+  const supabase = createServiceRoleClient()
+
+  // Ignore echoes of our own sends and delivery/read receipts
+  if (event.message?.is_echo) return
+  const text = event.message?.text?.trim()
+    ?? event.postback?.title?.trim()
+    ?? (event.message?.attachments?.length ? "[sent an attachment]" : null)
+  if (!text) return
+
+  const psid = event.sender.id
+
+  const { data: integration } = await supabase
+    .from("integrations")
+    .select("company_id, fb_access_token")
+    .eq("fb_page_id", pageId)
+    .eq("is_active", true)
+    .single()
+  if (!integration?.fb_access_token) return
+
+  // Find or create the lead by Messenger PSID
+  const { data: existing } = await supabase
+    .from("leads")
+    .select("id, status, phone")
+    .eq("company_id", integration.company_id)
+    .eq("messenger_psid", psid)
+    .is("deleted_at", null)
+    .maybeSingle()
+
+  let leadId: string
+  if (existing) {
+    leadId = existing.id
+    // Messenger-only leads have a placeholder phone. The moment they type a
+    // real number ("561-555-0123"), capture it — reminders, confirmations,
+    // and the tech's call-ahead all need it.
+    if (existing.phone.startsWith("msgr:")) {
+      const phoneMatch = text.replace(/[^\d+]/g, " ").match(/(\+?1?\s?\d{3}\s?\d{3}\s?\d{4})\b/)
+      if (phoneMatch) {
+        try {
+          const realPhone = formatPhone(phoneMatch[1].replace(/\s/g, ""))
+          await supabase.from("leads").update({ phone: realPhone }).eq("id", leadId)
+        } catch { /* not a parseable number — Linda keeps asking */ }
+      }
+    }
+  } else {
+    const profile = await getMessengerProfile(integration.fb_access_token, psid)
+    const { data: newLead } = await supabase
+      .from("leads")
+      .insert({
+        company_id: integration.company_id,
+        phone: messengerPlaceholderPhone(psid), // real number collected in conversation
+        first_name: profile.firstName,
+        last_name: profile.lastName,
+        messenger_psid: psid,
+        source: "facebook",
+        channel: "messenger",
+        status: "just_came_in",
+        metadata: { page_id: pageId, messenger: true },
+      })
+      .select("id")
+      .single()
+    if (!newLead) return
+    leadId = newLead.id
+
+    const leadName = `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim() || "Messenger lead"
+    notifyNewLead(integration.company_id, leadName, "via Messenger", "facebook").catch(() => {})
+  }
+
+  // Run the same AI engine as SMS; saves inbound + outbound with channel=messenger
+  try {
+    const result = await processAndSave(leadId, integration.company_id, text, undefined, undefined, "messenger")
+    if (result.response) {
+      await sendMessengerMessage(integration.fb_access_token, psid, result.response)
+      await supabase
+        .from("leads")
+        .update({ last_message_at: new Date().toISOString() })
+        .eq("id", leadId)
+    }
+  } catch (e) {
+    console.error("[webhook/facebook] Messenger AI error for lead:", leadId, e)
+  }
+}
 
 // GET — Facebook webhook verification challenge
 export async function GET(req: NextRequest) {
@@ -46,10 +141,11 @@ export async function POST(req: NextRequest) {
     object: string
     entry: Array<{
       id: string
-      changes: Array<{
+      changes?: Array<{
         field: string
         value: { leadgen_id: string; page_id: string; form_id: string }
       }>
+      messaging?: MessagingEvent[]
     }>
   }
   try {
@@ -65,7 +161,12 @@ export async function POST(req: NextRequest) {
   const supabase = createServiceRoleClient()
 
   for (const entry of body.entry) {
-    for (const change of entry.changes) {
+    // Messenger conversation events — entry.id is the page ID
+    for (const msgEvent of entry.messaging ?? []) {
+      await handleMessagingEvent(entry.id, msgEvent)
+    }
+
+    for (const change of entry.changes ?? []) {
       if (change.field !== "leadgen") continue
 
       const { leadgen_id, page_id, form_id } = change.value

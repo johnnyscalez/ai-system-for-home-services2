@@ -83,6 +83,7 @@ export interface Lead {
   last_name: string | null
   phone: string
   email: string | null
+  messenger_psid: string | null
   source: LeadSource
   source_form_id: string | null
   service_type: string | null

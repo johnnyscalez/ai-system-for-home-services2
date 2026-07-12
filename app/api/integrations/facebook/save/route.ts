@@ -43,9 +43,9 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Page not found in cache" }, { status: 404 })
   }
 
-  // Subscribe the page to leadgen webhook
+  // Subscribe the page to leadgen + Messenger webhooks
   const subRes = await fetch(
-    `https://graph.facebook.com/${page_id}/subscribed_apps?subscribed_fields=leadgen&access_token=${page.access_token}`,
+    `https://graph.facebook.com/${page_id}/subscribed_apps?subscribed_fields=leadgen,messages,messaging_postbacks&access_token=${page.access_token}`,
     { method: "POST" }
   )
   const subData = await subRes.json()

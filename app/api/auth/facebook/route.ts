@@ -16,6 +16,7 @@ export async function GET(req: NextRequest) {
     "pages_read_engagement",
     "pages_manage_metadata",
     "pages_manage_ads",
+    "pages_messaging",
     "ads_read",
     "business_management",
   ].join(",")

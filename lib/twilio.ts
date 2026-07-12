@@ -6,6 +6,11 @@ export function getTwilioClient() {
 }
 
 export async function sendSMS(to: string, body: string, from?: string, statusCallbackUrl?: string) {
+  // Messenger-only leads carry a "msgr:<psid>" placeholder phone — never let
+  // those reach Twilio (reminders, sequences, confirmations all route here).
+  if (!to || to.startsWith("msgr:")) {
+    throw new Error(`sendSMS: not a real phone number: "${to}"`)
+  }
   const client = getTwilioClient()
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ""
   return client.messages.create({
