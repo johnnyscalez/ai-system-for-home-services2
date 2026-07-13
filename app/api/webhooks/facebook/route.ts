@@ -62,6 +62,11 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
         } catch { /* not a parseable number — Linda keeps asking */ }
       }
     }
+    // Same for email — capture the moment it's shared in conversation
+    const emailMatch = text.match(/[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/)?.[0]
+    if (emailMatch) {
+      await supabase.from("leads").update({ email: emailMatch.toLowerCase() }).eq("id", leadId).is("email", null)
+    }
   } else {
     const profile = await getMessengerProfile(integration.fb_access_token, psid)
     const { data: newLead } = await supabase

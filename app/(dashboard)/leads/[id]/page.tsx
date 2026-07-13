@@ -53,7 +53,8 @@ export default async function LeadDetailPage({
     .from("conversations")
     .select("*")
     .eq("lead_id", id)
-    .eq("channel", "sms")
+    // Text thread = sms + messenger + whatsapp; voice transcripts render separately
+    .or("channel.is.null,channel.neq.voice")
     .order("created_at", { ascending: true })
 
   const { data: appointments } = await supabase
@@ -134,6 +135,15 @@ export default async function LeadDetailPage({
               <p className="text-xs text-muted-foreground capitalize">
                 {lead.source} lead · {formatDistanceToNow(lead.created_at)} ago
               </p>
+              {lead.messenger_psid && (
+                <span className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full"
+                  style={{ color: "#0084FF", background: "rgba(0,132,255,0.10)", border: "1px solid rgba(0,132,255,0.25)" }}>
+                  <svg viewBox="0 0 24 24" className="w-3 h-3" fill="currentColor" aria-hidden>
+                    <path d="M12 2C6.477 2 2 6.145 2 11.26c0 2.913 1.454 5.512 3.726 7.21V22l3.405-1.869c.909.252 1.871.388 2.869.388 5.523 0 10-4.145 10-9.259C22 6.145 17.523 2 12 2zm1.008 12.461-2.546-2.716-4.97 2.716 5.467-5.804 2.609 2.716 4.906-2.716-5.466 5.804z" />
+                  </svg>
+                  Messenger lead
+                </span>
+              )}
             </div>
           </div>
 
@@ -151,7 +161,13 @@ export default async function LeadDetailPage({
             <div className="space-y-2">
               <div className="flex items-center gap-2 text-sm">
                 <Phone className="w-3.5 h-3.5 text-muted-foreground shrink-0" />
-                <span className="font-mono text-xs">{lead.phone}</span>
+                {(lead.phone as string).startsWith("msgr:") ? (
+                  <span className="text-xs italic text-muted-foreground">
+                    Not collected yet — AI will ask on Messenger
+                  </span>
+                ) : (
+                  <span className="font-mono text-xs">{lead.phone}</span>
+                )}
               </div>
               {lead.email && (
                 <div className="flex items-center gap-2 text-sm">
@@ -316,6 +332,7 @@ export default async function LeadDetailPage({
           leadStatus={lead.status}
           fromNumber={phoneRecord?.phone_number ?? null}
           leadPhone={lead.phone}
+          leadChannel={lead.channel ?? null}
           companyTimezone={companyTimezone}
         />
       </div>

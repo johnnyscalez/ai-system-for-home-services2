@@ -34,6 +34,29 @@ type Props = {
   fromNumber: string | null
   leadPhone: string
   companyTimezone?: string
+  leadChannel?: string | null
+}
+
+// Brand glyphs for message channels (lucide has no Messenger/WhatsApp icons)
+function MessengerGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+      <path d="M12 2C6.477 2 2 6.145 2 11.26c0 2.913 1.454 5.512 3.726 7.21V22l3.405-1.869c.909.252 1.871.388 2.869.388 5.523 0 10-4.145 10-9.259C22 6.145 17.523 2 12 2zm1.008 12.461-2.546-2.716-4.97 2.716 5.467-5.804 2.609 2.716 4.906-2.716-5.466 5.804z" />
+    </svg>
+  )
+}
+
+function WhatsAppGlyph({ className }: { className?: string }) {
+  return (
+    <svg viewBox="0 0 24 24" className={className} fill="currentColor" aria-hidden>
+      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.297-.497.1-.198.05-.371-.025-.52-.075-.149-.669-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 0 1-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 0 1-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 0 1 2.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0 0 12.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 0 0 5.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 0 0-3.48-8.413z" />
+    </svg>
+  )
+}
+
+const CHANNEL_META: Record<string, { label: string; color: string }> = {
+  messenger: { label: "Messenger", color: "#0084FF" },
+  whatsapp:  { label: "WhatsApp",  color: "#25D366" },
 }
 
 export function ConversationThread({
@@ -46,6 +69,7 @@ export function ConversationThread({
   fromNumber,
   leadPhone,
   companyTimezone = "America/New_York",
+  leadChannel = null,
 }: Props) {
   const [messages, setMessages] = useState<Message[]>(initialMessages)
   const [aiSmsPaused, setAiSmsPaused] = useState(initialAiPaused)
@@ -103,7 +127,9 @@ export function ConversationThread({
         .from("conversations")
         .select("id, direction, sent_by, body, created_at, twilio_sid, channel")
         .eq("lead_id", leadId)
-        .eq("channel", "sms")
+        // Text thread = sms + messenger + whatsapp (legacy rows have null channel).
+        // Voice transcripts are shown elsewhere.
+        .or("channel.is.null,channel.neq.voice")
         .order("created_at", { ascending: true })
 
       if (!data) return
@@ -124,7 +150,7 @@ export function ConversationThread({
         { event: "INSERT", schema: "public", table: "conversations", filter: `lead_id=eq.${leadId}` },
         (payload) => {
           const msg = payload.new as Message
-          if (msg.channel && msg.channel !== "sms") return  // ignore voice transcripts
+          if (msg.channel === "voice") return  // voice transcripts live elsewhere
           setMessages((prev) => {
             if (prev.some((m) => m.id === msg.id)) return prev
             return [...prev, msg]
@@ -146,6 +172,19 @@ export function ConversationThread({
     return () => { supabase.removeChannel(channel) }
   }, [leadId, supabase])
 
+  // Which channel is this thread on? Latest non-voice message wins; falls back
+  // to the lead's own channel. Determines the header badge AND where manual
+  // replies get sent (SMS vs Messenger Send API).
+  const threadChannel: "sms" | "messenger" | "whatsapp" = (() => {
+    for (let i = messages.length - 1; i >= 0; i--) {
+      const ch = messages[i].channel
+      if (ch === "messenger" || ch === "whatsapp") return ch
+      if (ch === "sms" || !ch) return "sms"
+    }
+    if (leadChannel === "messenger" || leadChannel === "whatsapp") return leadChannel
+    return "sms"
+  })()
+
   const handleSend = useCallback(async () => {
     const body = draft.trim()
     if (!body || sending) return
@@ -155,7 +194,10 @@ export function ConversationThread({
     setDraft("")
 
     try {
-      const res = await fetch("/api/sms/send", {
+      // Messenger leads get replies through the Messenger Send API — their
+      // phone may be a placeholder, so SMS would go nowhere.
+      const endpoint = threadChannel === "messenger" ? "/api/messenger/send" : "/api/sms/send"
+      const res = await fetch(endpoint, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ leadId, body }),
@@ -174,7 +216,7 @@ export function ConversationThread({
     } finally {
       setSending(false)
     }
-  }, [draft, leadId, sending])
+  }, [draft, leadId, sending, threadChannel])
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === "Enter" && (e.metaKey || e.ctrlKey)) {
@@ -212,11 +254,29 @@ export function ConversationThread({
 
   return (
     <div className="flex flex-col flex-1 min-w-0">
-      {/* Thread header */}
+      {/* Thread header — channel-aware: Messenger / WhatsApp / SMS */}
       <div className="px-5 py-3 border-b border-border flex items-center justify-between shrink-0">
         <div className="flex items-center gap-2">
-          <span className="text-sm font-medium">SMS Conversation</span>
-          <span className="text-xs text-muted-foreground font-mono">{leadPhone}</span>
+          {threadChannel === "messenger" ? (
+            <>
+              <span style={{ color: CHANNEL_META.messenger.color }}><MessengerGlyph className="w-4 h-4" /></span>
+              <span className="text-sm font-medium" style={{ color: CHANNEL_META.messenger.color }}>
+                Messenger Conversation
+              </span>
+            </>
+          ) : threadChannel === "whatsapp" ? (
+            <>
+              <span style={{ color: CHANNEL_META.whatsapp.color }}><WhatsAppGlyph className="w-4 h-4" /></span>
+              <span className="text-sm font-medium" style={{ color: CHANNEL_META.whatsapp.color }}>
+                WhatsApp Conversation
+              </span>
+            </>
+          ) : (
+            <span className="text-sm font-medium">SMS Conversation</span>
+          )}
+          <span className="text-xs text-muted-foreground font-mono">
+            {leadPhone.startsWith("msgr:") ? "no phone yet" : leadPhone}
+          </span>
         </div>
         {/* Legacy combined badge — shows combined state for quick glance */}
         {(aiSmsPaused || aiVoicePaused) ? (
@@ -283,7 +343,7 @@ export function ConversationThread({
 
       {/* Messages — filter voice transcripts at render time so they never appear here */}
       <div className="flex-1 overflow-y-auto px-5 py-4 space-y-3">
-        {messages.filter(m => !m.channel || m.channel === "sms").length === 0 ? (
+        {messages.filter(m => m.channel !== "voice").length === 0 ? (
           <div className="flex flex-col items-center justify-center h-full text-center">
             <Bot className="w-10 h-10 text-muted-foreground/30 mb-3" />
             <p className="text-sm text-muted-foreground">No messages yet</p>
@@ -293,12 +353,16 @@ export function ConversationThread({
           </div>
         ) : (
           <AnimatePresence initial={false}>
-            {messages.filter(m => !m.channel || m.channel === "sms").map((msg) => {
+            {messages.filter(m => m.channel !== "voice").map((msg) => {
               const isOutbound = msg.direction === "outbound"
               const isAi = msg.sent_by === "ai"
               const isReminder = msg.sent_by === "reminder"
               const ageSeconds = (Date.now() - new Date(msg.created_at).getTime()) / 1000
-              const deliveryFailed = isOutbound && !isReminder && msg.twilio_sid === null && ageSeconds > 15
+              const isSms = !msg.channel || msg.channel === "sms"
+              // Delivery tracking via twilio_sid only exists for SMS — messenger/
+              // whatsapp rows would otherwise show a false "Not delivered"
+              const deliveryFailed = isSms && isOutbound && !isReminder && msg.twilio_sid === null && ageSeconds > 15
+              const channelMeta = msg.channel ? CHANNEL_META[msg.channel] : undefined
               const isInitial = initialMessages.some((m) => m.id === msg.id)
 
               return (
@@ -339,6 +403,14 @@ export function ConversationThread({
                       {isOutbound && !isAi && (
                         <span className="text-[10px] text-muted-foreground flex items-center gap-0.5">
                           <User className="w-2.5 h-2.5" /> You
+                        </span>
+                      )}
+                      {channelMeta && (
+                        <span className="text-[10px] font-medium flex items-center gap-0.5" style={{ color: channelMeta.color }}>
+                          {msg.channel === "messenger"
+                            ? <MessengerGlyph className="w-2.5 h-2.5" />
+                            : <WhatsAppGlyph className="w-2.5 h-2.5" />}
+                          {channelMeta.label}
                         </span>
                       )}
                       <span className="text-[10px] text-muted-foreground">
