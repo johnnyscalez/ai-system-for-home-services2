@@ -584,6 +584,8 @@ const TOAST_MESSAGES: Record<string, string> = {
   facebook: "Facebook Lead Ads connected successfully",
   facebook_denied: "Facebook authorization was cancelled",
   auth_failed: "Authentication failed — please try again",
+  session_lost: "Your login session couldn't be verified when Facebook redirected back — you're still logged in, just click Connect again",
+  state_mismatch: "This connection was started from a different login — click Connect again from this account",
   token_failed: "Could not get Facebook access token — check your app credentials",
   no_pages: "No Facebook Pages found — make sure you manage at least one Business Page",
   save_failed: "Failed to save integration — please try again",

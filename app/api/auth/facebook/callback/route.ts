@@ -13,9 +13,21 @@ export async function GET(req: NextRequest) {
   }
 
   const supabase = await createServerSupabaseClient()
-  const { data: { user } } = await supabase.auth.getUser()
-  if (!user || user.id !== state) {
-    return NextResponse.redirect(`${appUrl}/integrations?error=auth_failed`)
+  // getUser() validates against Supabase over the network — a transient
+  // failure here used to kill the whole OAuth round-trip. Retry once.
+  let { data: { user } } = await supabase.auth.getUser()
+  if (!user) {
+    await new Promise((r) => setTimeout(r, 700))
+    const retry = await supabase.auth.getUser()
+    user = retry.data.user
+  }
+  if (!user) {
+    console.error("[fb-callback] no session at callback (after retry). state:", state)
+    return NextResponse.redirect(`${appUrl}/integrations?error=session_lost`)
+  }
+  if (user.id !== state) {
+    console.error("[fb-callback] state mismatch. user:", user.id, "state:", state)
+    return NextResponse.redirect(`${appUrl}/integrations?error=state_mismatch`)
   }
 
   const { data: profile } = await supabase
