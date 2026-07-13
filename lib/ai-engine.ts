@@ -139,7 +139,10 @@ export async function runConversation(
       .from("conversations")
       .select("direction, body, sent_by, created_at")
       .eq("lead_id", leadId)
-      .eq("channel", "sms")
+      // All text channels — sms, messenger, whatsapp (legacy rows are null).
+      // Filtering to sms-only made the AI amnesiac on messenger/whatsapp:
+      // every inbound looked like a first contact and it re-greeted forever.
+      .or("channel.is.null,channel.neq.voice")
       .order("created_at", { ascending: true }),
     supabase
       .from("ai_agent_config")
@@ -981,7 +984,7 @@ export async function processAndSave(
         .from("conversations")
         .select("direction, body")
         .eq("lead_id", leadId)
-        .eq("channel", "sms")
+        .or("channel.is.null,channel.neq.voice")
         .order("created_at", { ascending: true })
         .limit(20)
       const histLines = (hist ?? []).map(m => `${m.direction === "inbound" ? "Lead" : "AI"}: ${m.body}`).join("\n")
@@ -1268,12 +1271,13 @@ export async function processAndSave(
           .maybeSingle()
 
         if (leadData?.phone && phoneRecord?.phone_number) {
-          // Fetch recent SMS context so voice agent knows exactly what this call is about
+          // Fetch recent text context (sms/messenger/whatsapp) so the voice
+          // agent knows exactly what this call is about
           const { data: smsHistory } = await supabase
             .from("conversations")
             .select("direction, body")
             .eq("lead_id", leadId)
-            .eq("channel", "sms")
+            .or("channel.is.null,channel.neq.voice")
             .order("created_at", { ascending: false })
             .limit(8)
 
