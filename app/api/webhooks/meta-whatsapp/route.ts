@@ -143,7 +143,7 @@ export async function POST(req: NextRequest) {
           await db.from("leads").update({ email: email.toLowerCase() }).eq("id", lead.id).is("email", null)
         }
 
-        const result = await processAndSave(lead.id, conn.company_id, ev.text, ev.wamid)
+        const result = await processAndSave(lead.id, conn.company_id, ev.text, ev.wamid, undefined, "whatsapp")
         if (result.response) {
           const wamid = await sendCloudText(conn, phone, result.response)
           if (wamid && result.outboundConversationId) {

@@ -937,7 +937,7 @@ export async function processAndSave(
   incomingMessage: string | null,
   incomingTwilioSid?: string,
   followUpAngle?: string,
-  channel: "sms" | "messenger" = "sms"
+  channel: "sms" | "messenger" | "whatsapp" = "sms"
 ): Promise<EngineResult> {
   const supabase = createServiceRoleClient()
 
