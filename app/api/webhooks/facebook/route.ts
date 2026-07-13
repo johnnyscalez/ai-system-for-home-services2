@@ -159,6 +159,17 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Invalid JSON" }, { status: 400 })
   }
 
+  // Delivery observability — every Meta POST logs one line so Railway logs
+  // show whether events are arriving at all (messaging + leadgen counts).
+  console.log("[webhook/facebook] delivery:", JSON.stringify({
+    object: body.object,
+    entries: (body.entry ?? []).map(e => ({
+      id: e.id,
+      messaging: e.messaging?.length ?? 0,
+      changes: (e.changes ?? []).map(c => c.field),
+    })),
+  }))
+
   if (body.object !== "page") {
     return NextResponse.json({ ok: true })
   }
