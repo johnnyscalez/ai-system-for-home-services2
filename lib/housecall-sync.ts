@@ -171,6 +171,13 @@ export async function pushBookingToHcp(appointmentId: string): Promise<{ pushed:
     .single()
   if (!lead) return { pushed: false, reason: "lead not found" }
 
+  // Messenger-only leads carry a msgr:<psid> placeholder phone. Don't create
+  // an HCP customer with garbage contact info — skip now; the reconciliation
+  // cron re-pushes once the real phone is captured in conversation.
+  if (typeof lead.phone === "string" && lead.phone.startsWith("msgr:") && !lead.email) {
+    return { pushed: false, reason: "no real contact info yet (messenger lead)" }
+  }
+
   const customerId = await resolveOrCreateCustomer(db, client, lead)
   const addressId = await ensureServiceAddress(client, customerId, apt.address ?? lead.address)
 

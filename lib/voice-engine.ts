@@ -752,6 +752,17 @@ async function executeTool(
         selectTechnician(session.company_id, apt.id, scheduled_at, lead?.job_type as string | null, zip).catch(() => {})
       }
 
+      // HCP-mode companies: mirror the booking into Housecall Pro as a real
+      // job — same as the SMS/Messenger/WhatsApp engine. Fire-and-forget so
+      // the caller never waits on HCP; failed pushes retry via the
+      // reconciliation cron. (Voice is the after-hours flagship — bookings
+      // made at 11pm must be on the board when the office opens.)
+      if (apt) {
+        import("@/lib/housecall-sync")
+          .then(({ pushBookingToHcp }) => pushBookingToHcp(apt.id))
+          .catch((err) => console.error("[hcp-sync] voice booking push failed:", err))
+      }
+
       // Google Calendar sync
       if (apt) {
         try {
