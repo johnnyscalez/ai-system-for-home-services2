@@ -38,10 +38,7 @@ export async function middleware(request: NextRequest) {
   const isPublicRoute =
     path === "/" ||
     path === "/start" ||
-    path === "/start/tab" ||
-    path === "/start/tech" ||
-    path === "/start/hire" ||
-    path === "/start/booked" ||
+    path.startsWith("/start/") ||
     path === "/privacy" ||
     path === "/terms" ||
     path === "/api/health" ||

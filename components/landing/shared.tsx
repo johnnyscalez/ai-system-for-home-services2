@@ -920,7 +920,15 @@ const inputStyle: React.CSSProperties = {
   width: "100%",
 }
 
-export function LeadFormSection({ source }: { source: string }) {
+export function LeadFormSection({
+  source,
+  heading = "Get your leak map — free, on a 20-minute call.",
+  sub,
+}: {
+  source: string
+  heading?: string
+  sub?: React.ReactNode
+}) {
   const reduced = useReducedMotion()
   const [phase, setPhase] = useState<FormPhase>("form")
   const [firstName, setFirstName] = useState("")
@@ -986,13 +994,17 @@ export function LeadFormSection({ source }: { source: string }) {
 
               <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-3"
                   style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
-                Get your leak map — free, on a 20-minute call.
+                {heading}
               </h2>
               <p className="text-base leading-relaxed mb-7" style={{ color: C.muted }}>
-                I&rsquo;ll map exactly where leads slip through your shop, then set the
-                same AI system up live in your shop — answering every lead, booking
-                the job, showing you which tech makes you money — free for 14 days.{" "}
-                <strong style={{ color: C.text }}>You keep the map either way.</strong>
+                {sub ?? (
+                  <>
+                    I&rsquo;ll map exactly where leads slip through your shop, then set the
+                    same AI system up live in your shop — answering every lead, booking
+                    the job, showing you which tech makes you money — free for 14 days.{" "}
+                    <strong style={{ color: C.text }}>You keep the map either way.</strong>
+                  </>
+                )}
               </p>
 
               <form onSubmit={handleSubmit} noValidate>
