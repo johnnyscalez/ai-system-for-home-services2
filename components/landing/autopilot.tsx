@@ -11,7 +11,7 @@
 // behind prefers-reduced-motion.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useRef } from "react"
+import { useCallback, useEffect, useRef, useState } from "react"
 import { motion, useInView, useReducedMotion, useScroll, useTransform } from "framer-motion"
 import { C } from "./shared"
 
@@ -98,15 +98,87 @@ function BookedReceipt() {
   )
 }
 
-// ── The phone artifact ───────────────────────────────────────────────────────
+// ── Typing indicator, matching whichever side is "typing" ───────────────────
+function TypingDots({ from }: { from: "ai" | "lead" }) {
+  const ai = from === "ai"
+  return (
+    <div className={`flex ${ai ? "justify-end" : "justify-start"}`}>
+      <div className="px-4 py-3"
+           style={ai
+             ? { background: "#0A84FF", borderRadius: "16px 16px 4px 16px" }
+             : { background: "#EDEAE7", borderRadius: "16px 16px 16px 4px" }}>
+        <div className="flex items-center gap-1">
+          {[0, 1, 2].map((i) => (
+            <motion.span key={i} className="block w-1.5 h-1.5 rounded-full"
+              style={{ background: ai ? "rgba(255,255,255,0.85)" : "#A8A29E" }}
+              animate={{ y: [0, -3.5, 0] }}
+              transition={{ duration: 0.75, repeat: Infinity, delay: i * 0.14, ease: "easeInOut" }}
+            />
+          ))}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── The phone artifact — a LIVE replay of the conversation ──────────────────
+// SSR and no-JS render the complete conversation (content is never hidden by
+// default). After hydration, when the phone scrolls into view and motion is
+// allowed, the replay takes over: typing dots, messages arriving one by one,
+// the thread auto-scrolling, the booked receipt landing last.
 export function ChatArtifact() {
-  const ref = useRef<HTMLDivElement>(null)
+  const frameRef = useRef<HTMLDivElement>(null)
+  const scrollRef = useRef<HTMLDivElement>(null)
   const reduced = useReducedMotion()
-  const { scrollYProgress } = useScroll({ target: ref, offset: ["start end", "end start"] })
+  const inView = useInView(frameRef, { once: true, margin: "-120px" })
+
+  const [count, setCount] = useState(CHAT.length) // full conversation by default
+  const [typing, setTyping] = useState<null | "ai" | "lead">(null)
+  const [playing, setPlaying] = useState(false)
+  const runId = useRef(0)
+
+  const play = useCallback(() => {
+    const id = ++runId.current
+    const wait = (ms: number) => new Promise((r) => setTimeout(r, ms))
+    ;(async () => {
+      setPlaying(true); setCount(0); setTyping(null)
+      await wait(650)
+      for (let i = 0; i < CHAT.length; i++) {
+        if (runId.current !== id) return
+        const m = CHAT[i]
+        setTyping(m.from)
+        await wait(Math.min(420 + m.text.length * 14, 1500))
+        if (runId.current !== id) return
+        setTyping(null)
+        setCount(i + 1)
+        await wait(m.stamp ? 620 : 380)
+      }
+      if (runId.current !== id) return
+      setPlaying(false)
+    })()
+  }, [])
+
+  // Auto-play once, when it enters the viewport (skipped for reduced motion)
+  useEffect(() => {
+    if (!inView || reduced) return
+    play()
+    return () => { runId.current++ }
+  }, [inView, reduced, play])
+
+  // Keep the thread pinned to the newest message while it plays
+  useEffect(() => {
+    const el = scrollRef.current
+    if (!el) return
+    el.scrollTo({ top: el.scrollHeight, behavior: reduced ? "auto" : "smooth" })
+  }, [count, typing, reduced])
+
+  const { scrollYProgress } = useScroll({ target: frameRef, offset: ["start end", "end start"] })
   const drift = useTransform(scrollYProgress, [0, 1], reduced ? [0, 0] : [14, -14])
 
+  const finished = count >= CHAT.length
+
   return (
-    <motion.div ref={ref} style={{ y: drift }} className="relative mx-auto w-full max-w-[400px]">
+    <motion.div ref={frameRef} style={{ y: drift }} className="relative mx-auto w-full max-w-[400px]">
       <div className="rounded-[26px] overflow-hidden"
            style={{
              background: "#FFFFFF",
@@ -127,10 +199,26 @@ export function ChatArtifact() {
           </div>
         </div>
 
-        {/* Conversation — every message rendered, always visible */}
-        <div className="px-3.5 py-3 space-y-1.5">
-          {CHAT.map((m, i) => <Bubble key={i} msg={m} />)}
-          <BookedReceipt />
+        {/* The thread — full conversation in the HTML; replay animates it */}
+        <div ref={scrollRef} className="px-3.5 py-3 space-y-1.5 overflow-y-auto"
+             style={{ height: 464, overscrollBehavior: "contain" }}>
+          {CHAT.slice(0, count).map((m, i) => <Bubble key={i} msg={m} />)}
+          {typing && <TypingDots from={typing} />}
+          {finished && <BookedReceipt />}
+        </div>
+
+        {/* Replay — a real control, disabled while playing */}
+        <div className="flex items-center justify-center py-2.5"
+             style={{ borderTop: "1px solid #F0EDEA", background: "#FBFAF9" }}>
+          <button type="button" onClick={play} disabled={playing}
+                  className="inline-flex items-center gap-1.5 text-[12px] font-semibold transition-colors disabled:opacity-40 hover:text-orange-600"
+                  style={{ color: C.muted }}>
+            <svg width="12" height="12" viewBox="0 0 14 14" fill="none" aria-hidden="true">
+              <path d="M12 6.2 A5.2 5.2 0 1 0 12.6 9" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" fill="none" />
+              <path d="M12.3 2.6 V6.4 H8.5" stroke="currentColor" strokeWidth="1.7" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+            </svg>
+            {playing ? "Watching it happen live" : "Watch it again"}
+          </button>
         </div>
       </div>
     </motion.div>
