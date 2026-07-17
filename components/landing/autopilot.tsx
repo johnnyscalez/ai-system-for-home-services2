@@ -244,7 +244,7 @@ export function AutopilotHero() {
           {/* Copy column */}
           <div className="pt-4 lg:pt-14 pb-2 lg:pb-24">
             <p className="text-sm font-semibold mb-5" style={{ color: "rgba(250,250,248,0.45)" }}>
-              For HVAC owners running 5+ techs
+              For HVAC owners running 4+ techs
             </p>
 
             <h1 className="font-extrabold tracking-tight leading-[1.04] mb-4"
@@ -389,6 +389,65 @@ export function PaidLeadMath() {
             </p>
           </div>
         </div>
+      </div>
+    </section>
+  )
+}
+
+// ── THE REVENUE CHAIN — speed → booking rate → revenue ──────────────────────
+// Compact by design: one visual sentence, not a section of copy. The point
+// lands as an equation the eye reads in three seconds.
+function ChainArrow() {
+  return (
+    <svg width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true"
+         className="shrink-0 rotate-90 md:rotate-0">
+      <path d="M6 17 H26 M20 10.5 L27 17 L20 23.5"
+            stroke={C.orange} strokeWidth="2.6" strokeLinecap="round" strokeLinejoin="round" />
+    </svg>
+  )
+}
+
+export function RevenueChainSection() {
+  return (
+    <section className="relative py-16 px-6" style={{ background: C.dark }}>
+      <div className="max-w-5xl mx-auto text-center">
+        <div className="flex flex-col md:flex-row items-center justify-center gap-5 md:gap-7">
+
+          <div className="max-w-[240px]">
+            <div className="text-lg font-extrabold leading-snug tracking-tight"
+                 style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>
+              Every lead answered in under a minute
+            </div>
+          </div>
+
+          <ChainArrow />
+
+          <div>
+            <div className="font-black leading-none"
+                 style={{ color: C.orange, fontFamily: "var(--font-jetbrains)", fontSize: "clamp(3rem, 7vw, 4.6rem)", letterSpacing: "-0.02em" }}>
+              +391%
+            </div>
+            <div className="text-[13px] font-semibold mt-1.5" style={{ color: "rgba(250,250,248,0.55)" }}>
+              more likely to convert
+            </div>
+          </div>
+
+          <ChainArrow />
+
+          <div className="max-w-[240px]">
+            <div className="text-lg font-extrabold leading-snug tracking-tight"
+                 style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>
+              More booked jobs. More revenue.
+            </div>
+          </div>
+        </div>
+
+        <p className="mt-9 text-[14px] max-w-2xl mx-auto leading-relaxed" style={{ color: "rgba(250,250,248,0.55)" }}>
+          This is a revenue tool, not a convenience tool. Speed is the booking-rate
+          lever, and booking rate is the revenue lever: industry response-time
+          research found leads contacted within one minute convert{" "}
+          <strong style={{ color: "rgba(250,250,248,0.85)" }}>391% more often</strong>.
+        </p>
       </div>
     </section>
   )

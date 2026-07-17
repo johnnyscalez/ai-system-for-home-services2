@@ -11,7 +11,7 @@ import {
   MinimalHeader, LeadFormSection, FaqSection, MinimalFooter, StickyBottomCta,
 } from "@/components/landing/shared"
 import {
-  AutopilotHero, PaidLeadMath, WorkOrderSection, StackStaysSection,
+  AutopilotHero, PaidLeadMath, RevenueChainSection, WorkOrderSection, StackStaysSection,
 } from "@/components/landing/autopilot"
 
 export default function AutopilotPage() {
@@ -20,11 +20,12 @@ export default function AutopilotPage() {
       <MinimalHeader />
       <AutopilotHero />
       <PaidLeadMath />
+      <RevenueChainSection />
       <WorkOrderSection />
       <StackStaysSection />
       <LeadFormSection
         source="autopilot"
-        heading="See it running on your leads. Free for 2 weeks."
+        heading="See It Booking Your Leads In Seconds Without Paying a Dime"
         sub={
           <>
             Book a 20-minute walkthrough. We connect your lead sources, and the AI

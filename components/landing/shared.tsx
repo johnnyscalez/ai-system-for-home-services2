@@ -183,7 +183,7 @@ function LeakCounter() {
 // WOUND HERO — shared shell; each page passes its ad-matched headline
 // ─────────────────────────────────────────────────────────────────────────────
 export function WoundHero({
-  eyebrow = "For HVAC shops running 5+ techs",
+  eyebrow = "For HVAC shops running 4+ techs",
   line1,
   line2,
   sub,
@@ -880,20 +880,20 @@ function revenueAtLeast(revenue: string, floor: (typeof REVENUE_ORDER)[number]):
   return REVENUE_ORDER.indexOf(revenue as (typeof REVENUE_ORDER)[number]) >= REVENUE_ORDER.indexOf(floor)
 }
 
+// Threshold: 4+ techs. With the 1-2 / 3-4 / 5-9 / 10+ buckets, the 3-4
+// bucket is the one that contains "4", so it qualifies on the same terms
+// as 5-9.
 // 1-2 techs: never — no team to dispatch between, no per-tech performance
 //   to compare, the differentiator half of the product is dead weight.
-// 3-4 techs: needs $2M+ revenue — below that, price is a painful slice of
-//   a shop netting ~8% on an $800K-$1M business; the front-office pains
-//   this solves mostly don't exist yet. At $2M+ it's the exceptional
-//   operator ($500K+/tech) worth every minute of a call.
-// 5-9 techs: needs $1-2M+ revenue (i.e. anything but "Under $1M") — below
-//   $1M the per-tech economics don't pencil for a high-ticket product.
+// 3-4 techs: needs $1M+ revenue — same floor as 5-9; below $1M the
+//   per-tech economics don't pencil for a high-ticket product.
+// 5-9 techs: needs $1-2M+ revenue (i.e. anything but "Under $1M").
 // 10+ techs: needs $2M+ revenue — more techs need proportionally MORE
 //   revenue to clear the ~$200K/tech viability floor, not less; 10+ techs
 //   on only $1-2M is a worse ratio than a 5-tech shop at the same revenue.
 function isQualified(techs: string, revenue: string): boolean {
-  if (techs === "5-9") return revenueAtLeast(revenue, "1-2M")
-  if (techs === "3-4" || techs === "10+") return revenueAtLeast(revenue, "2-5M")
+  if (techs === "3-4" || techs === "5-9") return revenueAtLeast(revenue, "1-2M")
+  if (techs === "10+") return revenueAtLeast(revenue, "2-5M")
   return false // 1-2 techs
 }
 
@@ -984,14 +984,6 @@ export function LeadFormSection({
           {/* ── STATE 1: the form ── */}
           {phase === "form" && (
             <div>
-              <div className="inline-flex items-center gap-2 px-3.5 py-1.5 rounded-full mb-4"
-                   style={{ background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.20)" }}>
-                <span className="w-1.5 h-1.5 rounded-full" style={{ background: C.orange }} />
-                <span className="text-xs font-bold uppercase tracking-wider" style={{ color: C.orangeDk }}>
-                  Free 14-day trial available
-                </span>
-              </div>
-
               <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-3"
                   style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
                 {heading}
@@ -1079,22 +1071,10 @@ export function LeadFormSection({
                   </p>
                 </div>
 
-                {/* Offer reinforcement — right before the click, where risk-reversal does its best work */}
-                <div className="rounded-2xl px-5 py-4 mb-5 text-center"
-                     style={{ background: `linear-gradient(135deg, ${C.orange}, ${C.orangeDk})`, boxShadow: "0 8px 24px rgba(249,115,22,0.25)" }}>
-                  <div className="text-base sm:text-lg font-black text-white tracking-tight"
-                       style={{ fontFamily: "var(--font-jakarta)" }}>
-                    14 days free. No card. No contract.
-                  </div>
-                  <p className="text-xs text-white/85 mt-1">
-                    I build it in your shop and you watch it book real jobs. If the numbers don&rsquo;t convince you, you walk.
-                  </p>
-                </div>
-
                 <button type="submit"
-                        className="flex items-center justify-center gap-2 w-full font-bold text-white py-4 rounded-xl transition-all duration-200 hover:-translate-y-0.5 text-lg focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-orange-600 focus-visible:outline-offset-2"
+                        className="flex items-center justify-center gap-2 w-full font-bold text-white py-4 rounded-xl transition-colors duration-200 hover:bg-orange-600 text-lg focus-visible:outline focus-visible:outline-[3px] focus-visible:outline-orange-600 focus-visible:outline-offset-2"
                         style={{ background: C.orange, boxShadow: "0 8px 28px rgba(249,115,22,0.30)" }}>
-                  Claim My Free 14 Days
+                  Show Me How It Books More Leads
                   <ArrowRight className="w-5 h-5" aria-hidden="true" />
                 </button>
                 <p className="text-center text-xs mt-3" style={{ color: C.muted }}>
@@ -1272,7 +1252,7 @@ export function StickyBottomCta() {
       <a href="#form"
          className="flex items-center justify-center gap-2 w-full font-bold text-white py-4 rounded-xl text-base"
          style={{ background: C.orange, boxShadow: "0 8px 28px rgba(249,115,22,0.35)" }}>
-        Claim My Free 14 Days
+        Show Me How It Books More Leads
         <ArrowRight className="w-4 h-4" aria-hidden="true" />
       </a>
     </motion.div>
