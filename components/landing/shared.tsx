@@ -926,7 +926,7 @@ export function LeadFormSection({
   sub,
 }: {
   source: string
-  heading?: string
+  heading?: React.ReactNode
   sub?: React.ReactNode
 }) {
   const reduced = useReducedMotion()

@@ -277,8 +277,8 @@ export function AutopilotHero() {
       <div className="max-w-6xl mx-auto">
         <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-7 lg:gap-10 items-start">
 
-          {/* Copy column — compact on mobile, full on desktop */}
-          <div className="pt-2 lg:pt-14 lg:pb-24">
+          {/* Copy column — compact and centered on mobile, full on desktop */}
+          <div className="pt-2 lg:pt-14 lg:pb-24 text-center lg:text-left">
             <p className="text-[13px] lg:text-sm font-semibold mb-3 lg:mb-5" style={{ color: "rgba(250,250,248,0.45)" }}>
               For HVAC owners running 4+ techs
             </p>

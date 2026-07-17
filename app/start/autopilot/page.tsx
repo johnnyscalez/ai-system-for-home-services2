@@ -25,7 +25,25 @@ export default function AutopilotPage() {
       <StackStaysSection />
       <LeadFormSection
         source="autopilot"
-        heading="See It Booking Your Leads In Seconds Without Paying a Dime"
+        heading={
+          <>
+            See It Booking Your Leads In Seconds{" "}
+            <span
+              style={{
+                // Highlighter swipe across the lower half of the phrase —
+                // clones cleanly when the phrase wraps on small screens
+                background:
+                  "linear-gradient(to bottom, transparent 46%, rgba(249,115,22,0.30) 46%, rgba(249,115,22,0.30) 94%, transparent 94%)",
+                boxDecorationBreak: "clone",
+                WebkitBoxDecorationBreak: "clone",
+                padding: "0 0.12em",
+                marginLeft: "-0.12em",
+              }}
+            >
+              Without Paying a Dime
+            </span>
+          </>
+        }
         sub={
           <>
             Book a 20-minute walkthrough. We connect your lead sources, and the AI
