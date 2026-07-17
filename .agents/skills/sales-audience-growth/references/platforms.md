@@ -24,6 +24,11 @@ Detailed per-platform audience growth features — opt-in forms, landing pages, 
 - [In InboxReads](#in-inboxreads)
 - [In MutualGro](#in-mutualgro)
 - [In ReferralKit](#in-referralkit)
+- [In ReferralHero](#in-referralhero)
+- [In KickoffLabs](#in-kickofflabs)
+- [In UpViral](#in-upviral)
+- [In LaunchList](#in-launchlist)
+- [In Waitlister](#in-waitlister)
 - [In Refind](#in-refind)
 
 ### In Kit
@@ -56,7 +61,7 @@ Detailed per-platform audience growth features — opt-in forms, landing pages, 
 ### In Mailchimp
 - **Landing pages**: Built-in landing page builder (all plans)
 - **Signup forms**: Embedded, popup, and hosted forms
-- **No built-in referral system** — use SparkLoop or ReferralHero
+- **No built-in referral system** — use SparkLoop, ReferralKit, or ReferralHero (see those sections)
 - **Audience dashboard**: Track growth sources (organic, import, API, integrations)
 
 ### In Substack
@@ -298,6 +303,74 @@ ReferralKit (referralkit.co — NOT .io) is a no-code newsletter referral progra
 - **Limitations**: No API, no webhooks, no Zapier/Make/MCP. Merge-tag flow means broadcast templates that strip merge tags will fail — use subscriber-targeted sends
 - **Domain warning**: `referralkit.io` is dead (ECONNREFUSED). Always use `referralkit.co`
 - **Best for**: Newsletter operators under 10K subscribers on a natively supported ESP wanting a free Morning Brew-style referral program without engineering work
+
+### In ReferralHero
+
+ReferralHero is a full-stack referral / affiliate / waitlist / contest platform with a documented REST API, webhooks, Zapier (500+ apps), six native ESP connectors (Mailchimp, Kit, AWeber, Klaviyo, ActiveCampaign, SendLane), multi-level referral tracking (Level 1/2/3), and coupon group management. For full platform help, use `/sales-referralhero`.
+
+- **Tiers**: Free (25 subs, NO API), PRO $199/mo (10K members, API + webhooks), PREMIUM $399/mo (50K members, adds ReCaptcha + SMS Verification), PREMIUM Waitlist/Contest $199/mo (50K subs + broadcasts), Enterprise custom
+- **API**: `https://app.referralhero.com/api/v2`, `Authorization: Bearer` auth, 5,000 req/hour soft rate limit (HTTP 429 + `too_many_calls` on overage); 40+ endpoints across lists, subscribers, transactions, coupons, rewards
+- **Multi-level referrals**: Level 1/2/3 endpoints, with separate "all" (includes unqualified) vs confirmed-only variants — pick the right one or counts look wrong
+- **Anti-fraud controls**: Built-in heuristics (PRO+), ReCaptcha + SMS Verification (PREMIUM-only), manual `qualify`/`unqualify` endpoints, `double_optin` campaign flag
+- **Reward fulfillment**: Two-step API flow (`promote` → `unlock_promoted_reward`) for external-driven logic; UI runs both server-side at milestone
+- **ESP gotcha**: Connecting a native ESP AND posting to `/subscribers` via API causes duplicate adds — pick one ingestion path per campaign
+- **No MCP server** (as of 2026-06-01); no native CRM connector — go via Zapier or build with the API
+- **Best for**: Teams with engineering capacity wanting documented API + webhooks + multi-level + coupons across multiple verticals (FinTech, SaaS, home services, dentists, med spas, mobile apps), sub-50K subscribers; or when ReferralKit's no-code merge-tag approach isn't enough and SparkLoop's newsletter-only focus doesn't fit
+
+### In KickoffLabs
+
+KickoffLabs is a viral marketing platform for pre-launch waitlists, bonus-entry giveaways, milestone-reward referral programs, and leaderboard giveaways, with REST API v1 + v2, server-side webhooks, AnyForm script, and KOL.js. For full platform help, use `/sales-kickofflabs`.
+
+- **Campaign types**: pre-launch waitlist (Dropbox-style), bonus-entry giveaway (Gleam-style), milestone rewards (Morning Brew-style), leaderboard giveaway (top-N), email opt-in bribes
+- **Tiers** (annual): Hobby $13/mo (500 leads), Premium $48/mo (2.5K + reward emails + A/B + tracking pixels), Business $99/mo (10K + custom email templates + custom domains + 3 team), Enterprise $202/mo (25K + SMS included + 5 team); $8 per 1,000 overage auto-upgrade
+- **Critical gate**: reward-level emails and A/B testing are **Premium+** — Hobby cannot run milestone-reward campaigns properly
+- **Fraud detection**: structured webhook flags `duplicate_ip` / `bounced` / `duplidate_email` (verbatim typo in their docs); bulk `POST /v2/{CAMPAIGN_ID}/approve` supports 200 emails per call for human-reviewed overrides
+- **API**: v1 (`/subscribe`, `/info` form-encoded) + v2 (`/v2/{CAMPAIGN_ID}/...` JSON with tags, leads, leaderboard, approve, block, waitlist, verify, SMS, bulk-tags); auth via `api_key` + `CAMPAIGN_ID`; rate limits scale ~10/min Hobby → ~100/min Enterprise
+- **Webhook payload blocks**: `__event`, `__fraudulent`, `__referral`, `__reward_level`, `__score_change`, `__tagged`; no documented HMAC signing scheme
+- **API key MUST be server-side** — KickoffLabs explicitly bans client-side JS use; use AnyForm + KOL.js for browser-side
+- **Native ESPs**: Klaviyo, Mailchimp, ActiveCampaign, Brevo; website builders Webflow/Wix/Squarespace/Weebly; Shopify; Facebook Audiences; Slack; Zapier; Pipedream; Integrately; no MCP server
+- **Limitations**: Capterra reviews flag design customization limits and learning curve; leaderboard endpoint capped at 50 results
+- **Best for**: founders + marketers running pre-launch waitlists or giveaways needing built-in fraud detection + 60+ bonus actions + structured webhook integration; not the right pick if you need multi-level Level 1/2/3 (use ReferralHero) or merge-tag newsletter-only referrals (use ReferralKit)
+
+### In UpViral
+
+UpViral (by Emarky, since 2015) is a viral referral marketing / list-building platform for sweepstakes, giveaways, pre-launch waiting lists, and milestone referral programs. For full platform help, use `/sales-upviral`.
+
+- **Campaign types**: Viral Sweepstakes (point competition + grand prize), Viral Rewards (giveaway where everyone past a threshold unlocks a reward), Viral Waiting List (Dropbox-style queue jumping), Milestone Campaign (evergreen referral), Custom
+- **Tiers** (annual): Starter $79/mo (10K leads, 1 brand, **no API**), Business $119/mo "BEST DEAL" (25K, 2 brands, **API + webhooks unlocked**), Premium $319/mo (100K, 5 brands, dedicated account manager); $1/14-day trial
+- **Critical gate**: API access and Callback-URL webhooks start at **Business** — Starter is UI + native integrations + basic Zapier only. Any server-side/CRM-sync/warehouse pipeline forces Business minimum
+- **API**: base `https://app.upviral.com/api/v1/`; auth via form-encoded `uvapikey` + `uvmethod` (no Bearer header) + `campaign_id`; methods `add_contact`, `get_lead_details`, `get_lead_details_by_email`, `get_leads`, `get_leads_points` (operator + value for reward fulfillment), `add_points`, `get_custom_fields`, `lists`; offset pagination via `start`/`size`; JSON responses; PHP SDK
+- **Webhooks**: "Callback URL" per campaign, fires on events like reward-unlock; lean payload (enrich via `get_lead_details`); no documented HMAC signing
+- **Fraud detection**: IP-based — same-IP referral flagged "suspicious," then manual activate/delete/blacklist; watch false positives from shared NAT/office/CGNAT IPs
+- **Integrations**: 30+ native ESPs/CRMs (Mailchimp, ActiveCampaign, ConvertKit, AWeber, HubSpot, Klaviyo, Intercom) + Zapier (New Lead / New Reward Unlocked triggers), Make, Pipedream, Integrately, Pabbly; no native WordPress plugin; ClickFunnels/Shopify/funnel-builder integrations reported flaky; no MCP server
+- **Differentiators**: built-in A/B testing of landing/thank-you/email variants; smart leaderboards; automated winner selection
+- **Limitations**: long first-campaign setup / learning curve; fragile drag-and-drop builder (broken widgets); B2C-focused (poor B2B fit); $79/mo floor steep for one-off campaigns
+- **Best for**: B2C founders/marketers running point-for-share viral campaigns who want A/B testing and (on Business+) REST API + webhooks; not the pick for B2B, cheap one-offs (KickoffLabs ~$13/mo or KingSumo fit better), or multi-level Level 1/2/3 tracking (use ReferralHero)
+
+### In LaunchList
+
+LaunchList is viral pre-launch waitlist software with gamified referrals and **one-time lifetime pricing** (pay once per submission tier — the only no-subscription option in the waitlist category). For full platform help, use `/sales-launchlist`.
+
+- **Tiers** (one-time, per project): Free $0 (100 submissions), Launch $29 (500, adds email verification + welcome emails + rewards + position inflation), Grow $79 (10K, **webhooks + Zapier + team unlock here**), Scale custom (100K+)
+- **Referral mechanics**: unique referral links, queue-position jumping, leaderboard, reward/milestone settings, position inflation (display inflated queue numbers for FOMO)
+- **Forms**: iframe embed widget or custom DIY form posting to `getlaunchlist.com/s/FORM_KEY` (email field must be named `email`, form class `launchlist-form`, `widget-diy.js` required for referral attribution); hosted SEO-ready landing pages with built-in leaderboard
+- **Spam protection on the free tier**: disposable-email blocklist (3,000+ domains), `_gotcha` honeypot, domain/pattern blocks; ReCaptcha v2 + email verification at Launch+
+- **No public REST API** — planned on roadmap. Egress = `new_user`/`email_verify` webhooks + Zapier triggers (both Grow+) + CSV export; no read/update/delete
+- **No email broadcast system** — bring your own ESP; wire signups over via Zapier or a webhook handler and send launch announcements from there
+- **Limitations**: no native ESP/CRM connectors, no Make/Pabbly, no MCP server; webhook signing/retries undocumented; pricing sources disagree on intermediate volume steps ($19/$39/$149/$299 cited by their own blog) — verify before budgeting
+- **Best for**: indie hackers and pre-revenue founders under ~10K signups who hate subscriptions and only need a waitlist (not giveaways/contests). For an API today use KickoffLabs or ReferralHero; for email broadcasts built in, use an ESP or Waitlister
+
+### In Waitlister
+
+Waitlister is a pre-launch waitlist platform with hosted landing pages, points-based viral referrals, and — unusually for the category — **built-in email broadcasts**, plus the richest developer surface in the indie waitlist family (REST API + five HMAC-signed webhook events). For full platform help, use `/sales-waitlister`.
+
+- **Tiers**: Free $0 (100 subs, 1 waitlist, capture-only), Launch $15/mo (unlimited subs, 3 waitlists, **referrals + broadcasts** 2,500 emails/mo, position inflation, double opt-in), Growth $49/mo (**API + webhooks + Klaviyo/Mailchimp/Kit connectors + fraud detection unlock here**, 10K emails/mo, custom domains), Business $129/mo (50K emails, 5 seats, 120 RPM API)
+- **Referral mechanics**: points-based queue jumping, leaderboard, position inflation, milestone thresholds; programmatic point grants via `PUT /subscribers/{id}` (points is absolute, not increment)
+- **Email built in**: welcome emails + broadcast campaigns with monthly caps — no separate ESP needed for simple all-list updates; hand off to Klaviyo/Mailchimp/Kit for segmentation (no advanced segmentation natively)
+- **Developer surface**: REST API (`waitlister.me/api/v1`, `X-Api-Key`, 60–120 RPM) with add/list/get/update subscriber; 5 webhook events (`signup_created`, `referral_completed`, `milestone_reached`, `subscriber_unsubscribed`, `subscriber_pending_expired`) with HMAC SHA-256 signing, retries, auto-disable after 10 failures
+- **Fraud detection** (Growth+): covers landing-page signups automatically; API signups must forward `metadata.client_ip` + `fingerprint` or they bypass detection
+- **Limitations**: NO Zapier/Make/MCP (webhooks/API only), no delete-subscriber endpoint, broadcast caps with undocumented overage, limited referral reward-tier customization (AppSumo reviewer complaint)
+- **Best for**: multi-project founders wanting pages + referrals + email in one tool with real API/webhooks from $49/mo; unlimited subscribers from $15/mo. For Zapier use KickoffLabs/UpViral; for one-time pricing use LaunchList; for multi-level referrals use ReferralHero
 
 ### In Refind
 

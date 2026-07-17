@@ -1,0 +1,437 @@
+<title>FieldBuilt AI — After-Hours Product Blueprint</title>
+<style>
+  :root {
+    --ground: #FAFAF8;
+    --surface: #FFFFFF;
+    --ink: #1C1917;
+    --muted: #6E6862;
+    --border: #E7E5E4;
+    --subtle: #F3F1EE;
+    --accent: #F97316;
+    --accent-deep: #C2410C;
+    --money: #4D7C0F;
+    --night: #171412;
+    --night-ink: #FAF7F2;
+    --night-muted: #A8A29E;
+    --night-border: #2E2A26;
+  }
+  @media (prefers-color-scheme: dark) {
+    :root {
+      --ground: #1C1917;
+      --surface: #232019;
+      --surface: #23201C;
+      --ink: #FAF7F2;
+      --muted: #A8A29E;
+      --border: #35302B;
+      --subtle: #26221E;
+      --accent: #FB923C;
+      --accent-deep: #F97316;
+      --money: #84CC16;
+    }
+  }
+  :root[data-theme="light"] {
+    --ground: #FAFAF8; --surface: #FFFFFF; --ink: #1C1917; --muted: #6E6862;
+    --border: #E7E5E4; --subtle: #F3F1EE; --accent: #F97316; --accent-deep: #C2410C; --money: #4D7C0F;
+  }
+  :root[data-theme="dark"] {
+    --ground: #1C1917; --surface: #23201C; --ink: #FAF7F2; --muted: #A8A29E;
+    --border: #35302B; --subtle: #26221E; --accent: #FB923C; --accent-deep: #F97316; --money: #84CC16;
+  }
+
+  * { box-sizing: border-box; }
+  html { scroll-behavior: smooth; }
+  body {
+    margin: 0;
+    background: var(--ground);
+    color: var(--ink);
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, "Helvetica Neue", Arial, sans-serif;
+    line-height: 1.65;
+    font-size: 16px;
+  }
+  .mono { font-family: ui-monospace, "SF Mono", SFMono-Regular, Menlo, Consolas, monospace; font-variant-numeric: tabular-nums; }
+
+  .wrap { max-width: 860px; margin: 0 auto; padding: 0 24px; }
+
+  /* ── Night hero ─────────────────────────────── */
+  .hero {
+    background: var(--night);
+    color: var(--night-ink);
+    padding: 72px 0 64px;
+    position: relative;
+    overflow: hidden;
+  }
+  .hero::before {
+    content: "";
+    position: absolute; inset: 0;
+    background-image: radial-gradient(rgba(249,115,22,0.13) 1px, transparent 1px);
+    background-size: 26px 26px;
+    mask-image: linear-gradient(to bottom, rgba(0,0,0,.9), transparent 75%);
+    -webkit-mask-image: linear-gradient(to bottom, rgba(0,0,0,.9), transparent 75%);
+    pointer-events: none;
+  }
+  .hero .wrap { position: relative; }
+  .eyebrow {
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    font-weight: 700; color: var(--accent);
+    margin: 0 0 14px;
+  }
+  .hero h1 {
+    font-weight: 800;
+    font-size: clamp(34px, 6vw, 56px);
+    line-height: 1.06;
+    letter-spacing: -0.02em;
+    margin: 0 0 18px;
+    text-wrap: balance;
+    max-width: 15ch;
+  }
+  .hero .sub {
+    color: var(--night-muted);
+    font-size: 18px;
+    max-width: 54ch;
+    margin: 0 0 48px;
+  }
+  .hero .sub strong { color: var(--night-ink); font-weight: 600; }
+
+  /* night timeline */
+  .night { list-style: none; margin: 0; padding: 0; border-left: 2px solid var(--night-border); }
+  .night li { position: relative; padding: 0 0 26px 26px; }
+  .night li:last-child { padding-bottom: 0; }
+  .night li::before {
+    content: ""; position: absolute; left: -6px; top: 7px;
+    width: 10px; height: 10px; border-radius: 50%;
+    background: var(--night-border);
+  }
+  .night li.fire::before { background: #F97316; box-shadow: 0 0 0 4px rgba(249,115,22,.18); }
+  .night li.cash::before { background: #84CC16; box-shadow: 0 0 0 4px rgba(132,204,22,.15); }
+  .night .t { font-size: 13px; color: #F97316; font-weight: 600; display: block; margin-bottom: 2px; }
+  .night li.cash .t { color: #A3E635; }
+  .night .e { color: var(--night-ink); font-size: 15.5px; max-width: 58ch; }
+  .night .e em { color: var(--night-muted); font-style: normal; }
+
+  /* ── Document body ──────────────────────────── */
+  main { padding: 24px 0 80px; }
+  section { margin-top: 64px; }
+  .kicker {
+    font-size: 12px; letter-spacing: .14em; text-transform: uppercase;
+    font-weight: 700; color: var(--accent-deep); margin: 0 0 10px;
+  }
+  h2 {
+    font-size: 28px; font-weight: 800; letter-spacing: -0.015em;
+    line-height: 1.15; margin: 0 0 16px; text-wrap: balance;
+  }
+  h3 { font-size: 17px; font-weight: 700; margin: 0 0 6px; }
+  p { margin: 0 0 14px; max-width: 68ch; }
+  p.lede { font-size: 18px; }
+  .muted { color: var(--muted); }
+
+  .quote {
+    border-left: 3px solid var(--accent);
+    background: var(--subtle);
+    padding: 18px 22px;
+    border-radius: 0 10px 10px 0;
+    margin: 20px 0;
+    font-size: 17px;
+    max-width: 62ch;
+  }
+  .quote .who { display: block; margin-top: 8px; font-size: 13px; color: var(--muted); }
+
+  .cardgrid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 14px; margin-top: 20px; }
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 20px;
+    box-shadow: 0 3px 16px rgba(28,25,23,0.05);
+  }
+  .card h3 { display: flex; align-items: baseline; gap: 8px; }
+  .card .tag {
+    font-size: 11px; font-weight: 700; letter-spacing: .08em; text-transform: uppercase;
+    color: var(--accent-deep);
+  }
+  .card p { font-size: 14.5px; color: var(--muted); margin: 0; }
+  .card p strong { color: var(--ink); }
+
+  /* architecture stack */
+  .stack { display: flex; flex-direction: column; gap: 0; margin-top: 24px; }
+  .layer {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 20px;
+    box-shadow: 0 3px 16px rgba(28,25,23,0.05);
+  }
+  .layer .lt { display: flex; justify-content: space-between; align-items: baseline; gap: 12px; flex-wrap: wrap; }
+  .layer h3 { margin: 0; }
+  .layer .role { font-size: 12px; color: var(--muted); letter-spacing: .06em; text-transform: uppercase; font-weight: 600; }
+  .layer p { font-size: 14.5px; color: var(--muted); margin: 6px 0 0; max-width: none; }
+  .chips { display: flex; flex-wrap: wrap; gap: 8px; margin-top: 10px; }
+  .chip {
+    font-size: 13px; font-weight: 600;
+    background: var(--subtle); border: 1px solid var(--border);
+    padding: 4px 12px; border-radius: 999px;
+  }
+  .chip.hot { background: color-mix(in srgb, var(--accent) 12%, var(--surface)); border-color: color-mix(in srgb, var(--accent) 35%, var(--border)); color: var(--accent-deep); }
+  .down { text-align: center; color: var(--muted); font-size: 18px; line-height: 1; padding: 6px 0; }
+
+  /* tables */
+  .tablewrap { overflow-x: auto; margin-top: 20px; border: 1px solid var(--border); border-radius: 12px; background: var(--surface); box-shadow: 0 3px 16px rgba(28,25,23,0.05); }
+  table { border-collapse: collapse; width: 100%; font-size: 14.5px; }
+  th, td { text-align: left; padding: 12px 16px; border-bottom: 1px solid var(--border); vertical-align: top; }
+  tr:last-child td { border-bottom: none; }
+  th { font-size: 12px; letter-spacing: .08em; text-transform: uppercase; color: var(--muted); background: var(--subtle); white-space: nowrap; }
+  td:first-child { font-weight: 600; white-space: nowrap; }
+  .yes { color: var(--money); font-weight: 700; }
+  .no  { color: var(--muted); }
+  .half { color: var(--accent-deep); font-weight: 600; }
+
+  /* phases */
+  .phases { list-style: none; margin: 20px 0 0; padding: 0; counter-reset: ph; }
+  .phases li {
+    position: relative; padding: 16px 20px 16px 58px;
+    background: var(--surface); border: 1px solid var(--border);
+    border-radius: 12px; margin-bottom: 10px;
+    box-shadow: 0 3px 16px rgba(28,25,23,0.05);
+  }
+  .phases li::before {
+    counter-increment: ph; content: counter(ph);
+    position: absolute; left: 18px; top: 18px;
+    width: 26px; height: 26px; border-radius: 8px;
+    background: var(--accent); color: #fff;
+    font-weight: 800; font-size: 14px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .phases h3 { display: inline; }
+  .phases .gate { font-size: 12px; font-weight: 700; color: var(--accent-deep); text-transform: uppercase; letter-spacing: .06em; margin-left: 8px; }
+  .phases p { font-size: 14.5px; color: var(--muted); margin: 4px 0 0; }
+
+  /* metrics */
+  .metrics { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 14px; margin-top: 20px; }
+  .metric {
+    background: var(--surface); border: 1px solid var(--border); border-radius: 12px; padding: 18px 20px;
+    box-shadow: 0 3px 16px rgba(28,25,23,0.05);
+  }
+  .metric .num { font-size: 26px; font-weight: 800; letter-spacing: -0.02em; color: var(--money); }
+  .metric .lbl { font-size: 13px; color: var(--muted); margin-top: 2px; }
+
+  /* risks */
+  .risk { border-left: 3px solid var(--accent); padding: 2px 0 2px 18px; margin-bottom: 18px; }
+  .risk h3 { margin-bottom: 2px; }
+  .risk p { font-size: 14.5px; color: var(--muted); margin: 0; }
+  .risk p strong { color: var(--ink); }
+
+  footer { border-top: 1px solid var(--border); margin-top: 72px; padding: 24px 0 8px; font-size: 13px; color: var(--muted); }
+
+  @media (max-width: 560px) {
+    .hero { padding: 56px 0 48px; }
+    section { margin-top: 52px; }
+  }
+  @media (prefers-reduced-motion: no-preference) {
+    .night li { animation: rise .5s ease both; }
+    .night li:nth-child(2) { animation-delay: .07s; } .night li:nth-child(3) { animation-delay: .14s; }
+    .night li:nth-child(4) { animation-delay: .21s; } .night li:nth-child(5) { animation-delay: .28s; }
+    .night li:nth-child(6) { animation-delay: .35s; } .night li:nth-child(7) { animation-delay: .42s; }
+    @keyframes rise { from { opacity: 0; transform: translateY(8px); } to { opacity: 1; transform: none; } }
+  }
+</style>
+
+<div class="hero">
+  <div class="wrap">
+    <p class="eyebrow">FieldBuilt AI · Product Blueprint · July 2026</p>
+    <h1>The Night Shift Your Office Never Had</h1>
+    <p class="sub">An after-hours AI employee for HVAC companies that run on Housecall&nbsp;Pro.
+    It answers every lead when the office is closed, books the right tech into the CRM they already use,
+    and proves its revenue every morning. <strong>We stopped selling a new CRM. We sell the missing employee.</strong></p>
+
+    <ul class="night">
+      <li class="fire"><span class="t mono">10:47 PM</span>
+        <span class="e">Homeowner's AC dies. She calls Berg's Heating &amp; Air. Office closed — the AI answers on the second ring: <em>"This is the after-hours assistant for Berg's — what's going on tonight?"</em></span></li>
+      <li><span class="t mono">10:49 PM</span>
+        <span class="e">Qualified in four questions: no cooling, running but warm, in service area, homeowner. Zip + job type check pass.</span></li>
+      <li class="fire"><span class="t mono">10:51 PM</span>
+        <span class="e">Dispatch match: Mike covers 85251, does residential AC, has an 8:00 AM slot open in Housecall Pro. Job booked — with the full conversation summary in the job notes.</span></li>
+      <li class="cash"><span class="t mono">10:52 PM</span>
+        <span class="e">Upsell, per the owner's playbook: <em>"Since we're coming out anyway — our Comfort Club waives the dispatch fee and gets you priority."</em> Sold. No prices quoted, ever.</span></li>
+      <li><span class="t mono">10:53 PM</span>
+        <span class="e">Mike gets a text: tomorrow 8:00 AM, address, what the system is doing, what was promised. No morning surprises.</span></li>
+      <li><span class="t mono">2:14 AM</span>
+        <span class="e">Second caller smells gas. Hard-coded interrupt — <em>"hang up and call 911 and your gas company right now"</em> — owner notified. Not AI judgment. A fire alarm.</span></li>
+      <li class="cash"><span class="t mono">7:30 AM</span>
+        <span class="e">Owner's digest: 6 conversations, 3 jobs booked, 1 membership sold, 2 callbacks needed by 8:15. The calendar filled itself while he slept.</span></li>
+    </ul>
+  </div>
+</div>
+
+<main class="wrap">
+
+  <section>
+    <p class="kicker">Why we pivoted</p>
+    <h2>Legitimate shops won't switch CRMs. They'll hire for the gap.</h2>
+    <p class="lede">Our original product bundled AI follow-up with our own CRM. The market told us something better:
+    the bigger, healthier HVAC companies — our real ICP — already run their entire operation on Housecall Pro.
+    Office staff trained on it. Billing in it. Techs dispatched from it. Asking them to switch is asking them to
+    risk the business to try us. They will always say no.</p>
+    <div class="quote">
+      "I don't need another CRM. I need to wake up with three new jobs on my calendar that got booked
+      while nobody was in the office."
+      <span class="who">— HVAC owner, pilot conversation, July 2026</span>
+    </div>
+    <p>So the product inverts: <strong>their CRM stays the system of record.</strong> We install the one employee
+    it's missing — the night shift — and wire everything we do back into their existing workflow. Zero switching
+    cost. Zero retraining. One clear job.</p>
+  </section>
+
+  <section>
+    <p class="kicker">Who it's for</p>
+    <h2>The ICP, sharply drawn</h2>
+    <div class="cardgrid">
+      <div class="card"><h3>Established HVAC shops</h3><p><strong>5–50 techs, $1M+ revenue.</strong> Real lead volume, real job volume, an on-call rotation that exists but leaks money nightly.</p></div>
+      <div class="card"><h3>Running Housecall Pro MAX</h3><p><strong>~$300–500/mo to HCP already.</strong> The MAX/XL plan is what exposes the API key — the plan gate filters for our buyer automatically.</p></div>
+      <div class="card"><h3>Paying for demand</h3><p><strong>Ad spend + brand searches</strong> generating after-hours calls, texts, and Facebook messages that currently hit voicemail and die.</p></div>
+      <div class="card"><h3>Owner-led</h3><p><strong>Non-technical, ROI-literate.</strong> Understands hiring an employee; doesn't want software. Buys "done-for-you install," judges by the morning calendar.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">What it is</p>
+    <h2>One brain, four channels, one job: fill the morning calendar</h2>
+    <p>Every after-hours lead — <strong>inbound call, SMS, Facebook Messenger, WhatsApp</strong> — reaches the same
+    conversational brain. Voice and SMS lead the launch (that's where emergency money lives); Meta channels join
+    when app review clears. If a call is missed or abandoned, the same conversation continues instantly over
+    text — one thread, one memory, no dead ends.</p>
+    <div class="cardgrid">
+      <div class="card"><h3><span class="tag">Homeowner</span></h3><p>Gets answered at 11 PM by an assistant that says what it is, asks four smart questions, books a real slot, and never quotes a price. Panic → confirmed appointment in under five minutes.</p></div>
+      <div class="card"><h3><span class="tag">Owner</span></h3><p>Wakes to the 7:30 digest and a dashboard with two honest numbers: revenue <strong>booked by</strong> the AI and revenue <strong>sourced by</strong> it. The subscription justifies itself every renewal.</p></div>
+      <div class="card"><h3><span class="tag">Office</span></h3><p>Opens Housecall Pro at 8 AM — nothing new to learn. Every AI booking carries the full story in the job notes. Unresolved conversations arrive as a callback list with context, promised to customers "by 8:15."</p></div>
+      <div class="card"><h3><span class="tag">Tech</span></h3><p>Gets a text the moment an overnight emergency lands on his board: time, address, what the customer said. Right tech, right zip, right skill — matched against his live HCP schedule.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">How it's built</p>
+    <h2>System architecture</h2>
+    <div class="stack">
+      <div class="layer">
+        <div class="lt"><h3>Channel layer</h3><span class="role">Capture everything</span></div>
+        <p>Adapters normalize every channel into one conversation stream. Missed-call text-back is the voice safety net.</p>
+        <div class="chips"><span class="chip hot">Inbound voice</span><span class="chip hot">SMS</span><span class="chip">Messenger*</span><span class="chip">WhatsApp*</span><span class="chip">Web forms / FB Lead Ads</span></div>
+      </div>
+      <div class="down">↓</div>
+      <div class="layer">
+        <div class="lt"><h3>Conversation brain</h3><span class="role">Qualify · handle · book</span></div>
+        <p>The existing AI engine and HVAC playbooks, extended with the after-hours activation window and hard guardrails:
+        qualify zip + job type early; never quote prices; owner-configured upsells per service-call type; safety keywords
+        trigger a scripted 911 interrupt; always discloses it's an AI; no 2 AM transfers — summarize, promise the 8:15 callback, notify the owner.</p>
+      </div>
+      <div class="down">↓</div>
+      <div class="layer">
+        <div class="lt"><h3>Dispatch engine</h3><span class="role">The right tech, not just a slot</span></div>
+        <p>Per-tech profiles (zip coverage, job types, on-call default — already modeled in our schema) crossed with
+        live availability read from Housecall Pro. Emergencies book tonight's on-call; non-urgent books tomorrow's windows.</p>
+      </div>
+      <div class="down">↓</div>
+      <div class="layer">
+        <div class="lt"><h3>Housecall Pro sync</h3><span class="role">Their system of record</span></div>
+        <p>Creates the customer, books the job with conversation summary in the notes, assigns the tech. Reads employees
+        and schedules. We never duplicate what HCP owns — calendar, invoicing, tech portal, reporting stay theirs.</p>
+      </div>
+      <div class="down">↓</div>
+      <div class="layer">
+        <div class="lt"><h3>Attribution engine</h3><span class="role">Prove the money</span></div>
+        <p>Every HCP webhook is matched at the <strong>customer level</strong>: jobs the AI created count as
+        <em>booked by AI</em>; any later job on an AI-sourced customer — the office re-booking, the $8K estimate-to-install
+        conversion — counts as <em>sourced by AI</em> inside a 90-day window. Office edits get tagged, never lost.</p>
+      </div>
+      <div class="down">↓</div>
+      <div class="layer">
+        <div class="lt"><h3>Surfaces</h3><span class="role">Thin by design</span></div>
+        <p>The 7:30 AM owner digest (SMS + email), instant tech notifications, and a performance dashboard —
+        conversations, bookings, membership attach rate, attributed revenue. Our full CRM survives as a fallback mode
+        for shops without a supported platform.</p>
+      </div>
+    </div>
+    <p class="muted" style="font-size:13px; margin-top:12px;">* Ships when Meta app review clears — build now, launch never blocked on Meta.</p>
+  </section>
+
+  <section>
+    <p class="kicker">What changes</p>
+    <h2>Versus what we've already built</h2>
+    <p>This is a redirection, not a restart. Roughly 70% of the system carries over — the pivot demotes the CRM
+    and adds three genuinely new engines.</p>
+    <div class="tablewrap"><table>
+      <tr><th>Component</th><th>Before (standalone CRM)</th><th>After (HCP mode)</th></tr>
+      <tr><td>System of record</td><td>Our pipeline board</td><td class="yes">Housecall Pro — we read &amp; write, never duplicate</td></tr>
+      <tr><td>AI engine + playbooks</td><td>Built, tested end-to-end</td><td class="yes">Kept — extended with after-hours window</td></tr>
+      <tr><td>Voice + SMS infra</td><td>Outbound follow-ups, delivery retry</td><td class="yes">Kept — inbound answering becomes the front door</td></tr>
+      <tr><td>Primary direction</td><td>Outbound: chase form leads</td><td class="half">Inbound-first: answer what's already calling</td></tr>
+      <tr><td>Dispatch</td><td>Book a time slot</td><td class="half">New engine: tech-matched booking (zip · skill · availability)</td></tr>
+      <tr><td>Revenue tracking</td><td>Estimated (bookings × avg job value)</td><td class="half">New engine: webhook attribution — booked vs. sourced, real dollars</td></tr>
+      <tr><td>Our UI</td><td>Full CRM: pipeline, conversations, appointments</td><td class="half">Thin dashboard + digest; CRM survives as standalone mode</td></tr>
+      <tr><td>Meta channels</td><td>Lead Ads ingestion only</td><td class="half">New: Messenger + WhatsApp conversations (post-review)</td></tr>
+    </table></div>
+    <p style="margin-top:14px;">One codebase, one deployment, a per-company <span class="mono">integration_mode</span> flag.
+    Every AI improvement ships to both modes at once.</p>
+  </section>
+
+  <section>
+    <p class="kicker">The market</p>
+    <h2>Where we win — and against whom</h2>
+    <div class="tablewrap"><table>
+      <tr><th></th><th>Answers 24/7</th><th>Books into their CRM</th><th>Right-tech dispatch</th><th>Upsell playbooks</th><th>Revenue proof</th></tr>
+      <tr><td>Voicemail / on-call cell</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+      <tr><td>Human answering service ($1–2K/mo)</td><td class="yes">✓</td><td class="no">Takes messages</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+      <tr><td>AI receptionists (Smith.ai, generic)</td><td class="yes">✓</td><td class="no">Rarely, shallow</td><td class="no">—</td><td class="no">—</td><td class="no">—</td></tr>
+      <tr><td>Avoca-style AI (ServiceTitan world)</td><td class="yes">✓</td><td class="half">ServiceTitan</td><td class="half">Partial</td><td class="half">Partial</td><td class="half">Partial</td></tr>
+      <tr><td>HCP / Jobber native AI features</td><td class="half">Emerging</td><td class="yes">✓</td><td class="no">Basic</td><td class="no">—</td><td class="no">—</td></tr>
+      <tr><td><strong style="color:var(--accent-deep)">FieldBuilt AI</strong></td><td class="yes">✓</td><td class="yes">✓ HCP-native</td><td class="yes">✓</td><td class="yes">✓ per job type</td><td class="yes">✓ booked + sourced</td></tr>
+    </table></div>
+    <p style="margin-top:16px;">The enterprise AI players cluster around ServiceTitan — the big-shop CRM. <strong>The
+    Housecall Pro mid-market is the underserved middle:</strong> too big for voicemail, too small for ServiceTitan-tier
+    tooling, already paying $400/month for the CRM that exposes exactly the API we need. Platform-native AI is the real
+    long-term threat — which is why our moat is depth, not presence.</p>
+    <div class="cardgrid">
+      <div class="card"><h3>Deliberately narrow wedge</h3><p>"After-hours only" is easy to say yes to — it threatens nobody's job and competes with nothing they've bought. Daytime overflow is the natural expansion upsell.</p></div>
+      <div class="card"><h3>The attribution moat</h3><p>Platform AI answers calls. Ours proves dollars: <strong>"the AI made you $23,400 this month"</strong> is a retention engine no message-taking product can copy without our webhook + customer-level model.</p></div>
+      <div class="card"><h3>HVAC-deep playbooks</h3><p>Qualification order, objection handling, membership attach, safety interrupts — earned from real owner feedback, not a generic receptionist script.</p></div>
+      <div class="card"><h3>Multi-CRM escape hatch</h3><p>The architecture isolates HCP behind one sync layer. Jobber and ServiceTitan adapters are the countermove if HCP turns competitor — and cold-campaign replies are already telling us which comes second.</p></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Execution</p>
+    <h2>Build phases — validation before construction</h2>
+    <ul class="phases">
+      <li><h3>Kill the risk</h3><span class="gate">gate: pilot API key</span><p>Owner's HCP API key in hand → validator proves auth, reads his techs and schedule, creates one test job in his live account. If this fails, everything else is theory. <em>Groundwork already shipped: client, webhook receiver, validator script, attribution schema.</em></p></li>
+      <li><h3>The core loop</h3><span class="gate">call → booked job</span><p>Inbound voice answering + after-hours window + missed-call text-back + dispatch matching. One real after-hours call becomes one correctly-assigned HCP job with notes and tech notification.</p></li>
+      <li><h3>The trust layer</h3><span class="gate">first bad night prevented</span><p>Safety interrupts, escalation paths, early zip/job-type disqualification, upsell playbook config, AI disclosure. Tested adversarially before the first real customer night.</p></li>
+      <li><h3>The proof layer</h3><span class="gate">owner sees money</span><p>Attribution engine live on his webhooks, 7:30 digest, performance dashboard. This is the phase that converts pilot → paying → case study.</p></li>
+      <li><h3>Widen the funnel</h3><span class="gate">meta review clears</span><p>Messenger + WhatsApp adapters (24-hour-window-compliant follow-ups), onboarding flow for customer #2, daytime overflow upsell, second-CRM adapter chosen from campaign reply data.</p></li>
+    </ul>
+  </section>
+
+  <section>
+    <p class="kicker">What we measure</p>
+    <h2>Numbers that decide if this works</h2>
+    <div class="metrics">
+      <div class="metric"><div class="num mono">&lt; 5 s</div><div class="lbl">Time to answer, any channel, any hour</div></div>
+      <div class="metric"><div class="num mono">≥ 40%</div><div class="lbl">After-hours conversations → booked jobs</div></div>
+      <div class="metric"><div class="num mono">≥ 25%</div><div class="lbl">Membership attach rate on booked emergencies</div></div>
+      <div class="metric"><div class="num mono">$ / mo</div><div class="lbl">Attributed revenue: booked-by-AI + sourced-by-AI</div></div>
+      <div class="metric"><div class="num mono">0</div><div class="lbl">Wrong-tech dispatches and safety-interrupt misses</div></div>
+      <div class="metric"><div class="num mono">7:30 AM</div><div class="lbl">The habit metric: does the owner open the digest daily?</div></div>
+    </div>
+  </section>
+
+  <section>
+    <p class="kicker">Eyes open</p>
+    <h2>Risks we're carrying deliberately</h2>
+    <div class="risk"><h3>n = 1 validation</h3><p>The whole spec leans on one owner's word. <strong>Mitigation:</strong> the API key request doubles as the commitment test — and phase gates keep spend proportional to evidence. Get 3–5 more HCP-shop conversations before phase 4.</p></div>
+    <div class="risk"><h3>Housecall Pro builds this natively</h3><p>They have the distribution and the motive. <strong>Mitigation:</strong> move faster in a niche they serve generically, own the attribution proof, and keep the sync layer swappable so Jobber/ServiceTitan adapters turn platform risk into TAM.</p></div>
+    <div class="risk"><h3>Voice quality is the product</h3><p>One stumbling 11 PM call as "Berg's Heating &amp; Air" burns trust faster than ten good ones build it. <strong>Mitigation:</strong> missed-call text-back as the safety net, pilot iteration on real call recordings, and the office-open handoff for anything the AI shouldn't touch.</p></div>
+    <div class="risk"><h3>Meta timelines we don't control</h3><p>App review takes 2–6 weeks and can bounce. <strong>Mitigation:</strong> verification already in review; launch is gated on voice + SMS only; Messenger/WhatsApp attach when cleared.</p></div>
+  </section>
+
+  <footer>
+    FieldBuilt AI — internal product blueprint. Decisions locked in the July 2026 design session; full spec in
+    <span class="mono">docs/after-hours-pivot.md</span>. Pricing intentionally deferred.
+  </footer>
+</main>

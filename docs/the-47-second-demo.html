@@ -1,0 +1,925 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FieldBuilt AI — The 47-Second Demo</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+:root {
+  --cream:       #FAFAF8;
+  --surface:     #FFFFFF;
+  --ink:         #1A1614;
+  --ink-deep:    #14110F;
+  --text:        #1C1917;
+  --text-2:      #78716C;
+  --text-3:      #A8A29E;
+  --border:      #E7E5E4;
+  --orange:      #F97316;
+  --orange-deep: #EA580C;
+  --orange-soft: #FFF3EC;
+  --green:       #16A34A;
+  --green-soft:  #F0FDF4;
+  --purple:      #7C3AED;
+  --purple-soft: #F5F3FF;
+  --red:         #DC2626;
+  --red-soft:    #FEF2F2;
+  --blue:        #2563EB;
+  --blue-soft:   #EFF6FF;
+}
+* { margin:0; padding:0; box-sizing:border-box; }
+html { background: var(--cream); }
+body { font-family:'Inter',sans-serif; font-size:10.5pt; color:var(--text); background:var(--cream); line-height:1.6; }
+.page { width:210mm; min-height:297mm; margin:0 auto; background:var(--cream); position:relative; }
+@media print {
+  html,body { background:var(--cream); }
+  .page { page-break-after:always; width:100%; }
+  .nb { page-break-inside:avoid; }
+  @page { margin:0; }
+}
+
+/* ── COVER ── */
+.cover { background:var(--ink); min-height:297mm; display:flex; flex-direction:column; justify-content:space-between; padding:0; position:relative; overflow:hidden; }
+.c-grid { position:absolute; inset:0; background-image: linear-gradient(rgba(249,115,22,0.06) 1px,transparent 1px), linear-gradient(90deg,rgba(249,115,22,0.06) 1px,transparent 1px); background-size:28px 28px; pointer-events:none; }
+.c-orb1 { position:absolute; width:560px; height:560px; border-radius:50%; background:radial-gradient(circle,rgba(249,115,22,0.20) 0%,transparent 70%); top:-140px; right:-100px; pointer-events:none; }
+.c-orb2 { position:absolute; width:400px; height:400px; border-radius:50%; background:radial-gradient(circle,rgba(249,115,22,0.10) 0%,transparent 70%); bottom:40px; left:-80px; pointer-events:none; }
+.c-orb3 { position:absolute; width:300px; height:300px; border-radius:50%; background:radial-gradient(circle,rgba(22,163,74,0.08) 0%,transparent 70%); top:45%; right:15%; pointer-events:none; }
+.c-top { padding:52px 56px 0; position:relative; z-index:2; }
+.c-logo { display:flex; align-items:center; gap:10px; margin-bottom:72px; }
+.c-logo svg { width:40px; height:40px; }
+.c-logo-name { font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:17pt; color:#fff; letter-spacing:-0.02em; }
+.c-logo-badge { font-family:'JetBrains Mono',monospace; font-size:7pt; font-weight:700; background:var(--orange); color:#fff; padding:3px 7px; border-radius:5px; letter-spacing:0.05em; }
+.c-eyebrow { font-family:'JetBrains Mono',monospace; font-size:7.5pt; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--orange); margin-bottom:16px; display:flex; align-items:center; gap:10px; }
+.c-eyebrow::before { content:''; display:block; width:28px; height:1.5px; background:var(--orange); }
+.c-title { font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:46pt; color:#fff; letter-spacing:-0.035em; line-height:1.0; max-width:480px; }
+.c-title .hi { color:var(--orange); }
+.c-sub { font-size:12pt; color:rgba(255,255,255,0.50); margin-top:22px; max-width:400px; line-height:1.65; font-weight:400; }
+
+/* Number strip */
+.c-strip { display:flex; gap:0; margin-top:60px; border:1px solid rgba(255,255,255,0.09); border-radius:14px; overflow:hidden; max-width:500px; }
+.c-num { flex:1; padding:22px 16px; border-right:1px solid rgba(255,255,255,0.07); }
+.c-num:last-child { border-right:none; }
+.c-num-val { font-family:'JetBrains Mono',monospace; font-size:21pt; font-weight:700; color:var(--orange); line-height:1; margin-bottom:5px; }
+.c-num-lbl { font-family:'Inter',sans-serif; font-size:8pt; color:rgba(255,255,255,0.38); line-height:1.5; }
+
+/* Concept callout on cover */
+.c-concept { margin-top:36px; max-width:500px; background:rgba(249,115,22,0.10); border:1px solid rgba(249,115,22,0.22); border-radius:14px; padding:20px 24px; }
+.c-concept-label { font-family:'JetBrains Mono',monospace; font-size:7pt; letter-spacing:0.18em; text-transform:uppercase; color:var(--orange); margin-bottom:8px; font-weight:600; }
+.c-concept-text { font-family:'Plus Jakarta Sans',sans-serif; font-size:12pt; font-weight:700; color:#fff; line-height:1.4; letter-spacing:-0.01em; }
+.c-concept-text .hl { color:var(--orange); }
+
+.c-bottom { padding:36px 56px 44px; position:relative; z-index:2; display:flex; justify-content:space-between; align-items:flex-end; border-top:1px solid rgba(255,255,255,0.06); }
+.c-meta { font-family:'JetBrains Mono',monospace; font-size:7.5pt; color:rgba(255,255,255,0.25); letter-spacing:0.08em; line-height:1.9; text-transform:uppercase; }
+.c-badge { background:rgba(249,115,22,0.14); border:1px solid rgba(249,115,22,0.28); border-radius:999px; padding:9px 18px; font-family:'JetBrains Mono',monospace; font-size:7.5pt; font-weight:600; color:var(--orange); letter-spacing:0.1em; text-transform:uppercase; }
+
+/* ── CONTENT PAGES ── */
+.cp { padding:44px 50px; }
+.ph { display:flex; justify-content:space-between; align-items:center; padding-bottom:16px; border-bottom:1.5px solid var(--border); margin-bottom:28px; }
+.ph-left { display:flex; align-items:center; gap:8px; }
+.ph-icon { width:22px; height:22px; }
+.ph-name { font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:10.5pt; color:var(--text); letter-spacing:-0.01em; }
+.ph-name sup { font-family:'JetBrains Mono',monospace; font-size:6pt; font-weight:700; background:var(--orange); color:#fff; padding:1.5px 4px; border-radius:4px; position:relative; top:-4px; }
+.ph-sec { font-family:'JetBrains Mono',monospace; font-size:7pt; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:var(--text-3); }
+
+/* Section headings */
+.ey { font-family:'JetBrains Mono',monospace; font-size:7.5pt; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:var(--orange); margin-bottom:6px; display:flex; align-items:center; gap:8px; }
+.ey::before { content:''; display:block; width:18px; height:1.5px; background:var(--orange); flex-shrink:0; }
+.st { font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:19pt; color:var(--text); letter-spacing:-0.025em; line-height:1.15; margin-bottom:8px; }
+.sl { font-size:10.5pt; color:var(--text-2); line-height:1.65; margin-bottom:24px; max-width:520px; }
+h2 { font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:13.5pt; color:var(--text); letter-spacing:-0.02em; margin:20px 0 10px; }
+h3 { font-family:'Plus Jakarta Sans',sans-serif; font-weight:700; font-size:10.5pt; color:var(--text); letter-spacing:-0.01em; margin:14px 0 6px; }
+p { font-size:9.5pt; color:var(--text-2); line-height:1.65; margin-bottom:8px; }
+ul { margin:6px 0 10px 18px; color:var(--text-2); font-size:9.5pt; line-height:1.75; }
+li { margin-bottom:2px; }
+strong { color:var(--text); font-weight:600; }
+.div { height:1px; background:var(--border); margin:22px 0; }
+.or { color:var(--orange); }
+.gr { color:var(--green); }
+
+/* ── MOVE CARDS (the 7 moves) ── */
+.move { background:var(--surface); border-radius:16px; border:1px solid var(--border); margin-bottom:14px; overflow:hidden; box-shadow:0 4px 24px rgba(249,115,22,0.06),0 1px 3px rgba(28,25,23,0.04); }
+.move-top { display:flex; align-items:center; gap:14px; padding:14px 20px 12px; border-bottom:1px solid var(--border); }
+.move-num { width:36px; height:36px; border-radius:11px; background:var(--orange); display:flex; align-items:center; justify-content:center; font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:14pt; color:#fff; flex-shrink:0; line-height:1; }
+.move-num.green  { background:var(--green); }
+.move-num.purple { background:var(--purple); }
+.move-num.red    { background:var(--red); }
+.move-num.blue   { background:var(--blue); }
+.move-meta { flex:1; }
+.move-title { font-family:'Plus Jakarta Sans',sans-serif; font-weight:700; font-size:11pt; color:var(--text); letter-spacing:-0.01em; line-height:1.2; }
+.move-sub { font-family:'JetBrains Mono',monospace; font-size:7pt; font-weight:500; color:var(--text-3); letter-spacing:0.06em; margin-top:2px; }
+.move-chip { font-family:'Inter',sans-serif; font-size:7.5pt; font-weight:500; background:var(--orange-soft); color:var(--orange-deep); padding:4px 11px; border-radius:999px; white-space:nowrap; flex-shrink:0; }
+.move-chip.green  { background:var(--green-soft); color:var(--green); }
+.move-chip.purple { background:var(--purple-soft); color:var(--purple); }
+.move-chip.blue   { background:var(--blue-soft); color:var(--blue); }
+.move-body { padding:15px 20px; }
+
+/* ── SCRIPT LINES ── */
+.say { background:var(--purple-soft); border-left:3px solid var(--purple); border-radius:0 10px 10px 0; padding:12px 16px; margin:9px 0; font-family:'Inter',sans-serif; font-size:9.5pt; color:#3B1E8C; line-height:1.7; }
+.say em { color:#5B21B6; font-style:normal; font-weight:600; }
+.do { background:var(--orange-soft); border-left:3px solid var(--orange); border-radius:0 10px 10px 0; padding:12px 16px; margin:9px 0; font-family:'Inter',sans-serif; font-size:9pt; color:#7C2D12; line-height:1.65; }
+.do strong { color:var(--orange-deep); }
+.why { background:var(--green-soft); border-left:3px solid var(--green); border-radius:0 10px 10px 0; padding:11px 15px; margin:9px 0; font-family:'Inter',sans-serif; font-size:8.5pt; color:#14532D; line-height:1.6; }
+.why strong { color:var(--green); }
+.warn { background:var(--red-soft); border-left:3px solid var(--red); border-radius:0 10px 10px 0; padding:10px 14px; margin:9px 0; font-family:'Inter',sans-serif; font-size:8.5pt; color:#7F1D1D; line-height:1.6; }
+
+/* ── PHONE MOCKUP ── */
+.phone-row { display:flex; gap:20px; align-items:flex-start; margin:14px 0; }
+.phone-wrap { flex-shrink:0; }
+.phone { width:160px; background:var(--ink); border-radius:22px; padding:14px 12px; border:3px solid #3A3330; box-shadow:0 8px 32px rgba(0,0,0,0.3); }
+.phone-notch { width:50px; height:6px; background:#2A2522; border-radius:99px; margin:0 auto 12px; }
+.phone-screen { background:#1C1917; border-radius:12px; padding:10px; }
+.phone-header { display:flex; align-items:center; gap:6px; margin-bottom:10px; }
+.phone-avatar { width:26px; height:26px; border-radius:50%; background:var(--orange); display:flex; align-items:center; justify-content:center; font-family:'Plus Jakarta Sans',sans-serif; font-weight:700; font-size:9pt; color:#fff; flex-shrink:0; }
+.phone-contact { font-family:'Inter',sans-serif; font-size:8pt; font-weight:600; color:rgba(255,255,255,0.85); }
+.phone-status { font-family:'Inter',sans-serif; font-size:7pt; color:var(--green); }
+.bubble { border-radius:14px; padding:8px 10px; margin-bottom:6px; font-family:'Inter',sans-serif; font-size:7.5pt; line-height:1.5; max-width:120px; }
+.bubble.them { background:#2A2522; color:rgba(255,255,255,0.85); border-bottom-left-radius:4px; }
+.bubble.ai   { background:var(--orange); color:#fff; border-bottom-right-radius:4px; margin-left:auto; }
+.bubble-time { font-size:6pt; color:rgba(255,255,255,0.25); text-align:right; margin-top:2px; }
+.phone-info { flex:1; }
+.phone-info h3 { margin-top:0; }
+
+/* ── DASHBOARD PREVIEW ── */
+.dash-mock { background:var(--ink); border-radius:14px; border:1px solid rgba(255,255,255,0.08); padding:14px 16px; margin:12px 0; box-shadow:0 8px 28px rgba(0,0,0,0.2); }
+.dash-bar { display:flex; align-items:center; gap:8px; margin-bottom:14px; }
+.dash-dot { width:9px; height:9px; border-radius:50%; }
+.dash-title { font-family:'JetBrains Mono',monospace; font-size:7.5pt; color:rgba(255,255,255,0.4); letter-spacing:0.1em; text-transform:uppercase; flex:1; text-align:center; }
+.dash-cols { display:flex; gap:8px; }
+.dash-col { flex:1; }
+.dash-col-head { font-family:'JetBrains Mono',monospace; font-size:6.5pt; font-weight:600; letter-spacing:0.14em; text-transform:uppercase; color:rgba(255,255,255,0.35); margin-bottom:6px; padding-bottom:6px; border-bottom:1px solid rgba(255,255,255,0.08); }
+.lead-card { background:#2A2522; border-radius:9px; padding:9px 10px; margin-bottom:6px; }
+.lead-card.active { background:#2A2218; border:1px solid rgba(249,115,22,0.3); }
+.lead-name { font-family:'Plus Jakarta Sans',sans-serif; font-weight:700; font-size:8pt; color:rgba(255,255,255,0.9); margin-bottom:2px; }
+.lead-tag { font-family:'JetBrains Mono',monospace; font-size:6pt; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; padding:2px 6px; border-radius:999px; display:inline-block; margin-bottom:3px; }
+.lt-new      { background:rgba(59,130,246,0.15); color:#60A5FA; }
+.lt-contact  { background:rgba(249,115,22,0.15); color:var(--orange); }
+.lt-qualified{ background:rgba(22,163,74,0.15); color:#4ADE80; }
+.lead-time { font-family:'Inter',sans-serif; font-size:6.5pt; color:rgba(255,255,255,0.3); }
+.live-dot { display:inline-block; width:6px; height:6px; border-radius:50%; background:var(--green); margin-right:4px; animation:pulse 1.5s infinite; }
+@keyframes pulse { 0%,100% { opacity:1; } 50% { opacity:0.3; } }
+
+/* ── QUESTION ENGINEERING ── */
+.q-card { background:var(--surface); border:1px solid var(--border); border-radius:13px; padding:14px 16px; margin-bottom:11px; display:flex; gap:14px; box-shadow:0 2px 10px rgba(249,115,22,0.04); }
+.q-num { width:28px; height:28px; border-radius:9px; background:var(--orange-soft); color:var(--orange); font-family:'Plus Jakarta Sans',sans-serif; font-weight:700; font-size:10.5pt; display:flex; align-items:center; justify-content:center; flex-shrink:0; }
+.q-body {}
+.q-ask { font-family:'Plus Jakarta Sans',sans-serif; font-weight:700; font-size:9.5pt; color:var(--text); margin-bottom:4px; line-height:1.3; }
+.q-intent { font-family:'JetBrains Mono',monospace; font-size:7pt; font-weight:600; letter-spacing:0.12em; text-transform:uppercase; color:var(--orange); margin-bottom:5px; }
+.q-why { font-family:'Inter',sans-serif; font-size:8.5pt; color:var(--text-2); line-height:1.6; }
+.q-followup { font-family:'Inter',sans-serif; font-size:8.5pt; color:var(--text-3); font-style:italic; margin-top:4px; }
+
+/* ── EMOTION CURVE ── */
+.curve { background:var(--surface); border:1px solid var(--border); border-radius:14px; padding:18px 20px; margin:14px 0; box-shadow:0 2px 10px rgba(249,115,22,0.04); }
+.curve-title { font-family:'Plus Jakarta Sans',sans-serif; font-weight:700; font-size:9.5pt; color:var(--text); margin-bottom:14px; }
+.curve-row { display:flex; align-items:center; gap:12px; margin-bottom:10px; }
+.curve-label { font-family:'JetBrains Mono',monospace; font-size:7pt; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; width:70px; flex-shrink:0; color:var(--text-3); }
+.curve-bar-wrap { flex:1; height:22px; background:rgba(249,115,22,0.06); border-radius:5px; overflow:hidden; }
+.curve-bar { height:100%; border-radius:5px; display:flex; align-items:center; padding-left:8px; }
+.curve-bar-label { font-family:'Inter',sans-serif; font-size:7.5pt; font-weight:600; color:#fff; white-space:nowrap; }
+
+/* ── DATA TABLE ── */
+.dt { width:100%; border-collapse:collapse; margin:12px 0; font-size:9pt; }
+.dt th { background:var(--ink); color:rgba(255,255,255,0.8); font-family:'JetBrains Mono',monospace; font-size:7pt; font-weight:600; letter-spacing:0.1em; text-transform:uppercase; padding:9px 13px; text-align:left; }
+.dt th:first-child { border-radius:8px 0 0 0; }
+.dt th:last-child  { border-radius:0 8px 0 0; }
+.dt td { padding:8px 13px; border-bottom:1px solid var(--border); color:var(--text); vertical-align:top; line-height:1.5; }
+.dt tr:last-child td { border-bottom:none; }
+.dt tr:nth-child(even) td { background:rgba(249,115,22,0.015); }
+.td-or { font-family:'JetBrains Mono',monospace; font-weight:600; color:var(--orange); }
+.td-gr { font-family:'JetBrains Mono',monospace; font-weight:600; color:var(--green); }
+.td-sm { color:var(--text-3); font-size:8.5pt; }
+
+/* ── SETUP CHECKLIST ── */
+.setup-grid { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin:14px 0; }
+.setup-item { background:var(--surface); border:1px solid var(--border); border-radius:12px; padding:13px 15px; box-shadow:0 2px 8px rgba(249,115,22,0.04); }
+.setup-icon { font-size:16pt; margin-bottom:8px; display:block; }
+.setup-title { font-family:'Plus Jakarta Sans',sans-serif; font-weight:700; font-size:9.5pt; color:var(--text); margin-bottom:3px; }
+.setup-desc { font-size:8.5pt; color:var(--text-2); line-height:1.6; }
+
+/* ── THE MOMENT box ── */
+.moment-box { background:var(--ink); border-radius:16px; padding:26px 28px; margin:14px 0; position:relative; overflow:hidden; }
+.moment-grid { position:absolute; inset:0; background-image: linear-gradient(rgba(249,115,22,0.07) 1px,transparent 1px), linear-gradient(90deg,rgba(249,115,22,0.07) 1px,transparent 1px); background-size:22px 22px; pointer-events:none; }
+.moment-orb { position:absolute; width:300px; height:300px; border-radius:50%; background:radial-gradient(circle,rgba(249,115,22,0.15) 0%,transparent 70%); top:-80px; right:-80px; pointer-events:none; }
+.moment-content { position:relative; z-index:2; }
+.moment-ey { font-family:'JetBrains Mono',monospace; font-size:7pt; font-weight:600; letter-spacing:0.18em; text-transform:uppercase; color:var(--orange); margin-bottom:10px; }
+.moment-title { font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:18pt; color:#fff; letter-spacing:-0.025em; line-height:1.15; margin-bottom:6px; }
+.moment-title .hl { color:var(--orange); }
+.moment-body { font-family:'Inter',sans-serif; font-size:10pt; color:rgba(255,255,255,0.55); line-height:1.7; }
+.moment-steps { display:flex; gap:10px; margin-top:18px; }
+.moment-step { flex:1; background:rgba(255,255,255,0.05); border:1px solid rgba(255,255,255,0.08); border-radius:11px; padding:13px 12px; }
+.ms-num { font-family:'JetBrains Mono',monospace; font-size:16pt; font-weight:700; color:var(--orange); line-height:1; margin-bottom:5px; }
+.ms-label { font-family:'Inter',sans-serif; font-size:8pt; color:rgba(255,255,255,0.45); line-height:1.5; }
+
+/* ── OFFER BLOCK ── */
+.offer-wrap { background:var(--ink); border-radius:16px; padding:24px 26px; margin:14px 0; position:relative; overflow:hidden; }
+.offer-grid { position:absolute; inset:0; background-image: linear-gradient(rgba(249,115,22,0.05) 1px,transparent 1px), linear-gradient(90deg,rgba(249,115,22,0.05) 1px,transparent 1px); background-size:24px 24px; pointer-events:none; }
+.offer-content { position:relative; z-index:2; }
+.offer-cols { display:flex; gap:14px; }
+.offer-col { flex:1; background:rgba(255,255,255,0.04); border:1px solid rgba(255,255,255,0.08); border-radius:12px; padding:16px 14px; }
+.offer-col.active { background:rgba(249,115,22,0.10); border-color:rgba(249,115,22,0.25); }
+.oc-label { font-family:'JetBrains Mono',monospace; font-size:6.5pt; font-weight:600; letter-spacing:0.16em; text-transform:uppercase; color:rgba(255,255,255,0.35); margin-bottom:7px; }
+.oc-label.active { color:rgba(249,115,22,0.7); }
+.oc-val { font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:20pt; color:rgba(255,255,255,0.3); letter-spacing:-0.03em; line-height:1.1; text-decoration:line-through; }
+.oc-val.active { color:var(--orange); text-decoration:none; }
+.oc-sub { font-size:8.5pt; color:rgba(255,255,255,0.3); margin-top:4px; line-height:1.5; }
+.oc-sub.active { color:rgba(255,255,255,0.55); }
+.offer-arrow { display:flex; align-items:center; color:var(--orange); font-size:18pt; padding:0 2px; }
+
+/* ── REAL DATA ── */
+.data-pill { display:inline-flex; align-items:center; gap:5px; background:var(--orange-soft); border:1px solid rgba(249,115,22,0.2); border-radius:999px; padding:3px 10px; font-family:'JetBrains Mono',monospace; font-size:7.5pt; font-weight:600; color:var(--orange-deep); margin:2px 2px; }
+
+/* ── TIMELINE ── */
+.timeline { position:relative; margin:14px 0; }
+.timeline::before { content:''; position:absolute; left:17px; top:26px; bottom:26px; width:2px; background:var(--border); }
+.tl-item { display:flex; gap:16px; padding:10px 0; }
+.tl-dot { width:36px; height:36px; border-radius:50%; background:var(--surface); border:2.5px solid var(--orange); display:flex; align-items:center; justify-content:center; flex-shrink:0; position:relative; z-index:1; }
+.tl-dot svg { width:14px; height:14px; }
+.tl-dot.green  { border-color:var(--green); }
+.tl-dot.purple { border-color:var(--purple); }
+.tl-content {}
+.tl-time { font-family:'JetBrains Mono',monospace; font-size:7pt; font-weight:600; color:var(--orange); text-transform:uppercase; letter-spacing:0.1em; margin-bottom:3px; }
+.tl-time.green  { color:var(--green); }
+.tl-time.purple { color:var(--purple); }
+.tl-card { background:var(--surface); border:1px solid var(--border); border-radius:11px; padding:10px 14px; font-size:9.5pt; color:var(--text-2); line-height:1.65; }
+
+/* Footer */
+.ft { margin-top:36px; padding-top:16px; border-top:1px solid var(--border); display:flex; justify-content:space-between; align-items:center; }
+.ft-left { font-family:'JetBrains Mono',monospace; font-size:7pt; color:var(--text-3); letter-spacing:0.08em; text-transform:uppercase; }
+.ft-right { display:flex; align-items:center; gap:7px; }
+.ft-name { font-family:'Plus Jakarta Sans',sans-serif; font-weight:800; font-size:8.5pt; color:var(--text); letter-spacing:-0.01em; }
+.ft-badge { background:var(--orange); color:#fff; font-family:'JetBrains Mono',monospace; font-size:5.5pt; padding:1.5px 4px; border-radius:3px; font-weight:700; letter-spacing:0.05em; }
+
+.logo-svg { width:20px; height:20px; }
+</style>
+</head>
+<body>
+
+<!-- ═══════ COVER ═══════ -->
+<div class="page">
+<div class="cover">
+  <div class="c-grid"></div><div class="c-orb1"></div><div class="c-orb2"></div><div class="c-orb3"></div>
+
+  <div class="c-top">
+    <div class="c-logo">
+      <svg viewBox="0 0 64 64" fill="none"><rect x="18" y="12" width="11" height="40" rx="1.5" fill="white"/><rect x="18" y="28" width="20" height="10" rx="1.5" fill="white"/><rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/><rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/></svg>
+      <span class="c-logo-name">FIELDBUILT <span class="c-logo-badge">AI</span></span>
+    </div>
+
+    <div class="c-eyebrow">Warm Inbound · Live Experience Sales Process</div>
+    <div class="c-title">The<br/><span class="hi">47-Second</span><br/>Demo</div>
+    <div class="c-sub">A 20-minute experience that doesn't tell HVAC owners what the system does — it makes them feel what their customers feel. Every move is engineered to create conviction, not just comprehension.</div>
+
+    <div class="c-strip">
+      <div class="c-num"><div class="c-num-val">7</div><div class="c-num-lbl">Moves total<br/>in order</div></div>
+      <div class="c-num"><div class="c-num-val">20min</div><div class="c-num-lbl">Total call<br/>duration</div></div>
+      <div class="c-num"><div class="c-num-val">1</div><div class="c-num-lbl">Mind-blow<br/>moment</div></div>
+      <div class="c-num"><div class="c-num-val">$0</div><div class="c-num-lbl">Risk to<br/>prospect</div></div>
+    </div>
+
+    <div class="c-concept">
+      <div class="c-concept-label">The Core Principle</div>
+      <div class="c-concept-text">Don't show them the system. <span class="hl">Make them be the lead.</span> They experience what their customers feel at 11pm on a Tuesday — and suddenly, they're not evaluating software. They're feeling the gap in their own business.</div>
+    </div>
+  </div>
+
+  <div class="c-bottom">
+    <div class="c-meta">FieldBuilt AI · Founding Partner Pilot · June 2026<br/>Based on 1,122 scraped HVAC owner profiles · Houston, Phoenix, Dallas, Miami, Atlanta</div>
+    <div class="c-badge">Experience-First · 7 Moves</div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ PAGE 2 — SETUP + REAL DATA ═══════ -->
+<div class="page">
+<div class="cp">
+  <div class="ph">
+    <div class="ph-left">
+      <svg class="ph-icon" viewBox="0 0 64 64" fill="none"><rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/><rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/><rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/><rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/></svg>
+      <span class="ph-name">FIELDBUILT <sup>AI</sup></span>
+    </div>
+    <div class="ph-sec">Who You're Talking To · Setup</div>
+  </div>
+
+  <div class="ey">Real data from 1,122 scraped HVAC owners</div>
+  <div class="st">Know This Person Before You Dial</div>
+  <div class="sl">This isn't a hypothetical customer. You scraped 1,122 real HVAC owners. Here's what they actually look like — and what's actually keeping them up at night.</div>
+
+  <table class="dt">
+    <thead><tr><th>Signal</th><th>What the Data Shows</th><th>What It Means for Your Call</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong>Top cities</strong></td>
+        <td class="td-or">Houston (38) · Phoenix (17) · Dallas (22) · Miami (16) · Atlanta (18)</td>
+        <td>Peak-heat markets. AC failures happen at night, on weekends. Every hour of no-response = lost job.</td>
+      </tr>
+      <tr>
+        <td><strong>Lead source</strong></td>
+        <td class="td-or">728 on Apollo · 86 running Facebook Ads</td>
+        <td>86 are confirmed ad-spenders — they're already buying leads. Every cold lead is real money lost.</td>
+      </tr>
+      <tr>
+        <td><strong>Their #1 pain</strong></td>
+        <td>Dispatch chaos during peak season. Can't answer leads when on jobs. Phone rings while hands are full.</td>
+        <td>The pain is ACTIVE right now — June-August is peak. They're feeling it this week.</td>
+      </tr>
+      <tr>
+        <td><strong>Title</strong></td>
+        <td>Owner / President / Co-Owner</td>
+        <td>You're talking to the decision maker. No gatekeeper. No committee. One yes closes the deal.</td>
+      </tr>
+      <tr>
+        <td><strong>Language they use</strong></td>
+        <td>"dispatch board is chaos" · "leads slip through the cracks" · "buried in calls" · "missed callback costs a tech's full day"</td>
+        <td>Use their words back to them. The fastest path to "you get it" is mirroring.</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="div"></div>
+  <div class="ey">Demo environment — set this up before the call</div>
+  <h2>Pre-Call Setup (10 minutes)</h2>
+
+  <div class="setup-grid">
+    <div class="setup-item">
+      <span class="setup-icon">📱</span>
+      <div class="setup-title">Demo HVAC number live</div>
+      <div class="setup-desc">Your Twilio demo number configured with Alex responding for "Pro Air Solutions." Test it yourself first — text "AC not working" and verify Jordan responds and qualifies correctly.</div>
+    </div>
+    <div class="setup-item">
+      <span class="setup-icon">💻</span>
+      <div class="setup-title">Dashboard open + clean</div>
+      <div class="setup-desc">FieldBuilt AI dashboard open on your second screen. Pipeline view visible. Zero leads in it — so when they text, their card appears as the ONLY card. Drama = maximum.</div>
+    </div>
+    <div class="setup-item">
+      <span class="setup-icon">🔢</span>
+      <div class="setup-title">Calculator tab open</div>
+      <div class="setup-desc">Simple browser calculator or Google. Not a spreadsheet — too clinical. You want them to type the number themselves. Their finger on the key makes it emotionally theirs.</div>
+    </div>
+    <div class="setup-item">
+      <span class="setup-icon">💳</span>
+      <div class="setup-title">Stripe link ready to paste</div>
+      <div class="setup-desc">$200 deposit link copied to clipboard. Ready to paste in the chat the MOMENT they say yes. The gap between "yes" and "done" is where deals die.</div>
+    </div>
+    <div class="setup-item">
+      <span class="setup-icon">🔍</span>
+      <div class="setup-title">Their FB ad found</div>
+      <div class="setup-desc">Meta Ad Library → their company name → screenshot their actual ad creative. Reference it by name on the call. "That ad with the technician on the roof" → instant credibility.</div>
+    </div>
+    <div class="setup-item">
+      <span class="setup-icon">🌡️</span>
+      <div class="setup-title">Local weather note</div>
+      <div class="setup-desc">Check current temperature in their city. "It's 108° in Phoenix right now" is not small talk — it's a pain activator. It makes the problem feel urgent and physical, not abstract.</div>
+    </div>
+  </div>
+
+  <div class="do" style="margin-top:10px">
+    <strong>The mindset you're walking in with:</strong> These owners are currently in peak season. Their phone is ringing. They're on jobs. Every missed lead is real. You are not selling them something they might need — you're showing up with the exact solution to a problem they are actively experiencing today.
+  </div>
+
+  <div class="ft">
+    <div class="ft-left">FieldBuilt AI · The 47-Second Demo · June 2026</div>
+    <div class="ft-right">
+      <svg class="logo-svg" viewBox="0 0 64 64" fill="none"><rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/><rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/><rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/><rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/></svg>
+      <span class="ft-name">FIELDBUILT <span class="ft-badge">AI</span></span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ PAGE 3 — THE EMOTIONAL ARCHITECTURE ═══════ -->
+<div class="page">
+<div class="cp">
+  <div class="ph">
+    <div class="ph-left">
+      <svg class="ph-icon" viewBox="0 0 64 64" fill="none"><rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/><rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/><rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/><rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/></svg>
+      <span class="ph-name">FIELDBUILT <sup>AI</sup></span>
+    </div>
+    <div class="ph-sec">The Emotional Arc</div>
+  </div>
+
+  <div class="ey">Engineering the emotional journey</div>
+  <div class="st">The Arc of the Call</div>
+  <div class="sl">Every move targets a specific emotional state. The prospect should move through Pain → Curiosity → Wonder → Conviction → Relief. In that order. Don't skip steps.</div>
+
+  <!-- Emotion curve visual -->
+  <div class="curve nb">
+    <div class="curve-title">Emotional State by Move</div>
+    <div class="curve-row"><div class="curve-label">Move 1</div><div class="curve-bar-wrap"><div class="curve-bar" style="width:40%;background:#DC2626"><div class="curve-bar-label">Pain Access</div></div></div></div>
+    <div class="curve-row"><div class="curve-label">Move 2</div><div class="curve-bar-wrap"><div class="curve-bar" style="width:55%;background:#EA580C"><div class="curve-bar-label">Quantified Loss</div></div></div></div>
+    <div class="curve-row"><div class="curve-label">Move 3</div><div class="curve-bar-wrap"><div class="curve-bar" style="width:75%;background:#F97316"><div class="curve-bar-label">Permission + Curiosity</div></div></div></div>
+    <div class="curve-row"><div class="curve-label">Move 4 ★</div><div class="curve-bar-wrap"><div class="curve-bar" style="width:100%;background:linear-gradient(90deg,#7C3AED,#F97316)"><div class="curve-bar-label">THE MOMENT — Mind-Blow</div></div></div></div>
+    <div class="curve-row"><div class="curve-label">Move 5</div><div class="curve-bar-wrap"><div class="curve-bar" style="width:90%;background:#16A34A"><div class="curve-bar-label">Future Vision (Relief)</div></div></div></div>
+    <div class="curve-row"><div class="curve-label">Move 6</div><div class="curve-bar-wrap"><div class="curve-bar" style="width:85%;background:#16A34A"><div class="curve-bar-label">Their Own Math (Certainty)</div></div></div></div>
+    <div class="curve-row"><div class="curve-label">Move 7</div><div class="curve-bar-wrap"><div class="curve-bar" style="width:95%;background:#0EA5E9"><div class="curve-bar-label">No-Risk Decision</div></div></div></div>
+  </div>
+
+  <div class="div"></div>
+
+  <div class="ey">The 5 questions — engineered with intent</div>
+  <div class="st">Questions That Engineer Conviction</div>
+  <div class="sl">Each question has ONE job. If you ask them in order, by question 5 the prospect is not evaluating your offer — they're announcing their own conclusion.</div>
+
+  <div class="q-card nb">
+    <div class="q-num">1</div>
+    <div class="q-body">
+      <div class="q-intent">Pain Memory Access</div>
+      <div class="q-ask">"When's the last time you were on a job, hands full, and a new lead came in that you just couldn't get to? What happened to it?"</div>
+      <div class="q-why">Forces them to access a specific memory — not give a generic answer. A specific memory activates the emotional response of that moment. Their body re-experiences the frustration. You are not creating the pain — you're making existing pain vivid. This is the difference between "I have a problem" and "I FEEL a problem."</div>
+      <div class="q-followup">→ If they can't recall: "Does that happen more in summer? Like right now?" (They will say yes.)</div>
+    </div>
+  </div>
+
+  <div class="q-card nb">
+    <div class="q-num">2</div>
+    <div class="q-body">
+      <div class="q-intent">Invisible Loss Reveal</div>
+      <div class="q-ask">"How many times a week do you think that happens — and you don't even find out until later, or never at all?"</div>
+      <div class="q-why">"You don't even find out" is the key phrase. It opens the category of invisible losses — the money they're losing that doesn't show up anywhere. Most owners know about the lead they missed. They have no concept of the 10 they never knew about. This question creates that gap in their mind.</div>
+      <div class="q-followup">→ Follow up: "What's an average job worth for you — just a rough estimate?" → Now you have the number. You don't calculate it yet. You just hold it.</div>
+    </div>
+  </div>
+
+  <div class="q-card nb">
+    <div class="q-num">3</div>
+    <div class="q-body">
+      <div class="q-intent">Permission Bridge</div>
+      <div class="q-ask">"What if I could show you something that handles that exact scenario — every single time, midnight on a Tuesday — and it costs less than what you spent on Facebook ads this week? Would it be worth 5 minutes?"</div>
+      <div class="q-why">This is NOT a feature pitch. It's a pre-commitment question. By answering "yes" — and they always do — they've just told their own brain "I'm going to say yes if it delivers on that." You've set the standard. The demo now just has to meet it. You've also anchored cost ("less than your weekly ad spend") before they even see a number.</div>
+    </div>
+  </div>
+
+  <div class="q-card nb">
+    <div class="q-num">4</div>
+    <div class="q-body">
+      <div class="q-intent">Post-Demo — Future Pacing</div>
+      <div class="q-ask">"What would your business look like if every single lead that just filled out your form — right now, while we're on this call — got that exact response?"</div>
+      <div class="q-why">Asked AFTER they've experienced the demo. They're still in the emotional high of seeing the system work. This question makes them project themselves into the future where the system is already running. They're not evaluating a purchase — they're imagining ownership. The brain treats vivid imagination as near-experience. You're installing a picture of success before the objection conversation starts.</div>
+      <div class="q-followup">→ Let them answer fully. Don't rush to the offer. This is worth 60 seconds of silence.</div>
+    </div>
+  </div>
+
+  <div class="q-card nb">
+    <div class="q-num">5</div>
+    <div class="q-body">
+      <div class="q-intent">Calculator Moment — Their Number</div>
+      <div class="q-ask">"You said about [X] leads go cold a week. At [their ticket], that's — what does that add up to per month? I want you to say the number."</div>
+      <div class="q-why">This is the most important question in the process. YOU know the answer. But when THEY calculate it and SAY it — it becomes their number, not yours. Information you give someone has 40% retention. Information they generate themselves has 90%+ retention and emotional weight. "I said it — therefore it's real." The decision is 80% made the moment they say their own loss number out loud.</div>
+    </div>
+  </div>
+
+  <div class="ft">
+    <div class="ft-left">FieldBuilt AI · The 47-Second Demo · June 2026</div>
+    <div class="ft-right">
+      <svg class="logo-svg" viewBox="0 0 64 64" fill="none"><rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/><rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/><rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/><rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/></svg>
+      <span class="ft-name">FIELDBUILT <span class="ft-badge">AI</span></span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ PAGE 4 — THE 7 MOVES (1-3) ═══════ -->
+<div class="page">
+<div class="cp">
+  <div class="ph">
+    <div class="ph-left">
+      <svg class="ph-icon" viewBox="0 0 64 64" fill="none"><rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/><rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/><rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/><rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/></svg>
+      <span class="ph-name">FIELDBUILT <sup>AI</sup></span>
+    </div>
+    <div class="ph-sec">The 7 Moves — Part 1</div>
+  </div>
+
+  <div class="ey">Moves 1–3 · Pain → Quantify → Permission</div>
+  <div class="st">The First Half</div>
+  <div class="sl">The first three moves have one job: get them to feel the cost of the status quo so viscerally that the demo feels like relief, not a sales pitch.</div>
+
+  <div class="move nb">
+    <div class="move-top">
+      <div class="move-num red">1</div>
+      <div class="move-meta">
+        <div class="move-title">The Pain Access Open</div>
+        <div class="move-sub">2 minutes · No pitch · No demo · Just listen</div>
+      </div>
+      <div class="move-chip" style="background:var(--red-soft);color:var(--red)">Activate the feeling</div>
+    </div>
+    <div class="move-body">
+      <p>Start here. Not with "let me tell you what I built." Not with features. Open by making them access a real painful memory. Their body will do the selling for you.</p>
+      <div class="say">"Hey [Name] — really glad you jumped on. Before I show you anything, I want to ask you something that'll make the demo 10x more relevant. Can I?" <em>[They say yes.]</em> "When's the last time you were on a job, completely buried, and a new lead came in that you just couldn't get to in time? Do you remember what happened to it?"</div>
+      <div class="why"><strong>Why this works:</strong> You're opening with curiosity and a specific memory request. Not a pitch. The prospect relaxes because you're asking, not selling. And their answer will almost always include the exact pain your system solves — in their own words, which you'll mirror back later.</div>
+      <div class="do"><strong>Listen for their exact language.</strong> Write down what they say. "Dispatch chaos" · "slipped through" · "called back two hours later, they'd already booked someone else." These exact phrases go back into your pitch later and trigger the feeling again.</div>
+      <p style="margin-top:8px"><strong>Natural follow-up (read the room, use one):</strong></p>
+      <ul>
+        <li>"How often does that happen — especially in a week like this one?" <span style="color:var(--text-3)">(It's peak summer. Right now.)</span></li>
+        <li>"It's [X]° in [their city] right now — I'm guessing your dispatch board looks pretty intense."</li>
+        <li>"And when you found out that lead went somewhere else — what did that job end up being worth?"</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="move nb">
+    <div class="move-top">
+      <div class="move-num" style="background:#EA580C">2</div>
+      <div class="move-meta">
+        <div class="move-title">The Invisible Money Question</div>
+        <div class="move-sub">2 minutes · Get the number · Hold it</div>
+      </div>
+      <div class="move-chip">Make the loss real</div>
+    </div>
+    <div class="move-body">
+      <p>Don't calculate for them. Guide them to calculate for themselves. The number they say out loud lands 3× harder than the number you tell them.</p>
+      <div class="say">"Okay. So how many leads a week do you think go cold — ones you meant to call back but just couldn't get to in time? Rough number." <em>[They answer. Let's say "3-4 a week."]</em> "And your average job — what does a typical install or repair run? Ballpark is fine." <em>[They say $4,000-$6,000.]</em> "So [4 leads] × [$5,000] — what does that add up to per week?"</div>
+      <div class="why"><strong>The math moment:</strong> Let them do it. "$20,000 a week?" When THEY say that number, it's theirs. You can now reference it for the rest of the call as "your $20,000." Not a stat. Their number.</div>
+      <div class="do"><strong>After they say the number: pause 3 full seconds.</strong> Let it sit. Don't rush to "well that's why I built this." The silence gives the number room to land emotionally. This is the single most skipped technique in sales and the single most valuable one.</div>
+    </div>
+  </div>
+
+  <div class="move nb">
+    <div class="move-top">
+      <div class="move-num" style="background:#D97706">3</div>
+      <div class="move-meta">
+        <div class="move-title">The Permission Bridge</div>
+        <div class="move-sub">30 seconds · Pre-commitment · No resistance</div>
+      </div>
+      <div class="move-chip">Install the yes before the demo</div>
+    </div>
+    <div class="move-body">
+      <p>Before you show anything — get a conditional yes. This one sentence completely restructures the demo from "let me pitch you" to "I'm just confirming what you already said you wanted."</p>
+      <div class="say">"What if I could show you something that handles that exact scenario — every lead, midnight on a Tuesday, when you're on a roof — and it costs less than what you spent on Facebook ads this week. Worth 5 minutes?"</div>
+      <div class="why"><strong>Why this works:</strong> Cost is anchored to "what you spent on ads this week" — a number they're comfortable with. They've already said yes to the ROI before seeing the price. You haven't pitched a feature. You've described their outcome. By answering yes, they've committed to "if it does that, I'm in." The demo just needs to deliver.</div>
+      <div class="do"><strong>Then say:</strong> "Okay. Grab your phone. I'm going to do something a little different."</div>
+    </div>
+  </div>
+
+  <div class="ft">
+    <div class="ft-left">FieldBuilt AI · The 47-Second Demo · June 2026</div>
+    <div class="ft-right">
+      <svg class="logo-svg" viewBox="0 0 64 64" fill="none"><rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/><rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/><rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/><rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/></svg>
+      <span class="ft-name">FIELDBUILT <span class="ft-badge">AI</span></span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ PAGE 5 — MOVE 4: THE MOMENT ═══════ -->
+<div class="page">
+<div class="cp">
+  <div class="ph">
+    <div class="ph-left">
+      <svg class="ph-icon" viewBox="0 0 64 64" fill="none"><rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/><rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/><rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/><rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/></svg>
+      <span class="ph-name">FIELDBUILT <sup>AI</sup></span>
+    </div>
+    <div class="ph-sec">Move 4 — The Core Experience</div>
+  </div>
+
+  <!-- THE MOMENT -->
+  <div class="moment-box nb">
+    <div class="moment-grid"></div><div class="moment-orb"></div>
+    <div class="moment-content">
+      <div class="moment-ey">★ Move 4 — The Heart of the Demo</div>
+      <div class="moment-title">Be The<br/><span class="hl">Lead</span></div>
+      <div class="moment-body">This is the only moment that matters. Everything before builds to it. Everything after capitalizes on it. The prospect stops being an evaluator and starts being a customer — because for the next 5 minutes, they ARE the customer.</div>
+      <div class="moment-steps">
+        <div class="moment-step"><div class="ms-num">1</div><div class="ms-label">They text your demo number</div></div>
+        <div class="moment-step"><div class="ms-num">47s</div><div class="ms-label">Alex responds automatically</div></div>
+        <div class="moment-step"><div class="ms-num">4</div><div class="ms-label">Jordan asks 4 questions</div></div>
+        <div class="moment-step"><div class="ms-num">live</div><div class="ms-label">Dashboard updates in real-time</div></div>
+      </div>
+    </div>
+  </div>
+
+  <h2>Step-by-Step — What You Say and What They See</h2>
+
+  <div class="timeline">
+    <div class="tl-item nb">
+      <div class="tl-dot" style="border-color:var(--orange)">
+        <svg fill="none" viewBox="0 0 24 24" stroke="#F97316" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z"/></svg>
+      </div>
+      <div class="tl-content">
+        <div class="tl-time">Step 1 — Give them the number</div>
+        <div class="tl-card">
+          <div class="say" style="margin-top:0">"Okay — I want you to pretend you just saw a Facebook ad from an HVAC company and you need your AC fixed. Text this number right now: [your demo number]. Just say something like 'My AC stopped working.' Don't overthink it. Just send it."</div>
+          <div class="do" style="margin-bottom:0"><strong>You do:</strong> Share your screen to the dashboard — which is currently empty. They can see it. You say nothing else. Just: "Go ahead, send it."</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-item nb">
+      <div class="tl-dot" style="border-color:var(--purple)">
+        <svg fill="none" viewBox="0 0 24 24" stroke="#7C3AED" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+      </div>
+      <div class="tl-content">
+        <div class="tl-time purple">Step 2 — The 47-second silence</div>
+        <div class="tl-card">
+          <p style="margin-bottom:8px">You say nothing. They look at their phone. You look at the clock. 47 seconds feels like forever. That's the point. Every second that passes, they're thinking "what happens when my lead is waiting like this?" And then their phone buzzes.</p>
+          <div class="say" style="margin:0">"Oh — there it is." <em>[Point at their phone, don't say anything about the system yet.]</em> "Go ahead and reply like you're the customer."</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-item nb">
+      <div class="tl-dot" style="border-color:var(--orange)">
+        <svg fill="none" viewBox="0 0 24 24" stroke="#F97316" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M8 12h.01M12 12h.01M16 12h.01M21 12c0 4.418-4.03 8-9 8a9.863 9.863 0 01-4.255-.949L3 20l1.395-3.72C3.512 15.042 3 13.574 3 12c0-4.418 4.03-8 9-8s9 3.582 9 8z"/></svg>
+      </div>
+      <div class="tl-content">
+        <div class="tl-time">Step 3 — The conversation unfolds</div>
+        <div class="tl-card">
+          <p style="margin-bottom:8px">Jordan asks about the issue, their address, their availability. The prospect is now texting back and forth. They're in it. Let the conversation run for 2-3 exchanges before you say anything at all.</p>
+          <div class="phone-row" style="margin-top:8px;margin-bottom:8px">
+            <div class="phone-wrap">
+              <div class="phone">
+                <div class="phone-notch"></div>
+                <div class="phone-screen">
+                  <div class="phone-header">
+                    <div class="phone-avatar">A</div>
+                    <div>
+                      <div class="phone-contact">Pro Air Solutions</div>
+                      <div class="phone-status">● Online</div>
+                    </div>
+                  </div>
+                  <div class="bubble them">My AC stopped working</div>
+                  <div class="bubble ai">Hey! I'm Alex from Pro Air Solutions. I can help get someone out to you fast — how long has it been out?</div>
+                  <div class="bubble-time">47 sec</div>
+                  <div class="bubble them">About 2 hours, it just stopped</div>
+                  <div class="bubble ai">Got it. Is this for your home or a rental? And what's your zip code?</div>
+                  <div class="bubble them">My home, 77084</div>
+                  <div class="bubble ai">Perfect. Would tomorrow at 9am or 2pm work better for you?</div>
+                </div>
+              </div>
+            </div>
+            <div class="phone-info">
+              <h3 style="margin-top:0">What they experience</h3>
+              <p>They feel what every one of their Facebook leads feels right now — a real, fast, personal response. It doesn't feel like a bot. It doesn't say "I'm an AI." It just works.</p>
+              <p><strong>Watch their face.</strong> Most people smile or laugh a little here. That's recognition — "my customers would actually like this."</p>
+              <div class="why" style="margin:0">The moment they have an opinion about the conversation quality — good or bad — they've emotionally engaged. That engagement IS the purchase decision forming.</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+
+    <div class="tl-item nb">
+      <div class="tl-dot green" style="border-color:var(--green)">
+        <svg fill="none" viewBox="0 0 24 24" stroke="#16A34A" stroke-width="2.5"><path stroke-linecap="round" stroke-linejoin="round" d="M9 17v-2m3 2v-4m3 4v-6m2 10H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+      </div>
+      <div class="tl-content">
+        <div class="tl-time green">Step 4 — The Mirror Flip — THE WOW MOMENT</div>
+        <div class="tl-card">
+          <div class="say" style="margin-top:0">"Now look at my screen."</div>
+          <p style="margin:8px 0">You reveal the dashboard. Their name is in the pipeline. Lead card is populated with their message, their zip, their available times. Status: <strong>Contacted → Qualified</strong>. In real time.</p>
+          <div class="dash-mock">
+            <div class="dash-bar">
+              <div class="dash-dot" style="background:#EF4444"></div>
+              <div class="dash-dot" style="background:#F59E0B"></div>
+              <div class="dash-dot" style="background:#22C55E"></div>
+              <div class="dash-title">FieldBuilt AI — Live Pipeline</div>
+            </div>
+            <div class="dash-cols">
+              <div class="dash-col">
+                <div class="dash-col-head">New</div>
+              </div>
+              <div class="dash-col">
+                <div class="dash-col-head">Contacted</div>
+                <div class="lead-card">
+                  <div class="lead-name">Demo Lead</div>
+                  <div><span class="lead-tag lt-contact">contacted</span></div>
+                  <div class="lead-time">Just now · Zip: 77084</div>
+                </div>
+              </div>
+              <div class="dash-col">
+                <div class="dash-col-head">Qualified</div>
+                <div class="lead-card active">
+                  <div class="lead-name">[Their Name] <span class="live-dot"></span></div>
+                  <div><span class="lead-tag lt-qualified">qualified</span></div>
+                  <div class="lead-time">47s response · Avail: 9am/2pm</div>
+                </div>
+              </div>
+              <div class="dash-col">
+                <div class="dash-col-head">Appt Booked</div>
+              </div>
+            </div>
+          </div>
+          <div class="say" style="margin-top:10px">"I didn't touch anything. I didn't type anything. I didn't call anyone. That happened automatically. And that's what every single lead who fills out your Facebook form gets — starting tonight."</div>
+          <div class="warn" style="margin-top:8px"><strong>Stop talking here.</strong> Full stop. Don't list features. Don't explain how it works. Don't say "and it also does X." Let them react. The silence after this moment is the most valuable 10 seconds in the entire call.</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ft">
+    <div class="ft-left">FieldBuilt AI · The 47-Second Demo · June 2026</div>
+    <div class="ft-right">
+      <svg class="logo-svg" viewBox="0 0 64 64" fill="none"><rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/><rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/><rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/><rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/></svg>
+      <span class="ft-name">FIELDBUILT <span class="ft-badge">AI</span></span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ PAGE 6 — MOVES 5-7 + CLOSE ═══════ -->
+<div class="page">
+<div class="cp">
+  <div class="ph">
+    <div class="ph-left">
+      <svg class="ph-icon" viewBox="0 0 64 64" fill="none"><rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/><rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/><rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/><rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/></svg>
+      <span class="ph-name">FIELDBUILT <sup>AI</sup></span>
+    </div>
+    <div class="ph-sec">Moves 5–7 · Vision → Math → Close</div>
+  </div>
+
+  <div class="ey">After the mind-blow moment</div>
+  <div class="st">Moves 5–7: Build Certainty, Then Close</div>
+
+  <div class="move nb">
+    <div class="move-top">
+      <div class="move-num green">5</div>
+      <div class="move-meta">
+        <div class="move-title">Future Pace — Let Them See the Win State</div>
+        <div class="move-sub">90 seconds · One question · Let them answer fully</div>
+      </div>
+      <div class="move-chip green">Install ownership</div>
+    </div>
+    <div class="move-body">
+      <p>They've just experienced the system. Now you ask them to project themselves into the future where it's already running. This is the most underrated move in the process. Don't skip it.</p>
+      <div class="say">"Quick question — and I want you to actually think about this for a second. What would your business look like if every lead that hit your Facebook form got that exact response? Every one. While you're on the roof. While you're at dinner with your family. What changes?"</div>
+      <div class="why"><strong>Why this works:</strong> You're not asking "do you like it." You're asking them to describe their own future. The brain experiences vivid future projection as near-reality. They're not buying software — they're buying the version of their business they just imagined. Let them paint it. Don't rush them.</div>
+      <div class="do"><strong>Listen for the words "I wouldn't have to" or "I could finally."</strong> These are the moments where they've crossed from evaluating to desiring. Once they say those words, the sale is 90% done. You just need to not mess it up.</div>
+    </div>
+  </div>
+
+  <div class="move nb">
+    <div class="move-top">
+      <div class="move-num blue">6</div>
+      <div class="move-meta">
+        <div class="move-title">The Math They Build — Their Number</div>
+        <div class="move-sub">2 minutes · Calculator · They type it</div>
+      </div>
+      <div class="move-chip blue">Certainty through math</div>
+    </div>
+    <div class="move-body">
+      <p>You already got their lead count and ticket size in Move 2. Now you bring it back. Don't use a spreadsheet — use a visible calculator on screen and have them say the number.</p>
+      <div class="say">"Remember you said about [X] leads go cold a week? At [$Y] a job — what does that come to per month? I want to hear you say it." <em>[Pause. They calculate.]</em> "That's the number this system is competing against. Not other software. Not $297. Your [their number]."</div>
+      <div class="why"><strong>Then the anchor:</strong> "One extra booking from this system per month covers the cost for 20 months. This isn't about cost. It's about which world you want to live in."</div>
+      <div class="do"><strong>Visual trick:</strong> Pull up the calculator on screen, visible to them. Type in their numbers, let them confirm. This makes the math feel collaborative and real — not a vendor pitch deck showing favorable numbers.</div>
+    </div>
+  </div>
+
+  <div class="move nb">
+    <div class="move-top">
+      <div class="move-num purple">7</div>
+      <div class="move-meta">
+        <div class="move-title">The No-Risk Close</div>
+        <div class="move-sub">2 minutes · Full-price anchor → pilot offer → link in chat</div>
+      </div>
+      <div class="move-chip purple">Remove all friction</div>
+    </div>
+    <div class="move-body">
+      <p>Every step has been building to this. The only remaining job is to remove the last bit of risk so saying yes is the obvious move.</p>
+      <div class="say">"Here's what I want to do. Normally this is a $2,250 install plus $597 a month. For you — I'm waiving the entire install, and giving you the first 30 days completely free. The only thing I need is $200 — not a fee, it gets applied to your first month. It's just so I know we're both serious.<br/><br/>You just texted that number and saw what your leads experience. You just built the math. The only question left is: do you want that running on your real leads or not?<br/><br/>I'm sending you the link right now."</div>
+      <div class="warn">Send the Stripe link immediately in the chat while you're both on the call. Don't say "I'll email it." Type it in the chat right now. Every minute between "yes" and "paid" is a minute for doubt to creep in.</div>
+
+      <div class="div" style="margin:12px 0"></div>
+
+      <div class="offer-wrap">
+        <div class="offer-grid"></div>
+        <div class="offer-content">
+          <div class="offer-cols">
+            <div class="offer-col">
+              <div class="oc-label">Standard Rate — Always Say This First</div>
+              <div class="oc-val">$2,250</div>
+              <div class="oc-sub">Install + $597/month ongoing</div>
+            </div>
+            <div class="offer-arrow">→</div>
+            <div class="offer-col active">
+              <div class="oc-label active">Founding Partner — 5 Spots</div>
+              <div class="oc-val active">$0 Install</div>
+              <div class="oc-sub active">30 days FREE · $200 refundable deposit · $297/month after</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ft">
+    <div class="ft-left">FieldBuilt AI · The 47-Second Demo · June 2026</div>
+    <div class="ft-right">
+      <svg class="logo-svg" viewBox="0 0 64 64" fill="none"><rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/><rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/><rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/><rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/></svg>
+      <span class="ft-name">FIELDBUILT <span class="ft-badge">AI</span></span>
+    </div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════ PAGE 7 — CHEAT SHEET ═══════ -->
+<div class="page">
+<div class="cp">
+  <div class="ph">
+    <div class="ph-left">
+      <svg class="ph-icon" viewBox="0 0 64 64" fill="none"><rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/><rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/><rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/><rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/></svg>
+      <span class="ph-name">FIELDBUILT <sup>AI</sup></span>
+    </div>
+    <div class="ph-sec">Quick Reference · Print This Page</div>
+  </div>
+
+  <div class="ey">One page · Print and keep next to your keyboard</div>
+  <div class="st">The 7 Moves at a Glance</div>
+
+  <table class="dt nb">
+    <thead><tr><th>#</th><th>Move</th><th>What You Say / Do</th><th>Emotion Target</th></tr></thead>
+    <tbody>
+      <tr>
+        <td class="td-or"><strong>1</strong></td>
+        <td><strong>Pain Access</strong><div class="td-sm">2 min</div></td>
+        <td>"When's the last time you were on a job and a lead came in you couldn't get to?" → <em>Listen. Write their exact words.</em></td>
+        <td style="color:var(--red)"><strong>Pain activated</strong></td>
+      </tr>
+      <tr>
+        <td class="td-or"><strong>2</strong></td>
+        <td><strong>Invisible Money</strong><div class="td-sm">2 min</div></td>
+        <td>"How many go cold per week? What's your avg ticket?" → <em>3-second pause after they say the number.</em></td>
+        <td style="color:#EA580C"><strong>Loss made real</strong></td>
+      </tr>
+      <tr>
+        <td class="td-or"><strong>3</strong></td>
+        <td><strong>Permission Bridge</strong><div class="td-sm">30 sec</div></td>
+        <td>"What if I showed you something that handles that exactly — costs less than your weekly ad spend?" → <em>They say yes → "Grab your phone."</em></td>
+        <td style="color:#D97706"><strong>Pre-committed</strong></td>
+      </tr>
+      <tr style="background:rgba(249,115,22,0.04)">
+        <td class="td-or"><strong>★4</strong></td>
+        <td><strong>Be The Lead</strong><div class="td-sm">5 min</div></td>
+        <td>"Text [demo number] — pretend you're a customer." → <em>47s response → let them reply → flip to dashboard → "Look at my screen. I didn't touch anything." → SILENCE 10 sec.</em></td>
+        <td style="color:var(--purple)"><strong>MIND-BLOW</strong></td>
+      </tr>
+      <tr>
+        <td class="td-or"><strong>5</strong></td>
+        <td><strong>Future Pace</strong><div class="td-sm">90 sec</div></td>
+        <td>"What would your business look like if every lead got that response?" → <em>Let them describe it. Don't interrupt.</em></td>
+        <td style="color:var(--green)"><strong>Vision installed</strong></td>
+      </tr>
+      <tr>
+        <td class="td-or"><strong>6</strong></td>
+        <td><strong>Their Math</strong><div class="td-sm">2 min</div></td>
+        <td>"[X leads] × [$Y ticket] — say the number." → <em>"That's what this system competes against. Not $297."</em></td>
+        <td style="color:var(--blue)"><strong>Certain</strong></td>
+      </tr>
+      <tr>
+        <td class="td-or"><strong>7</strong></td>
+        <td><strong>The Close</strong><div class="td-sm">2 min</div></td>
+        <td>"Normally $2,250 + $597. For you: $0 install, 30 days free, $200 deposit. Link's in the chat right now."</td>
+        <td style="color:var(--green)"><strong>Decision easy</strong></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="div"></div>
+
+  <div style="display:grid;grid-template-columns:1fr 1fr;gap:14px">
+    <div>
+      <h2 style="margin-top:0">3 Rules for Move 4 (The Moment)</h2>
+      <div class="do">
+        <strong>Rule 1:</strong> Dashboard must be empty when call starts. Their card appearing as the ONLY card = maximum visual impact.<br/><br/>
+        <strong>Rule 2:</strong> Don't explain what's happening while it's happening. Let the system perform without narration. Commentary breaks the experience.<br/><br/>
+        <strong>Rule 3:</strong> After you say "I didn't touch anything" — 10 seconds of silence. Count them in your head. Do not fill the silence.
+      </div>
+    </div>
+    <div>
+      <h2 style="margin-top:0">What "Good" Sounds Like on a Call</h2>
+      <div class="why">
+        <strong>"Wait, that went to my phone that fast?"</strong> → They're surprised by speed. Amplify: "That's 47 seconds. Your leads expect that now."<br/><br/>
+        <strong>"That doesn't feel like a bot."</strong> → This is gold. "It never says 'I'm an AI.' It just works."<br/><br/>
+        <strong>"I could finally take my phone off at night."</strong> → Close immediately. They just told you what they're buying.
+      </div>
+    </div>
+  </div>
+
+  <div class="div"></div>
+
+  <div class="moment-box" style="padding:20px 24px">
+    <div class="moment-grid"></div><div class="moment-orb" style="width:200px;height:200px;top:-60px;right:-40px"></div>
+    <div class="moment-content">
+      <div style="display:flex;gap:24px;align-items:center">
+        <div style="flex:1">
+          <div class="moment-ey" style="margin-bottom:6px">The One Thing</div>
+          <div style="font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:14pt;color:#fff;letter-spacing:-0.02em;line-height:1.4">You're not selling software.<br/>You're ending their Sunday night anxiety<br/><span style="color:var(--orange)">about the leads they missed that week.</span></div>
+        </div>
+        <div style="width:140px;text-align:center">
+          <div style="font-family:'JetBrains Mono',monospace;font-size:36pt;font-weight:700;color:var(--orange);line-height:1">47s</div>
+          <div style="font-family:'Inter',sans-serif;font-size:8pt;color:rgba(255,255,255,0.4)">vs 47 hours<br/>industry average</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="ft" style="margin-top:22px">
+    <div class="ft-left">FieldBuilt AI · The 47-Second Demo · June 2026 · Based on 1,122 scraped HVAC owner profiles</div>
+    <div class="ft-right">
+      <svg class="logo-svg" viewBox="0 0 64 64" fill="none"><rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/><rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/><rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/><rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/></svg>
+      <span class="ft-name">FIELDBUILT <span class="ft-badge">AI</span></span>
+    </div>
+  </div>
+</div>
+</div>
+
+</body>
+</html>

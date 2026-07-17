@@ -1,0 +1,1911 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1.0"/>
+<title>FieldBuilt AI — Sales Call Playbook</title>
+<link rel="preconnect" href="https://fonts.googleapis.com"/>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600;700&display=swap" rel="stylesheet"/>
+<style>
+  :root {
+    --cream:       #FAFAF8;
+    --surface:     #FFFFFF;
+    --ink:         #1A1614;
+    --ink-deep:    #14110F;
+    --text:        #1C1917;
+    --text-2:      #78716C;
+    --text-3:      #A8A29E;
+    --border:      #E7E5E4;
+    --orange:      #F97316;
+    --orange-deep: #EA580C;
+    --orange-soft: #FFF3EC;
+    --green:       #16A34A;
+    --green-soft:  #F0FDF4;
+    --red:         #DC2626;
+  }
+
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+
+  html { background: var(--cream); }
+
+  body {
+    font-family: 'Inter', sans-serif;
+    font-size: 10.5pt;
+    color: var(--text);
+    background: var(--cream);
+    line-height: 1.6;
+  }
+
+  /* ── PAGE LAYOUT ── */
+  .page {
+    width: 210mm;
+    min-height: 297mm;
+    margin: 0 auto;
+    background: var(--cream);
+    position: relative;
+  }
+
+  @media print {
+    html, body { background: var(--cream); }
+    .page { page-break-after: always; width: 100%; }
+    .no-break { page-break-inside: avoid; }
+  }
+
+  /* ── COVER PAGE ── */
+  .cover {
+    background: var(--ink);
+    min-height: 297mm;
+    display: flex;
+    flex-direction: column;
+    justify-content: space-between;
+    padding: 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .cover-hatch {
+    position: absolute;
+    inset: 0;
+    background-image:
+      linear-gradient(rgba(249,115,22,0.07) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(249,115,22,0.07) 1px, transparent 1px);
+    background-size: 32px 32px;
+    pointer-events: none;
+  }
+
+  .cover-orb1 {
+    position: absolute;
+    width: 500px; height: 500px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(249,115,22,0.18) 0%, transparent 70%);
+    top: -120px; right: -120px;
+    pointer-events: none;
+  }
+
+  .cover-orb2 {
+    position: absolute;
+    width: 380px; height: 380px;
+    border-radius: 50%;
+    background: radial-gradient(circle, rgba(249,115,22,0.10) 0%, transparent 70%);
+    bottom: 60px; left: -80px;
+    pointer-events: none;
+  }
+
+  .cover-top {
+    padding: 52px 56px 0;
+    position: relative;
+    z-index: 2;
+  }
+
+  .cover-logo {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 80px;
+  }
+
+  .cover-logo-icon {
+    width: 40px; height: 40px;
+    flex-shrink: 0;
+  }
+
+  .cover-logo-text {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800;
+    font-size: 18pt;
+    color: #FFFFFF;
+    letter-spacing: -0.02em;
+    line-height: 1;
+  }
+
+  .cover-logo-badge {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.5pt;
+    font-weight: 700;
+    background: var(--orange);
+    color: #fff;
+    padding: 3px 7px;
+    border-radius: 5px;
+    letter-spacing: 0.05em;
+  }
+
+  .cover-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8pt;
+    font-weight: 600;
+    letter-spacing: 0.18em;
+    text-transform: uppercase;
+    color: var(--orange);
+    margin-bottom: 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+  }
+
+  .cover-eyebrow::before {
+    content: '';
+    display: block;
+    width: 32px; height: 1.5px;
+    background: var(--orange);
+  }
+
+  .cover-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800;
+    font-size: 38pt;
+    color: #FFFFFF;
+    letter-spacing: -0.03em;
+    line-height: 1.08;
+    max-width: 480px;
+  }
+
+  .cover-title span {
+    color: var(--orange);
+  }
+
+  .cover-subtitle {
+    font-family: 'Inter', sans-serif;
+    font-size: 11.5pt;
+    color: rgba(255,255,255,0.55);
+    margin-top: 20px;
+    max-width: 380px;
+    line-height: 1.6;
+  }
+
+  .cover-stats {
+    display: flex;
+    gap: 0;
+    margin-top: 56px;
+    border: 1px solid rgba(255,255,255,0.10);
+    border-radius: 14px;
+    overflow: hidden;
+    max-width: 520px;
+  }
+
+  .cover-stat {
+    flex: 1;
+    padding: 22px 20px;
+    border-right: 1px solid rgba(255,255,255,0.08);
+    position: relative;
+  }
+
+  .cover-stat:last-child { border-right: none; }
+
+  .cover-stat-num {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 22pt;
+    font-weight: 700;
+    color: var(--orange);
+    line-height: 1;
+    margin-bottom: 4px;
+  }
+
+  .cover-stat-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 8.5pt;
+    color: rgba(255,255,255,0.45);
+    line-height: 1.4;
+  }
+
+  .cover-bottom {
+    padding: 40px 56px 48px;
+    position: relative;
+    z-index: 2;
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-end;
+    border-top: 1px solid rgba(255,255,255,0.07);
+  }
+
+  .cover-meta {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8pt;
+    color: rgba(255,255,255,0.30);
+    letter-spacing: 0.08em;
+    line-height: 1.8;
+  }
+
+  .cover-pill {
+    background: rgba(249,115,22,0.15);
+    border: 1px solid rgba(249,115,22,0.3);
+    border-radius: 999px;
+    padding: 8px 18px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 8pt;
+    font-weight: 600;
+    color: var(--orange);
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+  }
+
+  /* ── CONTENT PAGES ── */
+  .content-page {
+    padding: 48px 52px;
+    position: relative;
+  }
+
+  .page-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding-bottom: 18px;
+    border-bottom: 1.5px solid var(--border);
+    margin-bottom: 32px;
+  }
+
+  .page-header-logo {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .page-header-icon {
+    width: 24px; height: 24px;
+  }
+
+  .page-header-name {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800;
+    font-size: 11pt;
+    color: var(--text);
+    letter-spacing: -0.01em;
+  }
+
+  .page-header-name sup {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 6.5pt;
+    font-weight: 700;
+    background: var(--orange);
+    color: #fff;
+    padding: 1.5px 4px;
+    border-radius: 4px;
+    letter-spacing: 0.05em;
+    position: relative;
+    top: -4px;
+  }
+
+  .page-header-section {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: var(--text-3);
+  }
+
+  /* ── SECTION TITLES ── */
+  .section-eyebrow {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: var(--orange);
+    margin-bottom: 8px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+  }
+
+  .section-eyebrow::before {
+    content: '';
+    display: block;
+    width: 20px; height: 1.5px;
+    background: var(--orange);
+    flex-shrink: 0;
+  }
+
+  .section-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800;
+    font-size: 20pt;
+    color: var(--text);
+    letter-spacing: -0.025em;
+    line-height: 1.15;
+    margin-bottom: 6px;
+  }
+
+  .section-lead {
+    font-size: 10.5pt;
+    color: var(--text-2);
+    line-height: 1.65;
+    margin-bottom: 28px;
+    max-width: 540px;
+  }
+
+  /* ── PHASE CARDS ── */
+  .phase-card {
+    background: var(--surface);
+    border-radius: 14px;
+    border: 1px solid var(--border);
+    box-shadow: 0 4px 20px rgba(249,115,22,0.06), 0 1px 3px rgba(28,25,23,0.04);
+    margin-bottom: 14px;
+    overflow: hidden;
+  }
+
+  .phase-card-header {
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    padding: 16px 20px 14px;
+    border-bottom: 1px solid var(--border);
+  }
+
+  .phase-num {
+    width: 34px; height: 34px;
+    border-radius: 10px;
+    background: var(--orange);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800;
+    font-size: 13pt;
+    color: #fff;
+    flex-shrink: 0;
+    line-height: 1;
+  }
+
+  .phase-meta { flex: 1; }
+
+  .phase-name {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 700;
+    font-size: 11.5pt;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    line-height: 1.2;
+  }
+
+  .phase-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.5pt;
+    font-weight: 500;
+    color: var(--text-3);
+    letter-spacing: 0.06em;
+    margin-top: 2px;
+  }
+
+  .phase-goal-chip {
+    font-family: 'Inter', sans-serif;
+    font-size: 7.5pt;
+    font-weight: 500;
+    background: var(--orange-soft);
+    color: var(--orange-deep);
+    padding: 4px 10px;
+    border-radius: 999px;
+    white-space: nowrap;
+  }
+
+  .phase-card-body {
+    padding: 16px 20px;
+  }
+
+  .phase-card-body p {
+    font-size: 9.5pt;
+    color: var(--text-2);
+    line-height: 1.65;
+    margin-bottom: 10px;
+  }
+
+  .phase-card-body p:last-child { margin-bottom: 0; }
+
+  /* ── SCRIPT BLOCK ── */
+  .script-block {
+    background: #F5F3FF;
+    border-left: 3px solid #7C3AED;
+    border-radius: 0 10px 10px 0;
+    padding: 13px 16px;
+    margin: 10px 0;
+    font-family: 'Inter', sans-serif;
+    font-size: 9.5pt;
+    color: #3B1E8C;
+    line-height: 1.65;
+  }
+
+  .script-block strong {
+    color: #5B21B6;
+    font-weight: 600;
+  }
+
+  .note-block {
+    background: var(--orange-soft);
+    border-left: 3px solid var(--orange);
+    border-radius: 0 10px 10px 0;
+    padding: 12px 16px;
+    margin: 10px 0;
+    font-family: 'Inter', sans-serif;
+    font-size: 9pt;
+    color: #7C2D12;
+    line-height: 1.6;
+  }
+
+  .callout-block {
+    background: var(--green-soft);
+    border-left: 3px solid var(--green);
+    border-radius: 0 10px 10px 0;
+    padding: 12px 16px;
+    margin: 10px 0;
+    font-family: 'Inter', sans-serif;
+    font-size: 9pt;
+    color: #14532D;
+    line-height: 1.6;
+  }
+
+  /* ── QUESTION CARDS ── */
+  .q-list { display: flex; flex-direction: column; gap: 10px; margin: 12px 0; }
+
+  .q-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    gap: 14px;
+    align-items: flex-start;
+    box-shadow: 0 2px 8px rgba(249,115,22,0.04);
+  }
+
+  .q-num {
+    width: 26px; height: 26px;
+    border-radius: 8px;
+    background: var(--orange-soft);
+    color: var(--orange);
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 700;
+    font-size: 10pt;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+  }
+
+  .q-content {}
+  .q-label {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 700;
+    font-size: 9.5pt;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .q-text {
+    font-family: 'Inter', sans-serif;
+    font-size: 9pt;
+    color: var(--text-2);
+    line-height: 1.6;
+  }
+
+  /* ── AI TEAM CARDS ── */
+  .ai-team {
+    display: grid;
+    grid-template-columns: repeat(5, 1fr);
+    gap: 10px;
+    margin: 16px 0;
+  }
+
+  .ai-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 16px 12px;
+    text-align: center;
+    box-shadow: 0 2px 10px rgba(249,115,22,0.05);
+  }
+
+  .ai-avatar {
+    width: 40px; height: 40px;
+    border-radius: 12px;
+    background: var(--orange);
+    margin: 0 auto 10px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800;
+    font-size: 15pt;
+    color: #fff;
+  }
+
+  .ai-name {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 700;
+    font-size: 10pt;
+    color: var(--text);
+    margin-bottom: 4px;
+  }
+
+  .ai-role {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 6.5pt;
+    font-weight: 600;
+    color: var(--orange);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 6px;
+  }
+
+  .ai-desc {
+    font-family: 'Inter', sans-serif;
+    font-size: 7.5pt;
+    color: var(--text-2);
+    line-height: 1.55;
+  }
+
+  /* ── OBJECTION CARDS ── */
+  .obj-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    margin-bottom: 14px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(249,115,22,0.04);
+  }
+
+  .obj-header {
+    background: #FFF3EC;
+    padding: 11px 18px;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    border-bottom: 1px solid #FED7AA;
+  }
+
+  .obj-icon {
+    width: 22px; height: 22px;
+    border-radius: 7px;
+    background: var(--orange);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 11pt;
+    flex-shrink: 0;
+  }
+
+  .obj-question {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 700;
+    font-size: 9.5pt;
+    color: var(--orange-deep);
+  }
+
+  .obj-bucket {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7pt;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    color: var(--text-3);
+    text-transform: uppercase;
+    margin-left: auto;
+    white-space: nowrap;
+  }
+
+  .obj-body {
+    padding: 14px 18px;
+    font-size: 9.5pt;
+    color: var(--text-2);
+    line-height: 1.65;
+  }
+
+  /* ── TABLES ── */
+  .data-table {
+    width: 100%;
+    border-collapse: collapse;
+    margin: 14px 0;
+    font-size: 9pt;
+  }
+
+  .data-table th {
+    background: var(--ink);
+    color: rgba(255,255,255,0.85);
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.5pt;
+    font-weight: 600;
+    letter-spacing: 0.1em;
+    text-transform: uppercase;
+    padding: 10px 14px;
+    text-align: left;
+  }
+
+  .data-table th:first-child { border-radius: 8px 0 0 0; }
+  .data-table th:last-child { border-radius: 0 8px 0 0; }
+
+  .data-table td {
+    padding: 9px 14px;
+    border-bottom: 1px solid var(--border);
+    color: var(--text);
+    vertical-align: top;
+    line-height: 1.5;
+  }
+
+  .data-table tr:last-child td { border-bottom: none; }
+  .data-table tr:nth-child(even) td { background: rgba(249,115,22,0.02); }
+
+  .td-orange {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--orange);
+  }
+
+  .td-green {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    color: var(--green);
+  }
+
+  .td-muted {
+    color: var(--text-3);
+    font-size: 8.5pt;
+  }
+
+  /* ── OFFER BOX ── */
+  .offer-box {
+    background: var(--ink);
+    border-radius: 16px;
+    padding: 28px 30px;
+    margin: 20px 0;
+    position: relative;
+    overflow: hidden;
+  }
+
+  .offer-box-hatch {
+    position: absolute; inset: 0;
+    background-image:
+      linear-gradient(rgba(249,115,22,0.06) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(249,115,22,0.06) 1px, transparent 1px);
+    background-size: 24px 24px;
+    pointer-events: none;
+  }
+
+  .offer-box-content { position: relative; z-index: 2; }
+
+  .offer-row {
+    display: flex;
+    gap: 20px;
+    align-items: stretch;
+  }
+
+  .offer-col {
+    flex: 1;
+    background: rgba(255,255,255,0.05);
+    border: 1px solid rgba(255,255,255,0.1);
+    border-radius: 12px;
+    padding: 18px 16px;
+  }
+
+  .offer-col-label {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7pt;
+    font-weight: 600;
+    letter-spacing: 0.16em;
+    text-transform: uppercase;
+    color: rgba(255,255,255,0.4);
+    margin-bottom: 8px;
+  }
+
+  .offer-col-price {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800;
+    font-size: 22pt;
+    color: rgba(255,255,255,0.4);
+    letter-spacing: -0.03em;
+    text-decoration: line-through;
+    line-height: 1.1;
+  }
+
+  .offer-col-price.active {
+    color: var(--orange);
+    text-decoration: none;
+  }
+
+  .offer-col-sub {
+    font-size: 9pt;
+    color: rgba(255,255,255,0.35);
+    margin-top: 4px;
+    line-height: 1.5;
+  }
+
+  .offer-col-sub.active { color: rgba(255,255,255,0.55); }
+
+  .offer-arrow {
+    display: flex;
+    align-items: center;
+    color: var(--orange);
+    font-size: 20pt;
+    font-weight: 300;
+    padding: 0 4px;
+  }
+
+  /* ── VALUE STACK ── */
+  .value-stack {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    overflow: hidden;
+    margin: 16px 0;
+    box-shadow: 0 4px 20px rgba(249,115,22,0.06);
+  }
+
+  .value-row {
+    display: flex;
+    align-items: center;
+    padding: 11px 18px;
+    border-bottom: 1px solid var(--border);
+    gap: 14px;
+  }
+
+  .value-row:last-child { border-bottom: none; background: var(--orange-soft); }
+
+  .value-icon {
+    width: 30px; height: 30px;
+    border-radius: 9px;
+    background: var(--orange-soft);
+    display: flex; align-items: center; justify-content: center;
+    font-size: 13pt;
+    flex-shrink: 0;
+  }
+
+  .value-row:last-child .value-icon { background: var(--orange); }
+
+  .value-name {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 700;
+    font-size: 9.5pt;
+    color: var(--text);
+    line-height: 1.2;
+    flex: 1;
+  }
+
+  .value-name-sub {
+    font-weight: 400;
+    font-size: 8.5pt;
+    color: var(--text-2);
+  }
+
+  .value-price {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 600;
+    font-size: 10pt;
+    color: var(--text-3);
+    text-align: right;
+    text-decoration: line-through;
+    white-space: nowrap;
+  }
+
+  .value-row:last-child .value-name { color: var(--orange-deep); }
+  .value-row:last-child .value-price { color: var(--orange); text-decoration: none; font-size: 13pt; }
+
+  /* ── SLIDE DECK ── */
+  .slide-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 12px;
+    margin: 16px 0;
+  }
+
+  .slide-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 13px;
+    overflow: hidden;
+    box-shadow: 0 2px 10px rgba(249,115,22,0.04);
+  }
+
+  .slide-num-bar {
+    background: var(--orange);
+    padding: 8px 14px;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7pt;
+    font-weight: 700;
+    letter-spacing: 0.14em;
+    text-transform: uppercase;
+    color: #fff;
+  }
+
+  .slide-body {
+    padding: 13px 14px;
+  }
+
+  .slide-title {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 700;
+    font-size: 9.5pt;
+    color: var(--text);
+    margin-bottom: 4px;
+    line-height: 1.25;
+  }
+
+  .slide-headline {
+    font-family: 'Inter', sans-serif;
+    font-size: 8.5pt;
+    font-style: italic;
+    color: var(--orange-deep);
+    margin-bottom: 6px;
+  }
+
+  .slide-desc {
+    font-size: 8.5pt;
+    color: var(--text-2);
+    line-height: 1.6;
+  }
+
+  /* ── POWERFUL SCORECARD ── */
+  .powerful-grid {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 10px;
+    margin: 16px 0;
+  }
+
+  .powerful-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 14px;
+    box-shadow: 0 2px 8px rgba(249,115,22,0.04);
+  }
+
+  .powerful-letter {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800;
+    font-size: 22pt;
+    color: var(--orange);
+    letter-spacing: -0.03em;
+    line-height: 1;
+    margin-bottom: 2px;
+  }
+
+  .powerful-word {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 700;
+    font-size: 9pt;
+    color: var(--text);
+    margin-bottom: 6px;
+  }
+
+  .powerful-q {
+    font-size: 8pt;
+    color: var(--text-2);
+    line-height: 1.55;
+  }
+
+  .score-dots {
+    display: flex; gap: 4px; margin-top: 10px;
+  }
+
+  .dot {
+    width: 10px; height: 10px;
+    border-radius: 50%;
+    background: var(--border);
+  }
+
+  /* ── NUMBERS REFERENCE ── */
+  .numbers-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+    margin: 16px 0;
+  }
+
+  .number-card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 12px;
+    padding: 14px 16px;
+    display: flex;
+    align-items: center;
+    gap: 14px;
+    box-shadow: 0 2px 8px rgba(249,115,22,0.04);
+  }
+
+  .number-val {
+    font-family: 'JetBrains Mono', monospace;
+    font-weight: 700;
+    font-size: 16pt;
+    color: var(--orange);
+    letter-spacing: -0.02em;
+    line-height: 1;
+    white-space: nowrap;
+  }
+
+  .number-label {
+    font-family: 'Inter', sans-serif;
+    font-size: 9pt;
+    color: var(--text-2);
+    line-height: 1.5;
+  }
+
+  /* ── FOLLOW-UP ── */
+  .followup-timeline {
+    display: flex;
+    flex-direction: column;
+    gap: 0;
+    margin: 14px 0;
+    position: relative;
+  }
+
+  .followup-timeline::before {
+    content: '';
+    position: absolute;
+    left: 17px; top: 28px; bottom: 28px;
+    width: 2px;
+    background: var(--border);
+  }
+
+  .fu-item {
+    display: flex;
+    gap: 16px;
+    align-items: flex-start;
+    padding: 12px 0;
+  }
+
+  .fu-dot {
+    width: 36px; height: 36px;
+    border-radius: 50%;
+    background: var(--surface);
+    border: 2px solid var(--orange);
+    display: flex; align-items: center; justify-content: center;
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.5pt;
+    font-weight: 700;
+    color: var(--orange);
+    flex-shrink: 0;
+    position: relative;
+    z-index: 1;
+  }
+
+  .fu-content {}
+  .fu-time {
+    font-family: 'JetBrains Mono', monospace;
+    font-size: 7.5pt;
+    font-weight: 600;
+    color: var(--orange);
+    text-transform: uppercase;
+    letter-spacing: 0.1em;
+    margin-bottom: 3px;
+  }
+
+  .fu-text {
+    font-family: 'Inter', sans-serif;
+    font-size: 9.5pt;
+    color: var(--text-2);
+    line-height: 1.6;
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 10px;
+    padding: 10px 14px;
+  }
+
+  /* ── DIVIDER ── */
+  .divider {
+    height: 1px;
+    background: var(--border);
+    margin: 24px 0;
+  }
+
+  .h2 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 800;
+    font-size: 14pt;
+    color: var(--text);
+    letter-spacing: -0.02em;
+    margin: 22px 0 12px;
+  }
+
+  .h3 {
+    font-family: 'Plus Jakarta Sans', sans-serif;
+    font-weight: 700;
+    font-size: 11pt;
+    color: var(--text);
+    letter-spacing: -0.01em;
+    margin: 18px 0 8px;
+  }
+
+  p {
+    font-size: 10pt;
+    color: var(--text-2);
+    line-height: 1.65;
+    margin-bottom: 8px;
+  }
+
+  ul {
+    margin: 6px 0 10px 18px;
+    color: var(--text-2);
+    font-size: 9.5pt;
+    line-height: 1.7;
+  }
+
+  li { margin-bottom: 3px; }
+
+  strong { color: var(--text); font-weight: 600; }
+
+  .orange { color: var(--orange); }
+  .green  { color: var(--green); }
+
+  /* page-break helpers */
+  .pb-before { page-break-before: always; }
+
+</style>
+</head>
+<body>
+
+<!-- ═══════════════════════════════════════════════
+     COVER PAGE
+══════════════════════════════════════════════════ -->
+<div class="page">
+<div class="cover">
+  <div class="cover-hatch"></div>
+  <div class="cover-orb1"></div>
+  <div class="cover-orb2"></div>
+
+  <div class="cover-top">
+    <!-- Logo -->
+    <div class="cover-logo">
+      <svg class="cover-logo-icon" viewBox="0 0 64 64" fill="none">
+        <rect x="18" y="12" width="11" height="40" rx="1.5" fill="white"/>
+        <rect x="18" y="28" width="20" height="10" rx="1.5" fill="white"/>
+        <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/>
+        <rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/>
+      </svg>
+      <span class="cover-logo-text">FIELDBUILT <span class="cover-logo-badge">AI</span></span>
+    </div>
+
+    <!-- Eyebrow -->
+    <div class="cover-eyebrow">Founding Partner Program · HVAC</div>
+
+    <!-- Title -->
+    <div class="cover-title">Sales Call<br/><span>Playbook</span></div>
+    <div class="cover-subtitle">A complete word-for-word system for converting warm inbound leads into paying customers — built on Hormozi frameworks, POWERFUL deal intelligence, and HVAC-specific pain mapping.</div>
+
+    <!-- Stats -->
+    <div class="cover-stats">
+      <div class="cover-stat">
+        <div class="cover-stat-num">47s</div>
+        <div class="cover-stat-label">Lead response<br/>time</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-num">100×</div>
+        <div class="cover-stat-label">Conversion lift<br/>vs 60min reply</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-num">$297</div>
+        <div class="cover-stat-label">Pilot price<br/>after trial</div>
+      </div>
+      <div class="cover-stat">
+        <div class="cover-stat-num">5</div>
+        <div class="cover-stat-label">Founding partner<br/>spots available</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="cover-bottom">
+    <div class="cover-meta">
+      CONFIDENTIAL — INTERNAL USE ONLY<br/>
+      FIELDBUILT AI · JUNE 2026<br/>
+      HVAC FOUNDING PARTNER PILOT
+    </div>
+    <div class="cover-pill">30 Days Free · $200 Deposit</div>
+  </div>
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     PAGE 2 — THE OFFER + PREP
+══════════════════════════════════════════════════ -->
+<div class="page">
+<div class="content-page">
+  <div class="page-header">
+    <div class="page-header-logo">
+      <svg class="page-header-icon" viewBox="0 0 64 64" fill="none">
+        <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/>
+        <rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/>
+      </svg>
+      <span class="page-header-name">FIELDBUILT <sup>AI</sup></span>
+    </div>
+    <div class="page-header-section">The Offer &amp; Pre-Call Prep</div>
+  </div>
+
+  <div class="section-eyebrow">Commit This To Memory</div>
+  <div class="section-title">The Founding Partner Offer</div>
+  <div class="section-lead">Before you get on any call, this offer must be second nature. Anchor to full price first. Always. Every time.</div>
+
+  <div class="offer-box">
+    <div class="offer-box-hatch"></div>
+    <div class="offer-box-content">
+      <div class="offer-row">
+        <div class="offer-col">
+          <div class="offer-col-label">Standard Price</div>
+          <div class="offer-col-price">$2,250</div>
+          <div class="offer-col-sub">Installation fee + $597/month ongoing</div>
+        </div>
+        <div class="offer-arrow">→</div>
+        <div class="offer-col">
+          <div class="offer-col-label">Founding Partner Pilot</div>
+          <div class="offer-col-price active">$0 Install</div>
+          <div class="offer-col-sub active">30 days FREE · $200 refundable deposit · $297/month after</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="note-block">
+    <strong>The $200 psychology:</strong> It is NOT a fee. It is a commitment filter. Frame it as: <em>"I'm putting in real time configuring this for your specific business — I just need to know we're both serious."</em> Framed correctly, prospects who balk at $200 are telling you they were never going to pay $297/month either.
+  </div>
+
+  <!-- The 5 AI employees -->
+  <div class="h2">Meet Their New Team</div>
+  <div class="ai-team">
+    <div class="ai-card">
+      <div class="ai-avatar">A</div>
+      <div class="ai-name">Alex</div>
+      <div class="ai-role">Receptionist</div>
+      <div class="ai-desc">Texts every lead within 47 seconds, 24/7 — including 2am and Sunday</div>
+    </div>
+    <div class="ai-card">
+      <div class="ai-avatar">J</div>
+      <div class="ai-name">Jordan</div>
+      <div class="ai-role">Appt Setter</div>
+      <div class="ai-desc">Qualifies with 4 questions, handles objections, books the estimate</div>
+    </div>
+    <div class="ai-card">
+      <div class="ai-avatar">S</div>
+      <div class="ai-name">Sam</div>
+      <div class="ai-role">Dispatcher</div>
+      <div class="ai-desc">Routes to right tech by skill, zip, and availability automatically</div>
+    </div>
+    <div class="ai-card">
+      <div class="ai-avatar">R</div>
+      <div class="ai-name">Riley</div>
+      <div class="ai-role">Follow-Up</div>
+      <div class="ai-desc">7-day sequences — 1hr, 24hr, 72hr, 7d — no lead ever goes cold</div>
+    </div>
+    <div class="ai-card">
+      <div class="ai-avatar">M</div>
+      <div class="ai-name">Morgan</div>
+      <div class="ai-role">Office Mgr</div>
+      <div class="ai-desc">CRM, confirmations, push alerts — full visibility in one dashboard</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <!-- Pre-call checklist -->
+  <div class="section-eyebrow">5 Minutes Before You Dial</div>
+  <div class="h2">Pre-Call Research Checklist</div>
+
+  <table class="data-table">
+    <thead>
+      <tr>
+        <th>What to Look Up</th>
+        <th>Where</th>
+        <th>What You're Looking For</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td><strong>Active Facebook Ads</strong></td>
+        <td class="td-muted">Meta Ad Library</td>
+        <td>Are they actively spending? Note the ad creative — reference it in the opener</td>
+      </tr>
+      <tr>
+        <td><strong>Google Reviews</strong></td>
+        <td class="td-muted">Google Maps</td>
+        <td>Rating + patterns in reviews. Positive = they care about quality. Negative = pain signal</td>
+      </tr>
+      <tr>
+        <td><strong>Team Size</strong></td>
+        <td class="td-muted">Website / LinkedIn</td>
+        <td>Number of techs = volume they can handle. 3-15 is the sweet spot</td>
+      </tr>
+      <tr>
+        <td><strong>Service Area</strong></td>
+        <td class="td-muted">Website</td>
+        <td>Zip codes they cover — feeds into dispatch configuration</td>
+      </tr>
+      <tr>
+        <td><strong>Browser Tabs Ready</strong></td>
+        <td class="td-muted">Your system</td>
+        <td>Demo link, Stripe payment link, Calendly — open before the call starts</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="callout-block">
+    <strong>Your mental frame:</strong> They're spending $3K+/month on ads, generating 30-60 leads/month. If 30% go cold and their average ticket is $6,000 — that's $54,000-$108,000 in annual revenue quietly bleeding out. Your $297/month is rounding error. Your job is just to make that math vivid.
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     PAGE 3 — CALL STRUCTURE + PHASES 1-3
+══════════════════════════════════════════════════ -->
+<div class="page">
+<div class="content-page">
+  <div class="page-header">
+    <div class="page-header-logo">
+      <svg class="page-header-icon" viewBox="0 0 64 64" fill="none">
+        <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/>
+        <rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/>
+      </svg>
+      <span class="page-header-name">FIELDBUILT <sup>AI</sup></span>
+    </div>
+    <div class="page-header-section">Call Structure — Phases 1–3</div>
+  </div>
+
+  <div class="section-eyebrow">The Call Flow</div>
+  <div class="section-title">25–35 Minute Framework</div>
+
+  <!-- Phase cards -->
+  <div class="phase-card no-break">
+    <div class="phase-card-header">
+      <div class="phase-num">1</div>
+      <div class="phase-meta">
+        <div class="phase-name">Open + Rapport</div>
+        <div class="phase-time">2–3 minutes</div>
+      </div>
+      <div class="phase-goal-chip">Make them comfortable</div>
+    </div>
+    <div class="phase-card-body">
+      <p>These leads already said yes. Don't over-pitch the opener. Be diagnostic, not salesy — this immediately separates you from every vendor they've ever spoken to.</p>
+      <div class="script-block">
+        "Hey [Name], thanks for jumping on — I'm [your name]. I saw you're running ads in [city], which is actually why I reached out. Before I show you anything, I just want to make sure this actually makes sense for your situation. Cool if I ask you a couple quick questions first?"
+      </div>
+      <p style="margin-top:8px"><strong>Quick rapport question (pick one):</strong></p>
+      <ul>
+        <li>"How long have you been running the [company name] show?"</li>
+        <li>"I saw your Google reviews — a lot of customers mention [thing]. Is that intentional?"</li>
+        <li>"You're in [city] — peak season must be intense right now, how's volume been?"</li>
+      </ul>
+      <div class="script-block" style="margin-top:8px">
+        "Awesome. So let me understand your situation a bit — then I'll show you exactly what I built and you can tell me if it makes sense."
+      </div>
+    </div>
+  </div>
+
+  <div class="phase-card no-break">
+    <div class="phase-card-header">
+      <div class="phase-num">2</div>
+      <div class="phase-meta">
+        <div class="phase-name">Diagnose Pain</div>
+        <div class="phase-time">8–10 minutes</div>
+      </div>
+      <div class="phase-goal-chip">Get them to say the number</div>
+    </div>
+    <div class="phase-card-body">
+      <p>This is the most important phase. <strong>Don't tell them their problem — let them tell you.</strong> By the time they've answered all 5 questions, they've convinced themselves. Your solution becomes the obvious relief.</p>
+
+      <div class="q-list">
+        <div class="q-card">
+          <div class="q-num">Q1</div>
+          <div class="q-content">
+            <div class="q-label">Establish the bleed</div>
+            <div class="q-text">"When someone fills out your Facebook form right now — what actually happens? Like, who follows up and how fast?"<br/><em style="color:#A8A29E;font-size:8.5pt;">If they say "pretty fast" → "What about at 10pm on a Wednesday? Or Saturday morning?"</em></div>
+          </div>
+        </div>
+        <div class="q-card">
+          <div class="q-num">Q2</div>
+          <div class="q-content">
+            <div class="q-label">Quantify the loss — THE CRITICAL MOMENT</div>
+            <div class="q-text">"How many leads do you think slip through — ones where you called but they went cold before you could connect?"<br/><em style="color:#A8A29E;font-size:8.5pt;">Then: "What's your average job worth — estimate ticket?"  →  "So [X] leads × $[ticket] = $[X] walking out every month. Does that feel about right?"</em></div>
+          </div>
+        </div>
+        <div class="q-card">
+          <div class="q-num">Q3</div>
+          <div class="q-content">
+            <div class="q-label">Find the bottleneck</div>
+            <div class="q-text">"Are you the one doing most of the follow-up, or do you have someone on it?"<br/><em style="color:#A8A29E;font-size:8.5pt;">If themselves: "What happens when you're on a job and someone fills out the form?"</em></div>
+          </div>
+        </div>
+        <div class="q-card">
+          <div class="q-num">Q4</div>
+          <div class="q-content">
+            <div class="q-label">Surface the real fear</div>
+            <div class="q-text">"Has this ever cost you a big job? A lead that became someone else's customer because you couldn't get to them in time?"</div>
+          </div>
+        </div>
+        <div class="q-card">
+          <div class="q-num">Q5</div>
+          <div class="q-content">
+            <div class="q-label">Confirm the trigger</div>
+            <div class="q-text">"Why did you respond to my message? Is this a timing thing or has it been a problem for a while?"</div>
+          </div>
+        </div>
+      </div>
+
+      <div class="note-block" style="margin-top:10px">
+        <strong>Always do the pain summary before moving to the demo:</strong><br/>
+        "Okay so let me make sure I'm hearing this right. You're spending [X]/month on ads, generating [X] leads, but a big chunk go cold — especially after hours. And at [ticket size], that's real money. Fair summary?" → When they say yes — <strong>PAUSE. Then: "Okay. Let me show you what I built."</strong>
+      </div>
+    </div>
+  </div>
+
+  <div class="phase-card no-break">
+    <div class="phase-card-header">
+      <div class="phase-num">3</div>
+      <div class="phase-meta">
+        <div class="phase-name">Show the System</div>
+        <div class="phase-time">7–8 minutes</div>
+      </div>
+      <div class="phase-goal-chip">Make the outcome vivid</div>
+    </div>
+    <div class="phase-card-body">
+      <p><strong>Frame before sharing screen:</strong> "I'm going to walk you through exactly what happens from the moment someone fills out your form. Specific to HVAC. Takes 7 minutes."</p>
+      <table class="data-table" style="margin-top:10px">
+        <thead><tr><th>Step</th><th>What You Say</th><th>What You Show</th></tr></thead>
+        <tbody>
+          <tr>
+            <td><strong>1. 47-Second Response</strong></td>
+            <td>"Lead fills out your form at 11:47pm Tuesday. This is Alex. Watch."</td>
+            <td>SMS sending in seconds</td>
+          </tr>
+          <tr>
+            <td><strong>2. Qualification</strong></td>
+            <td>"Jordan asks 4 questions. Never diagnoses. Never quotes prices. Only books."</td>
+            <td>SMS conversation thread</td>
+          </tr>
+          <tr>
+            <td><strong>3. Booking + CRM</strong></td>
+            <td>"Lead picks a time. Your phone gets a push. Morgan logged everything."</td>
+            <td>Lead card in dashboard</td>
+          </tr>
+          <tr>
+            <td><strong>4. Follow-Up</strong></td>
+            <td>"For leads that don't book immediately — Riley sends 4 messages over 7 days."</td>
+            <td>Follow-up sequence view</td>
+          </tr>
+          <tr>
+            <td><strong>5. Dispatch</strong></td>
+            <td>"Zip 77084, AC repair, Thursday 2pm — Sam assigns the right tech automatically."</td>
+            <td>Dispatch assignment screen</td>
+          </tr>
+        </tbody>
+      </table>
+      <div class="callout-block" style="margin-top:10px">
+        After the demo: <strong>"That's the whole system. Five people, five jobs, 24/7. What questions do you have right now?"</strong> — Then stop talking. Let them react. Do not fill the silence.
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     PAGE 4 — VALUE STACK + OFFER + CLOSE
+══════════════════════════════════════════════════ -->
+<div class="page">
+<div class="content-page">
+  <div class="page-header">
+    <div class="page-header-logo">
+      <svg class="page-header-icon" viewBox="0 0 64 64" fill="none">
+        <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/>
+        <rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/>
+      </svg>
+      <span class="page-header-name">FIELDBUILT <sup>AI</sup></span>
+    </div>
+    <div class="page-header-section">Value Stack · Offer · Close</div>
+  </div>
+
+  <div class="section-eyebrow">Phase 4 — Stack the Value</div>
+  <div class="h2">The Human Equivalent Cost</div>
+  <p style="margin-bottom:14px">Say this verbatim. Let the math do the work.</p>
+
+  <div class="value-stack">
+    <div class="value-row">
+      <div class="value-icon">👤</div>
+      <div class="value-name">Alex — 24/7 Receptionist<br/><span class="value-name-sub">Texts leads, handles after-hours, never calls in sick</span></div>
+      <div class="value-price">$4,000–5,000/mo</div>
+    </div>
+    <div class="value-row">
+      <div class="value-icon">📅</div>
+      <div class="value-name">Jordan — Appointment Setter<br/><span class="value-name-sub">Qualifies, handles objections, books estimates</span></div>
+      <div class="value-price">$3,500–4,500/mo</div>
+    </div>
+    <div class="value-row">
+      <div class="value-icon">🗺️</div>
+      <div class="value-name">Sam — Smart Dispatcher<br/><span class="value-name-sub">Routes techs by skill, zip, availability</span></div>
+      <div class="value-price">$3,000–4,000/mo</div>
+    </div>
+    <div class="value-row">
+      <div class="value-icon">💬</div>
+      <div class="value-name">Riley — Follow-Up Agent<br/><span class="value-name-sub">7-day sequences, marks Cold automatically</span></div>
+      <div class="value-price">$3,000–3,500/mo</div>
+    </div>
+    <div class="value-row">
+      <div class="value-icon">📊</div>
+      <div class="value-name">Morgan — Office Manager<br/><span class="value-name-sub">CRM, confirmations, push alerts to owner</span></div>
+      <div class="value-price">$2,500–3,000/mo</div>
+    </div>
+    <div class="value-row">
+      <div class="value-icon" style="background:var(--orange);">✦</div>
+      <div class="value-name" style="color:var(--orange-deep);font-size:10.5pt"><strong>FieldBuilt AI — All Five. Founding Partner Price.</strong></div>
+      <div class="value-price">$297/mo</div>
+    </div>
+  </div>
+
+  <div class="script-block">
+    "That's $13,500 to $19,000 a month to hire all five. And they take breaks. And they quit. That's what I'm replacing. For $297 a month after your free trial."
+    <br/><br/>
+    <strong>[Pause. Then:]</strong> "If this system books you 3 extra jobs a month that would have gone cold — at [their ticket size] — what's that worth?"
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-eyebrow">Phase 5 — Make the Offer</div>
+  <div class="h2">The Founding Partner Pitch</div>
+
+  <div class="script-block">
+    "So here's what I'm doing for the first 5 founding partners.<br/><br/>
+    Normally this is a <strong>$2,250 setup plus $597 a month.</strong> That's what we'll be at in a few months.<br/><br/>
+    For you — I'm waiving the entire install. Zero dollars. And I'm giving you the first <strong>30 days completely free.</strong><br/><br/>
+    The only thing I ask is a <strong>$200 deposit</strong>. Not a fee — it comes back to you or gets applied to your first month. It's just my way of making sure we're both serious. I'm putting in real time setting this up for your specific business — I need to know you're not going to ghost me after day one.<br/><br/>
+    So: 30 days free, $200 holds your spot, and after 30 days if you want to keep it — which you will — it's $297 a month."
+  </div>
+
+  <div class="note-block">
+    <strong>Rule: Stop talking after you present the offer.</strong> The next person who speaks loses. Give them 10 full seconds of silence. Sit with it.
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-eyebrow">Phase 7 — The Close</div>
+  <div class="h2">Get the $200 On the Call</div>
+
+  <div class="script-block">
+    "Alright — here's what I want to do. I'll get you set up for the 30-day pilot and walk you through the 20-minute onboarding where we configure the system for your specific service and area. To hold your spot, I need the $200 — <strong>I'm sending you the link right now in the chat.</strong> Once that goes through, I'll book the onboarding call and you'll have the system live on your leads within 48 hours. Sound good?"
+  </div>
+
+  <div class="callout-block">
+    <strong>Send the Stripe link WHILE ON THE CALL.</strong> Not after. Not "I'll email it to you." Right now, in the chat. The gap between "yes" and "done" is where deals die.
+  </div>
+
+  <div class="script-block" style="margin-top:10px">
+    <strong>If they say "let me do it later":</strong><br/>
+    "My concern is I only have 5 pilot spots and two others are interested. I can't hold the spot without the deposit. If you want to do this, let's do it now while we're both here — takes 30 seconds."
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     PAGE 5 — OBJECTION HANDLING
+══════════════════════════════════════════════════ -->
+<div class="page">
+<div class="content-page">
+  <div class="page-header">
+    <div class="page-header-logo">
+      <svg class="page-header-icon" viewBox="0 0 64 64" fill="none">
+        <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/>
+        <rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/>
+      </svg>
+      <span class="page-header-name">FIELDBUILT <sup>AI</sup></span>
+    </div>
+    <div class="page-header-section">Objection Handling</div>
+  </div>
+
+  <div class="section-eyebrow">Hormozi Root Cause Diagnosis</div>
+  <div class="section-title">Every Objection Is One of Three Problems</div>
+  <div class="section-lead">Before answering any objection, identify the root. Then solve at the root — not the symptom.</div>
+
+  <table class="data-table" style="margin-bottom:22px">
+    <thead><tr><th>Root Cause</th><th>What They're Really Saying</th><th>Fix It With</th></tr></thead>
+    <tbody>
+      <tr>
+        <td><strong class="orange">Outcome Belief</strong></td>
+        <td>"I don't think this will actually work"</td>
+        <td>Proof + the 30-day free trial eliminates their risk</td>
+      </tr>
+      <tr>
+        <td><strong class="orange">Trust in You</strong></td>
+        <td>"I don't know if YOU can deliver it"</td>
+        <td>Specificity, transparency, case studies, your personal involvement</td>
+      </tr>
+      <tr>
+        <td><strong class="orange">Perceived Cost</strong></td>
+        <td>"The money/time/disruption isn't worth it"</td>
+        <td>ROI math — one extra job vs. months of cost</td>
+      </tr>
+    </tbody>
+  </table>
+
+  <div class="obj-card no-break">
+    <div class="obj-header">
+      <div class="obj-icon">💭</div>
+      <div class="obj-question">"How do I know this will actually work?"</div>
+      <div class="obj-bucket">Outcome Belief</div>
+    </div>
+    <div class="obj-body">"That's exactly why I'm giving you 30 days for free. You're not buying a promise — you're running it on your actual leads. By day 7 you'll have seen it work or you won't. You risk nothing except 30 days of having your leads followed up on instantly. Leads contacted within 5 minutes convert at 100x the rate of leads contacted after an hour. That's not my stat — that's industry research. The system does that for every single lead."</div>
+  </div>
+
+  <div class="obj-card no-break">
+    <div class="obj-header">
+      <div class="obj-icon">💭</div>
+      <div class="obj-question">"I already have someone doing follow-up"</div>
+      <div class="obj-bucket">Outcome Belief</div>
+    </div>
+    <div class="obj-body">"Does she work at 2am? Does she send a follow-up at exactly 1 hour, 24 hours, 72 hours, and 7 days? Does she qualify every lead with the same 4 questions and log it in a CRM automatically? I'm not replacing her — I'm handling the overflow and after-hours so she can focus on the jobs that actually need a human. What would it mean for her if every lead that came in after 5pm was already qualified and booked by the time she got in?"</div>
+  </div>
+
+  <div class="obj-card no-break">
+    <div class="obj-header">
+      <div class="obj-icon">💭</div>
+      <div class="obj-question">"I don't trust AI talking to my customers"</div>
+      <div class="obj-bucket">Trust + Fear</div>
+    </div>
+    <div class="obj-body">"I built the system with this exact concern from HVAC owners in mind. The AI does one thing: it collects four pieces of information and books a time slot. It cannot diagnose. It cannot quote. It cannot make any technical statement about the problem. If someone asks 'what's wrong with my AC?' — it says 'great question, let's get a tech out to take a look.' You see every single message in the dashboard. You can step in at any point. And every customer who does book — they don't feel like they're talking to a robot. They feel like they got a quick, professional response."</div>
+  </div>
+
+  <div class="obj-card no-break">
+    <div class="obj-header">
+      <div class="obj-icon">💭</div>
+      <div class="obj-question">"$297 is a lot every month"</div>
+      <div class="obj-bucket">Perceived Cost</div>
+    </div>
+    <div class="obj-body">"What's your average job ticket? [They answer.] So one extra job a month that would have gone cold pays for 20 months of the system. You're doing ~40 leads a month — if this rescues even 2 of those, that's [2× ticket]. The $297 is literally rounding error. The real question isn't whether $297 is worth it. It's: are you losing more than $297 worth of jobs to slow follow-up right now? I think we both know the answer."</div>
+  </div>
+
+  <div class="obj-card no-break">
+    <div class="obj-header">
+      <div class="obj-icon">💭</div>
+      <div class="obj-question">"I need to think about it"</div>
+      <div class="obj-bucket">Trust (usually)</div>
+    </div>
+    <div class="obj-body">"Totally fair. What's the part that needs more thought? Is it the tech side, is it whether this will work for HVAC specifically, or is it something else?" [Let them answer — it's one of the other objections in disguise. Solve that. Then:] "The 30 days free eliminates the financial risk entirely. Worst case: you spend 30 days having your leads followed up on automatically and it doesn't add any jobs. Then you walk away and owe nothing. Does it make more sense to think about it — or to just try it and see?"</div>
+  </div>
+
+  <div class="obj-card no-break">
+    <div class="obj-header">
+      <div class="obj-icon">💭</div>
+      <div class="obj-question">"Can you send me more information?"</div>
+      <div class="obj-bucket">Trust / Stall</div>
+    </div>
+    <div class="obj-body">"Absolutely — I'll send you a one-pager after the call. But let me ask: if the information confirmed everything I've just told you, would you be ready to try the 30-day pilot?" [If yes:] "Then let's save you a step. What would it take for you to be comfortable moving forward today?" [If no:] "What's the question that the information needs to answer?"</div>
+  </div>
+
+  <div class="obj-card no-break">
+    <div class="obj-header">
+      <div class="obj-icon">💭</div>
+      <div class="obj-question">"I need to talk to my partner/wife first"</div>
+      <div class="obj-bucket">Stakeholder</div>
+    </div>
+    <div class="obj-body">"Makes sense — would it be helpful to do a quick 10-minute call with both of you so she can ask questions directly? I can do that this week." [Then:] "In the meantime — can I ask what YOU think? If it was just your call, does this make sense?" Get the champion committed first. Then loop in the other person.</div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     PAGE 6 — SLIDES + SCORECARD + FOLLOW-UP
+══════════════════════════════════════════════════ -->
+<div class="page">
+<div class="content-page">
+  <div class="page-header">
+    <div class="page-header-logo">
+      <svg class="page-header-icon" viewBox="0 0 64 64" fill="none">
+        <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/>
+        <rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/>
+      </svg>
+      <span class="page-header-name">FIELDBUILT <sup>AI</sup></span>
+    </div>
+    <div class="page-header-section">Demo Slides · Scorecard · Follow-Up</div>
+  </div>
+
+  <div class="section-eyebrow">Share-Screen Deck — 8 Slides Maximum</div>
+  <div class="h2">Demo Slide Structure</div>
+
+  <div class="slide-grid">
+    <div class="slide-card">
+      <div class="slide-num-bar">Slide 1 — The Problem</div>
+      <div class="slide-body">
+        <div class="slide-title">Your lead filled out the form at 11:47pm Tuesday.</div>
+        <div class="slide-headline">"78% of customers choose the company that responds first."</div>
+        <div class="slide-desc">Visual: Timeline — Form filled → 8 hours → Lead called competitor</div>
+      </div>
+    </div>
+    <div class="slide-card">
+      <div class="slide-num-bar">Slide 2 — The Math (LIVE)</div>
+      <div class="slide-body">
+        <div class="slide-title">You're burning $[X] every month and don't know it.</div>
+        <div class="slide-headline">Fill this in with their real numbers on the call.</div>
+        <div class="slide-desc">Visual: Blank calculator — leads × % cold × avg ticket = $$$. Make them do the math out loud.</div>
+      </div>
+    </div>
+    <div class="slide-card">
+      <div class="slide-num-bar">Slide 3 — The AI Office</div>
+      <div class="slide-body">
+        <div class="slide-title">Five people. Working 24/7. Installed today.</div>
+        <div class="slide-headline">"Meet your new team."</div>
+        <div class="slide-desc">Visual: 5 name cards — Alex / Jordan / Sam / Riley / Morgan with one-line job descriptions. No bullet lists.</div>
+      </div>
+    </div>
+    <div class="slide-card">
+      <div class="slide-num-bar">Slide 4 — What Happens Minute 1</div>
+      <div class="slide-body">
+        <div class="slide-title">Form filled → 47 seconds → AI Office takes over.</div>
+        <div class="slide-headline">"Every lead. Every time."</div>
+        <div class="slide-desc">Visual: Flow diagram — Form → Alex → Jordan → Appointment booked → Sam → Riley (if no reply)</div>
+      </div>
+    </div>
+    <div class="slide-card">
+      <div class="slide-num-bar">Slide 5 — The Conversation</div>
+      <div class="slide-body">
+        <div class="slide-title">This is what your leads see.</div>
+        <div class="slide-headline">"Never diagnoses. Never quotes. Only books."</div>
+        <div class="slide-desc">Visual: Actual SMS conversation screenshot — qualification flow, objection handling, booking confirmation</div>
+      </div>
+    </div>
+    <div class="slide-card">
+      <div class="slide-num-bar">Slide 6 — The Dashboard</div>
+      <div class="slide-body">
+        <div class="slide-title">Every lead. Every message. Every appointment. One place.</div>
+        <div class="slide-headline">"You see everything in real time. Override anytime."</div>
+        <div class="slide-desc">Visual: CRM dashboard screenshot — pipeline, lead cards, conversation thread, appointment calendar</div>
+      </div>
+    </div>
+    <div class="slide-card">
+      <div class="slide-num-bar">Slide 7 — The ROI</div>
+      <div class="slide-body">
+        <div class="slide-title">One extra job pays for 20 months.</div>
+        <div class="slide-headline">"$297/month vs. avg ticket: $6,000"</div>
+        <div class="slide-desc">Visual: Two columns — cost vs. value. Simple, bold. No charts. Just the number.</div>
+      </div>
+    </div>
+    <div class="slide-card">
+      <div class="slide-num-bar">Slide 8 — The Offer</div>
+      <div class="slide-body">
+        <div class="slide-title">30 days free. $200 to hold your spot.</div>
+        <div class="slide-headline">Full price: <s>$2,250 install + $597/mo</s></div>
+        <div class="slide-desc">Visual: Full price struck through. Pilot price in orange. "5 founding partner spots available." — CTA visible.</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-eyebrow">POWERFUL Deal Scorecard — Fill in After Every Call</div>
+  <div class="h2">Did You Capture All 8 Dimensions?</div>
+
+  <div class="powerful-grid">
+    <div class="powerful-card">
+      <div class="powerful-letter">P</div>
+      <div class="powerful-word">Pain</div>
+      <div class="powerful-q">What specific revenue are they losing each month? Did they say a number?</div>
+      <div class="score-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>
+    <div class="powerful-card">
+      <div class="powerful-letter">O</div>
+      <div class="powerful-word">Opportunity Cost</div>
+      <div class="powerful-q">Did they quantify the monthly loss in their own words?</div>
+      <div class="score-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>
+    <div class="powerful-card">
+      <div class="powerful-letter">W</div>
+      <div class="powerful-word">Wants / Needs</div>
+      <div class="powerful-q">What does success look like to them — more bookings, less owner involvement?</div>
+      <div class="score-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>
+    <div class="powerful-card">
+      <div class="powerful-letter">E</div>
+      <div class="powerful-word">Executive Influence</div>
+      <div class="powerful-q">Owner only, or is a partner/spouse involved in the decision?</div>
+      <div class="score-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>
+    <div class="powerful-card">
+      <div class="powerful-letter">R</div>
+      <div class="powerful-word">Resources</div>
+      <div class="powerful-q">Are they running FB/Google ads? Monthly spend? Any budget allocated?</div>
+      <div class="score-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>
+    <div class="powerful-card">
+      <div class="powerful-letter">F</div>
+      <div class="powerful-word">Fear of Failure</div>
+      <div class="powerful-q">What's their biggest concern — AI saying something wrong? Setup hassle?</div>
+      <div class="score-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>
+    <div class="powerful-card">
+      <div class="powerful-letter">U</div>
+      <div class="powerful-word">Trust</div>
+      <div class="powerful-q">Did they open up? Were they candid? Did they feel safe in the conversation?</div>
+      <div class="score-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>
+    <div class="powerful-card">
+      <div class="powerful-letter">L</div>
+      <div class="powerful-word">Little Things</div>
+      <div class="powerful-q">Any personal details, timing constraints, preferred communication style?</div>
+      <div class="score-dots"><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div><div class="dot"></div></div>
+    </div>
+  </div>
+
+  <table class="data-table" style="margin-top:4px">
+    <thead><tr><th>Total Score</th><th>Action</th></tr></thead>
+    <tbody>
+      <tr><td class="td-green"><strong>35–40</strong></td><td>Close on this call. Send link now.</td></tr>
+      <tr><td class="td-orange"><strong>25–34</strong></td><td>Close on this call — one more objection to clear first.</td></tr>
+      <tr><td><strong style="color:var(--red)">Below 25</strong></td><td>Schedule a second call. Something important is still missing.</td></tr>
+    </tbody>
+  </table>
+
+  <div class="divider"></div>
+
+  <div class="section-eyebrow">If They Didn't Close On the Call</div>
+  <div class="h2">3-Touch Follow-Up Sequence</div>
+
+  <div class="followup-timeline">
+    <div class="fu-item">
+      <div class="fu-dot">2h</div>
+      <div class="fu-content">
+        <div class="fu-time">Within 2 Hours — WhatsApp</div>
+        <div class="fu-text">"Hey [Name] — really enjoyed the conversation. Sending over the one-pager I mentioned. The spot is still open today. If you want to try the 30 days, just hit reply and I'll send the link — takes 60 seconds. [Your name]"</div>
+      </div>
+    </div>
+    <div class="fu-item">
+      <div class="fu-dot">48h</div>
+      <div class="fu-content">
+        <div class="fu-time">48 Hours Later — If No Response</div>
+        <div class="fu-text">"Hey [Name] — just wanted to check in. Did you get a chance to look over what I sent? I have one founding partner spot left before I open to general waitlist. Wanted to give you first right of refusal since we already talked. [Your name]"</div>
+      </div>
+    </div>
+    <div class="fu-item">
+      <div class="fu-dot">5d</div>
+      <div class="fu-content">
+        <div class="fu-time">Day 5 — If Still No Response</div>
+        <div class="fu-text">"Hey [Name] — I'll assume the timing isn't right. I'll check back in a few weeks. If something changes — we had a pilot customer in [similar city] book 4 extra jobs in their first 2 weeks. I'll send you their numbers when they're ready for a case study. [Your name]"</div>
+      </div>
+    </div>
+  </div>
+
+</div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     PAGE 7 — NUMBERS CHEAT SHEET
+══════════════════════════════════════════════════ -->
+<div class="page">
+<div class="content-page">
+  <div class="page-header">
+    <div class="page-header-logo">
+      <svg class="page-header-icon" viewBox="0 0 64 64" fill="none">
+        <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/>
+        <rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/>
+      </svg>
+      <span class="page-header-name">FIELDBUILT <sup>AI</sup></span>
+    </div>
+    <div class="page-header-section">Numbers Cheat Sheet</div>
+  </div>
+
+  <div class="section-eyebrow">Know These Cold</div>
+  <div class="section-title">Numbers That Close Deals</div>
+  <div class="section-lead">Every stat below should roll off your tongue without thinking. If you're fishing for a number on a sales call, you've already lost confidence.</div>
+
+  <div class="numbers-grid">
+    <div class="number-card">
+      <div class="number-val">47s</div>
+      <div class="number-label">FieldBuilt AI lead response time — every lead, every time, including 2am</div>
+    </div>
+    <div class="number-card">
+      <div class="number-val">47hrs</div>
+      <div class="number-label">Industry average lead response time — what they're competing against</div>
+    </div>
+    <div class="number-card">
+      <div class="number-val">100×</div>
+      <div class="number-label">Lead conversion lift when contacted within 5 min vs. after 60 min</div>
+    </div>
+    <div class="number-card">
+      <div class="number-val">65–78%</div>
+      <div class="number-label">Percentage of leads that go cold without immediate follow-up</div>
+    </div>
+    <div class="number-card">
+      <div class="number-val">$19K/mo</div>
+      <div class="number-label">Human equivalent cost to hire all five AI office roles</div>
+    </div>
+    <div class="number-card">
+      <div class="number-val">$297/mo</div>
+      <div class="number-label">FieldBuilt AI pilot price — after 30 days free</div>
+    </div>
+    <div class="number-card">
+      <div class="number-val">$200</div>
+      <div class="number-label">Refundable deposit — commitment filter, not a fee</div>
+    </div>
+    <div class="number-card">
+      <div class="number-val">$597/mo</div>
+      <div class="number-label">Full price (post-pilot) — always anchor to this first</div>
+    </div>
+    <div class="number-card">
+      <div class="number-val">$2,250</div>
+      <div class="number-label">Standard install fee — waived entirely for founding partners</div>
+    </div>
+    <div class="number-card">
+      <div class="number-val">48 hrs</div>
+      <div class="number-label">Time from deposit to system live on their real leads</div>
+    </div>
+    <div class="number-card">
+      <div class="number-val">$3–8K</div>
+      <div class="number-label">Avg HVAC residential ticket — the ROI math anchor</div>
+    </div>
+    <div class="number-card">
+      <div class="number-val">1 job</div>
+      <div class="number-label">Number of rescued leads needed per month to ROI-justify the system</div>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-eyebrow">The One Hormozi Truth</div>
+  <div class="offer-box" style="padding:24px 28px">
+    <div class="offer-box-hatch"></div>
+    <div class="offer-box-content">
+      <p style="font-family:'Plus Jakarta Sans',sans-serif;font-size:13pt;font-weight:700;color:#fff;letter-spacing:-0.02em;line-height:1.5;margin:0">
+        "If someone says 'too expensive' — they don't believe you enough yet.<br/>
+        That's a <span style="color:var(--orange)">trust and proof problem</span>, not a price problem.<br/>
+        Never drop the price. Increase the belief."
+      </p>
+      <p style="font-family:'JetBrains Mono',monospace;font-size:8pt;color:rgba(255,255,255,0.4);letter-spacing:0.1em;text-transform:uppercase;margin-top:14px">— Alex Hormozi, $100M Offers</p>
+    </div>
+  </div>
+
+  <div class="divider"></div>
+
+  <div class="section-eyebrow">After They Pay — What Happens Next</div>
+  <div class="h2">Onboarding Confirmation Script</div>
+
+  <div class="script-block">
+    "Perfect. You're in. I'll send you a calendar link in the next 5 minutes for the onboarding — it's about 20-25 minutes. During that call we'll set your service type, your booking hours, your coverage area, and get your Facebook lead webhook connected. By the time that call ends, every lead that fills out your form is getting a text in 47 seconds.<br/><br/>
+    One thing I want to say — I'm personally going to be checking in with you in week 1 and week 2. If anything looks weird or you want to adjust how the system talks, just WhatsApp me. I want to make sure this works for you."
+  </div>
+
+  <div class="callout-block" style="margin-top:10px">
+    <strong>Speed to value is your most powerful retention tool.</strong> The faster they see a real lead get texted, qualified, and booked by the system — the lower your churn risk. Push to get them live within 24 hours of the deposit.
+  </div>
+
+  <!-- Footer -->
+  <div style="margin-top:40px;padding-top:20px;border-top:1px solid var(--border);display:flex;justify-content:space-between;align-items:center">
+    <div style="font-family:'JetBrains Mono',monospace;font-size:7.5pt;color:var(--text-3);letter-spacing:0.08em;text-transform:uppercase">
+      FieldBuilt AI · Founding Partner Playbook · June 2026
+    </div>
+    <div style="display:flex;align-items:center;gap:8px">
+      <svg width="18" height="18" viewBox="0 0 64 64" fill="none">
+        <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/>
+        <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/>
+        <rect x="42" y="12" width="7" height="11" rx="1.5" fill="#EA580C"/>
+      </svg>
+      <span style="font-family:'Plus Jakarta Sans',sans-serif;font-weight:800;font-size:9pt;color:var(--text);letter-spacing:-0.01em">FIELDBUILT <span style="background:var(--orange);color:#fff;font-family:'JetBrains Mono',monospace;font-size:6pt;padding:1px 4px;border-radius:3px;font-weight:700;letter-spacing:0.05em">AI</span></span>
+    </div>
+  </div>
+
+</div>
+</div>
+
+</body>
+</html>

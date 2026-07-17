@@ -73,9 +73,9 @@ function BookedReceipt() {
           <motion.path
             d="M6 10.2 L8.8 13 L14 7.6"
             stroke={C.success} strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round" fill="none"
-            initial={reduced ? false : { pathLength: 0 }}
+            initial={{ pathLength: 0 }}
             animate={inView || reduced ? { pathLength: 1 } : {}}
-            transition={{ duration: 0.5, delay: 0.2 }}
+            transition={reduced ? { duration: 0 } : { duration: 0.5, delay: 0.2 }}
           />
         </svg>
         <span className="text-[13px] font-extrabold tracking-tight" style={{ color: "#14532D", fontFamily: "var(--font-jakarta)" }}>
@@ -173,12 +173,15 @@ export function ChatArtifact() {
   }, [count, typing, reduced])
 
   const { scrollYProgress } = useScroll({ target: frameRef, offset: ["start end", "end start"] })
-  const drift = useTransform(scrollYProgress, [0, 1], reduced ? [0, 0] : [14, -14])
+  // Range starts at 0 so the SSR transform is "none" for everyone — branching
+  // the range on `reduced` caused a hydration mismatch for reduced-motion users.
+  const drift = useTransform(scrollYProgress, [0, 1], reduced ? [0, 0] : [0, -28])
 
   const finished = count >= CHAT.length
 
   return (
-    <motion.div ref={frameRef} style={{ y: drift }} className="relative mx-auto w-full max-w-[400px]">
+    <div ref={frameRef} className="relative mx-auto w-full max-w-[400px]">
+      <motion.div style={{ y: drift }}>
       <div className="rounded-[26px] overflow-hidden"
            style={{
              background: "#FFFFFF",
@@ -221,7 +224,8 @@ export function ChatArtifact() {
           </button>
         </div>
       </div>
-    </motion.div>
+      </motion.div>
+    </div>
   )
 }
 
@@ -235,67 +239,96 @@ function ArrowUpRight({ size = 15 }: { size?: number }) {
 }
 
 // ── HERO ─────────────────────────────────────────────────────────────────────
+// Mobile-first composition: on phones (where the ad traffic lives) the first
+// screen is eyebrow → compact headline → CTA → the TOP OF THE LIVE CHAT.
+// The explainer paragraph moves BELOW the chat on mobile so the artifact is
+// never pushed off the fold by copy. Desktop keeps the two-column layout.
+function HeroCta() {
+  return (
+    <>
+      <a href="#form"
+         className="inline-flex w-full sm:w-auto items-center justify-center gap-2 font-bold text-white text-[15px] sm:text-base px-5 sm:px-7 py-4 rounded-xl transition-colors hover:bg-orange-600"
+         style={{ background: C.orange }}>
+        Show Me How It Books My Leads, Free
+        <ArrowUpRight />
+      </a>
+      <p className="text-[12.5px] mt-3" style={{ color: "rgba(250,250,248,0.42)" }}>
+        Runs on your real leads &middot; Your CRM stays &middot; Setup in days
+      </p>
+    </>
+  )
+}
+
+function HeroSub() {
+  return (
+    <p className="text-base sm:text-lg leading-relaxed max-w-xl" style={{ color: "rgba(250,250,248,0.62)" }}>
+      FieldBuilt is the 24/7 employee working the back end of your shop:
+      it texts every lead the moment they come in, follows up until they
+      answer, qualifies them, books the job, routes the right tech, and
+      logs it all in <strong style={{ color: "rgba(250,250,248,0.9)" }}>your</strong> CRM.
+      You change nothing about how you work.
+    </p>
+  )
+}
+
 export function AutopilotHero() {
   return (
-    <section className="relative pt-28 pb-0 px-6" style={{ background: C.dark }}>
+    <section className="relative pt-[5.25rem] lg:pt-28 pb-0 px-5 sm:px-6" style={{ background: C.dark }}>
       <div className="max-w-6xl mx-auto">
-        <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-12 lg:gap-10 items-start">
+        <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-7 lg:gap-10 items-start">
 
-          {/* Copy column */}
-          <div className="pt-4 lg:pt-14 pb-2 lg:pb-24">
-            <p className="text-sm font-semibold mb-5" style={{ color: "rgba(250,250,248,0.45)" }}>
+          {/* Copy column — compact on mobile, full on desktop */}
+          <div className="pt-2 lg:pt-14 lg:pb-24">
+            <p className="text-[13px] lg:text-sm font-semibold mb-3 lg:mb-5" style={{ color: "rgba(250,250,248,0.45)" }}>
               For HVAC owners running 4+ techs
             </p>
 
-            <h1 className="font-extrabold tracking-tight leading-[1.04] mb-4"
+            <h1 className="font-extrabold tracking-tight leading-[1.06] mb-2.5 lg:mb-4"
                 style={{
                   color: "#F5F3F0",
                   fontFamily: "var(--font-jakarta)",
-                  fontSize: "clamp(2.1rem, 5vw, 3.35rem)",
+                  fontSize: "clamp(1.7rem, 4.8vw, 3.35rem)",
                   letterSpacing: "-0.03em",
                 }}>
               Every lead answered in seconds. Booked, routed, and logged.
             </h1>
 
-            <p className="font-extrabold tracking-tight mb-6"
+            <p className="font-extrabold tracking-tight mb-5 lg:mb-6"
                style={{
                  color: C.orange,
                  fontFamily: "var(--font-jakarta)",
-                 fontSize: "clamp(1.25rem, 2.6vw, 1.7rem)",
+                 fontSize: "clamp(1.1rem, 2.6vw, 1.7rem)",
                  letterSpacing: "-0.02em",
                }}>
               Nobody on your team touches a thing.
             </p>
 
-            <p className="text-base sm:text-lg leading-relaxed mb-8 max-w-xl" style={{ color: "rgba(250,250,248,0.62)" }}>
-              FieldBuilt is the 24/7 employee working the back end of your shop:
-              it texts every lead the moment they come in, follows up until they
-              answer, qualifies them, books the job, routes the right tech, and
-              logs it all in <strong style={{ color: "rgba(250,250,248,0.9)" }}>your</strong> CRM.
-              You change nothing about how you work.
-            </p>
+            {/* Mobile: CTA immediately, so button + top of the chat share the fold */}
+            <div className="lg:hidden mb-2">
+              <HeroCta />
+            </div>
 
-            <a href="#form"
-               className="inline-flex items-center gap-2 font-bold text-white text-base px-7 py-4 rounded-xl transition-colors hover:bg-orange-600"
-               style={{ background: C.orange }}>
-              Start Free for 2 Weeks
-              <ArrowUpRight />
-            </a>
-            <p className="text-[13px] mt-4" style={{ color: "rgba(250,250,248,0.38)" }}>
-              Runs on your real leads &middot; Your CRM stays &middot; Setup in days, not months
-            </p>
+            {/* Desktop: full paragraph + CTA in the classic position */}
+            <div className="hidden lg:block">
+              <div className="mb-8"><HeroSub /></div>
+              <HeroCta />
+            </div>
           </div>
 
           {/* The artifact — bleeds past the hero floor into the timeline band */}
-          <div className="relative lg:-mb-16 pb-2 lg:pb-0" style={{ zIndex: 2 }}>
+          <div className="relative lg:-mb-16" style={{ zIndex: 2 }}>
             <ChatArtifact />
+            {/* Mobile: the explainer lands AFTER they've watched it work */}
+            <div className="lg:hidden mt-7 pb-2">
+              <HeroSub />
+            </div>
           </div>
         </div>
       </div>
 
       {/* Timeline rail — the ad's 12-minute claim, receipts attached */}
-      <div className="relative mt-10 lg:mt-0" style={{ background: C.darkCard, borderTop: "1px solid rgba(249,115,22,0.10)" }}>
-        <div className="max-w-6xl mx-auto px-0 py-8 lg:py-9 lg:pr-[44%]">
+      <div className="relative mt-8 lg:mt-0" style={{ background: C.darkCard, borderTop: "1px solid rgba(249,115,22,0.10)" }}>
+        <div className="max-w-6xl mx-auto px-0 py-7 lg:py-9 lg:pr-[44%]">
           <TimelineRail />
         </div>
       </div>
@@ -313,18 +346,19 @@ const STOPS = [
 
 function TimelineRail() {
   return (
-    <div className="px-6">
-      <div className="flex items-start justify-between max-w-2xl">
+    <div className="px-5 sm:px-6">
+      {/* Phones: a clean 2x2 grid. sm and up: the connected horizontal rail. */}
+      <div className="grid grid-cols-2 gap-x-5 gap-y-5 sm:flex sm:items-start sm:justify-between sm:gap-0 max-w-2xl">
         {STOPS.map((s, i) => (
-          <div key={i} className="relative flex-1 min-w-0">
-            {/* connector */}
+          <div key={i} className="relative sm:flex-1 min-w-0">
+            {/* connector — rail form only */}
             {i < STOPS.length - 1 && (
-              <div className="absolute top-[5px] left-[14px] right-0 h-[3px] rounded-full"
+              <div className="hidden sm:block absolute top-[5px] left-[14px] right-0 h-[3px] rounded-full"
                    style={{ background: "rgba(249,115,22,0.22)" }} />
             )}
-            <div className="relative w-[13px] h-[13px] rounded-full mb-3"
+            <div className="relative w-[13px] h-[13px] rounded-full mb-2.5 sm:mb-3"
                  style={{ background: i === STOPS.length - 1 ? C.orange : "rgba(249,115,22,0.45)" }} />
-            <div className="pr-3">
+            <div className="sm:pr-3">
               <div className="text-[12px] font-bold mb-0.5"
                    style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>
                 {s.t}
@@ -434,10 +468,27 @@ export function RevenueChainSection() {
 
           <ChainArrow />
 
-          <div className="max-w-[240px]">
-            <div className="text-lg font-extrabold leading-snug tracking-tight"
+          {/* The payoff node — revenue rising, drawn to balance the +391% */}
+          <div className="flex flex-col items-center">
+            <svg width="118" height="62" viewBox="0 0 118 62" fill="none" aria-hidden="true" className="mb-2">
+              {/* the climb — booked jobs stacking into revenue */}
+              <path d="M8 52 C 36 52, 52 38, 104 12"
+                    stroke={C.orange} strokeWidth="4" strokeLinecap="round" fill="none" />
+              {/* arrowhead */}
+              <path d="M92 8 L106 11 L100 24"
+                    stroke={C.orange} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
+              {/* booked jobs landing on the line */}
+              <circle cx="8"  cy="52" r="4.5" fill={C.orange} />
+              <circle cx="47" cy="41" r="4.5" fill={C.orange} />
+              <circle cx="76" cy="27" r="4.5" fill={C.orange} />
+            </svg>
+            <div className="text-lg font-extrabold leading-tight tracking-tight"
                  style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>
-              More booked jobs. More revenue.
+              More booked jobs.
+            </div>
+            <div className="font-black leading-tight tracking-tight"
+                 style={{ color: C.orange, fontFamily: "var(--font-jakarta)", fontSize: "1.4rem" }}>
+              More revenue.
             </div>
           </div>
         </div>

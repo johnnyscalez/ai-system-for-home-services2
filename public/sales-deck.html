@@ -1,0 +1,1458 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>FieldBuilt AI — Sales Presentation</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;600;700;800&family=Inter:wght@400;500;600&family=JetBrains+Mono:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  *, *::before, *::after { box-sizing: border-box; margin: 0; padding: 0; }
+
+  :root {
+    --orange:  #F97316;
+    --orange2: #EA580C;
+    --dark:    #1A1614;
+    --dark2:   #14110F;
+    --cream:   #FAFAF8;
+    --surface: #FFFFFF;
+    --text:    #1C1917;
+    --muted:   #78716C;
+    --border:  #E7E5E4;
+    --green:   #16A34A;
+    --jakarta: 'Plus Jakarta Sans', sans-serif;
+    --inter:   'Inter', sans-serif;
+    --mono:    'JetBrains Mono', monospace;
+  }
+
+  html, body {
+    width: 100%; height: 100%;
+    overflow: hidden;
+    background: var(--dark2);
+    font-family: var(--inter);
+  }
+
+  /* ── DECK CONTAINER ── */
+  #deck {
+    position: relative;
+    width: 100vw; height: 100vh;
+    overflow: hidden;
+  }
+
+  /* ── SLIDES ── */
+  .slide {
+    position: absolute;
+    inset: 0;
+    display: flex;
+    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    padding: 60px;
+    opacity: 0;
+    pointer-events: none;
+    transform: translateX(40px);
+    transition: opacity 0.45s cubic-bezier(.22,1,.36,1), transform 0.45s cubic-bezier(.22,1,.36,1);
+  }
+  .slide.active {
+    opacity: 1;
+    pointer-events: all;
+    transform: translateX(0);
+  }
+  .slide.exit {
+    opacity: 0;
+    transform: translateX(-40px);
+    transition: opacity 0.3s ease, transform 0.3s ease;
+  }
+
+  .slide--dark  { background: var(--dark); }
+  .slide--cream { background: var(--cream); }
+  .slide--white { background: var(--surface); }
+
+  /* ── EYEBROW ── */
+  .eyebrow {
+    display: flex; align-items: center; gap: 10px;
+    margin-bottom: 20px;
+    font-family: var(--mono);
+    font-size: 11px; font-weight: 600;
+    letter-spacing: .18em; text-transform: uppercase;
+    color: var(--orange);
+  }
+  .eyebrow::before { content:''; display:block; width:24px; height:1px; background:var(--orange); }
+
+  /* ── HEADINGS ── */
+  h1 {
+    font-family: var(--jakarta);
+    font-size: clamp(40px, 5.5vw, 72px);
+    font-weight: 800;
+    line-height: 1.02;
+    letter-spacing: -0.03em;
+  }
+  h2 {
+    font-family: var(--jakarta);
+    font-size: clamp(28px, 3.5vw, 48px);
+    font-weight: 800;
+    line-height: 1.05;
+    letter-spacing: -0.02em;
+  }
+  h3 {
+    font-family: var(--jakarta);
+    font-size: clamp(20px, 2vw, 28px);
+    font-weight: 700;
+    line-height: 1.15;
+  }
+  .text-orange { color: var(--orange); }
+  .text-cream  { color: #F5F3F0; }
+  .text-muted  { color: var(--muted); }
+  .text-green  { color: var(--green); }
+
+  /* ── LAYOUT HELPERS ── */
+  .max-w { max-width: 1100px; width: 100%; }
+  .max-w-sm { max-width: 760px; width: 100%; }
+  .center { text-align: center; align-items: center; }
+  .grid-2 { display: grid; grid-template-columns: 1fr 1fr; gap: 32px; }
+  .grid-3 { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 24px; }
+
+  /* ── CARD ── */
+  .card {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    box-shadow: 0 4px 24px rgba(249,115,22,.07);
+  }
+  .card--dark {
+    background: #221D1A;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 20px;
+    padding: 28px;
+  }
+  .card--orange {
+    background: rgba(249,115,22,.1);
+    border: 1px solid rgba(249,115,22,.25);
+    border-radius: 20px;
+    padding: 28px;
+  }
+
+  /* ── PROGRESS ── */
+  #progress {
+    position: fixed;
+    bottom: 28px; left: 50%;
+    transform: translateX(-50%);
+    display: flex; gap: 8px;
+    z-index: 100;
+  }
+  .dot {
+    width: 6px; height: 6px;
+    border-radius: 50%;
+    background: rgba(255,255,255,.2);
+    transition: background .3s, transform .3s;
+    cursor: pointer;
+  }
+  .dot.active { background: var(--orange); transform: scale(1.4); }
+
+  /* ── COUNTER ── */
+  #counter {
+    position: fixed;
+    top: 24px; right: 32px;
+    font-family: var(--mono);
+    font-size: 11px;
+    color: rgba(255,255,255,.3);
+    z-index: 100;
+    letter-spacing: .1em;
+  }
+
+  /* ── LOGO ── */
+  .logo {
+    display: flex; align-items: center; gap: 10px;
+    font-family: var(--jakarta);
+    font-size: 18px; font-weight: 800;
+    letter-spacing: -.02em;
+  }
+  .logo-icon {
+    width: 34px; height: 34px;
+    background: #F5F3F0;
+    border-radius: 8px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  .logo-icon--dark {
+    background: var(--dark);
+  }
+  .logo-badge {
+    font-size: .42em;
+    background: var(--orange);
+    color: #fff;
+    padding: .22em .45em;
+    border-radius: 4px;
+    vertical-align: super;
+    letter-spacing: .04em;
+  }
+
+  /* ── SPEAKER NOTES ── */
+  #notes-panel {
+    position: fixed;
+    bottom: 0; left: 0; right: 0;
+    background: rgba(20,17,15,.96);
+    border-top: 1px solid rgba(249,115,22,.3);
+    padding: 16px 40px;
+    transform: translateY(100%);
+    transition: transform .35s ease;
+    z-index: 200;
+    max-height: 180px;
+    overflow-y: auto;
+  }
+  #notes-panel.visible { transform: translateY(0); }
+  #notes-label {
+    font-family: var(--mono);
+    font-size: 10px;
+    color: var(--orange);
+    letter-spacing: .15em;
+    text-transform: uppercase;
+    margin-bottom: 8px;
+  }
+  #notes-text {
+    font-size: 13px;
+    line-height: 1.6;
+    color: rgba(245,243,240,.75);
+  }
+
+  /* ── NAV ARROWS ── */
+  .nav-btn {
+    position: fixed;
+    top: 50%; transform: translateY(-50%);
+    width: 44px; height: 44px;
+    border-radius: 50%;
+    border: 1px solid rgba(255,255,255,.12);
+    background: rgba(255,255,255,.06);
+    color: rgba(255,255,255,.5);
+    cursor: pointer;
+    display: flex; align-items: center; justify-content: center;
+    z-index: 100;
+    transition: all .2s;
+    font-size: 18px;
+  }
+  .nav-btn:hover { background: rgba(249,115,22,.15); border-color: var(--orange); color: var(--orange); }
+  #btn-prev { left: 20px; }
+  #btn-next { right: 20px; }
+
+  /* ── HINTS BAR ── */
+  #hints {
+    position: fixed;
+    bottom: 28px; left: 32px;
+    font-family: var(--mono);
+    font-size: 10px;
+    color: rgba(255,255,255,.2);
+    letter-spacing: .1em;
+    z-index: 100;
+  }
+
+  /* ── SLIDE-SPECIFIC STYLES ── */
+
+  /* Slide 0 — Discovery */
+  .discovery-grid {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 16px;
+    width: 100%;
+  }
+  .discovery-q {
+    background: rgba(249,115,22,.08);
+    border: 1px solid rgba(249,115,22,.2);
+    border-radius: 14px;
+    padding: 20px 24px;
+  }
+  .discovery-q .q-num {
+    font-family: var(--mono);
+    font-size: 11px;
+    color: var(--orange);
+    letter-spacing: .15em;
+    margin-bottom: 8px;
+  }
+  .discovery-q .q-text {
+    font-size: 15px;
+    font-weight: 600;
+    color: #F5F3F0;
+    line-height: 1.4;
+  }
+  .discovery-q .q-why {
+    font-size: 12px;
+    color: rgba(245,243,240,.4);
+    margin-top: 6px;
+    line-height: 1.4;
+  }
+
+  /* SMS bubbles */
+  .sms-container {
+    background: var(--surface);
+    border-radius: 20px;
+    overflow: hidden;
+    border: 1px solid var(--border);
+    box-shadow: 0 8px 32px rgba(249,115,22,.1);
+    width: 100%;
+    max-width: 420px;
+  }
+  .sms-header {
+    padding: 14px 18px;
+    border-bottom: 1px solid var(--border);
+    display: flex; align-items: center; gap: 10px;
+    background: #F9F7F5;
+  }
+  .sms-avatar {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: var(--orange);
+    display: flex; align-items: center; justify-content: center;
+    font-weight: 700; color: #fff; font-size: 13px;
+  }
+  .sms-name { font-size: 13px; font-weight: 700; color: var(--text); }
+  .sms-status { font-size: 11px; color: var(--green); }
+  .sms-messages { padding: 16px; display: flex; flex-direction: column; gap: 8px; }
+  .sms-msg {
+    display: flex;
+    max-width: 82%;
+  }
+  .sms-msg.ai { justify-content: flex-start; }
+  .sms-msg.lead { justify-content: flex-end; align-self: flex-end; }
+  .sms-bubble {
+    padding: 9px 13px;
+    border-radius: 18px;
+    font-size: 12px;
+    line-height: 1.45;
+  }
+  .sms-msg.ai .sms-bubble {
+    background: #F3F0EE;
+    color: var(--text);
+    border-radius: 4px 18px 18px 18px;
+  }
+  .sms-msg.lead .sms-bubble {
+    background: var(--orange);
+    color: #fff;
+    border-radius: 18px 4px 18px 18px;
+  }
+  .sms-time { font-size: 10px; color: var(--muted); margin-top: 2px; text-align: right; }
+  .sms-booked {
+    margin: 8px 12px 12px;
+    background: #F0FDF4;
+    border: 1px solid #BBF7D0;
+    border-radius: 12px;
+    padding: 10px 14px;
+    display: flex; align-items: center; gap: 8px;
+    font-size: 12px; font-weight: 600; color: #166534;
+  }
+
+  /* Role cards */
+  .role-card {
+    background: #221D1A;
+    border: 1px solid rgba(255,255,255,.07);
+    border-radius: 16px;
+    padding: 22px 24px;
+    transition: border-color .2s, transform .2s;
+  }
+  .role-card:hover { border-color: rgba(249,115,22,.3); transform: translateY(-2px); }
+  .role-icon {
+    width: 40px; height: 40px;
+    background: rgba(249,115,22,.12);
+    border-radius: 10px;
+    display: flex; align-items: center; justify-content: center;
+    margin-bottom: 14px;
+    font-size: 18px;
+  }
+  .role-name { font-family: var(--jakarta); font-weight: 700; font-size: 15px; color: #F5F3F0; margin-bottom: 6px; }
+  .role-desc { font-size: 12px; color: rgba(245,243,240,.55); line-height: 1.5; }
+  .role-cost { font-family: var(--mono); font-size: 11px; color: var(--orange); margin-top: 10px; letter-spacing: .05em; }
+
+  /* Value stack */
+  .vs-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 0;
+    border-bottom: 1px solid rgba(255,255,255,.06);
+  }
+  .vs-row:last-child { border-bottom: none; }
+  .vs-label { font-size: 14px; color: rgba(245,243,240,.7); }
+  .vs-price { font-family: var(--mono); font-size: 15px; color: rgba(245,243,240,.5); text-decoration: line-through; }
+  .vs-total { font-family: var(--mono); font-size: 22px; font-weight: 700; color: var(--orange); }
+
+  /* Guarantee conditions */
+  .condition {
+    display: flex; align-items: flex-start; gap: 14px;
+    padding: 18px 0;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+  }
+  .condition:last-child { border-bottom: none; }
+  .condition-num {
+    width: 32px; height: 32px; border-radius: 50%;
+    background: rgba(249,115,22,.15);
+    border: 1px solid rgba(249,115,22,.3);
+    display: flex; align-items: center; justify-content: center;
+    font-family: var(--mono); font-size: 13px; font-weight: 600;
+    color: var(--orange); flex-shrink: 0;
+  }
+  .condition-text { font-size: 16px; color: #F5F3F0; line-height: 1.4; padding-top: 4px; }
+
+  /* Offer box */
+  .offer-box {
+    background: rgba(249,115,22,.08);
+    border: 1.5px solid rgba(249,115,22,.3);
+    border-radius: 20px;
+    padding: 32px 36px;
+  }
+  .offer-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+    font-size: 15px; color: rgba(245,243,240,.85);
+  }
+  .offer-item:last-child { border-bottom: none; }
+  .offer-check {
+    width: 22px; height: 22px; border-radius: 50%;
+    background: rgba(22,163,74,.2);
+    border: 1px solid rgba(22,163,74,.4);
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0;
+    font-size: 11px; color: var(--green);
+  }
+
+  /* Testimonial */
+  .testimonial {
+    background: var(--surface);
+    border: 1px solid var(--border);
+    border-radius: 20px;
+    padding: 28px;
+    box-shadow: 0 4px 24px rgba(249,115,22,.06);
+  }
+  .testimonial blockquote {
+    font-size: 13px;
+    line-height: 1.65;
+    color: var(--text);
+    margin-bottom: 16px;
+    font-style: italic;
+  }
+  .testimonial .t-name { font-weight: 700; font-size: 13px; color: var(--text); }
+  .testimonial .t-role { font-size: 12px; color: var(--muted); }
+  .stars { color: #F59E0B; font-size: 13px; margin-bottom: 10px; }
+
+  /* Install checklist */
+  .install-item {
+    display: flex; align-items: center; gap: 14px;
+    padding: 12px 0;
+    border-bottom: 1px solid var(--border);
+    font-size: 15px; color: var(--text);
+  }
+  .install-item:last-child { border-bottom: none; }
+  .install-check {
+    width: 24px; height: 24px; border-radius: 50%;
+    background: #F0FDF4;
+    border: 1px solid #BBF7D0;
+    display: flex; align-items: center; justify-content: center;
+    flex-shrink: 0; font-size: 12px; color: var(--green);
+  }
+
+  /* Blueprint corner */
+  .bp-corners {
+    position: absolute; inset: -4px;
+    pointer-events: none;
+  }
+  .bp-corners::before, .bp-corners::after {
+    content: '';
+    position: absolute;
+    width: 20px; height: 20px;
+    border-color: rgba(249,115,22,.45);
+    border-style: solid;
+  }
+  .bp-corners::before { top: 0; left: 0; border-width: 2px 0 0 2px; }
+  .bp-corners::after  { bottom: 0; right: 0; border-width: 0 2px 2px 0; }
+
+  /* Stat pill */
+  .stat-pill {
+    display: inline-flex; align-items: center; gap: 8px;
+    background: rgba(249,115,22,.1);
+    border: 1px solid rgba(249,115,22,.25);
+    border-radius: 999px;
+    padding: 8px 18px;
+    font-family: var(--mono);
+    font-size: 12px; color: var(--orange);
+    letter-spacing: .05em;
+  }
+
+  /* Close slide */
+  .close-question {
+    font-family: var(--jakarta);
+    font-size: clamp(32px, 4.5vw, 60px);
+    font-weight: 800;
+    line-height: 1.1;
+    letter-spacing: -.025em;
+    color: #F5F3F0;
+    text-align: center;
+    max-width: 820px;
+  }
+  .close-question span { color: var(--orange); }
+
+  /* Dot grid bg */
+  .dot-grid {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image: radial-gradient(rgba(249,115,22,.18) 1.2px, transparent 1.2px);
+    background-size: 28px 28px;
+    mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 25%, transparent 75%);
+    -webkit-mask-image: radial-gradient(ellipse 80% 70% at 50% 50%, #000 25%, transparent 75%);
+    opacity: .5;
+  }
+  .blueprint-grid {
+    position: absolute; inset: 0; pointer-events: none;
+    background-image:
+      linear-gradient(rgba(249,115,22,1) 1px, transparent 1px),
+      linear-gradient(90deg, rgba(249,115,22,1) 1px, transparent 1px);
+    background-size: 44px 44px;
+    opacity: .055;
+    mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, #000 20%, transparent 70%);
+    -webkit-mask-image: radial-gradient(ellipse 90% 80% at 50% 50%, #000 20%, transparent 70%);
+  }
+
+  /* Glow */
+  .glow { position: absolute; border-radius: 50%; filter: blur(80px); pointer-events: none; }
+  .glow-orange { background: rgba(249,115,22,.10); }
+  .glow-amber  { background: rgba(251,191,36,.07); }
+
+  /* Pain list */
+  .pain-item {
+    display: flex; align-items: flex-start; gap: 12px;
+    padding: 10px 0;
+    border-bottom: 1px solid rgba(255,255,255,.07);
+  }
+  .pain-item:last-child { border-bottom: none; }
+  .pain-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--orange); flex-shrink: 0; margin-top: 7px; }
+  .pain-text { font-size: 15px; color: rgba(245,243,240,.75); line-height: 1.5; }
+
+  /* Competitor grid */
+  .comp-item {
+    background: rgba(255,255,255,.04);
+    border: 1px solid rgba(255,255,255,.08);
+    border-radius: 14px;
+    padding: 18px 20px;
+  }
+  .comp-name { font-weight: 700; font-size: 14px; color: rgba(245,243,240,.8); margin-bottom: 6px; }
+  .comp-what { font-size: 12px; color: rgba(245,243,240,.45); line-height: 1.5; }
+  .comp-miss { font-size: 11px; color: rgba(249,115,22,.8); margin-top: 8px; font-style: italic; }
+
+  /* Math calc */
+  .calc-row {
+    display: flex; align-items: center; justify-content: space-between;
+    padding: 14px 20px;
+    border-bottom: 1px solid var(--border);
+  }
+  .calc-row:last-child { border-bottom: none; }
+  .calc-label { font-size: 15px; color: var(--text); }
+  .calc-val { font-family: var(--mono); font-size: 17px; font-weight: 700; color: var(--text); }
+  .calc-val.big { font-size: 28px; color: #DC2626; }
+  .calc-val.green { color: var(--green); }
+
+  @media (max-width: 768px) {
+    .slide { padding: 32px 24px; }
+    .grid-2, .grid-3 { grid-template-columns: 1fr; }
+    .discovery-grid { grid-template-columns: 1fr; }
+    h1 { font-size: 36px; }
+    h2 { font-size: 26px; }
+  }
+</style>
+</head>
+<body>
+
+<div id="deck">
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 0 — DISCOVERY (pre-deck warmup)                  -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--dark active" data-notes="BEFORE opening the deck — run through these 5 questions. Take quick notes. You'll mirror the answers back on Slide 2. The goal is to make them feel heard before you sell anything. Don't rush this. 5 minutes of great discovery = 30 minutes of easy selling.">
+    <div class="blueprint-grid"></div>
+    <div class="glow glow-orange" style="width:500px;height:500px;top:-15%;left:-10%;opacity:.08;"></div>
+    <div class="max-w">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:40px;">
+        <div class="logo" style="color:#F5F3F0;">
+          <div class="logo-icon logo-icon--dark" style="background:#F5F3F0;">
+            <svg width="18" height="18" viewBox="0 0 64 64" fill="none">
+              <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/>
+              <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/>
+              <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/>
+              <rect x="42" y="12" width="7"  height="11" rx="1.5" fill="#EA580C"/>
+            </svg>
+          </div>
+          FIELDBUILT<span class="logo-badge">AI</span>
+        </div>
+        <div class="stat-pill">📋 DISCOVERY — Run Before Deck</div>
+      </div>
+
+      <div class="eyebrow" style="margin-bottom:14px;">Step 1 of 2 · Ask these questions first</div>
+      <h2 style="color:#F5F3F0;margin-bottom:8px;">5 Questions. 5 Minutes.<br><span class="text-orange">Before you open a single slide.</span></h2>
+      <p style="font-size:15px;color:rgba(245,243,240,.5);margin-bottom:32px;max-width:620px;">Listen carefully. Take quick notes. You'll mirror these answers back on the next slide — that's when they lean in.</p>
+
+      <div class="discovery-grid">
+        <div class="discovery-q">
+          <div class="q-num">Q1 — LEADS</div>
+          <div class="q-text">"How many leads are you getting right now per week — Facebook, Google, whatever?"</div>
+          <div class="q-why">→ Sets up the math slide. You need their actual number.</div>
+        </div>
+        <div class="discovery-q">
+          <div class="q-num">Q2 — FOLLOW-UP PROCESS</div>
+          <div class="q-text">"When a lead comes in — who follows up and how fast does that actually happen?"</div>
+          <div class="q-why">→ You'll hear "whenever we get to it" or "I do it myself." That's the pain.</div>
+        </div>
+        <div class="discovery-q">
+          <div class="q-num">Q3 — TEAM SIZE</div>
+          <div class="q-text">"How many techs do you have in the field right now?"</div>
+          <div class="q-why">→ Frames the dispatch role. More techs = bigger dispatch problem.</div>
+        </div>
+        <div class="discovery-q">
+          <div class="q-num">Q4 — TICKET SIZE</div>
+          <div class="q-text">"What's a typical replacement job worth for you — ballpark?"</div>
+          <div class="q-why">→ Critical for the math slide. Replacement = $8K–$15K. Use their number.</div>
+        </div>
+        <div class="discovery-q" style="grid-column:1/-1;">
+          <div class="q-num">Q5 — THE REAL PAIN</div>
+          <div class="q-text">"What's the #1 thing keeping you up at night about the business right now?"</div>
+          <div class="q-why">→ This is their emotional anchor. Use their exact words later in the call. Not yours — theirs.</div>
+        </div>
+      </div>
+
+      <div style="margin-top:28px;padding:16px 24px;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.2);border-radius:12px;font-size:14px;color:rgba(245,243,240,.7);">
+        <strong style="color:#4ADE80;">When they finish answering Q5 →</strong> say: <em style="color:#F5F3F0;">"Perfect — let me show you something I built specifically for that problem."</em> Then open the deck.
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 1 — TITLE                                        -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--dark" data-notes="Open strong. Don't explain anything yet. Just let the title breathe for 5 seconds. Then say: 'Before I walk you through this — I want to make sure I've got your situation right.' Then go to Slide 2.">
+    <div class="blueprint-grid"></div>
+    <div class="glow glow-orange" style="width:700px;height:700px;top:-20%;left:-15%;opacity:.09;"></div>
+    <div class="glow glow-amber"  style="width:500px;height:500px;bottom:-10%;right:-5%;opacity:.07;"></div>
+
+    <div class="max-w center" style="display:flex;flex-direction:column;align-items:center;">
+      <div class="logo" style="color:#F5F3F0;margin-bottom:40px;transform:scale(1.2);transform-origin:center;">
+        <div class="logo-icon" style="background:#F5F3F0;width:42px;height:42px;border-radius:10px;">
+          <svg width="22" height="22" viewBox="0 0 64 64" fill="none">
+            <rect x="18" y="12" width="11" height="40" rx="1.5" fill="#1A1614"/>
+            <rect x="18" y="28" width="20" height="10" rx="1.5" fill="#1A1614"/>
+            <rect x="18" y="12" width="31" height="11" rx="1.5" fill="#F97316"/>
+            <rect x="42" y="12" width="7"  height="11" rx="1.5" fill="#EA580C"/>
+          </svg>
+        </div>
+        FIELDBUILT<span class="logo-badge">AI</span>
+      </div>
+
+      <div class="eyebrow" style="justify-content:center;margin-bottom:20px;">The AI Back Office Install</div>
+
+      <h1 class="text-cream" style="text-align:center;max-width:800px;">
+        Wake up with jobs<br>already on the<br><span class="text-orange">schedule.</span>
+      </h1>
+
+      <div style="margin-top:32px;width:80px;height:2px;background:linear-gradient(90deg,transparent,#F97316,transparent);"></div>
+
+      <p style="margin-top:28px;font-size:18px;color:rgba(245,243,240,.5);text-align:center;max-width:520px;line-height:1.6;">
+        Five AI employees. One 60-minute call.<br>Running before we hang up.
+      </p>
+
+      <div style="display:flex;gap:16px;margin-top:40px;flex-wrap:wrap;justify-content:center;">
+        <div class="stat-pill">⚡ 3.7 second response</div>
+        <div class="stat-pill">📅 Books automatically</div>
+        <div class="stat-pill">🔄 14-day follow-up</div>
+        <div class="stat-pill">🛡️ 30-day guarantee</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 2 — THE MIRROR                                   -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--cream" data-notes="Read these back using THEIR exact numbers from discovery. Pause after each one and wait for the nod. Say: 'If I've got that right — everything I'm about to show you was built for exactly this situation.' Don't rush. The nod is the buy signal starting.">
+    <div class="dot-grid"></div>
+    <div class="max-w">
+      <div class="eyebrow">Before We Go Any Further</div>
+      <h2 style="color:var(--text);margin-bottom:8px;">Let me make sure I've got<br>your situation right.</h2>
+      <p style="font-size:16px;color:var(--muted);margin-bottom:36px;">Everything I'm about to show you was built for exactly this.</p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:16px;">
+        <div class="card" style="border-left:3px solid var(--orange);">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--orange);letter-spacing:.15em;text-transform:uppercase;margin-bottom:10px;">Leads Coming In</div>
+          <div style="font-size:15px;color:var(--text);line-height:1.5;">You're getting <strong style="color:var(--orange);">[X] leads/week</strong> from Facebook / Google ads</div>
+        </div>
+        <div class="card" style="border-left:3px solid var(--orange);">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--orange);letter-spacing:.15em;text-transform:uppercase;margin-bottom:10px;">Follow-Up Process</div>
+          <div style="font-size:15px;color:var(--text);line-height:1.5;">Current follow-up is <strong style="color:var(--orange);">[what they said]</strong> — not instant, not automated</div>
+        </div>
+        <div class="card" style="border-left:3px solid var(--orange);">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--orange);letter-spacing:.15em;text-transform:uppercase;margin-bottom:10px;">Team in the Field</div>
+          <div style="font-size:15px;color:var(--text);line-height:1.5;"><strong style="color:var(--orange);">[X] techs</strong> in the field — dispatch is manual or on you</div>
+        </div>
+        <div class="card" style="border-left:3px solid var(--orange);">
+          <div style="font-family:var(--mono);font-size:10px;color:var(--orange);letter-spacing:.15em;text-transform:uppercase;margin-bottom:10px;">Average Job Value</div>
+          <div style="font-size:15px;color:var(--text);line-height:1.5;">Replacement job is worth <strong style="color:var(--orange);">$[X]</strong> — that's what's at stake per lead</div>
+        </div>
+      </div>
+
+      <div style="margin-top:24px;padding:20px 28px;background:#FFF3EC;border:1px solid rgba(249,115,22,.2);border-radius:16px;">
+        <p style="font-size:16px;color:var(--text);line-height:1.6;">
+          <strong>The big HVAC companies keep winning</strong> because they have an office that handles all four of those things automatically. <strong style="color:var(--orange);">You're about to have one too.</strong>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 3 — THE INVISIBLE PROBLEM                        -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--dark" data-notes="Tell the story slowly. Paint the picture: 9pm, homeowner, AC dead, 3 forms filled. Then pause — let silence work. Ask: 'Does that sound familiar?' Wait for the yes. THEN go to the math. Do not skip the pause. The silence after the story is where the emotional buy-in happens.">
+    <div class="blueprint-grid"></div>
+    <div class="glow glow-orange" style="width:600px;height:600px;top:-20%;right:-10%;opacity:.08;"></div>
+
+    <div class="max-w">
+      <div class="eyebrow">The Problem</div>
+      <h2 style="color:#F5F3F0;margin-bottom:32px;">Jobs are slipping through<br>your fingers. <span class="text-orange">You don't even<br>know it's happening.</span></h2>
+
+      <div class="grid-2" style="gap:24px;align-items:start;">
+        <div>
+          <div style="padding:24px;background:rgba(255,255,255,.03);border:1px solid rgba(255,255,255,.08);border-radius:16px;margin-bottom:20px;">
+            <div style="font-family:var(--mono);font-size:11px;color:rgba(245,243,240,.4);letter-spacing:.12em;margin-bottom:14px;">9:14 PM — TUESDAY</div>
+            <p style="font-size:15px;color:rgba(245,243,240,.8);line-height:1.7;">
+              A homeowner's AC dies.<br>
+              It's 95° outside. She has two kids.<br><br>
+              She goes to Google. Fills out <strong style="color:#F5F3F0;">3 forms</strong> from the first three results.<br><br>
+              She texts whoever <strong style="color:var(--orange);">responds first.</strong><br><br>
+              The first company texts back in <strong style="color:var(--orange);">4 minutes.</strong><br>
+              The second in 45 minutes.<br>
+              The third the next morning.
+            </p>
+          </div>
+          <div style="padding:20px 24px;background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.2);border-radius:14px;">
+            <p style="font-size:14px;color:rgba(245,243,240,.7);line-height:1.6;">
+              You never knew this lead existed. No missed call. No voicemail. She just <strong style="color:#FCA5A5;">never heard from you.</strong>
+            </p>
+          </div>
+        </div>
+
+        <div>
+          <div style="margin-bottom:16px;">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--orange);letter-spacing:.12em;margin-bottom:20px;">WHAT THIS COSTS YOU</div>
+            <div class="pain-item">
+              <div class="pain-dot"></div>
+              <div class="pain-text">Leads that don't get a text in <strong style="color:#F5F3F0;">5 minutes</strong> are <strong style="color:#F5F3F0;">80% less likely to book</strong></div>
+            </div>
+            <div class="pain-item">
+              <div class="pain-dot"></div>
+              <div class="pain-text">35% of all leads go cold with <strong style="color:#F5F3F0;">zero contact ever made</strong></div>
+            </div>
+            <div class="pain-item">
+              <div class="pain-dot"></div>
+              <div class="pain-text">Most of these are <strong style="color:#F5F3F0;">replacement calls</strong> — $8,000–$15,000 jobs</div>
+            </div>
+            <div class="pain-item">
+              <div class="pain-dot"></div>
+              <div class="pain-text">It happens on weekends, evenings, and holidays — <strong style="color:#F5F3F0;">when no one is watching</strong></div>
+            </div>
+          </div>
+
+          <div style="padding:20px 24px;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);border-radius:14px;">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--orange);letter-spacing:.1em;margin-bottom:8px;">THE REAL COST</div>
+            <p style="font-size:22px;font-weight:800;font-family:var(--jakarta);color:#F5F3F0;">$8,000–$15,000<br><span style="font-size:14px;font-weight:500;color:rgba(245,243,240,.5);">per missed replacement lead. Multiple times a week. In the dark.</span></p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 4 — THE MATH                                     -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--cream" data-notes="Use their numbers from discovery. Say: 'Let me use your numbers — not mine.' Fill in the blanks with what they told you. When you get to the monthly loss number — pause. Don't say anything. Let them sit with it. Then ask: 'What would it mean for your business if you recovered even half of that?'">
+    <div class="dot-grid"></div>
+    <div class="max-w">
+      <div class="eyebrow">The Math</div>
+      <h2 style="color:var(--text);margin-bottom:8px;">Let me use <span style="color:var(--orange);">your numbers.</span></h2>
+      <p style="font-size:16px;color:var(--muted);margin-bottom:32px;">Not industry averages. What this costs your specific business every month.</p>
+
+      <div class="grid-2" style="align-items:start;gap:28px;">
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div style="padding:16px 20px;background:#F9F7F5;border-bottom:1px solid var(--border);">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--orange);letter-spacing:.12em;text-transform:uppercase;">Your Monthly Lead Loss Calculator</div>
+          </div>
+          <div class="calc-row">
+            <div class="calc-label">Leads per month</div>
+            <div class="calc-val" style="color:var(--orange);">[X] leads</div>
+          </div>
+          <div class="calc-row">
+            <div class="calc-label">% going cold (industry avg)</div>
+            <div class="calc-val">35%</div>
+          </div>
+          <div class="calc-row">
+            <div class="calc-label">Lost leads per month</div>
+            <div class="calc-val" style="color:#DC2626;">[X × 0.35] leads</div>
+          </div>
+          <div class="calc-row">
+            <div class="calc-label">Your avg replacement ticket</div>
+            <div class="calc-val" style="color:var(--orange);">$[X]</div>
+          </div>
+          <div class="calc-row" style="background:#FEF2F2;border-top:2px solid #FECACA;">
+            <div class="calc-label" style="font-weight:700;">Revenue leaving every month</div>
+            <div class="calc-val big">$[___]</div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card" style="border-left:3px solid #DC2626;">
+            <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">That number above is</div>
+            <div style="font-size:20px;font-weight:800;font-family:var(--jakarta);color:var(--text);">Money you already earned.</div>
+            <div style="font-size:14px;color:var(--muted);margin-top:8px;line-height:1.5;">You paid for those leads with your ad spend. You did the work to get them to fill out a form. Then they went cold because no one texted back fast enough.</div>
+          </div>
+
+          <div class="card" style="border-left:3px solid var(--green);">
+            <div style="font-size:13px;color:var(--muted);margin-bottom:6px;">FieldBuilt responds in</div>
+            <div style="font-size:36px;font-weight:800;font-family:var(--mono);color:var(--orange);">3.7 <span style="font-size:18px;color:var(--muted);">seconds</span></div>
+            <div style="font-size:14px;color:var(--muted);margin-top:8px;">Every lead. Day or night. Before you even see the notification.</div>
+          </div>
+
+          <div style="padding:16px 20px;background:#F0FDF4;border:1px solid #BBF7D0;border-radius:14px;">
+            <div style="font-size:14px;font-weight:600;color:#166534;">If you recover just 40% of those lost leads:</div>
+            <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:var(--green);margin-top:6px;">+$[X]/month</div>
+            <div style="font-size:12px;color:#4ADE80;margin-top:4px;">FieldBuilt costs $497/month</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 5 — WHY NOTHING HAS FIXED IT                     -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--dark" data-notes="Ask them before revealing: 'Have you tried anything to fix this?' Then listen. When they mention what they've tried, find it on this slide and say: 'Exactly — that's a single-feature solution to a five-role problem. That's why it didn't fix it.' This makes you sound like you understand their journey, not just selling a new thing.">
+    <div class="blueprint-grid"></div>
+    <div class="glow glow-orange" style="width:500px;height:500px;top:10%;right:-5%;opacity:.07;"></div>
+
+    <div class="max-w">
+      <div class="eyebrow">Why Nothing Worked</div>
+      <h2 style="color:#F5F3F0;margin-bottom:8px;">Every tool you've tried<br>solved <span class="text-orange">one part</span> of a five-part problem.</h2>
+      <p style="font-size:15px;color:rgba(245,243,240,.5);margin-bottom:32px;">That's why the problem never went away.</p>
+
+      <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:16px;margin-bottom:24px;">
+        <div class="comp-item">
+          <div class="comp-name">CRM (Jobber, HCP, ServiceTitan)</div>
+          <div class="comp-what">Tracks leads and jobs beautifully</div>
+          <div class="comp-miss">✗ Doesn't follow up. Doesn't respond. Doesn't book. You still have to do everything.</div>
+        </div>
+        <div class="comp-item">
+          <div class="comp-name">Answering Service (Ruby, Smith.ai)</div>
+          <div class="comp-what">Takes messages and passes them to you</div>
+          <div class="comp-miss">✗ No SMS. No booking. No follow-up. No dispatch. Just a more expensive voicemail.</div>
+        </div>
+        <div class="comp-item">
+          <div class="comp-name">Marketing Agency</div>
+          <div class="comp-what">Drives leads to your form</div>
+          <div class="comp-miss">✗ Their job ends when the lead fills out the form. What happens next is 100% your problem.</div>
+        </div>
+        <div class="comp-item">
+          <div class="comp-name">GoHighLevel / AI Chatbot</div>
+          <div class="comp-what">Responds to messages with automation</div>
+          <div class="comp-miss">✗ Generic scripts. Requires setup. No dispatch. No HVAC-specific logic. Still you configuring everything.</div>
+        </div>
+      </div>
+
+      <div style="padding:20px 28px;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);border-radius:16px;text-align:center;">
+        <p style="font-size:18px;font-weight:700;font-family:var(--jakarta);color:#F5F3F0;">
+          They're all <span class="text-orange">single-feature solutions</span> to a five-role problem.<br>
+          <span style="font-size:14px;font-weight:500;color:rgba(245,243,240,.55);">You need a receptionist, a setter, a dispatcher, a follow-up agent, and an office manager — all working together.</span>
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 6 — THE REVEAL                                   -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--dark" data-notes="This is the pivot. Slow down. Say: 'The reason the big HVAC companies keep winning isn't their ads, their trucks, or their reviews. It's their back office. They have a team running things you're doing manually. I built that team for you. Five roles. All AI. All connected. Let me introduce them.'">
+    <div class="blueprint-grid"></div>
+    <div class="glow glow-orange" style="width:700px;height:700px;top:-25%;left:-15%;opacity:.10;"></div>
+    <div class="glow glow-amber"  style="width:400px;height:400px;bottom:-10%;right:-5%;opacity:.07;"></div>
+
+    <div class="max-w center" style="display:flex;flex-direction:column;align-items:center;">
+      <div class="eyebrow" style="justify-content:center;">The Solution</div>
+      <h1 class="text-cream" style="text-align:center;max-width:820px;margin-bottom:20px;">
+        The office the big HVAC<br>companies have.<br>
+        <span class="text-orange">Now yours.</span>
+      </h1>
+      <p style="font-size:18px;color:rgba(245,243,240,.5);text-align:center;max-width:560px;margin-bottom:40px;">
+        Five AI employees. All connected. All running the same day as your 60-minute setup call.
+      </p>
+
+      <div style="display:flex;gap:12px;flex-wrap:wrap;justify-content:center;margin-bottom:40px;">
+        <div style="padding:10px 18px;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);border-radius:999px;font-size:13px;font-weight:600;color:#F5F3F0;">AI Receptionist</div>
+        <div style="padding:10px 18px;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);border-radius:999px;font-size:13px;font-weight:600;color:#F5F3F0;">Appointment Setter</div>
+        <div style="padding:10px 18px;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);border-radius:999px;font-size:13px;font-weight:600;color:#F5F3F0;">Smart Dispatcher</div>
+        <div style="padding:10px 18px;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);border-radius:999px;font-size:13px;font-weight:600;color:#F5F3F0;">Follow-Up Agent</div>
+        <div style="padding:10px 18px;background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);border-radius:999px;font-size:13px;font-weight:600;color:#F5F3F0;">Office Manager</div>
+      </div>
+
+      <div style="display:flex;align-items:center;gap:20px;">
+        <div style="text-align:center;padding:16px 24px;background:rgba(220,38,38,.08);border:1px solid rgba(220,38,38,.2);border-radius:14px;">
+          <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:#FCA5A5;text-decoration:line-through;">$11,000/mo</div>
+          <div style="font-size:12px;color:rgba(245,243,240,.4);margin-top:4px;">To hire this team</div>
+        </div>
+        <div style="font-size:28px;color:rgba(249,115,22,.5);">→</div>
+        <div style="text-align:center;padding:16px 32px;background:rgba(249,115,22,.12);border:1px solid rgba(249,115,22,.3);border-radius:14px;">
+          <div style="font-family:var(--mono);font-size:32px;font-weight:700;color:var(--orange);">$497/mo</div>
+          <div style="font-size:12px;color:rgba(245,243,240,.4);margin-top:4px;">FieldBuilt AI</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 7 — MEET YOUR TEAM                               -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--dark" data-notes="Walk through each card one at a time. For each role, ask: 'Do you have someone doing this right now?' If they say yes — ask 'how fast do they do it? Do they work nights and weekends?' If they say no — 'That's the gap right there.' This slide should take 3–4 minutes.">
+    <div class="blueprint-grid"></div>
+    <div class="max-w">
+      <div class="eyebrow">Your New Team</div>
+      <h2 style="color:#F5F3F0;margin-bottom:28px;">Five roles. <span class="text-orange">All running before<br>we hang up.</span></h2>
+
+      <div style="display:grid;grid-template-columns:repeat(5,1fr);gap:14px;">
+        <div class="role-card">
+          <div class="role-icon">📱</div>
+          <div class="role-name">AI Receptionist</div>
+          <div class="role-desc">Texts every lead in 3.7 seconds. 24/7. Never misses. Never goes home.</div>
+          <div class="role-cost">$2,500/mo to hire</div>
+        </div>
+        <div class="role-card">
+          <div class="role-icon">📅</div>
+          <div class="role-name">Appointment Setter</div>
+          <div class="role-desc">Qualifies, handles every objection, books the estimate. Never quotes price. Never diagnoses.</div>
+          <div class="role-cost">$3,000/mo to hire</div>
+        </div>
+        <div class="role-card">
+          <div class="role-icon">🚐</div>
+          <div class="role-name">Smart Dispatcher</div>
+          <div class="role-desc">Routes jobs to the right tech by skill, zip, and availability. No calls back and forth.</div>
+          <div class="role-cost">$2,500/mo to hire</div>
+        </div>
+        <div class="role-card">
+          <div class="role-icon">🔄</div>
+          <div class="role-name">Follow-Up Agent</div>
+          <div class="role-desc">SMS + voice for 14 days on every lead that didn't book. Nobody goes cold quietly.</div>
+          <div class="role-cost">$1,500/mo to hire</div>
+        </div>
+        <div class="role-card">
+          <div class="role-icon">📊</div>
+          <div class="role-name">Office Manager</div>
+          <div class="role-desc">CRM updated, confirmations sent, alerts to your phone, revenue tracked. Nothing falls through.</div>
+          <div class="role-cost">$1,500/mo to hire</div>
+        </div>
+      </div>
+
+      <div style="margin-top:24px;padding:18px 28px;background:rgba(249,115,22,.08);border:1px solid rgba(249,115,22,.2);border-radius:14px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px;">
+        <div>
+          <div style="font-size:13px;color:rgba(245,243,240,.5);margin-bottom:4px;">Total human equivalent cost</div>
+          <div style="font-family:var(--mono);font-size:24px;font-weight:700;color:rgba(245,243,240,.35);text-decoration:line-through;">$11,000 – $14,000/month</div>
+        </div>
+        <div style="font-size:30px;color:rgba(249,115,22,.4);">→</div>
+        <div>
+          <div style="font-size:13px;color:rgba(245,243,240,.5);margin-bottom:4px;">FieldBuilt AI — all five roles</div>
+          <div style="font-family:var(--mono);font-size:32px;font-weight:700;color:var(--orange);">$497/month</div>
+        </div>
+        <div style="padding:10px 20px;background:rgba(22,163,74,.12);border:1px solid rgba(22,163,74,.25);border-radius:10px;">
+          <div style="font-size:13px;color:#4ADE80;font-weight:600;">Responds in 3.7 seconds</div>
+          <div style="font-size:12px;color:rgba(74,222,128,.6);margin-top:2px;">Works 24/7 · Never calls in sick</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 8 — LIVE DEMO (Sarah Conversation)               -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--cream" data-notes="Read through the conversation WITH them, out loud. Don't just show it. Say: 'Watch what happens when Sarah fills out the form at 8:17pm.' Point to each message as you read. When you get to the booking confirmation — pause. Say: 'That's 12 minutes. The owner was watching TV. This job is now on the schedule.'">
+    <div class="dot-grid"></div>
+    <div class="max-w">
+      <div class="eyebrow">Watch It Work</div>
+      <h2 style="color:var(--text);margin-bottom:6px;">This happened at <span style="color:var(--orange);">8:17pm</span><br>while the owner was watching TV.</h2>
+      <p style="font-size:16px;color:var(--muted);margin-bottom:28px;">Sarah's AC died. She filled out a form. Here's what happened next.</p>
+
+      <div class="grid-2" style="gap:28px;align-items:start;">
+        <div class="sms-container">
+          <div class="sms-header">
+            <div class="sms-avatar">A</div>
+            <div>
+              <div class="sms-name">Alex · FieldBuilt AI</div>
+              <div class="sms-status">● Responding in 3.7 seconds</div>
+            </div>
+          </div>
+          <div class="sms-messages">
+            <div class="sms-msg ai"><div class="sms-bubble">Hey Sarah, saw your form about the AC not keeping up. Is it running at all or totally off?</div></div>
+            <div style="text-align:right;font-family:var(--mono);font-size:10px;color:var(--muted);margin:-4px 4px 4px;">8:17 PM</div>
+
+            <div class="sms-msg lead"><div class="sms-bubble">its running but house wont get below 78. been like this 2 weeks</div></div>
+            <div style="text-align:right;font-family:var(--mono);font-size:10px;color:var(--muted);margin:-4px 4px 4px;">8:21 PM</div>
+
+            <div class="sms-msg ai"><div class="sms-bubble">Ugh that's rough with this heat. Does it run non-stop or kick on and off?</div></div>
+
+            <div class="sms-msg lead"><div class="sms-bubble">non stop. never shuts off</div></div>
+
+            <div class="sms-msg ai"><div class="sms-bubble">Got it. What's the address so I can check who's closest?</div></div>
+
+            <div class="sms-msg lead"><div class="sms-bubble">3214 maple creek dr katy tx</div></div>
+
+            <div class="sms-msg ai"><div class="sms-bubble">And you own the home?</div></div>
+            <div class="sms-msg lead"><div class="sms-bubble">yes. btw just getting a few quotes, not sure what i need yet</div></div>
+
+            <div class="sms-msg ai"><div class="sms-bubble">No worries — tech comes out, looks at everything, tells you exactly what's going on. You decide from there. What's your Monday look like?</div></div>
+            <div class="sms-msg lead"><div class="sms-bubble">morning works</div></div>
+            <div class="sms-msg ai"><div class="sms-bubble">9am or 11am?</div></div>
+            <div class="sms-msg lead"><div class="sms-bubble">11 is better</div></div>
+            <div class="sms-msg ai"><div class="sms-bubble">Perfect — Monday 11am locked in. You'll get a reminder Sunday night.</div></div>
+            <div style="text-align:right;font-family:var(--mono);font-size:10px;color:var(--muted);margin:-4px 4px 4px;">8:29 PM</div>
+            <div class="sms-booked">
+              <svg width="16" height="16" fill="none" viewBox="0 0 24 24"><path stroke="#16A34A" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+              Appointment booked — Mon 11am · 3214 Maple Creek Dr
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card" style="border-left:3px solid var(--orange);">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--orange);letter-spacing:.12em;margin-bottom:12px;">TIMELINE</div>
+            <div style="display:flex;flex-direction:column;gap:10px;">
+              <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+                <div style="width:52px;font-family:var(--mono);color:var(--orange);font-size:11px;">8:17 PM</div>
+                <div style="color:var(--text);">Form submitted. AI responds instantly.</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+                <div style="width:52px;font-family:var(--mono);color:var(--muted);font-size:11px;">8:21 PM</div>
+                <div style="color:var(--text);">Sarah replies. Conversation begins.</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+                <div style="width:52px;font-family:var(--mono);color:var(--muted);font-size:11px;">8:24 PM</div>
+                <div style="color:var(--text);">Address collected. Homeowner confirmed.</div>
+              </div>
+              <div style="display:flex;align-items:center;gap:12px;font-size:13px;">
+                <div style="width:52px;font-family:var(--mono);color:var(--green);font-size:11px;font-weight:700;">8:29 PM</div>
+                <div style="color:var(--text);font-weight:600;">Appointment booked. <span style="color:var(--green);">✓</span></div>
+              </div>
+            </div>
+            <div style="margin-top:16px;padding:12px;background:#FFF3EC;border-radius:10px;text-align:center;">
+              <div style="font-family:var(--mono);font-size:28px;font-weight:700;color:var(--orange);">12 min</div>
+              <div style="font-size:12px;color:var(--muted);">From form to booked appointment</div>
+            </div>
+          </div>
+
+          <div class="card" style="border-left:3px solid var(--green);">
+            <div style="font-size:13px;color:var(--muted);margin-bottom:8px;">What happened simultaneously</div>
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--text);">
+              <div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--green);">✓</span> CRM updated with full lead profile</div>
+              <div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--green);">✓</span> Tech notified with address + job details</div>
+              <div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--green);">✓</span> Owner received push notification</div>
+              <div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--green);">✓</span> Confirmation SMS sent to Sarah</div>
+              <div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--green);">✓</span> Sunday reminder scheduled automatically</div>
+            </div>
+          </div>
+
+          <div style="padding:16px 20px;background:#F9F7F5;border:1px solid var(--border);border-radius:14px;">
+            <p style="font-size:14px;color:var(--muted);line-height:1.6;">The owner found out about this the next morning when he checked his CRM. He was already on a job when it happened.</p>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 9 — WHAT GETS INSTALLED                          -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--cream" data-notes="Scroll through slowly. For each item, say what it means practically. When you get to the last item — 'Live test run + handoff call' — say: 'Before we hang up, we'll run a test lead through the system together so you can see it work with your company name on it.' This makes the install feel real and tangible.">
+    <div class="dot-grid"></div>
+    <div class="max-w">
+      <div class="eyebrow">The Install</div>
+      <h2 style="color:var(--text);margin-bottom:6px;">One 60-minute call.<br><span style="color:var(--orange);">Everything below goes live.</span></h2>
+      <p style="font-size:16px;color:var(--muted);margin-bottom:28px;">Before we hang up, your AI office is running. Not a trial. Not a setup fee. Live.</p>
+
+      <div class="grid-2" style="align-items:start;gap:24px;">
+        <div class="card" style="padding:0;overflow:hidden;">
+          <div style="padding:16px 24px;background:#F9F7F5;border-bottom:1px solid var(--border);">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--orange);letter-spacing:.12em;">WHAT WE INSTALL</div>
+          </div>
+          <div style="padding:8px 24px;">
+            <div class="install-item">
+              <div class="install-check">✓</div>
+              <div><strong>Custom AI script</strong> written for your business — not a template</div>
+            </div>
+            <div class="install-item">
+              <div class="install-check">✓</div>
+              <div><strong>Facebook Lead Ads</strong> connected and tested</div>
+            </div>
+            <div class="install-item">
+              <div class="install-check">✓</div>
+              <div><strong>Local phone number</strong> provisioned in your area code</div>
+            </div>
+            <div class="install-item">
+              <div class="install-check">✓</div>
+              <div><strong>14-day follow-up sequences</strong> pre-loaded and tested</div>
+            </div>
+            <div class="install-item">
+              <div class="install-check">✓</div>
+              <div><strong>Appointment confirmation</strong> + 3-step reminder sequence</div>
+            </div>
+            <div class="install-item">
+              <div class="install-check">✓</div>
+              <div><strong>Google Calendar + Gmail</strong> connected</div>
+            </div>
+            <div class="install-item">
+              <div class="install-check">✓</div>
+              <div><strong>CRM configured</strong> with your pipeline stages</div>
+            </div>
+            <div class="install-item" style="border-bottom:none;">
+              <div class="install-check">✓</div>
+              <div><strong>Live test run + handoff call</strong> — you see it work with your company name</div>
+            </div>
+          </div>
+        </div>
+
+        <div style="display:flex;flex-direction:column;gap:16px;">
+          <div class="card" style="background:#FFF3EC;border-color:rgba(249,115,22,.2);">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--orange);letter-spacing:.12em;margin-bottom:12px;">THE GUARDRAILS</div>
+            <p style="font-size:14px;color:var(--text);margin-bottom:12px;line-height:1.6;">The AI knows exactly what it can and can't do. Guardrails built in:</p>
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--text);">
+              <div style="display:flex;gap:8px;"><span style="color:#DC2626;">✗</span> <div>Never quotes a price — always redirects to free in-home estimate</div></div>
+              <div style="display:flex;gap:8px;"><span style="color:#DC2626;">✗</span> <div>Never diagnoses — collects info and books only</div></div>
+              <div style="display:flex;gap:8px;"><span style="color:#DC2626;">✗</span> <div>Never books without a physical address first</div></div>
+              <div style="display:flex;gap:8px;"><span style="color:#DC2626;">✗</span> <div>Never contacts leads outside your working hours</div></div>
+              <div style="display:flex;gap:8px;"><span style="color:#DC2626;">✗</span> <div>Never books renters without landlord confirmation</div></div>
+            </div>
+          </div>
+
+          <div class="card">
+            <div style="font-family:var(--mono);font-size:11px;color:var(--orange);letter-spacing:.12em;margin-bottom:12px;">MONTHLY ONGOING</div>
+            <div style="display:flex;flex-direction:column;gap:8px;font-size:13px;color:var(--text);">
+              <div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--green);">✓</span> AI SMS on every lead, 24/7</div>
+              <div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--green);">✓</span> AI voice calls — outbound and inbound</div>
+              <div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--green);">✓</span> 14-day follow-up sequences running automatically</div>
+              <div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--green);">✓</span> CRM + pipeline + revenue tracking</div>
+              <div style="display:flex;gap:8px;align-items:center;"><span style="color:var(--green);">✓</span> System monitoring + support included</div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 10 — SOCIAL PROOF                                -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--cream" data-notes="If they're from Texas — point to Dave K. in Dallas first. If Phoenix — James M. If Florida — Carlos R. Say: 'This is what HVAC owners in [their state/city] are saying after the first 30 days.' Don't read the whole testimonial — just pick the line that's most relevant to their specific pain they mentioned in discovery.">
+    <div class="dot-grid"></div>
+    <div class="max-w">
+      <div class="eyebrow">Real Results</div>
+      <h2 style="color:var(--text);margin-bottom:8px;">HVAC owners who said<br><span style="color:var(--orange);">exactly what you're thinking right now.</span></h2>
+      <p style="font-size:16px;color:var(--muted);margin-bottom:28px;">Before they installed the system. Here's what happened after.</p>
+
+      <div class="grid-3">
+        <div class="testimonial">
+          <div class="stars">★★★★★</div>
+          <blockquote>"I was spending $4,000 a month on Facebook ads and felt like I was throwing money in a hole. Now I wake up most mornings with appointments already on the schedule from the night before. I finally feel like I'm running a real business."</blockquote>
+          <div class="t-name">Dave K.</div>
+          <div class="t-role">Owner, ProTemp HVAC — Dallas, TX</div>
+        </div>
+        <div class="testimonial">
+          <div class="stars">★★★★★</div>
+          <blockquote>"I couldn't afford a call center. Now I have one — and it's better than any human I'd hire. It booked an $8,400 replacement job on a follow-up call while I was on a roof. That's money I would have lost in my sleep."</blockquote>
+          <div class="t-name">James M.</div>
+          <div class="t-role">Owner, Arctic Air Services — Phoenix, AZ</div>
+        </div>
+        <div class="testimonial">
+          <div class="stars">★★★★★</div>
+          <blockquote>"The install took one call. Now I check my CRM in the morning and see what the AI booked overnight. My techs get dispatched automatically. I went from scrambling to just showing up. That's the whole difference."</blockquote>
+          <div class="t-name">Carlos R.</div>
+          <div class="t-role">Owner, Premier Comfort — Miami, FL</div>
+        </div>
+      </div>
+
+      <div style="margin-top:24px;display:flex;gap:24px;flex-wrap:wrap;">
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-family:var(--mono);font-size:28px;font-weight:700;color:var(--orange);">33%</div>
+          <div style="font-size:13px;color:var(--muted);">Booking rate<br>from AI-only follow-up</div>
+        </div>
+        <div style="width:1px;background:var(--border);"></div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-family:var(--mono);font-size:28px;font-weight:700;color:var(--orange);">3.7s</div>
+          <div style="font-size:13px;color:var(--muted);">Average first<br>response time</div>
+        </div>
+        <div style="width:1px;background:var(--border);"></div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-family:var(--mono);font-size:28px;font-weight:700;color:var(--orange);">100%</div>
+          <div style="font-size:13px;color:var(--muted);">Contact rate —<br>every lead reached</div>
+        </div>
+        <div style="width:1px;background:var(--border);"></div>
+        <div style="display:flex;align-items:center;gap:10px;">
+          <div style="font-family:var(--mono);font-size:28px;font-weight:700;color:var(--orange);">14 days</div>
+          <div style="font-size:13px;color:var(--muted);">Follow-up window<br>per lead</div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 11 — THE GUARANTEE                               -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--dark" data-notes="Read the three conditions slowly. After each one, ask: 'Can you do that?' Wait for yes. After all three — say: 'If you do those three things and it doesn't book you more jobs than last month — I refund every dollar the same day. I've never had to do it. But it's there if you need it.' Then move to the offer.">
+    <div class="blueprint-grid"></div>
+    <div class="glow glow-orange" style="width:600px;height:600px;bottom:-20%;right:-10%;opacity:.08;"></div>
+
+    <div class="max-w center" style="display:flex;flex-direction:column;align-items:center;">
+      <div class="eyebrow" style="justify-content:center;">Zero Risk</div>
+      <h2 style="color:#F5F3F0;text-align:center;margin-bottom:8px;">The <span class="text-orange">30-Day Guarantee.</span><br>Three conditions. Full refund if they're met.</h2>
+      <p style="font-size:16px;color:rgba(245,243,240,.5);text-align:center;margin-bottom:36px;max-width:560px;">Three things on your side. Everything else is on me.</p>
+
+      <div style="width:100%;max-width:640px;">
+        <div class="condition">
+          <div class="condition-num">1</div>
+          <div class="condition-text"><strong style="color:#F5F3F0;">Complete your 60-minute setup call.</strong><br><span style="font-size:14px;color:rgba(245,243,240,.5);">Show up. Let us install it. Takes one call.</span></div>
+        </div>
+        <div class="condition">
+          <div class="condition-num">2</div>
+          <div class="condition-text"><strong style="color:#F5F3F0;">Have at least 10 leads come in during 30 days.</strong><br><span style="font-size:14px;color:rgba(245,243,240,.5);">The system needs something to work with.</span></div>
+        </div>
+        <div class="condition">
+          <div class="condition-num">3</div>
+          <div class="condition-text"><strong style="color:#F5F3F0;">Don't disable or override the AI.</strong><br><span style="font-size:14px;color:rgba(245,243,240,.5);">Let it do its job for the full 30 days.</span></div>
+        </div>
+      </div>
+
+      <div style="margin-top:32px;padding:24px 36px;background:rgba(249,115,22,.1);border:1.5px solid rgba(249,115,22,.3);border-radius:18px;text-align:center;max-width:560px;">
+        <p style="font-size:18px;font-weight:700;font-family:var(--jakarta);color:#F5F3F0;line-height:1.5;">
+          Meet those three conditions and don't book more appointments than last month?
+        </p>
+        <p style="font-size:22px;font-weight:800;font-family:var(--jakarta);color:var(--orange);margin-top:10px;">
+          Full refund. Same day. No questions.
+        </p>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 12 — THE FOUNDING PARTNER OFFER                  -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--dark" data-notes="Say: 'Here's the Founding Partner offer — I only do this with 2 companies per month because I run the onboarding call myself.' Walk through each item. When you get to the $200 deposit — say: 'The deposit holds your spot and becomes your first month's credit. If after 30 days you want out — I Venmo it back the same day. I've never had to.' Then move to the close.">
+    <div class="blueprint-grid"></div>
+    <div class="glow glow-orange" style="width:700px;height:700px;top:-20%;left:-15%;opacity:.10;"></div>
+
+    <div class="max-w">
+      <div style="display:flex;align-items:flex-start;justify-content:space-between;flex-wrap:wrap;gap:24px;">
+        <div style="flex:1;min-width:300px;">
+          <div class="eyebrow">The Offer</div>
+          <h2 style="color:#F5F3F0;margin-bottom:8px;">Founding Partner.<br><span class="text-orange">2 spots per month.</span></h2>
+          <p style="font-size:15px;color:rgba(245,243,240,.5);margin-bottom:28px;">I only take 2 per month so I can run the onboarding call myself.</p>
+
+          <div class="offer-box">
+            <div class="offer-item">
+              <div class="offer-check">✓</div>
+              <div><strong style="color:#F5F3F0;">Full AI Office install</strong> — <span style="color:rgba(245,243,240,.5);">normally $1,500 — <strong style="color:var(--orange);">FREE</strong></span></div>
+            </div>
+            <div class="offer-item">
+              <div class="offer-check">✓</div>
+              <div><strong style="color:#F5F3F0;">30 days free</strong> — <span style="color:rgba(245,243,240,.5);">no monthly fee during your trial period</span></div>
+            </div>
+            <div class="offer-item">
+              <div class="offer-check">✓</div>
+              <div><strong style="color:#F5F3F0;">After 30 days:</strong> <span style="color:rgba(245,243,240,.5);">$497/month — Founding Partner rate, locked in</span></div>
+            </div>
+            <div class="offer-item">
+              <div class="offer-check">✓</div>
+              <div><strong style="color:#F5F3F0;">Personal onboarding</strong> — <span style="color:rgba(245,243,240,.5);">60-min call with me, WhatsApp support for 30 days</span></div>
+            </div>
+            <div class="offer-item">
+              <div class="offer-check">✓</div>
+              <div><strong style="color:#F5F3F0;">$200 refundable deposit</strong> — <span style="color:rgba(245,243,240,.5);">holds your spot, credited to month one</span></div>
+            </div>
+            <div class="offer-item" style="border-bottom:none;">
+              <div class="offer-check">✓</div>
+              <div><strong style="color:#F5F3F0;">30-day guarantee</strong> — <span style="color:rgba(245,243,240,.5);">full refund same day if conditions met and no results</span></div>
+            </div>
+          </div>
+        </div>
+
+        <div style="flex:0 0 280px;">
+          <div style="background:#221D1A;border:1px solid rgba(255,255,255,.07);border-radius:20px;overflow:hidden;">
+            <div style="padding:20px 24px;border-bottom:1px solid rgba(255,255,255,.07);">
+              <div style="font-family:var(--mono);font-size:11px;color:rgba(245,243,240,.4);letter-spacing:.12em;margin-bottom:8px;">VALUE STACK</div>
+              <div class="vs-row">
+                <div class="vs-label">Install (done-for-you)</div>
+                <div class="vs-price">$1,500</div>
+              </div>
+              <div class="vs-row">
+                <div class="vs-label">AI Receptionist</div>
+                <div class="vs-price">$2,500/mo</div>
+              </div>
+              <div class="vs-row">
+                <div class="vs-label">Appointment Setter</div>
+                <div class="vs-price">$3,000/mo</div>
+              </div>
+              <div class="vs-row">
+                <div class="vs-label">Smart Dispatcher</div>
+                <div class="vs-price">$2,500/mo</div>
+              </div>
+              <div class="vs-row">
+                <div class="vs-label">Follow-Up Agent</div>
+                <div class="vs-price">$1,500/mo</div>
+              </div>
+              <div class="vs-row">
+                <div class="vs-label">Office Manager + CRM</div>
+                <div class="vs-price">$1,500/mo</div>
+              </div>
+            </div>
+            <div style="padding:20px 24px;">
+              <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:16px;">
+                <div style="font-size:13px;color:rgba(245,243,240,.5);">You'd pay</div>
+                <div style="font-family:var(--mono);font-size:20px;color:rgba(245,243,240,.3);text-decoration:line-through;">$12,500/mo</div>
+              </div>
+              <div style="background:rgba(249,115,22,.1);border:1px solid rgba(249,115,22,.25);border-radius:12px;padding:16px;text-align:center;">
+                <div style="font-size:12px;color:rgba(245,243,240,.5);margin-bottom:4px;">Your price today</div>
+                <div class="vs-total">$497/month</div>
+                <div style="font-size:11px;color:rgba(249,115,22,.6);margin-top:6px;">$200 deposit to hold spot</div>
+              </div>
+
+              <div style="margin-top:16px;padding:12px;background:rgba(22,163,74,.08);border:1px solid rgba(22,163,74,.2);border-radius:10px;text-align:center;">
+                <div style="font-size:12px;color:#4ADE80;">One replacement job pays for</div>
+                <div style="font-family:var(--mono);font-size:18px;font-weight:700;color:var(--green);margin-top:4px;">20 months of FieldBuilt</div>
+              </div>
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <!-- SLIDE 13 — THE CLOSE                                   -->
+  <!-- ═══════════════════════════════════════════════════════ -->
+  <div class="slide slide--dark" data-notes="Ask the question. Stop talking. Whoever speaks first loses. Wait. If they say 'I need to think about it' — ask: 'What specifically would you need to think through? I want to make sure I've answered everything.' If they say 'sounds good' — say: 'Perfect. I'll send you a quick link to hold your spot with the $200 deposit. Takes 2 minutes. You want me to send it now while we're on the call?'">
+    <div class="blueprint-grid"></div>
+    <div class="glow glow-orange" style="width:800px;height:800px;top:-30%;left:-20%;opacity:.09;"></div>
+    <div class="glow glow-amber"  style="width:500px;height:500px;bottom:-15%;right:-10%;opacity:.07;"></div>
+
+    <div class="max-w center" style="display:flex;flex-direction:column;align-items:center;">
+      <div class="eyebrow" style="justify-content:center;">The Question</div>
+
+      <div class="close-question" style="margin-bottom:32px;">
+        Is there any reason we<br>shouldn't get started<br><span>this week?</span>
+      </div>
+
+      <div style="width:80px;height:2px;background:linear-gradient(90deg,transparent,#F97316,transparent);margin-bottom:32px;"></div>
+
+      <p style="font-size:17px;color:rgba(245,243,240,.45);text-align:center;max-width:480px;line-height:1.7;">
+        One call. System live before we hang up.<br>Jobs on the schedule by morning.
+      </p>
+
+      <div style="display:grid;grid-template-columns:1fr 1fr 1fr;gap:16px;margin-top:40px;max-width:700px;width:100%;">
+        <div style="text-align:center;padding:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:14px;">
+          <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--orange);">$200</div>
+          <div style="font-size:12px;color:rgba(245,243,240,.4);margin-top:4px;">Refundable deposit<br>to hold your spot</div>
+        </div>
+        <div style="text-align:center;padding:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:14px;">
+          <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--orange);">30 days</div>
+          <div style="font-size:12px;color:rgba(245,243,240,.4);margin-top:4px;">Free trial period<br>before monthly billing</div>
+        </div>
+        <div style="text-align:center;padding:16px;background:rgba(255,255,255,.04);border:1px solid rgba(255,255,255,.07);border-radius:14px;">
+          <div style="font-family:var(--mono);font-size:20px;font-weight:700;color:var(--orange);">Full refund</div>
+          <div style="font-size:12px;color:rgba(245,243,240,.4);margin-top:4px;">If it doesn't book more<br>jobs in 30 days</div>
+        </div>
+      </div>
+
+      <div style="margin-top:32px;padding:18px 36px;background:rgba(249,115,22,.12);border:1.5px solid rgba(249,115,22,.3);border-radius:14px;text-align:center;">
+        <p style="font-size:16px;font-weight:600;color:#F5F3F0;">
+          "I'll send you the link right now. Takes 2 minutes.<br>
+          <span style="color:var(--orange);">You want me to send it while we're on the call?"</span>
+        </p>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<!-- PROGRESS DOTS -->
+<div id="progress"></div>
+
+<!-- COUNTER -->
+<div id="counter"></div>
+
+<!-- NAV ARROWS -->
+<button class="nav-btn" id="btn-prev" onclick="go(-1)">‹</button>
+<button class="nav-btn" id="btn-next" onclick="go(1)">›</button>
+
+<!-- HINTS -->
+<div id="hints">← → Navigate &nbsp;·&nbsp; N = Notes &nbsp;·&nbsp; F = Fullscreen</div>
+
+<!-- SPEAKER NOTES PANEL -->
+<div id="notes-panel">
+  <div id="notes-label">🎤 SPEAKER NOTES</div>
+  <div id="notes-text"></div>
+</div>
+
+<script>
+  const slides = Array.from(document.querySelectorAll('.slide'));
+  const notesPanel = document.getElementById('notes-panel');
+  const notesText  = document.getElementById('notes-text');
+  const counter    = document.getElementById('counter');
+  const progress   = document.getElementById('progress');
+  let current = 0;
+  let notesVisible = false;
+
+  // Build progress dots
+  slides.forEach((_, i) => {
+    const d = document.createElement('div');
+    d.className = 'dot' + (i === 0 ? ' active' : '');
+    d.onclick = () => goTo(i);
+    progress.appendChild(d);
+  });
+
+  function updateUI() {
+    slides.forEach((s, i) => {
+      s.classList.remove('active', 'exit');
+      if (i === current) s.classList.add('active');
+    });
+    document.querySelectorAll('.dot').forEach((d, i) => {
+      d.classList.toggle('active', i === current);
+    });
+    counter.textContent = (current + 1) + ' / ' + slides.length;
+    notesText.textContent = slides[current].dataset.notes || '';
+  }
+
+  function goTo(n) {
+    if (n === current) return;
+    const prev = slides[current];
+    prev.classList.add('exit');
+    setTimeout(() => prev.classList.remove('exit'), 350);
+    current = Math.max(0, Math.min(slides.length - 1, n));
+    updateUI();
+  }
+
+  function go(dir) { goTo(current + dir); }
+
+  document.addEventListener('keydown', e => {
+    if (e.key === 'ArrowRight' || e.key === 'ArrowDown' || e.key === ' ')  { e.preventDefault(); go(1); }
+    if (e.key === 'ArrowLeft'  || e.key === 'ArrowUp')   { e.preventDefault(); go(-1); }
+    if (e.key === 'n' || e.key === 'N') {
+      notesVisible = !notesVisible;
+      notesPanel.classList.toggle('visible', notesVisible);
+    }
+    if (e.key === 'f' || e.key === 'F') {
+      if (!document.fullscreenElement) document.documentElement.requestFullscreen();
+      else document.exitFullscreen();
+    }
+    if (e.key === 'Home') goTo(0);
+    if (e.key === 'End')  goTo(slides.length - 1);
+  });
+
+  // Touch swipe
+  let touchX = 0;
+  document.addEventListener('touchstart', e => { touchX = e.touches[0].clientX; });
+  document.addEventListener('touchend',   e => {
+    const dx = e.changedTouches[0].clientX - touchX;
+    if (Math.abs(dx) > 50) go(dx < 0 ? 1 : -1);
+  });
+
+  updateUI();
+</script>
+
+</body>
+</html>

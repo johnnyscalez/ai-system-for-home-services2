@@ -128,7 +128,7 @@ Ask the user:
 
 ## Step 3 — Platform-specific guidance
 
-For platform-specific audience growth features (Kit, Beehiiv, SparkLoop, Mailchimp, Substack, Omnisend, ActiveCampaign, GetResponse, Unbounce, Leadpages, Ghost, ZoomInfo FormComplete, Clearbit, SendPulse, AdRoll, Lettergrowth, Collab Match, InboxReads, MutualGro, ReferralKit, Refind, Customers.ai, etc.), see references/platforms.md.
+For platform-specific audience growth features (Kit, Beehiiv, SparkLoop, Mailchimp, Substack, Omnisend, ActiveCampaign, GetResponse, Unbounce, Leadpages, Ghost, ZoomInfo FormComplete, Clearbit, SendPulse, AdRoll, Lettergrowth, Collab Match, InboxReads, MutualGro, ReferralKit, ReferralHero, KickoffLabs, UpViral, LaunchList, Waitlister, Refind, Customers.ai, etc.), see references/platforms.md.
 
 ## Step 4 — Actionable guidance
 
@@ -222,6 +222,11 @@ This skill covers a strategy domain across many platforms. **Before pointing the
 - `/sales-inboxreads` — InboxReads platform help (5,600+ newsletter directory, 1-click cross-promo swaps, Opportunities Board, Live Media Kits, ad pricing suggestions, free/$8-58/mo)
 - `/sales-mutualgro` — MutualGro platform help (creator collaboration with AI partner matching, scheduled X/LinkedIn posting, accepts non-newsletter projects, free/£3.99/mo)
 - `/sales-referralkit` — ReferralKit platform help (no-code newsletter referral program by Copyhackers, merge-tag-driven, milestone rewards, free for first 10K leads, Mailchimp/Kit/MailerLite/AWeber ESPs)
+- `/sales-referralhero` — ReferralHero platform help (full-stack referral/affiliate/waitlist/contest with REST API, webhooks, Zapier, multi-level referrals, coupon groups, 6 native ESPs, PRO $199/mo and PREMIUM $399/mo)
+- `/sales-kickofflabs` — KickoffLabs platform help (viral waitlists, bonus-entry giveaways, milestone rewards, leaderboard giveaways with v1+v2 REST API, structured fraud webhooks, AnyForm + KOL.js, $13/mo Hobby to $202/mo Enterprise annual)
+- `/sales-upviral` — UpViral platform help (viral sweepstakes, giveaways, waiting lists, milestone referral programs with REST API + Callback-URL webhooks, IP-based fraud detection, A/B testing; API gated to Business $119/mo annual+, Starter $79/mo has no API)
+- `/sales-launchlist` — LaunchList platform help (viral pre-launch waitlist with one-time lifetime pricing $0–$79+, gamified referrals + position inflation, no public API — form POST + webhooks/Zapier at Grow $79+)
+- `/sales-waitlister` — Waitlister platform help (pre-launch waitlists with built-in email broadcasts, REST API + 5 HMAC-signed webhook events at Growth $49/mo, unlimited subscribers from $15/mo, no Zapier)
 - `/sales-refind` — Refind platform help (CPA-based newsletter ad network, 488K curated readers, cross-promotion, publisher earning)
 - `/sales-retargeting` — Retargeting strategy (using ads to drive visitors back to signup pages)
 - `/sales-b2b-advertising` — account-based advertising (WebSights feeds retargeting audiences)
