@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { getSession, updateSession } from "@/lib/voice-session"
 import { getTwilioClient } from "@/lib/twilio"
+import { prewarmTts } from "@/lib/tts"
 
 export const runtime = "nodejs"
 
@@ -83,6 +84,7 @@ export async function POST(req: NextRequest) {
 
       const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
       const vmText = `Hi, this is ${agentName} calling about your ${serviceType} inquiry. I wanted to reach out and get you scheduled for a free on-site estimate. Please give us a call back or just reply to our text and we will get you taken care of. Talk soon!`
+      prewarmTts(vmText)
       const twilio = getTwilioClient()
       await twilio.calls(callSid).update({
         twiml: `<?xml version="1.0" encoding="UTF-8"?>

@@ -396,6 +396,15 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
     .filter(Boolean)
     .join("\n\n")
 
+  // Prompt caching: the cache breakpoint on the system block also covers the
+  // TOOLS definitions serialized before it. Turn 1 of a call writes the cache;
+  // every later turn (and the 2nd/3rd sequential calls inside slot-check and
+  // booking turns) reads it — a direct time-to-first-token cut on a live phone
+  // call where every 100ms of silence is audible. Identical output, same prompt.
+  const cachedSystem = [
+    { type: "text" as const, text: systemPrompt, cache_control: { type: "ephemeral" as const } },
+  ]
+
   // ── Build message list for Claude ───────────────────────────────────────────
   const isGreeting = userMessage === null
   let messages: VoiceMessage[] = [...session.messages]
@@ -447,7 +456,7 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
   const response = await anthropic.messages.create({
     model: mainModel,
     max_tokens: 150,
-    system: systemPrompt,
+    system: cachedSystem,
     tools: TOOLS,
     messages: messages as Parameters<typeof anthropic.messages.create>[0]["messages"],
   })
@@ -566,7 +575,7 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
     const slotResponse = await anthropic.messages.create({
       model:      "claude-sonnet-4-6",
       max_tokens: 150,
-      system:     systemPrompt,
+      system:     cachedSystem,
       tools:      TOOLS,
       messages:   slotMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],
     })
@@ -591,7 +600,7 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
       const nested = await anthropic.messages.create({
         model:      "claude-sonnet-4-6",
         max_tokens: 150,
-        system:     systemPrompt,
+        system:     cachedSystem,
         tools:      TOOLS,
         messages:   nestedMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],
       })
@@ -621,7 +630,7 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
     const followUp = await anthropic.messages.create({
       model:      "claude-sonnet-4-6",
       max_tokens: 100,
-      system:     systemPrompt,
+      system:     cachedSystem,
       tools:      TOOLS,
       messages:   followUpMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],
     })

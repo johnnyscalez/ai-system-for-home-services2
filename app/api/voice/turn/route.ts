@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 import { getSession, saveCallTurn } from "@/lib/voice-session"
 import { runVoiceTurn } from "@/lib/voice-engine"
 import { notifyAppointmentBooked, notifyNeedsAttention } from "@/lib/notifications"
+import { prewarmTts } from "@/lib/tts"
 
 export const runtime = "nodejs"
 
@@ -11,6 +12,10 @@ function twiml(xml: string) {
 }
 
 function speakUrl(text: string, appUrl: string): string {
+  // Start generating the audio NOW — Twilio fetches this URL only after the
+  // TwiML round-trip, and by then the clip is done or in flight (lib/tts
+  // dedupes, so /speak joins this same promise instead of generating twice).
+  prewarmTts(text)
   return `${appUrl}/api/voice/speak?t=${encodeURIComponent(text)}`
 }
 
@@ -89,14 +94,16 @@ export async function POST(req: NextRequest) {
   try {
     const result = await runVoiceTurn(session, speechResult)
 
-    // Save turn to conversations table for CRM visibility
-    await saveCallTurn(session, speechResult, result.text)
-
-    // Update lead last_message_at
+    // CRM bookkeeping — deliberately NOT awaited. These two writes are for
+    // dashboard visibility only (turn context lives in the session), and every
+    // ms before the TwiML returns is dead air the caller hears on a live call.
+    saveCallTurn(session, speechResult, result.text)
+      .catch((e) => console.error("[voice/turn] saveCallTurn failed:", e))
     const db = createServiceRoleClient()
-    await db.from("leads")
+    db.from("leads")
       .update({ last_message_at: new Date().toISOString() })
       .eq("id", session.lead_id)
+      .then(({ error }) => { if (error) console.error("[voice/turn] lead update failed:", error) })
 
     // Route TwiML based on action
     switch (result.action.type) {

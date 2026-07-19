@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { formatPhone } from "@/lib/twilio"
 import { getOrCreateSession, appendMessages } from "@/lib/voice-session"
+import { prewarmTts } from "@/lib/tts"
 
 export const runtime = "nodejs"
 
@@ -10,6 +11,9 @@ function twiml(xml: string) {
 }
 
 function speakUrl(text: string, appUrl: string): string {
+  // Kick off audio generation before Twilio even receives the TwiML —
+  // /api/voice/speak joins the same in-flight promise via lib/tts.
+  prewarmTts(text)
   return `${appUrl}/api/voice/speak?t=${encodeURIComponent(text)}`
 }
 
