@@ -934,7 +934,7 @@ export function LeadFormSection({
   const [firstName, setFirstName] = useState("")
   const [phone, setPhone] = useState("")
   const [email, setEmail] = useState("")
-  const [trucks, setTrucks] = useState("")
+  const [techs, setTechs] = useState("")
   const [revenue, setRevenue] = useState("")
   // Only 1-2 techs disqualifies on headcount alone; every other unqualified
   // combination fails on revenue-for-that-headcount instead — a single
@@ -947,9 +947,9 @@ export function LeadFormSection({
     e.preventDefault()
     if (!e.currentTarget.reportValidity()) return
 
-    const qualified = isQualified(trucks, revenue)
-    const tier = qualified ? leadTier(trucks, revenue) : undefined
-    if (!qualified) setNoqualReason(trucks === "1-2" ? "headcount" : "revenue")
+    const qualified = isQualified(techs, revenue)
+    const tier = qualified ? leadTier(techs, revenue) : undefined
+    if (!qualified) setNoqualReason(techs === "1-2" ? "headcount" : "revenue")
 
     // Same-origin proxy — see app/api/lead-intake/route.ts for why this
     // doesn't call the agent directly (the agent's shared secret must never
@@ -957,7 +957,7 @@ export function LeadFormSection({
     fetch("/api/lead-intake", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ first_name: firstName, phone, email, trucks, revenue, qualified, tier, angle: source }),
+      body: JSON.stringify({ first_name: firstName, phone, email, techs, revenue, qualified, tier, angle: source }),
     }).catch(() => {})
 
     // Meta Pixel: fire QualifiedLead ONLY for qualified submissions.
@@ -966,9 +966,9 @@ export function LeadFormSection({
       // fires for QUALIFIED submissions, "optimize for Leads" in Ads Manager
       // trains Meta's delivery on qualified leads only — unqualified opt-ins
       // never enter the training signal. The custom event stays alongside for
-      // granular reporting (trucks/revenue/angle breakdowns).
+      // granular reporting (techs/revenue/angle breakdowns).
       window.fbq("track", "Lead", { content_name: source })
-      window.fbq("trackCustom", "QualifiedLead", { trucks, revenue, source })
+      window.fbq("trackCustom", "QualifiedLead", { techs, revenue, source })
     }
 
     setPhase(qualified ? "qualified" : "noqual")
@@ -1002,10 +1002,10 @@ export function LeadFormSection({
               <form onSubmit={handleSubmit} noValidate>
                 <div className="grid sm:grid-cols-2 gap-4 mb-4">
                   <div>
-                    <label htmlFor="lf-trucks" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
+                    <label htmlFor="lf-techs" className="block text-sm font-bold mb-1.5" style={{ color: C.text }}>
                       How many techs do you run?
                     </label>
-                    <select id="lf-trucks" required value={trucks} onChange={(e) => setTrucks(e.target.value)}
+                    <select id="lf-techs" required value={techs} onChange={(e) => setTechs(e.target.value)}
                             className="focus:outline-none focus:ring-[3px] focus:ring-orange-500/20 focus:border-orange-500"
                             style={inputStyle}>
                       <option value="" disabled>Select</option>
