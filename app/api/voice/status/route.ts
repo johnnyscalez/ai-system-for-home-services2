@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { getSession, updateSession } from "@/lib/voice-session"
+import { summarizeCompletedCall } from "@/lib/call-notes"
 
 export const runtime = "nodejs"
 
@@ -29,6 +30,18 @@ export async function POST(req: NextRequest) {
     "completed"
 
   await updateSession(callSid, { status: sessionStatus })
+
+  // Post-call lead intel: one cheap Haiku pass over the full transcript files
+  // system details + notes to the CRM — replaces the per-turn note-taking
+  // tools that added dead air to the live call. Guarded against double-runs
+  // and empty transcripts inside.
+  if (sessionStatus === "completed") {
+    try {
+      await summarizeCompletedCall(session)
+    } catch (e) {
+      console.error("[voice/status] post-call summary failed:", e)
+    }
+  }
 
   // If no-answer or busy on outbound — expedite the next pending SMS step.
   // Do NOT insert a new step 1 (voice) — that creates an infinite call loop.

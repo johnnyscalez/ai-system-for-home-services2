@@ -4,7 +4,7 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 import { createCalendarEvent } from "@/lib/google-calendar"
 import { determineAgentType, getAgentPrompt, getJobKnowledgeBlock } from "@/lib/voice-agents"
 import { updateSession, appendMessages } from "@/lib/voice-session"
-import { JOB_TYPES, JOB_TYPE_TOOL_DESCRIPTION, getJobTypeLabel } from "@/lib/job-types"
+import { getJobTypeLabel } from "@/lib/job-types"
 import { selectTechnician, getTechnicianContextForCompany, findSlotsForLead } from "@/lib/technician-booking"
 import type { VoiceSession, VoiceMessage } from "@/lib/voice-session"
 
@@ -39,7 +39,7 @@ MANDATORY RULES — never break these:
 10. Never read out a list of slots — offer exactly two naturally: "I've got Thursday morning or Friday afternoon."
 11. SERVICE AREA RULE: You MUST call find_available_slots after learning the lead's zip code. Say ONE short natural sentence AND call the tool in the SAME turn — saying "let me check" without actually calling the tool is a failure; the lead will be left waiting for nothing. The slot offer comes after the results return.
 12. TIMEZONE RULE: When booking, use the exact ISO 8601 datetime from the find_available_slots results. Never construct your own datetime string — the slots returned are already in the correct timezone.
-13. OUTSIDE SERVICE AREA: If find_available_slots says outside service area, say warmly that you don't serve that area, then call update_lead_status("closed_lost"), add_note with the zip, and end_call.
+13. OUTSIDE SERVICE AREA: If find_available_slots says outside service area, say warmly that you don't serve that area, then call update_lead_status("closed_lost") and end_call.
 14. PIVOT AFTER ANSWERING: When you answer a question the lead asked (cost, timeline, what's included) without needing their input, end that same response with your next qualifying question. Do NOT stop and wait silently after answering.
 15. VISIT FEE / TRIP CHARGE: If a SERVICE CALL FEE POLICY block appears in this system prompt, follow it exactly when asked about cost to come out. Never say "free" unless that policy says so. If no SERVICE CALL FEE POLICY block is present, say "It's completely free — no trip charge."
 16. BOOKING — NO DISAMBIGUATION LOOPS: When the lead accepts a day or day-part ("Monday morning works", "tomorrow's fine"), pick the EARLIEST matching slot from the find_available_slots results and book it immediately: confirm once with the specific window ("Perfect — Monday morning, eight to ten, at [Address]") and call book_appointment in that same turn. NEVER re-ask which window. NEVER say "I've got you down" without calling book_appointment.
@@ -116,41 +116,11 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
       required: ["scheduled_at", "reason"],
     },
   },
-  {
-    name: "add_note",
-    description:
-      "Add a note to this lead's CRM profile. Use to record: budget concerns, objections, preferences, spouse needs to approve, competitor mentioned, anything important for the next agent who contacts them. Notes are permanent and visible to the whole team.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        note: { type: "string", description: "The note to add. Factual and brief." },
-      },
-      required: ["note"],
-    },
-  },
-  {
-    name: "update_lead_details",
-    description:
-      "Persist structured lead data to the CRM. Call this as soon as you learn any of these details — do NOT wait until booking. Even if the call ends early, the contractor will see what was collected. Call it multiple times if needed as you learn more.",
-    input_schema: {
-      type: "object" as const,
-      properties: {
-        job_type: {
-          type: "string",
-          enum: JOB_TYPES as unknown as string[],
-          description: JOB_TYPE_TOOL_DESCRIPTION,
-        },
-        system_type: {
-          type: "string",
-          description: "Type of HVAC system the lead has, in plain English. Examples: 'Central AC', 'Gas furnace', 'Heat pump', 'Mini-split', 'Boiler'. Use what they say.",
-        },
-        system_age: {
-          type: "string",
-          description: "Age of the existing system. Use what they say: '15 years', 'about 10 years', 'no idea', 'brand new'. Do not convert — record verbatim.",
-        },
-      },
-    },
-  },
+  // NOTE: add_note and update_lead_details were removed from the LIVE call.
+  // Every tool-only turn cost a second sequential Claude call — audible dead
+  // air on the phone. Lead details and notes are now extracted ONCE from the
+  // full transcript after the call ends (lib/call-notes.ts, Haiku) — the lead
+  // file stays just as complete, the call gets faster.
   {
     name: "update_lead_status",
     description:
@@ -528,7 +498,7 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
         toolResultContent =
           `OUTSIDE_SERVICE_AREA: zip code "${zip}" is not covered by any active technician. ` +
           `Respond warmly in 2 sentences — say you unfortunately don't serve that area and you hope they find someone quickly. ` +
-          `Then call update_lead_status("closed_lost"), add_note("Outside service area: ${zip}"), and end_call("not_interested").`
+          `Then call update_lead_status("closed_lost") and end_call("not_interested").`
       } else if (slotsResult.reason === "no_technicians") {
         toolResultContent =
           "NO_TECHNICIANS: No active technicians on file right now. " +
