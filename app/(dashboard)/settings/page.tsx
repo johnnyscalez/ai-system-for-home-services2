@@ -7,7 +7,8 @@ import { Phone, Link2, CreditCard, Database, ArrowRight, Sparkles, FlaskConical 
 import { TestLeadButton } from "@/components/settings/TestLeadButton"
 import { CompanyInfoEditor } from "@/components/settings/CompanyInfoEditor"
 import { CallForwardingCard } from "@/components/settings/CallForwardingCard"
-import { PhoneForwarded } from "lucide-react"
+import { HousecallProCard } from "@/components/settings/HousecallProCard"
+import { PhoneForwarded, Wrench } from "lucide-react"
 
 export default async function SettingsPage() {
   const supabase = await createServerSupabaseClient()
@@ -16,7 +17,7 @@ export default async function SettingsPage() {
 
   const { data: profile } = await supabase
     .from("users")
-    .select("company_id, full_name, email, companies(name, service_type, service_area, notification_phone, plan, trial_ends_at, webhook_secret, avg_job_value)")
+    .select("company_id, full_name, email, companies(name, service_type, service_area, notification_phone, plan, trial_ends_at, webhook_secret, avg_job_value, integration_mode)")
     .eq("id", user.id)
     .single()
 
@@ -24,7 +25,15 @@ export default async function SettingsPage() {
     name: string; service_type: string | null; service_area: string | null;
     notification_phone: string | null;
     plan: string; trial_ends_at: string; webhook_secret: string; avg_job_value: number;
+    integration_mode: string | null;
   } | null
+
+  const { data: hcpConn } = await supabase
+    .from("hcp_connections")
+    .select("id, is_active")
+    .eq("company_id", profile?.company_id ?? "")
+    .eq("is_active", true)
+    .maybeSingle()
 
   const { data: phoneData } = await supabase
     .from("phone_numbers")
@@ -72,6 +81,22 @@ export default async function SettingsPage() {
           <p className="text-xs text-muted-foreground mt-1">
             Your AI texts and calls every lead from this number. Replies go straight to your CRM.
           </p>
+        </CardContent>
+      </Card>
+
+      {/* Housecall Pro — the V2 "AI employee" switch */}
+      <Card>
+        <CardHeader className="pb-3">
+          <div className="flex items-center gap-2">
+            <Wrench className="w-4 h-4 text-muted-foreground" />
+            <CardTitle className="text-base">Housecall Pro</CardTitle>
+          </div>
+        </CardHeader>
+        <CardContent>
+          <HousecallProCard
+            connected={Boolean(hcpConn)}
+            integrationMode={company?.integration_mode ?? "standalone"}
+          />
         </CardContent>
       </Card>
 
