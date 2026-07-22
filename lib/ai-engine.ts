@@ -1,5 +1,6 @@
 import { anthropic } from "@/lib/claude"
 import { createServiceRoleClient } from "@/lib/supabase-server"
+import { kbValue } from "@/lib/kb-utils"
 import { createCalendarEvent, getCalendarEvents } from "@/lib/google-calendar"
 import { getConversationFlow } from "@/lib/conversation-flows"
 import { getAvailableSlots, formatSlotsForPrompt, DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
@@ -255,8 +256,8 @@ export async function runConversation(
     buildFallbackSystemPrompt(
       agent?.agent_name ?? "Linda",
       company?.name ?? "the company",
-      kb?.business_description ?? "",
-      kb?.services_offered ?? "",
+      kbValue(kb?.business_description) ?? "",
+      kbValue(kb?.services_offered) ?? "",
       lead.service_type ?? "home services"
     )
 
@@ -266,15 +267,15 @@ export async function runConversation(
   // 3. Qualification rules (company-specific disqualifiers)
   // 4. Real available slots (the AI must offer only these)
   // 5. Lead file (live lead data, history, returning vs new)
-  const customKnowledgeBlock = kb?.custom_ai_knowledge
-    ? `=== YOUR COMPANY-SPECIFIC KNOWLEDGE ===\n${kb.custom_ai_knowledge}\n=== END COMPANY-SPECIFIC KNOWLEDGE ===`
+  const customKnowledgeBlock = kbValue(kb?.custom_ai_knowledge)
+    ? `=== YOUR COMPANY-SPECIFIC KNOWLEDGE ===\n${kbValue(kb?.custom_ai_knowledge)}\n=== END COMPANY-SPECIFIC KNOWLEDGE ===`
     : ""
 
   // When a company hasn't configured financing, say so explicitly rather than
   // staying silent — an empty block let the model fall back on generic
   // industry assumptions and offer payment plans that don't exist.
-  const financingBlock = kb?.financing_options
-    ? `=== FINANCING OPTIONS (know this precisely — leads ask about this) ===\n${kb.financing_options}\n=== END FINANCING ===`
+  const financingBlock = kbValue(kb?.financing_options)
+    ? `=== FINANCING OPTIONS (know this precisely — leads ask about this) ===\n${kbValue(kb?.financing_options)}\n=== END FINANCING ===`
     : `=== FINANCING ===\nThis company has NOT given you any financing or payment-plan information. Never say or imply that financing, payment plans, or monthly payments are available. If asked, say you're not the one who handles payment details and the tech can go over the options on-site.\n=== END FINANCING ===`
 
   // Give the model the company's RAW pricing info plus hard rules, and let

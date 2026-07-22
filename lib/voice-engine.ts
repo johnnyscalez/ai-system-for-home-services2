@@ -1,6 +1,7 @@
 import { anthropic } from "@/lib/claude"
 import { buildQualificationBlock } from "@/lib/ai-engine"
 import { createServiceRoleClient } from "@/lib/supabase-server"
+import { kbValue } from "@/lib/kb-utils"
 import { createCalendarEvent } from "@/lib/google-calendar"
 import { determineAgentType, getAgentPrompt, getJobKnowledgeBlock } from "@/lib/voice-agents"
 import { updateSession, appendMessages } from "@/lib/voice-session"
@@ -252,9 +253,9 @@ export async function runVoiceTurn(
   const companyName = company?.name ?? "the company"
   const basePrompt = agent?.generated_system_prompt ||
     `You are ${agentName}, a sales rep for ${companyName}, a ${lead.service_type ?? "HVAC"} company.
-${kb?.business_description ? `About us: ${kb.business_description}` : ""}
-${kb?.services_offered ? `Services: ${kb.services_offered}` : ""}
-${kb?.service_areas ? `Service area: ${kb.service_areas}` : ""}
+${kbValue(kb?.business_description) ? `About us: ${kbValue(kb?.business_description)}` : ""}
+${kbValue(kb?.services_offered) ? `Services: ${kbValue(kb?.services_offered)}` : ""}
+${kbValue(kb?.service_areas) ? `Service area: ${kbValue(kb?.service_areas)}` : ""}
 
 IDENTITY RULE — NEVER BREAK THIS: The company you work for is "${companyName}".
 Every time you say who you're calling from, use exactly this name. Never invent,
@@ -263,20 +264,20 @@ from the description above.`
 
   const leadContext = buildVoiceLeadContext(lead, appointments, session.collected, tz)
 
-  const customKnowledgeBlock = kb?.custom_ai_knowledge
-    ? `=== YOUR COMPANY-SPECIFIC KNOWLEDGE ===\n${kb.custom_ai_knowledge}\n=== END COMPANY-SPECIFIC KNOWLEDGE ===`
+  const customKnowledgeBlock = kbValue(kb?.custom_ai_knowledge)
+    ? `=== YOUR COMPANY-SPECIFIC KNOWLEDGE ===\n${kbValue(kb?.custom_ai_knowledge)}\n=== END COMPANY-SPECIFIC KNOWLEDGE ===`
     : ""
 
   // Voice had no financing block at all, so the job-knowledge blocks used to
   // hardcode "we do have financing options" — a promise for companies that
   // offer none. Now it mirrors the SMS engine: real details when configured,
   // an explicit prohibition when not.
-  const financingBlock = kb?.financing_options
-    ? `=== FINANCING OPTIONS (know this precisely) ===\n${kb.financing_options}\n=== END FINANCING ===`
+  const financingBlock = kbValue(kb?.financing_options)
+    ? `=== FINANCING OPTIONS (know this precisely) ===\n${kbValue(kb?.financing_options)}\n=== END FINANCING ===`
     : `=== FINANCING ===\nThis company has NOT given you any financing or payment-plan information. Never say or imply that financing, payment plans, or monthly payments are available. If asked, say you're not the one who handles payment details and the tech can go over options on-site.\n=== END FINANCING ===`
 
   const pricingPolicyBlock = (() => {
-    const info = (kb as Record<string, unknown> | null)?.pricing_info as string | null
+    const info = kbValue((kb as Record<string, unknown> | null)?.pricing_info as string | null)
     if (!info) return ""
     const feeLines = info.split("\n").map((l: string) => l.trim()).filter((l: string) =>
       /service.?call|trip.?charge|trip.?fee|visit.?fee|diagnostic.?fee|call.?out|dispatch.?fee/i.test(l)
