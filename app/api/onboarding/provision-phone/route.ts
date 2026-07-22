@@ -1,13 +1,14 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { getTwilioClient } from "@/lib/twilio"
+import { zipFromAddress, zipToPoint } from "@/lib/routing"
 
 export async function POST(req: NextRequest) {
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
-  const { state } = await req.json()
+  const { state, officeAddress } = await req.json()
   if (!state) return NextResponse.json({ error: "State required" }, { status: 400 })
 
   const client = getTwilioClient()
@@ -36,16 +37,41 @@ export async function POST(req: NextRequest) {
       })
     }
 
-    // No existing number — search for a local number in the contractor's state
-    let availableNumbers = await client
-      .availablePhoneNumbers("US")
-      .local.list({ inRegion: state, smsEnabled: true, limit: 5 })
+    // Number search, closest-first. Searching by STATE alone is not good
+    // enough: a Chicago contractor was handed a 217 (Springfield) number,
+    // 200 miles from the people it texts. Locals answer local-looking
+    // numbers, so anchor the search on the office's actual coordinates and
+    // widen only if nothing is available.
+    const officePoint = zipToPoint(zipFromAddress(officeAddress))
 
-    // Fall back to any US number if none in that state
+    let availableNumbers: Array<{ phoneNumber: string }> = []
+
+    // inRegion pins the result to the contractor's own state — a pure
+    // radius search around Chicago happily returns Indiana numbers.
+    if (officePoint) {
+      for (const distance of [25, 50, 100]) {
+        availableNumbers = await client.availablePhoneNumbers("US").local.list({
+          nearLatLong: `${officePoint.lat},${officePoint.lng}`,
+          distance,
+          inRegion: state,
+          smsEnabled: true,
+          voiceEnabled: true,
+          limit: 5,
+        })
+        if (availableNumbers.length) break
+      }
+    }
+
+    // Statewide, then anywhere in the US — last resorts only.
     if (!availableNumbers.length) {
       availableNumbers = await client
         .availablePhoneNumbers("US")
-        .local.list({ smsEnabled: true, limit: 5 })
+        .local.list({ inRegion: state, smsEnabled: true, voiceEnabled: true, limit: 5 })
+    }
+    if (!availableNumbers.length) {
+      availableNumbers = await client
+        .availablePhoneNumbers("US")
+        .local.list({ smsEnabled: true, voiceEnabled: true, limit: 5 })
     }
 
     if (!availableNumbers.length) {

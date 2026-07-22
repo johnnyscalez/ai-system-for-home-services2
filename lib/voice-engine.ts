@@ -203,7 +203,7 @@ export async function runVoiceTurn(
       .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, disqualifiers")
       .eq("company_id", session.company_id).single(),
     db.from("knowledge_base")
-      .select("business_description, services_offered, service_areas, custom_ai_knowledge, pricing_info")
+      .select("business_description, services_offered, service_areas, custom_ai_knowledge, pricing_info, financing_options")
       .eq("company_id", session.company_id).single(),
     db.from("appointments")
       .select("id, scheduled_at, status, address, notes, created_at")
@@ -266,6 +266,14 @@ from the description above.`
   const customKnowledgeBlock = kb?.custom_ai_knowledge
     ? `=== YOUR COMPANY-SPECIFIC KNOWLEDGE ===\n${kb.custom_ai_knowledge}\n=== END COMPANY-SPECIFIC KNOWLEDGE ===`
     : ""
+
+  // Voice had no financing block at all, so the job-knowledge blocks used to
+  // hardcode "we do have financing options" — a promise for companies that
+  // offer none. Now it mirrors the SMS engine: real details when configured,
+  // an explicit prohibition when not.
+  const financingBlock = kb?.financing_options
+    ? `=== FINANCING OPTIONS (know this precisely) ===\n${kb.financing_options}\n=== END FINANCING ===`
+    : `=== FINANCING ===\nThis company has NOT given you any financing or payment-plan information. Never say or imply that financing, payment plans, or monthly payments are available. If asked, say you're not the one who handles payment details and the tech can go over options on-site.\n=== END FINANCING ===`
 
   const pricingPolicyBlock = (() => {
     const info = (kb as Record<string, unknown> | null)?.pricing_info as string | null
@@ -362,7 +370,7 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
     : ""
 
   // Note: no pre-computed slots block on fresh calls — the agent calls find_available_slots after getting zip code.
-  const systemPrompt = [voiceRules, basePrompt, pricingPolicyBlock, jobKnowledgeBlock, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext, offeredSlotsBlock, hcpBlock, historyBlock]
+  const systemPrompt = [voiceRules, basePrompt, pricingPolicyBlock, financingBlock, jobKnowledgeBlock, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext, offeredSlotsBlock, hcpBlock, historyBlock]
     .filter(Boolean)
     .join("\n\n")
 

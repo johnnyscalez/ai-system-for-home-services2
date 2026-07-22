@@ -270,9 +270,12 @@ export async function runConversation(
     ? `=== YOUR COMPANY-SPECIFIC KNOWLEDGE ===\n${kb.custom_ai_knowledge}\n=== END COMPANY-SPECIFIC KNOWLEDGE ===`
     : ""
 
+  // When a company hasn't configured financing, say so explicitly rather than
+  // staying silent — an empty block let the model fall back on generic
+  // industry assumptions and offer payment plans that don't exist.
   const financingBlock = kb?.financing_options
     ? `=== FINANCING OPTIONS (know this precisely — leads ask about this) ===\n${kb.financing_options}\n=== END FINANCING ===`
-    : ""
+    : `=== FINANCING ===\nThis company has NOT given you any financing or payment-plan information. Never say or imply that financing, payment plans, or monthly payments are available. If asked, say you're not the one who handles payment details and the tech can go over the options on-site.\n=== END FINANCING ===`
 
   // Give the model the company's RAW pricing info plus hard rules, and let
   // it identify the visit fee semantically — whatever the company calls it.

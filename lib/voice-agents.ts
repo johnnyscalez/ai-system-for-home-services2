@@ -64,8 +64,7 @@ INSTALLATION TIMELINES (rough — never promise specifics):
 • Full system replacement: typically 1-2 days
 • New construction / first-time install: varies, tech will give a timeline on-site
 
-FINANCING (only if they bring it up):
-• "Yeah, most people don't pay cash for a full system replacement — we do have financing options. The tech will go over everything on-site."
+PAYMENT / FINANCING: follow the FINANCING block in your prompt. If no such block appears, you do NOT know of any financing or payment plans — never imply they exist.
 === END HVAC KNOWLEDGE ===`
 
 // ─── Job-type-specialized knowledge blocks ────────────────────────────────────
@@ -154,8 +153,7 @@ INSTALLATION TIMELINES (rough — never promise specifics):
 • Full system (air handler + outdoor unit): typically 1-2 days
 • New construction / first install: varies, tech gives timeline on-site
 
-FINANCING (only if they bring it up):
-• "Most people don't pay cash for a full system — we do have financing options. The tech goes over everything on-site."
+PAYMENT / FINANCING: follow the FINANCING block in your prompt. If no such block appears, you do NOT know of any financing or payment plans — never imply they exist.
 
 WHAT THE ESTIMATE VISIT INCLUDES:
 • Visit fee: follow the SERVICE CALL FEE POLICY block in your prompt. If none, say "It's completely free — no trip charge."

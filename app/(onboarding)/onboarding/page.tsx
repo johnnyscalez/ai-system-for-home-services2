@@ -129,7 +129,7 @@ export default function OnboardingPage() {
       const res = await fetch("/api/onboarding/provision-phone", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ country: "US", state: business.state }),
+        body: JSON.stringify({ country: "US", state: business.state, officeAddress: business.officeAddress }),
       })
       const data = await res.json()
 
