@@ -51,6 +51,22 @@ export function addressToPoint(address: string | null | undefined): GeoPoint | n
   return zipToPoint(zipFromAddress(address))
 }
 
+/**
+ * All US zips whose centroid lies within `radiusMiles` of the given center
+ * zip. Straight-line distance on ZCTA centroids — the same resolution the
+ * dispatch engine routes with. Full scan of ~33k centroids is <5ms.
+ * Returns [] when the center zip is unknown.
+ */
+export function zipsWithinRadius(centerZip: string | null | undefined, radiusMiles: number): string[] {
+  const center = zipToPoint(centerZip)
+  if (!center || !(radiusMiles > 0)) return []
+  const out: string[] = []
+  for (const [zip, [lat, lng]] of Object.entries(ZIPS)) {
+    if (haversineMiles(center, { lat, lng }) <= radiusMiles) out.push(zip)
+  }
+  return out.sort()
+}
+
 function haversineMiles(a: GeoPoint, b: GeoPoint): number {
   const R = 3958.8
   const dLat = ((b.lat - a.lat) * Math.PI) / 180

@@ -73,10 +73,10 @@ export type BusinessData = {
   companyName: string
   serviceType: ServiceType | ""
   state: string
-  serviceArea: string
+  officeAddress: string
+  serviceRadius: string
   notificationPhone: string
   country: string
-  avgJobValue: string
 }
 
 interface Props {
@@ -93,7 +93,11 @@ export function StepBusiness({ data, onChange, onNext, onBack, error }: Props) {
       onChange({ ...data, [field]: e.target.value })
   }
 
-  const canProceed = !!data.companyName && !!data.serviceType && !!data.state && !!data.serviceArea && !!data.notificationPhone
+  // Office address must include a 5-digit zip — the backend resolves the
+  // service area (all zips within the radius) from that zip's centroid.
+  const addressHasZip = /\b\d{5}\b/.test(data.officeAddress)
+  const radiusOk = Number(data.serviceRadius) > 0
+  const canProceed = !!data.companyName && !!data.serviceType && !!data.state && addressHasZip && radiusOk
 
 
   return (
@@ -151,18 +155,39 @@ export function StepBusiness({ data, onChange, onNext, onBack, error }: Props) {
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="serviceArea">What areas do you serve?</Label>
+          <Label htmlFor="officeAddress">Office address</Label>
           <Input
-            id="serviceArea"
-            placeholder="Dallas-Fort Worth metro, TX"
-            value={data.serviceArea}
-            onChange={set("serviceArea")}
+            id="officeAddress"
+            placeholder="4501 Main St, Dallas, TX 75201"
+            value={data.officeAddress}
+            onChange={set("officeAddress")}
           />
-          <p className="text-xs text-muted-foreground">City, county, or metro area. Your AI will use this to qualify leads.</p>
+          <p className="text-xs text-muted-foreground">
+            Include the zip code — your service area is measured from here.
+            {data.officeAddress && !addressHasZip && (
+              <span className="text-destructive"> Add the 5-digit zip code.</span>
+            )}
+          </p>
         </div>
 
         <div className="space-y-1.5">
-          <Label htmlFor="notificationPhone">Appointment notification number</Label>
+          <Label htmlFor="serviceRadius">How far out do you serve? (miles)</Label>
+          <Input
+            id="serviceRadius"
+            type="number"
+            min={1}
+            max={200}
+            placeholder="25"
+            value={data.serviceRadius}
+            onChange={set("serviceRadius")}
+          />
+          <p className="text-xs text-muted-foreground">
+            We map every zip code within this radius of your office — the AI books jobs inside it and politely turns down leads outside it.
+          </p>
+        </div>
+
+        <div className="space-y-1.5">
+          <Label htmlFor="notificationPhone">Appointment notification number <span className="text-muted-foreground font-normal">(optional)</span></Label>
           <Input
             id="notificationPhone"
             type="tel"
@@ -171,21 +196,7 @@ export function StepBusiness({ data, onChange, onNext, onBack, error }: Props) {
             onChange={set("notificationPhone")}
           />
           <p className="text-xs text-muted-foreground">
-            We&apos;ll text this number the moment your AI books an appointment.
-          </p>
-        </div>
-
-        <div className="space-y-1.5">
-          <Label htmlFor="avgJobValue">Average job value ($)</Label>
-          <Input
-            id="avgJobValue"
-            type="number"
-            placeholder="3500"
-            value={data.avgJobValue}
-            onChange={set("avgJobValue")}
-          />
-          <p className="text-xs text-muted-foreground">
-            Used to calculate your projected revenue on the dashboard. You can update this later.
+            We&apos;ll text this number the moment your AI books an appointment. You can add it later in Settings.
           </p>
         </div>
 

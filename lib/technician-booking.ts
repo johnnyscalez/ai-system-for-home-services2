@@ -79,13 +79,22 @@ export async function findSlotsForLead(
 ): Promise<FindSlotsResult> {
   const db = createServiceRoleClient()
 
-  const [techRes, configRes] = await Promise.all([
+  const [techRes, configRes, companyAreaRes] = await Promise.all([
     db.from("technicians").select("*").eq("company_id", companyId).eq("status", "active").order("name"),
     db.from("ai_agent_config")
       .select("available_days, appointment_windows, booking_horizon_days, timezone")
       .eq("company_id", companyId)
       .single(),
+    db.from("companies").select("service_area_zips").eq("id", companyId).single(),
   ])
+
+  // Company-level service radius gate (set at onboarding: office + radius →
+  // every zip inside it). Techs with serves_all_areas=true mean "all areas WE
+  // serve", not "all of the US" — this is the boundary that makes that true.
+  const areaZips = (companyAreaRes.data?.service_area_zips as string[] | null) ?? null
+  if (zip && areaZips && areaZips.length > 0 && !areaZips.includes(zip.slice(0, 5))) {
+    return { found: false, reason: "no_zip_match" }
+  }
 
   const allTechs = (techRes.data ?? []) as Technician[]
   if (allTechs.length === 0) return { found: false, reason: "no_technicians" }

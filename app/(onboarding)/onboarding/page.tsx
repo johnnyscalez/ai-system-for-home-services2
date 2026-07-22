@@ -52,10 +52,10 @@ export default function OnboardingPage() {
     companyName: "",
     serviceType: "",
     state: "",
-    serviceArea: "",
+    officeAddress: "",
+    serviceRadius: "",
     notificationPhone: "",
     country: "US",
-    avgJobValue: "",
   })
 
   const [intelligence, setIntelligence] = useState<IntelligenceData>({
@@ -108,8 +108,8 @@ export default function OnboardingPage() {
   }, [step])
 
   function handleStep2Next() {
-    if (!business.companyName || !business.serviceType || !business.serviceArea || !business.notificationPhone) {
-      setError("Please fill in all required fields.")
+    if (!business.companyName || !business.serviceType || !/\b\d{5}\b/.test(business.officeAddress) || !(Number(business.serviceRadius) > 0)) {
+      setError("Please fill in all required fields — the office address needs its 5-digit zip code.")
       return
     }
     setError("")
@@ -182,7 +182,9 @@ export default function OnboardingPage() {
   const kbForAgent = {
     companyName: business.companyName,
     serviceType: business.serviceType,
-    serviceArea: business.serviceArea,
+    serviceArea: business.serviceRadius
+      ? `Within ${business.serviceRadius} miles of ${business.officeAddress}`
+      : business.officeAddress,
     businessDescription: intelligence.businessDescription,
     servicesOffered: intelligence.servicesOffered,
     pricingInfo: intelligence.pricingInfo,
@@ -283,7 +285,7 @@ export default function OnboardingPage() {
               kb={kbForAgent}
               companyName={business.companyName}
               serviceType={business.serviceType}
-              serviceArea={business.serviceArea}
+              serviceArea={kbForAgent.serviceArea}
               onChange={setAiAgent}
               onNext={handleStep4Next}
               onBack={() => setStep(3)}

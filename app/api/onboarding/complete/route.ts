@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase-server"
 import { generateSystemPrompt } from "@/lib/claude"
 import type { KnowledgeBaseData, AgentConfigData } from "@/lib/claude"
+import { zipFromAddress, zipsWithinRadius } from "@/lib/routing"
 
 export async function POST(req: NextRequest) {
   try {
@@ -16,13 +17,24 @@ export async function POST(req: NextRequest) {
     // Use service role to bypass RLS for all onboarding inserts
     const supabase = createServiceRoleClient()
 
+    // Service area = every zip within the radius of the office. Resolved once
+    // here from the embedded ZCTA centroid dataset; the slot engine gates
+    // out-of-area leads on this list, and the office point anchors routing.
+    const officeAddress = String(business.officeAddress ?? "").trim()
+    const radiusMiles = Math.min(200, Math.max(0, parseInt(business.serviceRadius, 10) || 0))
+    const officeZip = zipFromAddress(officeAddress)
+    const areaZips = radiusMiles > 0 ? zipsWithinRadius(officeZip, radiusMiles) : []
+    const serviceAreaText = radiusMiles > 0
+      ? `Within ${radiusMiles} miles of ${officeAddress}`
+      : officeAddress
+
     // Generate system prompt (non-fatal if fails)
     let systemPrompt = ""
     try {
       const kb: KnowledgeBaseData = {
         companyName: business.companyName,
         serviceType: business.serviceType,
-        serviceArea: business.serviceArea,
+        serviceArea: serviceAreaText,
         businessDescription: intelligence.businessDescription,
         servicesOffered: intelligence.servicesOffered,
         pricingInfo: intelligence.pricingInfo,
@@ -66,10 +78,6 @@ export async function POST(req: NextRequest) {
       return raw // return as-is if we can't normalize
     }
 
-    // Sanitize avg_job_value — reject NaN
-    const rawAvg = parseFloat(business.avgJobValue)
-    const avgJobValue = isNaN(rawAvg) ? 0 : rawAvg
-
     // 1. Create company
     const { data: company, error: companyError } = await supabase
       .from("companies")
@@ -77,9 +85,11 @@ export async function POST(req: NextRequest) {
         name: business.companyName,
         owner_id: user.id,
         service_type: business.serviceType,
-        service_area: business.serviceArea,
+        service_area: serviceAreaText,
+        office_address: officeAddress || null,
+        service_radius_miles: radiusMiles || null,
+        service_area_zips: areaZips.length > 0 ? areaZips : null,
         notification_phone: business.notificationPhone ? normalizePhone(business.notificationPhone) : null,
-        avg_job_value: avgJobValue,
         onboarding_completed: true,
         webhook_secret: webhookSecret,
       })
