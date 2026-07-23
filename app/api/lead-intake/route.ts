@@ -1,42 +1,84 @@
 import { NextRequest, NextResponse } from "next/server"
+import { createServiceRoleClient } from "@/lib/supabase-server"
 
-// Same-origin proxy the landing page form calls. This exists so the shared
-// secret the agent requires (x-intake-secret) never ships to the browser —
-// a client-side fetch straight to the agent's /api/intake would put that
-// secret in plain sight in the page's JS bundle and network tab. This route
-// runs server-side only; it's the one place that secret ever gets attached.
+// FieldBuilt's OWN funnel intake — the landing page qualify-form posts here.
 //
-// AGENT_INTAKE_URL + AGENT_INTAKE_SECRET are set once the agent project is
-// deployed (see the "ai agent for fieldbuilt" project). Until then this
-// route responds with a clear error instead of a silent failure.
+// Leads land directly in our system under the "FieldBuilt AI" sales tenant
+// (service_type: fieldbuilt_sales) and get worked by our own AI on the sales
+// playbook: instant text, qualification already done by the form, walkthrough
+// call booked by conversation. We are our own first customer — the AI that
+// texts the prospect IS the product being sold.
+//
+// Qualified leads → forwarded to the production lead webhook (same code path
+// every contractor lead takes: AI opener + follow-up sequences + notifications).
+// Unqualified leads → stored for the record, AI paused, no outreach.
 
 export async function POST(req: NextRequest) {
-  const agentUrl = process.env.AGENT_INTAKE_URL
-  const agentSecret = process.env.AGENT_INTAKE_SECRET
-
-  if (!agentUrl || !agentSecret) {
-    console.error("lead-intake: AGENT_INTAKE_URL / AGENT_INTAKE_SECRET not configured yet")
-    return NextResponse.json({ error: "Intake not configured" }, { status: 503 })
-  }
-
   const body = await req.json().catch(() => null)
-  if (!body || typeof body.phone !== "string") {
+  if (!body || typeof body.phone !== "string" || !body.phone.trim()) {
     return NextResponse.json({ error: "phone is required" }, { status: 400 })
   }
 
+  const db = createServiceRoleClient()
+  const { data: salesCo } = await db
+    .from("companies")
+    .select("id, webhook_secret")
+    .eq("service_type", "fieldbuilt_sales")
+    .limit(1)
+    .maybeSingle()
+
+  if (!salesCo) {
+    console.error("lead-intake: no fieldbuilt_sales company configured")
+    return NextResponse.json({ error: "Intake not configured" }, { status: 503 })
+  }
+
+  const qualified = body.qualified === true
+  const notes = [
+    `FieldBuilt funnel lead (${body.angle ?? "unknown angle"})`,
+    body.techs ? `Techs: ${body.techs}` : null,
+    body.revenue ? `Revenue: ${body.revenue}` : null,
+    body.tier ? `Tier: ${body.tier}` : null,
+    qualified ? "QUALIFIED by form" : "NOT qualified by form",
+  ].filter(Boolean).join(" · ")
+
+  if (!qualified) {
+    // Keep the record, but the AI never chases someone the form told "not a fit"
+    await db.from("leads").insert({
+      company_id: salesCo.id,
+      first_name: typeof body.first_name === "string" ? body.first_name : null,
+      phone: body.phone,
+      email: typeof body.email === "string" ? body.email : null,
+      source: "website",
+      channel: "sms",
+      status: "unqualified",
+      ai_paused: true,
+      notes,
+    })
+    return NextResponse.json({ ok: true, qualified: false })
+  }
+
+  // Qualified → the exact same pipeline every contractor lead rides:
+  // lead created → AI opener SMS within seconds → follow-up sequences → CRM
+  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "http://localhost:3000"
   try {
-    const res = await fetch(agentUrl, {
+    const res = await fetch(`${appUrl}/api/webhooks/lead`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "x-intake-secret": agentSecret,
+        "x-webhook-secret": salesCo.webhook_secret,
       },
-      body: JSON.stringify(body),
+      body: JSON.stringify({
+        first_name: body.first_name,
+        phone: body.phone,
+        email: body.email,
+        source: "website",
+        notes,
+      }),
     })
     const data = await res.json().catch(() => ({}))
-    return NextResponse.json(data, { status: res.status })
+    return NextResponse.json({ ok: res.ok, ...data }, { status: res.ok ? 200 : res.status })
   } catch (err) {
-    console.error("lead-intake: forwarding to agent failed:", err)
-    return NextResponse.json({ error: "Failed to reach intake" }, { status: 502 })
+    console.error("lead-intake: internal forward failed:", err)
+    return NextResponse.json({ error: "Failed to process lead" }, { status: 502 })
   }
 }

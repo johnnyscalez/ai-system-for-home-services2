@@ -1516,8 +1516,11 @@ This person is an existing customer. They already trust the company. Your job is
     const mark = (ok: boolean, label: string, note?: string) =>
       `  ${label}: ${ok ? `✓ on file${note ? ` (${note})` : ""}` : "✗ MISSING — collect it"}`
 
+    // FieldBuilt's own sales conversations book a CALL, not a home visit —
+    // no property address is required (or wanted).
+    const isSalesConvo = String(L.service_type ?? "") === "fieldbuilt_sales"
     const requiredMissing: string[] = []
-    if (!hasAddress) requiredMissing.push("property address")
+    if (!hasAddress && !isSalesConvo) requiredMissing.push("property address")
     if (!hasRealPhone) requiredMissing.push("mobile phone number")
     if (!hasName) requiredMissing.push("name")
 
