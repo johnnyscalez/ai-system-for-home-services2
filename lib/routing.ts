@@ -36,10 +36,36 @@ const AVG_MPH = 28
  */
 export const ROUTE_SLACK_MIN = 40
 
+// The centroid dataset is US Census ZCTAs (~33k), which omit PO-box-only and
+// single-building zips (20500, 60197, 30301, ...). A business whose address
+// carries one of those would otherwise resolve to nothing — no service area,
+// no routing anchor, silently. So when an exact zip is missing we fall back to
+// the centroid of every zip sharing its 3-digit prefix (the sectional center
+// facility, ~10-30 mile accuracy) — more than precise enough for a radius
+// measured in tens of miles. Built once, lazily.
+let prefixCentroids: Record<string, GeoPoint> | null = null
+function prefixCentroid(zip5: string): GeoPoint | null {
+  if (!prefixCentroids) {
+    const acc: Record<string, { lat: number; lng: number; n: number }> = {}
+    for (const [z, [lat, lng]] of Object.entries(ZIPS)) {
+      const p = z.slice(0, 3)
+      const a = acc[p] ?? (acc[p] = { lat: 0, lng: 0, n: 0 })
+      a.lat += lat; a.lng += lng; a.n += 1
+    }
+    prefixCentroids = {}
+    for (const [p, a] of Object.entries(acc)) {
+      prefixCentroids[p] = { lat: a.lat / a.n, lng: a.lng / a.n }
+    }
+  }
+  return prefixCentroids[zip5.slice(0, 3)] ?? null
+}
+
 export function zipToPoint(zip: string | null | undefined): GeoPoint | null {
   if (!zip) return null
-  const hit = ZIPS[zip.slice(0, 5)]
-  return hit ? { lat: hit[0], lng: hit[1] } : null
+  const zip5 = zip.slice(0, 5)
+  const hit = ZIPS[zip5]
+  if (hit) return { lat: hit[0], lng: hit[1] }
+  return prefixCentroid(zip5)
 }
 
 /** Extract a 5-digit zip from a freeform address string. */

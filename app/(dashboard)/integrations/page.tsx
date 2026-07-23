@@ -13,7 +13,7 @@ export default async function IntegrationsPage({
 
   const { data: profile } = await supabase
     .from("users")
-    .select("company_id, companies(webhook_secret, name)")
+    .select("company_id, companies(webhook_secret, name, integration_mode)")
     .eq("id", user.id)
     .single()
 
@@ -21,7 +21,14 @@ export default async function IntegrationsPage({
 
   const company = (
     Array.isArray(profile.companies) ? profile.companies[0] : profile.companies
-  ) as { webhook_secret: string; name: string | null } | null
+  ) as { webhook_secret: string; name: string | null; integration_mode: string | null } | null
+
+  const { data: hcpConn } = await supabase
+    .from("hcp_connections")
+    .select("id")
+    .eq("company_id", profile.company_id)
+    .eq("is_active", true)
+    .maybeSingle()
 
   const { data: integrations } = await supabase
     .from("integrations")
@@ -45,6 +52,8 @@ export default async function IntegrationsPage({
       companyName={company?.name ?? ""}
       webhookSecret={webhookSecret}
       appUrl={appUrl}
+      hcpConnected={Boolean(hcpConn)}
+      integrationMode={company?.integration_mode ?? "standalone"}
       toast={params.success ?? params.error ?? null}
       toastType={params.success ? "success" : params.error ? "error" : null}
     />

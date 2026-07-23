@@ -60,39 +60,64 @@ export async function GET(req: NextRequest) {
   const llData = await llRes.json()
   const userToken = llData.access_token || tokenData.access_token
 
-  // Fetch pages: try personal accounts first, fall back to Business Manager
-  const pagesRes = await fetch(
+  // Collect pages from EVERY source and merge — a client's page reaches us
+  // three different ways depending on how it's shared, and checking only one
+  // is why an agency-onboarded page came back empty:
+  //   1. /me/accounts       — pages the person directly has a role on
+  //   2. {biz}/owned_pages   — pages the Business Manager OWNS
+  //   3. {biz}/client_pages  — pages PARTNER-SHARED into the BM by a client
+  //                            (the runbook's "share your page with our BM"
+  //                            step lands a page HERE, not in owned_pages)
+  type FbPage = { id: string; name: string; access_token: string; fan_count?: number }
+  const collected: FbPage[] = []
+
+  const meRes = await fetch(
     `https://graph.facebook.com/me/accounts?access_token=${userToken}&fields=id,name,access_token,fan_count&limit=100`
-  )
-  const pagesData = await pagesRes.json()
-  let allPages: Array<{ id: string; name: string; access_token: string; fan_count?: number }> =
-    pagesData.data ?? []
+  ).then((r) => r.json()).catch(() => ({}))
+  collected.push(...((meRes.data as FbPage[]) ?? []))
 
-  // Business Manager fallback — pages managed via BM don't appear in /me/accounts
-  if (!allPages.length) {
-    try {
-      const bizRes = await fetch(
-        `https://graph.facebook.com/me/businesses?access_token=${userToken}&fields=id,name&limit=10`
-      )
-      const bizData = await bizRes.json()
-      const businesses: Array<{ id: string }> = bizData.data ?? []
+  try {
+    const bizRes = await fetch(
+      `https://graph.facebook.com/me/businesses?access_token=${userToken}&fields=id,name&limit=25`
+    ).then((r) => r.json())
+    const businesses: Array<{ id: string }> = bizRes.data ?? []
 
-      const pageResults = await Promise.all(
-        businesses.map((biz) =>
+    const perBiz = await Promise.all(
+      businesses.flatMap((biz) =>
+        ["owned_pages", "client_pages"].map((edge) =>
           fetch(
-            `https://graph.facebook.com/${biz.id}/owned_pages?access_token=${userToken}&fields=id,name,access_token,fan_count&limit=100`
-          ).then((r) => r.json()).then((d) => d.data ?? []).catch(() => [])
+            `https://graph.facebook.com/${biz.id}/${edge}?access_token=${userToken}&fields=id,name,access_token,fan_count&limit=100`
+          ).then((r) => r.json()).then((d) => (d.data as FbPage[]) ?? []).catch(() => [])
         )
       )
-      allPages = pageResults.flat()
-    } catch {
-      // ignore — will fall through to no_pages error
-    }
+    )
+    for (const list of perBiz) collected.push(...list)
+  } catch {
+    // ignore — the me/accounts result may still have pages
   }
+
+  // Dedupe by page id (a page can appear in more than one source)
+  const allPages: FbPage[] = Object.values(
+    Object.fromEntries(collected.filter((p) => p?.id).map((p) => [p.id, p]))
+  )
 
   if (!allPages.length) {
     return NextResponse.redirect(`${appUrl}/integrations?error=no_pages`)
   }
+
+  // Backfill page access tokens: client_pages sometimes returns a page with no
+  // token, and a page token is what we actually message and subscribe with.
+  await Promise.all(
+    allPages.map(async (p) => {
+      if (p.access_token) return
+      try {
+        const t = await fetch(
+          `https://graph.facebook.com/${p.id}?fields=access_token&access_token=${userToken}`
+        ).then((r) => r.json())
+        if (t?.access_token) p.access_token = t.access_token
+      } catch { /* leave tokenless — surfaced in setup, still selectable */ }
+    })
+  )
 
   // Store pages + user token in integrations table, mark setup as incomplete
   const serviceSupabase = createServiceRoleClient()

@@ -5,7 +5,7 @@ import { useState, useEffect } from "react"
 import { useRouter } from "next/navigation"
 import {
   Check, Copy, ExternalLink, AlertCircle, Zap, Globe,
-  ChevronRight, CheckCircle2, XCircle, RefreshCw, Info, Loader2, X,
+  ChevronRight, CheckCircle2, XCircle, RefreshCw, Info, Loader2, X, Wrench,
 } from "lucide-react"
 
 interface Integration {
@@ -36,6 +36,8 @@ interface Props {
   toastType: "success" | "error" | null
   whatsapp: WhatsAppConnection | null
   companyName: string
+  hcpConnected: boolean
+  integrationMode: string
 }
 
 function DotGrid() {
@@ -436,6 +438,104 @@ function GoogleAdsCard({ webhookUrl }: { webhookUrl: string }) {
 }
 
 // ─── Website form card ────────────────────────────────────────────────────────
+
+function HousecallProCard({ connected, integrationMode }: { connected: boolean; integrationMode: string }) {
+  const router = useRouter()
+  const [apiKey, setApiKey] = useState("")
+  const [busy, setBusy] = useState(false)
+  const [error, setError] = useState<string | null>(null)
+
+  const isV2 = integrationMode === "housecall_pro"
+
+  async function connect() {
+    setBusy(true); setError(null)
+    const res = await fetch("/api/integrations/housecall/connect", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ api_key: apiKey }),
+    })
+    const data = await res.json().catch(() => ({}))
+    setBusy(false)
+    if (!res.ok) { setError(data.error ?? "Connection failed"); return }
+    setApiKey("")
+    router.refresh()
+  }
+
+  return (
+    <motion.div
+      initial={{ opacity: 0, y: 24 }}
+      animate={{ opacity: 1, y: 0 }}
+      transition={{ delay: 0.05 }}
+      whileHover={{ y: -3, transition: { type: "spring", stiffness: 300 } }}
+      className="bg-white rounded-2xl border border-[#E7E5E4] overflow-hidden"
+      style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.06), 0 1px 3px rgba(0,0,0,0.04)" }}
+    >
+      <div className="p-6 pb-4 flex items-start justify-between">
+        <div className="flex items-center gap-4">
+          <div
+            className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
+            style={{ background: "linear-gradient(135deg, #1C1917, #44403C)", boxShadow: "0 4px 12px rgba(0,0,0,0.15)" }}
+          >
+            <Wrench className="w-6 h-6 text-white" />
+          </div>
+          <div>
+            <h3 className="font-bold text-[#1C1917] text-lg flex items-center gap-2">
+              Housecall Pro
+              {connected && isV2 && (
+                <span className="inline-flex items-center gap-1 text-xs font-semibold text-green-700 bg-green-50 border border-green-100 rounded-full px-2 py-0.5">
+                  <CheckCircle2 className="w-3 h-3" /> AI employee mode
+                </span>
+              )}
+            </h3>
+            <p className="text-sm text-[#78716C] mt-0.5">
+              The AI books into your real calendar and reads your techs from Housecall Pro.
+            </p>
+          </div>
+        </div>
+      </div>
+
+      <div className="px-6 pb-6">
+        {connected && isV2 ? (
+          <p className="text-sm text-[#57534E] bg-[#FAFAF8] border border-[#E7E5E4] rounded-xl px-4 py-3">
+            Connected. Every booking the AI makes is pushed into Housecall Pro with the
+            conversation summary in the job notes, and technicians and schedules sync automatically.
+          </p>
+        ) : (
+          <>
+            {connected && !isV2 && (
+              <p className="text-xs text-amber-700 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2 mb-3">
+                A connection exists but this account is still in standalone mode — re-submit the key to finish the switch.
+              </p>
+            )}
+            <p className="text-xs text-[#78716C] mb-3">
+              Connecting switches this account to <strong>AI employee mode</strong>: bookings go
+              straight into Housecall Pro, tech schedules come from HCP, and the dashboard becomes
+              the AI performance view. Find the key in Housecall Pro → Settings → API (MAX or XL plans only).
+            </p>
+            <div className="flex flex-col sm:flex-row gap-2">
+              <input
+                type="password"
+                placeholder="Paste the Housecall Pro API key"
+                value={apiKey}
+                onChange={(e) => setApiKey(e.target.value)}
+                disabled={busy}
+                className="flex-1 rounded-xl border border-[#E7E5E4] bg-white px-4 py-2.5 text-sm outline-none focus:border-[#F97316] focus:ring-2 focus:ring-[#F97316]/20"
+              />
+              <button
+                onClick={connect}
+                disabled={busy || apiKey.trim().length < 20}
+                className="inline-flex items-center justify-center gap-2 rounded-xl bg-[#F97316] px-5 py-2.5 text-sm font-semibold text-white transition-colors hover:bg-[#EA580C] disabled:opacity-40"
+              >
+                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : "Connect"}
+              </button>
+            </div>
+            {error && <p className="text-xs text-red-600 mt-2">{error}</p>}
+          </>
+        )}
+      </div>
+    </motion.div>
+  )
+}
 
 function WebsiteFormCard({ webhookUrl, secret }: { webhookUrl: string; secret: string }) {
   const [tab, setTab] = useState<"url" | "html" | "js">("url")
@@ -944,7 +1044,7 @@ function WhatsAppCard({ connection, companyName }: { connection: WhatsAppConnect
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast, toastType, whatsapp, companyName }: Props) {
+export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast, toastType, whatsapp, companyName, hcpConnected, integrationMode }: Props) {
   const [showToast, setShowToast] = useState(!!toast)
 
   useEffect(() => {
@@ -1029,6 +1129,7 @@ export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast,
 
         {/* Cards */}
         <div className="space-y-5">
+          <HousecallProCard connected={hcpConnected} integrationMode={integrationMode} />
           <FacebookCard integration={byType("facebook")} errorCode={toast === "no_pages" ? "no_pages" : null} />
           <WhatsAppCard connection={whatsapp} companyName={companyName} />
           <GoogleAdsCard webhookUrl={googleWebhookUrl} />
