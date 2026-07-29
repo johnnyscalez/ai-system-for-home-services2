@@ -503,7 +503,12 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
 
     let toolResultContent: string
     if (!slotsResult.found) {
-      if (slotsResult.reason === "no_zip_match") {
+      if (slotsResult.reason === "job_not_offered") {
+        toolResultContent =
+          `SERVICE_NOT_OFFERED: the company does not offer this type of job. ` +
+          `Respond warmly in 2 sentences — say that's not something they handle, and you hope they find the right person for it. ` +
+          `Do NOT offer an appointment. Then call update_lead_status("closed_lost") and end_call("not_interested").`
+      } else if (slotsResult.reason === "no_zip_match") {
         toolResultContent =
           `OUTSIDE_SERVICE_AREA: zip code "${zip}" is not covered by any active technician. ` +
           `Respond warmly in 2 sentences — say you unfortunately don't serve that area and you hope they find someone quickly. ` +

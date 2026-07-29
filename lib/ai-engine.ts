@@ -597,6 +597,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         no_specialization_match: "no technician is trained for this service type",
         no_zip_match:            "this zip code is outside our current service area",
         no_slots:                "all technicians are fully booked for the next few days",
+        job_not_offered:         "this is not a service the company offers",
       }
       const why = slotsResult.found === false
         ? (reasonLabels[slotsResult.reason] ?? slotsResult.reason)
@@ -620,6 +621,10 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       // Those phrases imply future checking that won't happen. Be direct about what
       // the system found (or didn't find) and what happens next.
       const noSlotsContext = slotsResult.found === false ? {
+        job_not_offered:
+          `You just checked and this is NOT a service the company offers at all (not an availability or area issue). ` +
+          `Say warmly and honestly: that's not something we handle, and you hope they find the right person for it. ` +
+          `Do NOT offer an appointment, do NOT say "let me check", and do NOT promise a callback to do the work. Keep it brief and kind.`,
         no_zip_match:
           `You just checked in real time and found that zip code ${findSlotsZip ?? "provided"} is outside the current service area. ` +
           `Say: we checked and unfortunately that area is a bit outside where we currently operate, but our team will personally reach out within 24 hours to see if we can make it work. ` +
@@ -661,7 +666,11 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
           ? "We checked and that area is just outside our current coverage — our team will reach out within 24 hours to see if we can make it work!"
           : "We checked and we're fully booked right now — our team will reach out within 24 hours the moment something opens up!"
       }
-      action = { type: "update_status", status: "needs_attention" }
+      // A service we don't offer is a clean decline (closed_lost); everything
+      // else (area, capacity, setup) is a human-follow-up flag.
+      action = slotsResult.found === false && slotsResult.reason === "job_not_offered"
+        ? { type: "update_status", status: "closed_lost" }
+        : { type: "update_status", status: "needs_attention" }
       return { response: responseText, action }
     }
 

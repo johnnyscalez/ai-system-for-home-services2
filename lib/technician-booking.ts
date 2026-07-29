@@ -66,7 +66,7 @@ export type SlotWithTech = {
 
 export type FindSlotsResult =
   | { found: true;  slots: SlotWithTech[] }
-  | { found: false; reason: "no_technicians" | "no_specialization_match" | "no_zip_match" | "no_slots" }
+  | { found: false; reason: "no_technicians" | "no_specialization_match" | "no_zip_match" | "no_slots" | "job_not_offered" }
 
 /**
  * Find real available booking slots for a specific job type and zip code.
@@ -96,7 +96,7 @@ export async function findSlotsForLead(
     return { found: false, reason: "no_zip_match" }
   }
 
-  const allTechs = (techRes.data ?? []) as Technician[]
+  let allTechs = (techRes.data ?? []) as Technician[]
   if (allTechs.length === 0) return { found: false, reason: "no_technicians" }
 
   const config       = configRes.data
@@ -106,7 +106,19 @@ export async function findSlotsForLead(
   const windows      = ((config?.appointment_windows as AppointmentWindow[] | null) ?? DEFAULT_WINDOWS)
                          .filter(w => w.enabled)
 
-  // 1. Specialization filter
+  // 0. Job-type capability filter — the primary work-routing gate.
+  // A tech handles a job type if their job_types list is empty (does everything)
+  // or explicitly includes it. If NO active tech handles this job type, the
+  // company doesn't offer it → the AI declines gracefully (distinct from an
+  // out-of-area miss). Runs before specialization/zip so "we don't do that"
+  // beats "not in your area".
+  if (jobType) {
+    const offering = allTechs.filter(t => !t.job_types?.length || t.job_types.includes(jobType))
+    if (offering.length === 0) return { found: false, reason: "job_not_offered" }
+    allTechs = offering
+  }
+
+  // 1. Specialization filter (legacy; inert for companies that don't set specializations)
   const targetSpecs = jobType ? (JOB_TYPE_SPECIALIZATION_MAP[jobType] ?? []) : []
   let candidates = targetSpecs.length === 0
     ? allTechs
@@ -327,11 +339,18 @@ export async function selectTechnician(
   const aptHour = aptDate.getHours()
   const aptMin  = aptDate.getMinutes()
 
-  // 2. Filter by specialization
+  // 1.5 Job-type capability filter — matches findSlotsForLead so assignment
+  // respects the same owner-vs-crew routing. Empty job_types = handles all.
+  const jobCapable = jobType
+    ? techs.filter(t => !t.job_types?.length || t.job_types.includes(jobType))
+    : techs
+  const techPool = jobCapable.length > 0 ? jobCapable : techs
+
+  // 2. Filter by specialization (legacy; inert when specializations unset)
   const targetSpecs = jobType ? (JOB_TYPE_SPECIALIZATION_MAP[jobType] ?? []) : []
   let candidates = targetSpecs.length === 0
-    ? techs  // no specific spec required — any tech qualifies
-    : techs.filter(t =>
+    ? techPool  // no specific spec required — any tech qualifies
+    : techPool.filter(t =>
         t.specializations.length === 0 ||  // tech marked as general (no spec filter)
         t.specializations.some(s => targetSpecs.includes(s))
       )

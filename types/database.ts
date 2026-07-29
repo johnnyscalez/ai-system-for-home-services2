@@ -181,6 +181,10 @@ export interface Technician {
   system_email: string | null
   photo_url: string | null
   specializations: string[]
+  // Job types this tech handles. Empty = all types (default, backward-compatible
+  // for companies that don't split work by tech). Non-empty = ONLY these enum
+  // job_type values — the routing gate used by e.g. owner-vs-crew splits.
+  job_types: string[]
   zip_codes: string[]
   serves_all_areas: boolean
   schedule: TechnicianSchedule
