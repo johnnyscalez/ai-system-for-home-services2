@@ -19,6 +19,10 @@ export type EngineResult = {
   response: string
   action?: ConversationAction
   outboundConversationId?: string
+  // Set when the agent intentionally stays silent (e.g. a Messenger duct lead
+  // who refused the required upsell). Tells processAndSave NOT to regenerate a
+  // fallback reply, and the channel send skips an empty response.
+  silent?: boolean
 }
 
 const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
@@ -147,7 +151,7 @@ export async function runConversation(
       .order("created_at", { ascending: true }),
     supabase
       .from("ai_agent_config")
-      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, per_day_slots, disqualifiers, qualifying_questions")
+      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, per_day_slots, disqualifiers, qualifying_questions, messenger_instructions")
       .eq("company_id", companyId)
       .single(),
     supabase
@@ -378,7 +382,17 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
 
 === END SMS HARD RULES ===`
 
-  const staticPrefix = [baseSystemPrompt, financingBlock, pricingPolicyBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext]
+  // Channel-specific override flow, injected ONLY for Messenger and ONLY when
+  // the company has configured messenger_instructions (empty for everyone else,
+  // so no other account changes). Placed LAST in the static prefix so it takes
+  // precedence over the generic flow/pricing rules it is meant to override.
+  const leadChannel = typeof (lead as Record<string, unknown>).channel === "string"
+    ? (lead as Record<string, unknown>).channel as string : "sms"
+  const messengerBlock = (leadChannel === "messenger" && kbValue(agent?.messenger_instructions))
+    ? `=== MESSENGER CHANNEL FLOW — HIGHEST PRIORITY, OVERRIDES ANY CONFLICTING RULE ABOVE ===\n${agent!.messenger_instructions}\n=== END MESSENGER CHANNEL FLOW ===`
+    : ""
+
+  const staticPrefix = [baseSystemPrompt, financingBlock, pricingPolicyBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext, messengerBlock]
     .filter(Boolean)
     .join("\n\n")
   const dynamicTail = [slotsBlock, leadContext, reasoningBlock, smsHardRules]
@@ -989,9 +1003,17 @@ export async function processAndSave(
     result = { response: "I can get a tech out to you this week — does morning or afternoon work better?" }
   }
 
+  // Silent-stop sentinel: a channel flow (e.g. Top Air's Messenger duct upsell)
+  // can instruct the agent to go silent by emitting [[SILENT]]. Strip it, send
+  // nothing, and mark the result silent so the fallback guard below doesn't
+  // "helpfully" generate a reply we explicitly don't want.
+  if (result.response && /\[\[\s*SILENT\s*\]\]/i.test(result.response)) {
+    result = { ...result, response: "", silent: true }
+  }
+
   // Final guard — runConversation returned empty text. Call Claude text-only for real response.
   // Never use deferred-action language ("get back to you") — AI won't follow up manually.
-  if (!result.response && incomingMessage !== null) {
+  if (!result.response && !result.silent && incomingMessage !== null) {
     try {
       const { data: hist } = await supabase
         .from("conversations")
