@@ -113,7 +113,7 @@ export async function findSlotsForLead(
   // out-of-area miss). Runs before specialization/zip so "we don't do that"
   // beats "not in your area".
   if (jobType) {
-    const offering = allTechs.filter(t => !t.job_types?.length || t.job_types.includes(jobType))
+    const offering = allTechs.filter(t => techHandlesJob(t.job_types, jobType))
     if (offering.length === 0) return { found: false, reason: "job_not_offered" }
     allTechs = offering
   }
@@ -285,6 +285,42 @@ export type TechnicianMatchResult =
 
 const DAY_NAMES = ["sunday", "monday", "tuesday", "wednesday", "thursday", "friday", "saturday"] as const
 
+// Two different job-type vocabularies exist in the system: the SMS/Messenger AI
+// engine emits values like "duct_cleaning"/"ac_installation", while the voice
+// engine and the technician job_types config use the JOB_TYPES enum
+// ("ductwork"/"new_ac_install"). Comparing them by raw string silently declined
+// real jobs (a duct lead sent "duct_cleaning", the crew was tagged "ductwork",
+// and no tech matched → "we don't offer that"). Normalize BOTH sides to a
+// canonical category before any capability comparison.
+const JOB_TYPE_CANON: Record<string, string> = {
+  ductwork: "duct", duct_cleaning: "duct", duct_repair: "duct",
+  ac_repair: "ac_repair", ac_not_cooling: "ac_repair", ac_frozen: "ac_repair",
+  ac_replacement: "ac_replace", ac_installation: "ac_replace", new_ac_install: "ac_replace",
+  furnace_repair: "furnace_repair", furnace_not_working: "furnace_repair",
+  furnace_replacement: "furnace_replace",
+  heat_pump_install: "heat_pump", heat_pump_installation: "heat_pump",
+  heat_pump_replacement: "heat_pump", heat_pump_repair: "heat_pump",
+  full_hvac_upgrade: "full_hvac", hvac_replacement: "full_hvac",
+  hvac_maintenance: "maintenance", hvac_tune_up: "maintenance",
+  mini_split: "mini_split", mini_split_installation: "mini_split", mini_split_repair: "mini_split",
+  thermostat: "thermostat", air_quality: "air_quality",
+  boiler_repair: "boiler", commercial_hvac: "commercial",
+  electrical: "electrical", plumbing: "plumbing",
+  other: "other", general: "general",
+}
+function canonJob(jt: string | null | undefined): string | null {
+  if (!jt) return null
+  const j = jt.toLowerCase().trim()
+  return JOB_TYPE_CANON[j] ?? j
+}
+/** Does a tech (with its configured job_types) handle this job type? Empty = all. */
+function techHandlesJob(techJobTypes: string[] | null | undefined, jobType: string | null): boolean {
+  if (!techJobTypes?.length) return true
+  const wanted = canonJob(jobType)
+  if (!wanted) return true
+  return techJobTypes.some(cap => canonJob(cap) === wanted)
+}
+
 // Map job_type values → specialization labels so AI job types resolve to technician skills
 const JOB_TYPE_SPECIALIZATION_MAP: Record<string, string[]> = {
   ac_repair:                 ["AC Repair"],
@@ -342,7 +378,7 @@ export async function selectTechnician(
   // 1.5 Job-type capability filter — matches findSlotsForLead so assignment
   // respects the same owner-vs-crew routing. Empty job_types = handles all.
   const jobCapable = jobType
-    ? techs.filter(t => !t.job_types?.length || t.job_types.includes(jobType))
+    ? techs.filter(t => techHandlesJob(t.job_types, jobType))
     : techs
   const techPool = jobCapable.length > 0 ? jobCapable : techs
 
