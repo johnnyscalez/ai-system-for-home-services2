@@ -127,6 +127,27 @@ function NightStat({ label, value, icon: Icon, accent, delay = 0 }: {
   )
 }
 
+// Money tile for the night hero — same tile language as NightStat, but renders
+// a dollar amount. Gets the lime "money" accent so revenue reads instantly.
+function NightMoney({ label, subLabel, cents, delay = 0 }: {
+  label: string; subLabel: string; cents: number; delay?: number
+}) {
+  const { value: displayed, ref } = useCountUp(Math.round(cents / 100), 1400, delay)
+  return (
+    <div className="relative rounded-xl px-4 py-3.5 border backdrop-blur-sm"
+      style={{ background: "rgba(163,230,53,0.07)", borderColor: "rgba(163,230,53,0.25)" }}>
+      <div className="flex items-center gap-2 mb-1">
+        <DollarSign className="w-3.5 h-3.5" style={{ color: "#A3E635" }} />
+        <span className="text-[11px] font-semibold uppercase tracking-wider text-white/50">{label}</span>
+      </div>
+      <span ref={ref} className="text-3xl font-bold tabular-nums" style={{ color: "#D9F99D", fontFamily: "var(--font-mono), 'JetBrains Mono', monospace" }}>
+        ${displayed.toLocaleString()}
+      </span>
+      <p className="text-[10px] text-white/35 mt-0.5">{subLabel}</p>
+    </div>
+  )
+}
+
 // ── Money stat card ────────────────────────────────────────────────────────────
 
 function MoneyCard({ label, subLabel, cents, count, delay = 0, estimated = false }: {
@@ -265,7 +286,7 @@ type RangeKey = typeof RANGES[number]["key"]
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 export function AgentDashboard({
-  firstName, companyName, nightLabel, night, avgJobValueCents,
+  firstName, companyName, nightLabel, night,
   bookings, leadsAll, revenueEvents, hcpConnected,
 }: Props) {
   const [range, setRange] = useState<RangeKey>("30d")
@@ -319,13 +340,6 @@ export function AgentDashboard({
       .filter(e => e.attribution === "sourced_by_ai" && e.amount_cents)
       .reduce((s, e) => s + Number(e.amount_cents), 0)
 
-    const upcoming = bookings.filter(b =>
-      b.status === "scheduled" &&
-      new Date(b.scheduled_at).getTime() > now &&
-      matchesSource(b.leads?.source ?? null)
-    )
-    const pipelineCents = upcoming.length * avgJobValueCents
-
     // Bars — bucket by day (or by week for 90d)
     const weekly = rangeDays > 35
     const bucketCount = range === "today" ? 1 : weekly ? Math.ceil(rangeDays / 7) : rangeDays
@@ -364,7 +378,7 @@ export function AgentDashboard({
 
     return {
       filteredBookings: filteredBookings.slice(0, 15),
-      money: { bookedCents, bookedCount: bookedEvents.length, sourcedCents, pipelineCents, pipelineCount: upcoming.length },
+      money: { bookedCents, bookedCount: bookedEvents.length, sourcedCents },
       bars: buckets,
       barUnit: weekly ? "week" : "day",
       sources,
@@ -373,7 +387,17 @@ export function AgentDashboard({
       aiBookedCount,
       officeBookedCount,
     }
-  }, [bookings, leadsAll, revenueEvents, range, sourceFilter, originFilter, rangeDays, avgJobValueCents])
+  }, [bookings, leadsAll, revenueEvents, range, sourceFilter, originFilter, rangeDays])
+
+  // Hero revenue — fixed 30-day window, independent of the filters below,
+  // matching the hero's fixed "last night" framing. Revenue the AI booked is
+  // the headline number the owner logs in to see.
+  const heroBookedCents = useMemo(() => {
+    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
+    return revenueEvents
+      .filter(e => e.attribution === "booked_by_ai" && e.amount_cents && new Date(e.created_at).getTime() >= cutoff)
+      .reduce((s, e) => s + Number(e.amount_cents), 0)
+  }, [revenueEvents])
 
   const fmtTime = (iso: string) =>
     new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
@@ -425,7 +449,7 @@ export function AgentDashboard({
               <NightStat label="Jobs booked" value={night.booked} icon={CalendarCheck} accent="#FB923C" />
               <NightStat label="Conversations" value={night.conversations} icon={MessagesSquare} accent="#FB923C" delay={80} />
               <NightStat label="New leads" value={night.newLeads} icon={UserPlus} accent="#FB923C" delay={160} />
-              <NightStat label="Need a callback" value={night.callbacks} icon={PhoneCall} accent={night.callbacks > 0 ? "#FBBF24" : "#84CC16"} delay={240} />
+              <NightMoney label="Revenue booked by AI" subLabel="Closed jobs the AI booked · last 30 days" cents={heroBookedCents} delay={240} />
             </div>
           </div>
         </motion.div>
@@ -469,10 +493,9 @@ export function AgentDashboard({
         </motion.div>
 
         {/* ── Money row ── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
-          <MoneyCard label="Booked by your AI" subLabel="Closed revenue from jobs the AI booked" cents={money.bookedCents} count={money.bookedCount} />
-          <MoneyCard label="Sourced by your AI" subLabel="Revenue from customers the AI brought in" cents={money.sourcedCents} delay={100} />
-          <MoneyCard label="Pipeline on the calendar" subLabel={`${money.pipelineCount} upcoming jobs × your average ticket`} cents={money.pipelineCents} count={money.pipelineCount} delay={200} estimated />
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+          <MoneyCard label="Booked by your AI" subLabel="Closed revenue from jobs the AI booked itself — start to finish" cents={money.bookedCents} count={money.bookedCount} />
+          <MoneyCard label="Sourced by your AI" subLabel="Customers the AI brought in — your office booked the job" cents={money.sourcedCents} delay={100} />
         </div>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-4">
