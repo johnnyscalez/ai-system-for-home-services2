@@ -134,16 +134,17 @@ function NightMoney({ label, subLabel, cents, delay = 0 }: {
 }) {
   const { value: displayed, ref } = useCountUp(Math.round(cents / 100), 1400, delay)
   return (
-    <div className="relative rounded-xl px-4 py-3.5 border backdrop-blur-sm"
-      style={{ background: "rgba(163,230,53,0.07)", borderColor: "rgba(163,230,53,0.25)" }}>
+    <div className="relative col-span-2 rounded-xl px-5 py-4 border backdrop-blur-sm"
+      style={{ background: "linear-gradient(135deg, rgba(163,230,53,0.10) 0%, rgba(163,230,53,0.04) 100%)", borderColor: "rgba(163,230,53,0.30)" }}>
       <div className="flex items-center gap-2 mb-1">
-        <DollarSign className="w-3.5 h-3.5" style={{ color: "#A3E635" }} />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-white/50">{label}</span>
+        <DollarSign className="w-4 h-4" style={{ color: "#A3E635" }} />
+        <span className="text-[11px] font-bold uppercase tracking-wider" style={{ color: "rgba(217,249,157,0.75)" }}>{label}</span>
       </div>
-      <span ref={ref} className="text-3xl font-bold tabular-nums" style={{ color: "#D9F99D", fontFamily: "var(--font-mono), 'JetBrains Mono', monospace" }}>
+      <span ref={ref} className="text-4xl md:text-[44px] leading-none font-bold tabular-nums"
+        style={{ color: "#D9F99D", fontFamily: "var(--font-mono), 'JetBrains Mono', monospace", textShadow: "0 0 32px rgba(163,230,53,0.35)" }}>
         ${displayed.toLocaleString()}
       </span>
-      <p className="text-[10px] text-white/35 mt-0.5">{subLabel}</p>
+      <p className="text-[11px] text-white/40 mt-1.5">{subLabel}</p>
     </div>
   )
 }
@@ -443,13 +444,13 @@ export function AgentDashboard({
               Good morning, {firstName}
             </h1>
             <p className="text-sm text-white/50 mb-6">
-              Here&apos;s what your AI agent handled while {companyName} was closed.
+              Here&apos;s what your AI agent handled for {companyName} — days, nights, and weekends.
             </p>
-            <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-              <NightStat label="Jobs booked" value={night.booked} icon={CalendarCheck} accent="#FB923C" />
-              <NightStat label="Conversations" value={night.conversations} icon={MessagesSquare} accent="#FB923C" delay={80} />
-              <NightStat label="New leads" value={night.newLeads} icon={UserPlus} accent="#FB923C" delay={160} />
-              <NightMoney label="Revenue booked by AI" subLabel="Closed jobs the AI booked · last 30 days" cents={heroBookedCents} delay={240} />
+            <div className="grid grid-cols-2 lg:grid-cols-5 gap-3">
+              <NightMoney label="Revenue booked by AI" subLabel="Closed revenue from jobs your AI booked" cents={heroBookedCents} />
+              <NightStat label="New leads" value={night.newLeads} icon={UserPlus} accent="#FB923C" delay={80} />
+              <NightStat label="Jobs booked" value={night.booked} icon={CalendarCheck} accent="#FB923C" delay={160} />
+              <NightStat label="Conversations" value={night.conversations} icon={MessagesSquare} accent="#FB923C" delay={240} />
             </div>
           </div>
         </motion.div>

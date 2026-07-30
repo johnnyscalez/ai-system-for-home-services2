@@ -145,28 +145,11 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase }: {
 }) {
   const now = new Date()
 
-  // Overnight window from the company's working hours (default 8–18, America/New_York)
-  const { data: agentCfg } = await supabase
-    .from("ai_agent_config")
-    .select("working_hours_start, working_hours_end, timezone")
-    .eq("company_id", companyId)
-    .maybeSingle()
-
-  const startHour = agentCfg?.working_hours_start ?? 8
-  const endHour = agentCfg?.working_hours_end ?? 18
-  const tz = agentCfg?.timezone ?? "America/New_York"
-  const hourNow = parseInt(now.toLocaleString("en-US", { timeZone: tz, hour: "numeric", hour12: false }), 10)
-
-  const officeOpen = hourNow >= startHour && hourNow < endHour
-  // Hours elapsed since the most recent close
-  const hoursSinceClose = ((hourNow - endHour + 24) % 24) || 24
-  const closeStart = new Date(now.getTime() - hoursSinceClose * 60 * 60 * 1000)
-  closeStart.setMinutes(0, 0, 0)
-  // If office is open now, the window ended at this morning's open; otherwise it's still running
-  const closedNightHours = (startHour - endHour + 24) % 24
-  const closeEnd = officeOpen ? new Date(closeStart.getTime() + closedNightHours * 60 * 60 * 1000) : now
-
-  const nightLabel = officeOpen ? "Last night, while you were closed" : "Tonight, while your office is closed"
+  // Hero stats window — last 30 days, matching the hero's revenue tile. The
+  // owner logs in to see totals (revenue, leads, jobs, conversations), not
+  // just last night's slice.
+  const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
+  const nightLabel = "Your AI agent — last 30 days, around the clock"
 
   // Raw 90-day window — the client filters by source + time range without refetching
   const since90d = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
@@ -184,17 +167,15 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase }: {
   ] = await Promise.all([
     supabase.from("appointments").select("*", { count: "exact", head: true })
       .eq("company_id", companyId)
-      .gte("created_at", closeStart.toISOString())
-      .lte("created_at", closeEnd.toISOString()),
+      .neq("status", "cancelled")
+      .gte("created_at", since30d),
     supabase.from("conversations").select("lead_id")
       .eq("company_id", companyId)
       .eq("direction", "inbound")
-      .gte("created_at", closeStart.toISOString())
-      .lte("created_at", closeEnd.toISOString()),
+      .gte("created_at", since30d),
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", companyId)
-      .gte("created_at", closeStart.toISOString())
-      .lte("created_at", closeEnd.toISOString()),
+      .gte("created_at", since30d),
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", companyId)
       .eq("status", "needs_attention"),
