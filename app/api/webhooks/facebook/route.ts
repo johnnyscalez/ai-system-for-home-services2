@@ -14,7 +14,7 @@ import crypto from "crypto"
 type MessagingEvent = {
   sender: { id: string }
   recipient: { id: string }
-  message?: { mid: string; text?: string; is_echo?: boolean; attachments?: unknown[] }
+  message?: { mid: string; text?: string; is_echo?: boolean; app_id?: number; attachments?: unknown[] }
   postback?: { title?: string; payload?: string }
 }
 
@@ -33,15 +33,6 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     has_postback: Boolean(event.postback),
   }))
 
-  // Ignore echoes of our own sends and delivery/read receipts
-  if (event.message?.is_echo) return
-  const text = event.message?.text?.trim()
-    ?? event.postback?.title?.trim()
-    ?? (event.message?.attachments?.length ? "[sent an attachment]" : null)
-  if (!text) return
-
-  const psid = event.sender.id
-
   const { data: integration } = await supabase
     .from("integrations")
     .select("company_id, fb_access_token")
@@ -53,10 +44,64 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     return
   }
 
+  // ── Echo = the PAGE sent a message. Two sources: our own AI sends (via the
+  // Graph API — they carry OUR app_id) and MANUAL replies a team member typed
+  // in Meta's inbox / Business Suite (different or no app_id). A manual reply
+  // means a human took over the conversation → pause the AI so it stops
+  // auto-replying and doesn't talk over the employee. (WhatsApp/SMS already do
+  // this; this brings Messenger to parity.)
+  if (event.message?.is_echo) {
+    const customerPsid = event.recipient?.id            // echo recipient = the lead
+    if (!customerPsid) return
+    const ourAppId  = process.env.FACEBOOK_APP_ID
+    const echoAppId = event.message.app_id != null ? String(event.message.app_id) : null
+    if (echoAppId && ourAppId && echoAppId === ourAppId) return  // our own AI send — ignore
+
+    const { data: lead } = await supabase
+      .from("leads")
+      .select("id")
+      .eq("company_id", integration.company_id)
+      .eq("messenger_psid", customerPsid)
+      .is("deleted_at", null)
+      .maybeSingle()
+    if (!lead) return
+
+    // Safety net when app_id is absent: don't mistake our own text for a human's.
+    const echoText = event.message.text?.trim() ?? ""
+    if (!echoAppId && echoText) {
+      const { data: ours } = await supabase
+        .from("conversations")
+        .select("id")
+        .eq("lead_id", lead.id)
+        .eq("direction", "outbound")
+        .eq("channel", "messenger")
+        .gte("created_at", new Date(Date.now() - 120000).toISOString())
+        .ilike("body", echoText.slice(0, 80) + "%")
+        .maybeSingle()
+      if (ours) return
+    }
+
+    await supabase.from("leads").update({ ai_paused: true }).eq("id", lead.id)
+    await supabase.from("conversations").insert({
+      lead_id: lead.id, company_id: integration.company_id,
+      direction: "outbound", sent_by: "human",
+      body: echoText || "(manual reply sent from Messenger)", channel: "messenger",
+    })
+    console.log(`[webhook/facebook] human takeover — AI paused for lead ${lead.id}`)
+    return
+  }
+
+  const text = event.message?.text?.trim()
+    ?? event.postback?.title?.trim()
+    ?? (event.message?.attachments?.length ? "[sent an attachment]" : null)
+  if (!text) return
+
+  const psid = event.sender.id
+
   // Find or create the lead by Messenger PSID
   const { data: existing } = await supabase
     .from("leads")
-    .select("id, status, phone")
+    .select("id, status, phone, ai_paused")
     .eq("company_id", integration.company_id)
     .eq("messenger_psid", psid)
     .is("deleted_at", null)
@@ -104,6 +149,19 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
 
     const leadName = `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim() || "Messenger lead"
     notifyNewLead(integration.company_id, leadName, "via Messenger", "facebook").catch(() => {})
+  }
+
+  // Human took over this conversation (a team member replied manually) → the AI
+  // stays quiet. Still record the lead's message so the team sees the full
+  // thread in the CRM; just don't generate an AI reply.
+  if (existing?.ai_paused) {
+    await supabase.from("conversations").insert({
+      lead_id: leadId, company_id: integration.company_id,
+      direction: "inbound", sent_by: "human", body: text, channel: "messenger",
+    })
+    await supabase.from("leads").update({ last_message_at: new Date().toISOString() }).eq("id", leadId)
+    console.log(`[webhook/facebook] lead ${leadId} is AI-paused (human handling) — no AI reply`)
+    return
   }
 
   // Run the same AI engine as SMS; saves inbound + outbound with channel=messenger
