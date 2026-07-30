@@ -20,6 +20,27 @@
  * so they fire at the right wall-clock time regardless of UTC.
  */
 
+/**
+ * Terminal lead statuses — ANY automated outreach (SMS sequences, voice
+ * steps, scheduled callbacks) must stop for a lead in one of these states.
+ * The single source of truth: the SMS engine historically wrote "lost" while
+ * the voice engine wrote "closed_lost", and the cron only recognized one of
+ * them — so follow-ups kept firing after an opt-out (audit C8). Every
+ * outreach gate checks THIS list, both spellings included forever.
+ */
+export const TERMINAL_LEAD_STATUSES = [
+  "appointment_booked",
+  "closed",
+  "closed_won",
+  "closed_lost",
+  "lost",
+  "unqualified",
+] as const
+
+export function isTerminalLeadStatus(status: string | null | undefined): boolean {
+  return !!status && (TERMINAL_LEAD_STATUSES as readonly string[]).includes(status)
+}
+
 export type StepType = "sms" | "voice"
 
 export type SequenceStep = {

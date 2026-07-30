@@ -114,7 +114,11 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     // real number ("561-555-0123"), capture it — reminders, confirmations,
     // and the tech's call-ahead all need it.
     if (existing.phone.startsWith("msgr:")) {
-      const phoneMatch = text.replace(/[^\d+]/g, " ").match(/(\+?1?\s?\d{3}\s?\d{3}\s?\d{4})\b/)
+      // \s* not \s?: "(312) 555-0187" normalizes to " 312  555 0187" with
+      // DOUBLE spaces — \s? missed the most common US phone format, so the
+      // lead's real number never replaced the msgr: placeholder and the job
+      // could never push to HCP (audit H4)
+      const phoneMatch = text.replace(/[^\d+]/g, " ").match(/(\+?1?\s*\d{3}\s*\d{3}\s*\d{4})\b/)
       if (phoneMatch) {
         try {
           const realPhone = formatPhone(phoneMatch[1].replace(/\s/g, ""))
@@ -149,6 +153,26 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
 
     const leadName = `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim() || "Messenger lead"
     notifyNewLead(integration.company_id, leadName, "via Messenger", "facebook").catch(() => {})
+  }
+
+  // Deterministic opt-out — Messenger has no carrier backstop like SMS, so
+  // this handler is the ONLY thing standing between a "stop" and continued
+  // automated messages (audit C8)
+  const MSGR_OPT_OUT_RE = /^\s*(stop|stopall|stop all|unsubscribe|opt ?out|remove me|do not (text|contact|message) me|don'?t (text|contact|message) me|leave me alone)\s*[.!]*\s*$/i
+  if (MSGR_OPT_OUT_RE.test(text)) {
+    await supabase.from("conversations").insert({
+      lead_id: leadId, company_id: integration.company_id,
+      direction: "inbound", sent_by: "human", body: text, channel: "messenger",
+    })
+    await supabase.from("leads")
+      .update({ status: "closed_lost", ai_paused: true, last_message_at: new Date().toISOString() })
+      .eq("id", leadId)
+    await supabase.from("sequences").update({ status: "cancelled" })
+      .eq("lead_id", leadId).eq("status", "pending")
+    await supabase.from("scheduled_calls").update({ status: "cancelled" })
+      .eq("lead_id", leadId).eq("status", "pending")
+    console.log(`[webhook/facebook] opt-out from messenger lead ${leadId} — all outreach cancelled, AI paused`)
+    return
   }
 
   // Human took over this conversation (a team member replied manually) → the AI
@@ -277,26 +301,58 @@ export async function POST(req: NextRequest) {
       const leadData = await leadRes.json()
       if (!leadData.field_data) continue
 
-      // Normalize field_data array into a flat object
+      // Normalize field_data array into a flat object. Keys are whatever the
+      // contractor typed as the form question — strip ALL punctuation, not
+      // just spaces ("What is your phone number?" → what_is_your_phone_number)
       const fields: Record<string, string> = {}
       for (const f of leadData.field_data as Array<{ name: string; values: string[] }>) {
-        fields[f.name.toLowerCase().replace(/\s+/g, "_")] = f.values?.[0] ?? ""
+        const key = f.name.toLowerCase().replace(/[^\w]+/g, "_").replace(/^_+|_+$/g, "")
+        fields[key] = f.values?.[0] ?? ""
       }
 
-      const rawPhone =
-        fields["phone_number"] ||
-        fields["phone"] ||
-        fields["mobile_phone"] ||
-        fields["mobile"] ||
-        ""
-      if (!rawPhone) continue
+      // ── Phone extraction: exact keys → key contains phone/mobile/cell →
+      // any field whose VALUE looks like a phone number. Ad forms name this
+      // field freely ("what_is_your_phone_number") — an unrecognized key must
+      // NEVER cost the contractor a paid lead.
+      const looksLikePhone = (v: string) => {
+        const digits = v.replace(/\D/g, "")
+        return digits.length >= 10 && digits.length <= 15 && /^[+\d(]/.test(v.trim())
+      }
+      let rawPhone =
+        fields["phone_number"] || fields["phone"] || fields["mobile_phone"] || fields["mobile"] || ""
+      if (!rawPhone) {
+        for (const [k, v] of Object.entries(fields)) {
+          if (v && /phone|mobile|cell/.test(k) && looksLikePhone(v)) { rawPhone = v; break }
+        }
+      }
+      if (!rawPhone) {
+        for (const v of Object.values(fields)) {
+          if (v && looksLikePhone(v)) { rawPhone = v; break }
+        }
+      }
 
-      const phone = formatPhone(rawPhone)
-      const fullName = fields["full_name"] || ""
+      let phone: string | null = null
+      try { phone = rawPhone ? formatPhone(rawPhone) : null } catch { phone = null }
+
+      // Email: exact keys, then any key containing "email", then value match
+      let leadEmail = fields["email"] || fields["email_address"] || ""
+      if (!leadEmail) {
+        for (const [k, v] of Object.entries(fields)) {
+          if (v && (/email/.test(k) || /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v))) { leadEmail = v; break }
+        }
+      }
+
+      const fullName = fields["full_name"] || fields["name"] || fields["your_name"] || fields["what_is_your_name"] || ""
       const firstName = fields["first_name"] || fullName.split(" ")[0] || null
       const lastName =
         fields["last_name"] ||
         (fullName.includes(" ") ? fullName.split(" ").slice(1).join(" ") : null)
+
+      // Zip from the form — previously discarded entirely; routing and the AI
+      // both want it
+      const formZip = (fields["zip"] || fields["zip_code"] || fields["postal_code"] ||
+        Object.entries(fields).find(([k, v]) => /zip|postal/.test(k) && /^\d{5}/.test(v ?? ""))?.[1] || "")
+        .match(/\d{5}/)?.[0] ?? null
 
       // Extract job/project details from any non-identity form fields.
       // Facebook lead forms often include custom questions like "What type of service do you need?"
@@ -329,16 +385,29 @@ export async function POST(req: NextRequest) {
         if (fields[k]) { jobType = fields[k]; break }
       }
 
-      // Collect all remaining custom question answers as notes
+      // Collect all remaining custom question answers as notes. Skip identity
+      // keys by EXACT name and also by fuzzy class (a phone captured from
+      // "what_is_your_phone_number" must not leak into notes as a question).
       const extraParts: string[] = []
       if (jobType) extraParts.push(jobType)
       for (const [k, v] of Object.entries(fields)) {
         if (!v || IDENTITY_KEYS.has(k) || JOB_TYPE_KEYS.includes(k)) continue
+        if (/phone|mobile|cell|email|zip|postal|name$/.test(k)) continue
         // Format the key nicely: "what_is_the_issue" → "What is the issue"
         const label = k.replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase())
         extraParts.push(`${label}: ${v}`)
       }
+      if (formZip) extraParts.push(`Zip: ${formZip}`)
       const formNotes = extraParts.length > 0 ? extraParts.join(" | ") : null
+
+      // NEVER drop a paid lead. If no phone could be extracted, the lead still
+      // gets created under a deterministic placeholder (dedupes Facebook's
+      // webhook retries) with needs_attention so the owner sees it and calls
+      // back manually — a silent drop is the one unforgivable outcome here.
+      const effectivePhone = phone ?? `fbform:${leadgen_id}`
+      if (!phone) {
+        console.error(`[webhook/facebook] leadgen ${leadgen_id} (form ${form_id}): no phone field recognized — creating needs_attention lead. Keys: ${Object.keys(fields).join(",")}`)
+      }
 
       // Upsert lead — excludes soft-deleted leads so a deleted lead's phone
       // number gets a clean slate instead of silently resurrecting old
@@ -347,7 +416,7 @@ export async function POST(req: NextRequest) {
         .from("leads")
         .select("id, status")
         .eq("company_id", integration.company_id)
-        .eq("phone", phone)
+        .eq("phone", effectivePhone)
         .is("deleted_at", null)
         .maybeSingle()
 
@@ -366,17 +435,17 @@ export async function POST(req: NextRequest) {
           .from("leads")
           .insert({
             company_id: integration.company_id,
-            phone,
+            phone: effectivePhone,
             first_name: firstName,
             last_name: lastName,
-            email: fields["email"] || null,
-            address: leadAddress,
+            email: leadEmail || null,
+            address: leadAddress ?? (formZip ? formZip : null),
             source: "facebook",
             channel: "sms",
             source_form_id: form_id,
-            status: "just_came_in",
+            status: phone ? "just_came_in" : "needs_attention",
             notes: formNotes,
-            metadata: { leadgen_id, page_id, form_id, job_type: jobType },
+            metadata: { leadgen_id, page_id, form_id, job_type: jobType, ...(formZip ? { service_zip: formZip } : {}), ...(phone ? {} : { phone_missing: true, form_keys: Object.keys(fields) }) },
             // Pre-classify the job_type COLUMN (the metadata job_type above is
             // the raw form field text) so the first AI turn runs the focused
             // job playbook instead of the identify module
@@ -390,7 +459,7 @@ export async function POST(req: NextRequest) {
 
         // Notify contractor of new lead (non-blocking)
         const leadName = `${firstName ?? ""} ${lastName ?? ""}`.trim()
-        notifyNewLead(integration.company_id, leadName, phone, "facebook").catch(() => {})
+        notifyNewLead(integration.company_id, leadName, phone ?? "no phone on form — call back needed", "facebook").catch(() => {})
       }
 
       // Update integration stats
@@ -399,6 +468,11 @@ export async function POST(req: NextRequest) {
         .update({ last_lead_at: new Date().toISOString() })
         .eq("company_id", integration.company_id)
         .eq("type", "facebook")
+
+      // No real phone → no SMS opener and no SMS sequences. The lead exists,
+      // the owner was notified with needs_attention; texting a placeholder
+      // would only generate Twilio errors.
+      if (!phone) continue
 
       // Get company's Twilio number and send AI opening message
       const { data: phoneNumber } = await supabase

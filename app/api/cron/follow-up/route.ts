@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave } from "@/lib/ai-engine"
 import { sendSMS, sendToLead, getTwilioClient } from "@/lib/twilio"
-import { isVoiceStep, LAST_STEP, FOLLOW_UP_ANGLE } from "@/lib/sequences"
+import { isVoiceStep, LAST_STEP, FOLLOW_UP_ANGLE, isTerminalLeadStatus } from "@/lib/sequences"
 
 // Called by Vercel Cron every 5 minutes.
 export async function GET(req: NextRequest) {
@@ -52,12 +52,10 @@ export async function GET(req: NextRequest) {
       continue
     }
 
-    // Cancel steps for terminal leads
-    if (
-      lead.status === "appointment_booked" ||
-      lead.status === "closed_won" ||
-      lead.status === "closed_lost"
-    ) {
+    // Cancel steps for terminal leads — shared list, BOTH status vocabularies
+    // ("lost" and "closed_lost"); the old three-value check let follow-ups
+    // keep firing after an SMS opt-out (audit C8)
+    if (isTerminalLeadStatus(lead.status)) {
       await supabase.from("sequences").update({ status: "cancelled" }).eq("id", step.id)
       continue
     }
@@ -235,6 +233,23 @@ export async function GET(req: NextRequest) {
           .update({ status: "cancelled" })
           .eq("id", step.id)
         console.log(`[cron] Voice step ${step.id} (step ${step.step}) cancelled after failure — sequence SMS steps will continue`)
+      } else {
+        // Permanent Twilio errors on SMS steps: retrying burns AI tokens and
+        // spams logs forever. 21610 = recipient opted out at the carrier,
+        // 21211 = invalid number — cancel the ENTIRE sequence for this lead,
+        // not just this step (audit C8).
+        const code = (err as { code?: number })?.code
+        if (code === 21610 || code === 21211) {
+          await supabase
+            .from("sequences")
+            .update({ status: "cancelled" })
+            .eq("lead_id", lead.id)
+            .eq("status", "pending")
+          if (code === 21610) {
+            await supabase.from("leads").update({ status: "closed_lost", ai_paused: true }).eq("id", lead.id)
+          }
+          console.log(`[cron] SMS step ${step.id} hit permanent Twilio error ${code} — all pending steps for lead ${lead.id} cancelled`)
+        }
       }
     }
   }
@@ -256,7 +271,7 @@ export async function GET(req: NextRequest) {
 
     if (!lead) continue
 
-    if (lead.ai_voice_paused || ["closed_won", "closed_lost"].includes(lead.status)) {
+    if (lead.ai_voice_paused || isTerminalLeadStatus(lead.status)) {
       await supabase.from("scheduled_calls").update({ status: "cancelled" }).eq("id", call.id)
       continue
     }

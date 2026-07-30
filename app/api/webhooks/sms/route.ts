@@ -205,6 +205,27 @@ export async function POST(req: NextRequest) {
 
   if (!lead) return twimlOk()
 
+  // ── Deterministic opt-out — BEFORE any AI involvement (audit C8) ──────────
+  // Twilio already blocks our sends after a carrier-level STOP; our job is to
+  // kill every scheduled touch so nothing even attempts to fire. No goodbye
+  // reply: answering a hard STOP is itself a compliance risk.
+  const OPT_OUT_RE = /^\s*(stop|stopall|stop all|unsubscribe|cancel|end|quit|opt ?out|remove me|do not (text|contact|message) me|don'?t (text|contact|message) me)\s*[.!]*\s*$/i
+  if (OPT_OUT_RE.test(messageBody)) {
+    await supabase.from("conversations").insert({
+      lead_id: lead.id, company_id: companyId, direction: "inbound",
+      sent_by: "human", body: messageBody, twilio_sid: twilioSid ?? null, channel,
+    }).then(() => {}, () => {})
+    await supabase.from("leads")
+      .update({ status: "closed_lost", ai_paused: true, last_message_at: new Date().toISOString() })
+      .eq("id", lead.id)
+    await supabase.from("sequences").update({ status: "cancelled" })
+      .eq("lead_id", lead.id).eq("status", "pending")
+    await supabase.from("scheduled_calls").update({ status: "cancelled" })
+      .eq("lead_id", lead.id).eq("status", "pending")
+    console.log(`[webhook/sms] opt-out from lead ${lead.id} — all outreach cancelled, AI paused`)
+    return twimlOk()
+  }
+
   // If AI is paused for this lead, skip
   if (lead.ai_paused) return twimlOk()
 
@@ -284,12 +305,19 @@ export async function POST(req: NextRequest) {
       .eq("status", "pending")
 
     // Schedule replied-not-booked follow-up if not already booked.
-    // Skip for leads that are already terminal (closed, lost, booked, needs attention).
-    // Reset ALL steps on EVERY reply so timers always count from the latest message.
+    // CRITICAL: the status must be re-read AFTER the AI turn — the turn we
+    // just ran may have set closed_lost (opt-out, decline), and scheduling
+    // from the stale pre-turn status re-armed 4 follow-ups for a lead who
+    // just said no (audit C8).
+    const { data: postTurn } = await supabase
+      .from("leads").select("status, ai_paused").eq("id", lead.id).single()
+    const postStatus = postTurn?.status ?? lead.status
     const skipSequenceStatuses = ["closed", "closed_won", "closed_lost", "appointment_booked", "lost", "unqualified", "needs_attention", "cold"]
     const shouldScheduleRepliedNotBooked =
       result.action?.type !== "book_appointment" &&
-      !skipSequenceStatuses.includes(lead.status)
+      !(result.action?.type === "update_status" && ["closed_lost", "needs_attention"].includes(result.action.status)) &&
+      !postTurn?.ai_paused &&
+      !skipSequenceStatuses.includes(postStatus)
 
     if (shouldScheduleRepliedNotBooked) {
       // Cancel all existing pending replied_not_booked steps, then pre-create all 4 fresh

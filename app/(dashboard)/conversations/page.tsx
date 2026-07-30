@@ -15,7 +15,7 @@ export default async function ConversationsPage() {
 
   const { data: leads } = await supabase
     .from("leads")
-    .select("id, first_name, last_name, phone, status, last_message_at, conversations!inner(id, channel)")
+    .select("id, first_name, last_name, phone, status, ai_paused, last_message_at, conversations!inner(id, channel)")
     .eq("company_id", profile.company_id)
     .not("last_message_at", "is", null)
     .order("last_message_at", { ascending: false })
@@ -29,7 +29,7 @@ export default async function ConversationsPage() {
     return { ...l, conversations: convos, channels }
   }) as {
     id: string; first_name: string | null; last_name: string | null;
-    phone: string; status: string; last_message_at: string | null;
+    phone: string; status: string; ai_paused: boolean | null; last_message_at: string | null;
     conversations: { id: string; channel: string | null }[];
     channels: string[];
   }[]
@@ -101,6 +101,11 @@ export default async function ConversationsPage() {
                     <Clock className="w-3 h-3" />
                     {lead.last_message_at ? formatDistanceToNow(lead.last_message_at) : "—"}
                   </span>
+                  {lead.ai_paused && (
+                    <Badge variant="outline" className="text-xs bg-amber-500/15 text-amber-600 border-amber-500/30">
+                      human handling
+                    </Badge>
+                  )}
                   <Badge variant="outline" className={`text-xs ${statusBadge[lead.status] ?? ""}`}>
                     {lead.status.replace(/_/g, " ")}
                   </Badge>

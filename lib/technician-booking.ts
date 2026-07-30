@@ -21,7 +21,7 @@ import { zipToPoint, addressToPoint, insertionCostMin, returnOvertimeMin, sameLo
  * to a UTC ISO string. Uses Intl.DateTimeFormat.formatToParts so DST is handled
  * correctly — no date libraries needed.
  */
-function localSlotToUtcIso(dateStr: string, timeStr: string, tz: string): string {
+export function localSlotToUtcIso(dateStr: string, timeStr: string, tz: string): string {
   // Treat the local values as UTC temporarily so we can do arithmetic
   const naiveUtc = new Date(`${dateStr}T${timeStr}:00Z`)
 
@@ -214,7 +214,10 @@ export async function findSlotsForLead(
 
   for (let offset = 0; offset <= horizonDays && scored.length < 16; offset++) {
     const day     = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000)
-    const dayName = DAY_NAMES[day.getDay()] as string
+    // Weekday MUST come from the company timezone, same as dateStr. Using the
+    // server's weekday (UTC on Railway) shifted every evening (7 PM–midnight
+    // CT) one day forward: Sunday slots offered, Friday slots hidden (audit C3).
+    const dayName = day.toLocaleDateString("en-US", { weekday: "long", timeZone: tz }).toLowerCase()
     if (!availDays.includes(dayName)) continue
 
     const dateStr = day.toLocaleDateString("en-CA", { timeZone: tz }) // YYYY-MM-DD
@@ -310,14 +313,58 @@ const JOB_TYPE_CANON: Record<string, string> = {
 }
 function canonJob(jt: string | null | undefined): string | null {
   if (!jt) return null
-  const j = jt.toLowerCase().trim()
-  return JOB_TYPE_CANON[j] ?? j
+  // Normalize separators/case: "Duct Cleaning", "duct-cleaning", " AC  repair "
+  const j = jt.toLowerCase().trim().replace(/[\s\-]+/g, "_")
+  const exact = JOB_TYPE_CANON[j]
+  if (exact) return exact
+  // Substring fallbacks — models occasionally invent values outside the enum
+  // (the voice model produced "air_duct_cleaning" and DECLINED the company's
+  // core service). Better to bucket a weird string into the right category
+  // than to turn a customer away over vocabulary.
+  if (/duct/.test(j)) return "duct"
+  if (/mini.?split/.test(j)) return "mini_split"
+  if (/thermostat|smart.?control/.test(j)) return "thermostat"
+  if (/heat.?pump/.test(j)) return "heat_pump"
+  if (/boiler/.test(j)) return "boiler"
+  if (/furnace|heating|heater/.test(j)) return "furnace_repair"
+  if (/air.?quality|purif|filtr|humidif/.test(j)) return "air_quality"
+  if (/maint|tune/.test(j)) return "maintenance"
+  if (/commercial/.test(j)) return "commercial"
+  if (/(install|replace|new)/.test(j) && /(ac|air.?cond|cooling)/.test(j)) return "ac_replace"
+  if (/ac|air.?cond|cooling/.test(j)) return "ac_repair"
+  // Truly unknown: return null = "cannot classify". Callers treat null as
+  // unrestricted rather than declining — never turn away a real customer
+  // because the model coined a phrase we've never seen.
+  return null
 }
+/** Booking-time revalidation: is this tech still a legal choice for this job
+ *  and address? Used when a booking arrives with a pre-selected tech from an
+ *  earlier slot offer — the address collected AFTER the offer may fall outside
+ *  the tech's territory, or the tech may have been deactivated (audit C7). */
+export async function techCanTakeBooking(
+  technicianId: string,
+  jobType: string | null,
+  zip: string | null
+): Promise<boolean> {
+  const db = createServiceRoleClient()
+  const { data: t } = await db
+    .from("technicians")
+    .select("status, job_types, zip_codes, serves_all_areas")
+    .eq("id", technicianId)
+    .maybeSingle()
+  if (!t || t.status !== "active") return false
+  if (!techHandlesJob(t.job_types as string[], jobType)) return false
+  const z = zip?.match(/\d{5}/)?.[0]
+  if (z && !(t.serves_all_areas || !(t.zip_codes as string[])?.length || (t.zip_codes as string[]).includes(z))) return false
+  return true
+}
+
 /** Does a tech (with its configured job_types) handle this job type? Empty = all. */
 function techHandlesJob(techJobTypes: string[] | null | undefined, jobType: string | null): boolean {
   if (!techJobTypes?.length) return true
   const wanted = canonJob(jobType)
-  if (!wanted) return true
+  // null = unclassifiable, "general" = explicit any-tech request — neither may gate
+  if (!wanted || wanted === "general") return true
   return techJobTypes.some(cap => canonJob(cap) === wanted)
 }
 
@@ -359,48 +406,62 @@ export async function selectTechnician(
 ): Promise<TechnicianMatchResult> {
   const db = createServiceRoleClient()
 
-  // 1. Fetch all active technicians for this company
-  const { data: allTechs } = await db
-    .from("technicians")
-    .select("*")
-    .eq("company_id", companyId)
-    .eq("status", "active")
-    .order("name")
+  // 1. Fetch all active technicians + company timezone (schedule checks must
+  // run in COMPANY time — the server is UTC and every CT evening the server
+  // weekday is already "tomorrow", audit C3)
+  const [{ data: allTechs }, { data: tzCfg }] = await Promise.all([
+    db.from("technicians")
+      .select("*")
+      .eq("company_id", companyId)
+      .eq("status", "active")
+      .order("name"),
+    db.from("ai_agent_config").select("timezone").eq("company_id", companyId).single(),
+  ])
 
   const techs = (allTechs ?? []) as Technician[]
   if (techs.length === 0) return { found: false, reason: "no_technicians" }
 
+  const tz = tzCfg?.timezone ?? "America/New_York"
   const aptDate = new Date(scheduledAt)
-  const dayName = DAY_NAMES[aptDate.getDay()] as keyof Technician["schedule"]
-  const aptHour = aptDate.getHours()
-  const aptMin  = aptDate.getMinutes()
+  const dayName = aptDate.toLocaleDateString("en-US", { weekday: "long", timeZone: tz })
+    .toLowerCase() as keyof Technician["schedule"]
+  const tparts = new Intl.DateTimeFormat("en-US", { timeZone: tz, hour12: false, hour: "2-digit", minute: "2-digit" })
+    .formatToParts(aptDate)
+  const aptHour = Number(tparts.find(p => p.type === "hour")?.value ?? 0) % 24
+  const aptMin  = Number(tparts.find(p => p.type === "minute")?.value ?? 0)
 
-  // 1.5 Job-type capability filter — matches findSlotsForLead so assignment
-  // respects the same owner-vs-crew routing. Empty job_types = handles all.
-  const jobCapable = jobType
-    ? techs.filter(t => techHandlesJob(t.job_types, jobType))
-    : techs
-  const techPool = jobCapable.length > 0 ? jobCapable : techs
+  // 1.5 Job-type capability filter — HARD, matching findSlotsForLead. The old
+  // fallback ("nobody handles it → let everybody through") silently defeated
+  // the owner-vs-crew routing at assignment time (audit C6): a heat-pump job
+  // got assigned to a duct tech. If no tech handles the job, we FAIL and the
+  // caller flags the appointment for manual dispatch — an honest gap beats a
+  // wrong tech on a real doorstep.
+  if (jobType) {
+    const jobCapable = techs.filter(t => techHandlesJob(t.job_types, jobType))
+    if (jobCapable.length === 0) return { found: false, reason: "no_specialization_match" }
+    techs.splice(0, techs.length, ...jobCapable)
+  }
 
   // 2. Filter by specialization (legacy; inert when specializations unset)
   const targetSpecs = jobType ? (JOB_TYPE_SPECIALIZATION_MAP[jobType] ?? []) : []
   let candidates = targetSpecs.length === 0
-    ? techPool  // no specific spec required — any tech qualifies
-    : techPool.filter(t =>
+    ? techs  // no specific spec required — any tech qualifies
+    : techs.filter(t =>
         t.specializations.length === 0 ||  // tech marked as general (no spec filter)
         t.specializations.some(s => targetSpecs.includes(s))
       )
 
   if (candidates.length === 0) return { found: false, reason: "no_specialization_match" }
 
-  // 3. Filter by zip code coverage (if we have a zip AND tech has zip restrictions)
+  // 3. Zip coverage — HARD filter, mirroring findSlotsForLead (audit C6). The
+  // old "only apply if someone matches" fallback assigned an Illinois tech to
+  // a Michigan address (and Ariel R to Beverly Hills 90210).
   if (leadZip) {
-    const zipFiltered = candidates.filter(t =>
-      t.zip_codes.length === 0 ||  // no restriction = serves all areas
-      t.zip_codes.includes(leadZip)
+    candidates = candidates.filter(t =>
+      t.serves_all_areas === true ||
+      t.zip_codes.length === 0 ||
+      t.zip_codes.includes(leadZip.slice(0, 5))
     )
-    // Only apply zip filter if at least one tech covers it
-    if (zipFiltered.length > 0) candidates = zipFiltered
   }
 
   if (candidates.length === 0) return { found: false, reason: "no_zip_match" }

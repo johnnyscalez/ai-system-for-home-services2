@@ -5,7 +5,7 @@ import { kbValue } from "@/lib/kb-utils"
 import { createCalendarEvent } from "@/lib/google-calendar"
 import { determineAgentType, getAgentPrompt, getJobKnowledgeBlock } from "@/lib/voice-agents"
 import { updateSession, appendMessages } from "@/lib/voice-session"
-import { getJobTypeLabel } from "@/lib/job-types"
+import { getJobTypeLabel, JOB_TYPES, JOB_TYPE_TOOL_DESCRIPTION } from "@/lib/job-types"
 import { selectTechnician, getTechnicianContextForCompany, findSlotsForLead } from "@/lib/technician-booking"
 import type { VoiceSession, VoiceMessage } from "@/lib/voice-session"
 
@@ -57,7 +57,14 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
       type: "object" as const,
       properties: {
         zip:      { type: "string", description: "5-digit ZIP code from the lead's address" },
-        job_type: { type: "string", description: "Job type enum value if known (e.g. 'ac_repair', 'furnace_repair'). Optional." },
+        // enum is load-bearing: without it the model invents strings like
+        // "air_duct_cleaning" which used to fail routing and DECLINE the
+        // company's core service (audit finding C2)
+        job_type: {
+          type: "string",
+          enum: JOB_TYPES as unknown as string[],
+          description: JOB_TYPE_TOOL_DESCRIPTION,
+        },
       },
       required: ["zip"],
     },
@@ -738,11 +745,22 @@ async function executeTool(
         collected: { ...session.collected, appointment_booked: "true", address },
       })
 
-      // Smart technician selection — non-blocking
+      // Smart technician selection. Failures are FLAGGED, never swallowed —
+      // the silent .catch(() => {}) here let wrong-tech and no-tech outcomes
+      // vanish (audit C6). Still non-blocking for the caller experience.
       if (apt) {
         const { data: lead } = await db.from("leads").select("job_type").eq("id", session.lead_id).single()
         const zip = address?.match(/\b(\d{5})\b/)?.[1] ?? null
-        selectTechnician(session.company_id, apt.id, scheduled_at, lead?.job_type as string | null, zip).catch(() => {})
+        selectTechnician(session.company_id, apt.id, scheduled_at, lead?.job_type as string | null, zip)
+          .then(async (res) => {
+            if (!res.found) {
+              const { flagNoTechAvailable } = await import("@/lib/technician-booking")
+              await flagNoTechAvailable(apt.id, res.reason, session.company_id)
+              const { notifyNeedsAttention } = await import("@/lib/notifications")
+              notifyNeedsAttention(session.company_id, "Voice booking needs manual dispatch", "").catch(() => {})
+            }
+          })
+          .catch((e) => console.error("[voice] selectTechnician failed:", e))
       }
 
       // HCP-mode companies: mirror the booking into Housecall Pro as a real

@@ -579,7 +579,31 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
 
   // ── find_available_slots: run the lookup, save slot→tech map, get Claude's slot-offer text ──
   if (findSlotsToolId) {
-    const slotsResult = await findSlotsForLead(companyId, findSlotsJobType, findSlotsZip)
+    // A zip is REQUIRED before any slot is offered. Without one the candidate
+    // pool ignores geography entirely — for a two-metro company that mixed
+    // Chicago and Detroit techs in one list, and whatever the lead picked
+    // locked in a tech 280 miles from them (audit C7).
+    const zip5 = findSlotsZip?.match(/\d{5}/)?.[0] ?? null
+    if (!zip5) {
+      const askZipReply = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 120,
+        system: systemPrompt,
+        messages: [
+          ...messages,
+          {
+            role: "user" as const,
+            content: `SYSTEM: You tried to check availability without a service zip code — availability depends on the service area, so you need the address (or at least the zip) FIRST. Write one short, natural SMS asking for the service address. Do not mention systems, tools, or zip codes as a requirement — just ask naturally ("What's the address we'd be coming to?"). Plain text only.`,
+          },
+        ],
+      })
+      for (const block of askZipReply.content) {
+        if (block.type === "text") responseText = block.text.trim()
+      }
+      if (!responseText) responseText = "What's the address we'd be coming to?"
+      return { response: responseText, action }
+    }
+    const slotsResult = await findSlotsForLead(companyId, findSlotsJobType, zip5)
 
     let toolResultText: string
 
@@ -1060,7 +1084,7 @@ export async function processAndSave(
   // Handle actions
   if (result.action) {
     if (result.action.type === "book_appointment") {
-      const { scheduled_at, address, notes } = result.action
+      const { scheduled_at: rawScheduledAt, address, notes } = result.action
 
       // Look up pre-selected tech from find_available_slots (saved to leads.selected_slots mid-conversation)
       const { data: freshLead } = await supabase
@@ -1069,11 +1093,41 @@ export async function processAndSave(
         .eq("id", leadId)
         .single()
 
+      // Timezone-normalize: the model occasionally emits a naive local
+      // datetime ("2026-08-03T13:00:00" with no offset). Node would read that
+      // as UTC and store the job 5-6 hours wrong (audit C7). No offset →
+      // interpret in the COMPANY timezone.
+      let scheduled_at = rawScheduledAt
+      if (!/([zZ]|[+-]\d{2}:?\d{2})$/.test(rawScheduledAt.trim())) {
+        const { data: tzRow } = await supabase
+          .from("ai_agent_config").select("timezone").eq("company_id", companyId).single()
+        const { localSlotToUtcIso } = await import("@/lib/technician-booking")
+        const naive = rawScheduledAt.trim()
+        scheduled_at = localSlotToUtcIso(naive.slice(0, 10), naive.slice(11, 16) || "09:00", tzRow?.timezone ?? "America/New_York")
+      }
+
+      const inferredJobType = inferJobType(notes ?? "")
+      const bookJobType = inferredJobType ?? (freshLead?.job_type as string | null)
+      const bookZip = extractZip(address ?? freshLead?.address ?? "")
+
       const selectedSlots = freshLead?.selected_slots as Record<string, { tech_id: string; tech_name: string }> | null
       const normalKey = scheduled_at.substring(0, 16) // YYYY-MM-DDTHH:MM
-      const preSelected = selectedSlots
-        ? Object.entries(selectedSlots).find(([k]) => k.substring(0, 16) === normalKey)?.[1]
+      let preSelected = selectedSlots
+        ? Object.entries(selectedSlots).find(([k]) => k.substring(0, 16) === normalKey)?.[1] ?? null
         : null
+
+      // Re-validate the pre-selected tech against the FINAL job type and
+      // address zip. Slots can be offered before the address is known —
+      // the tech locked in then may not cover where the lead actually lives
+      // (audit C7). Invalid → drop it and let selectTechnician re-pick below.
+      if (preSelected) {
+        const { techCanTakeBooking } = await import("@/lib/technician-booking")
+        const stillValid = await techCanTakeBooking(preSelected.tech_id, bookJobType, bookZip).catch(() => false)
+        if (!stillValid) {
+          console.warn(`[ai-engine] pre-selected tech ${preSelected.tech_name} no longer valid for job=${bookJobType} zip=${bookZip} — re-selecting`)
+          preSelected = null
+        }
+      }
 
       // Create appointment — with pre-selected tech if available
       const { data: apt } = await supabase
@@ -1099,7 +1153,6 @@ export async function processAndSave(
         .eq("id", leadId)
 
       // Always infer and save job_type (even when tech was pre-selected — needed for Reports)
-      const inferredJobType = inferJobType(notes ?? "")
       if (inferredJobType) {
         await supabase
           .from("leads")
@@ -1117,11 +1170,11 @@ export async function processAndSave(
           .is("address", null)
       }
 
-      // If no pre-selected tech (AI skipped find_available_slots or slots expired), fall back to selectTechnician
+      // If no valid pre-selected tech (AI skipped find_available_slots, slots
+      // expired, or revalidation dropped it), fall back to selectTechnician —
+      // which now hard-fails rather than guessing (audit C6/C7)
       if (!preSelected && apt) {
-        const jobType = inferredJobType ?? (freshLead?.job_type as string | null)
-        const zip     = extractZip(address ?? freshLead?.address ?? "")
-        const techResult = await selectTechnician(companyId, apt.id, scheduled_at, jobType, zip)
+        const techResult = await selectTechnician(companyId, apt.id, scheduled_at, bookJobType, bookZip)
         if (techResult.found) {
           await notifyTechnician(supabase, companyId, leadId, scheduled_at, address, notes,
             techResult.technician.id, techResult.technician.name, techResult.technician.phone)
