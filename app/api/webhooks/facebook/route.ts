@@ -21,6 +21,18 @@ type MessagingEvent = {
 async function handleMessagingEvent(pageId: string, event: MessagingEvent): Promise<void> {
   const supabase = createServiceRoleClient()
 
+  // Diagnostic: exactly what kind of messaging event arrived (temporary).
+  console.log("[webhook/facebook] msgEvent:", JSON.stringify({
+    page: pageId,
+    sender: event.sender?.id,
+    is_echo: event.message?.is_echo ?? false,
+    has_text: Boolean(event.message?.text),
+    text_preview: event.message?.text?.slice(0, 40),
+    is_delivery: Boolean((event as { delivery?: unknown }).delivery),
+    is_read: Boolean((event as { read?: unknown }).read),
+    has_postback: Boolean(event.postback),
+  }))
+
   // Ignore echoes of our own sends and delivery/read receipts
   if (event.message?.is_echo) return
   const text = event.message?.text?.trim()
@@ -36,7 +48,10 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     .eq("fb_page_id", pageId)
     .eq("is_active", true)
     .single()
-  if (!integration?.fb_access_token) return
+  if (!integration?.fb_access_token) {
+    console.log("[webhook/facebook] msgEvent: NO active integration for page", pageId)
+    return
+  }
 
   // Find or create the lead by Messenger PSID
   const { data: existing } = await supabase
