@@ -44,3 +44,4 @@ _agents/
 .claude/
 tools/
 AGENTS.md
+.tmp-*
