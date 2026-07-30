@@ -20,14 +20,23 @@ export default async function ConversationsPage() {
     .not("last_message_at", "is", null)
     .order("last_message_at", { ascending: false })
 
-  const rows = (leads ?? []).map((l) => ({
-    ...l,
-    conversations: (l.conversations as { id: string; channel: string }[]).filter((c) => c.channel === "sms"),
-  })) as {
+  // Show EVERY channel the AI works — SMS, Facebook Messenger, WhatsApp, voice —
+  // not just SMS. (The old filter dropped everything but SMS, so a
+  // Messenger-only account looked empty.)
+  const rows = (leads ?? []).map((l) => {
+    const convos = ((l.conversations as { id: string; channel: string | null }[]) ?? [])
+    const channels = Array.from(new Set(convos.map((c) => c.channel ?? "sms")))
+    return { ...l, conversations: convos, channels }
+  }) as {
     id: string; first_name: string | null; last_name: string | null;
     phone: string; status: string; last_message_at: string | null;
-    conversations: { id: string; channel: string }[];
+    conversations: { id: string; channel: string | null }[];
+    channels: string[];
   }[]
+
+  const channelLabel: Record<string, string> = {
+    sms: "SMS", messenger: "Messenger", whatsapp: "WhatsApp", voice: "Call",
+  }
 
   const statusBadge: Record<string, string> = {
     new: "bg-sky-500/15 text-sky-400 border-sky-500/20",
@@ -42,7 +51,7 @@ export default async function ConversationsPage() {
     <div className="p-6 space-y-6">
       <div>
         <h1 className="text-2xl font-bold">Conversations</h1>
-        <p className="text-sm text-muted-foreground mt-0.5">All SMS threads managed by your AI</p>
+        <p className="text-sm text-muted-foreground mt-0.5">Every thread your AI is managing — SMS, Messenger, WhatsApp, and calls</p>
       </div>
 
       <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -64,14 +73,26 @@ export default async function ConversationsPage() {
               >
                 <div className="flex items-center gap-3 min-w-0">
                   <div className="w-9 h-9 rounded-full bg-muted flex items-center justify-center text-sm font-semibold text-muted-foreground shrink-0">
-                    {lead.first_name?.[0] ?? "?"}{lead.last_name?.[0] ?? ""}
+                    {(lead.first_name?.[0] ?? "").toUpperCase() || (lead.channels.includes("messenger") ? "M" : "?")}{lead.last_name?.[0]?.toUpperCase() ?? ""}
                   </div>
                   <div className="min-w-0">
-                    <p className="text-sm font-medium">{lead.first_name} {lead.last_name}</p>
-                    <p className="text-xs text-muted-foreground">{lead.phone}</p>
+                    <p className="text-sm font-medium">
+                      {`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim()
+                        || (lead.channels.includes("messenger") ? "Messenger lead" : "Lead")}
+                    </p>
+                    <p className="text-xs text-muted-foreground">
+                      {lead.phone?.startsWith("msgr:")
+                        ? lead.channels.map((c) => channelLabel[c] ?? c).join(" · ")
+                        : lead.phone}
+                    </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 shrink-0">
+                  {!lead.phone?.startsWith("msgr:") && lead.channels.length > 0 && (
+                    <span className="text-xs text-muted-foreground hidden md:inline">
+                      {lead.channels.map((c) => channelLabel[c] ?? c).join(" · ")}
+                    </span>
+                  )}
                   <span className="text-xs text-muted-foreground flex items-center gap-1">
                     <MessageSquare className="w-3 h-3" />
                     {lead.conversations.length} messages
