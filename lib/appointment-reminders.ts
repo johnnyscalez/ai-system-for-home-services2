@@ -2,6 +2,40 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 import { sendAppointmentEmail, type EmailTemplateType, type GmailCredentials } from "@/lib/email"
 import { sendSMS, getTwilioClient } from "@/lib/twilio"
 
+/** Automation gate for the appointment pipeline. An opted-out / paused /
+ *  closed / deleted lead must receive NOTHING automated — the pipeline had
+ *  zero lead-state checks, so a lead who texted STOP still got confirmation
+ *  SMS, reminders, and an outbound voice call (adversarial finding 2).
+ *  NOTE: appointment_booked is deliberately NOT blocked — reminders exist
+ *  for booked leads. Returns a human-readable reason, or null when clear. */
+async function leadContactBlocked(leadId: string): Promise<string | null> {
+  const db = createServiceRoleClient()
+  const { data: l } = await db
+    .from("leads")
+    .select("ai_paused, status, deleted_at, phone")
+    .eq("id", leadId)
+    .maybeSingle()
+  if (!l) return "lead missing"
+  if (l.deleted_at) return "lead deleted"
+  if (l.ai_paused) return "AI paused (opt-out or human takeover)"
+  if (["closed_lost", "lost"].includes(l.status)) return "lead closed"
+  return null
+}
+
+/** Skip + flag the appointment once so the office decides what to do with a
+ *  standing appointment whose lead opted out. */
+async function blockAndFlag(appointmentId: string, reason: string): Promise<void> {
+  const db = createServiceRoleClient()
+  const marker = "⚠️ Automated contact stopped"
+  const { data: apt } = await db.from("appointments").select("notes").eq("id", appointmentId).maybeSingle()
+  if (apt && !(apt.notes ?? "").includes(marker)) {
+    await db.from("appointments").update({
+      notes: [apt.notes, `${marker} (${reason}) — confirm or cancel this appointment manually.`].filter(Boolean).join(" | "),
+    }).eq("id", appointmentId)
+  }
+  console.log(`[appointment-reminders] skipped automated contact for apt ${appointmentId}: ${reason}`)
+}
+
 async function getContext(appointmentId: string) {
   const supabase = createServiceRoleClient()
 
@@ -53,6 +87,10 @@ export async function sendConfirmations(appointmentId: string) {
   const supabase = createServiceRoleClient()
   const ctx = await getContext(appointmentId)
   if (!ctx) return
+  {
+    const blocked = await leadContactBlocked(ctx.apt.lead_id)
+    if (blocked) { await blockAndFlag(appointmentId, blocked); return }
+  }
 
   const { apt, agentCfg, emailTpl, phoneNum, gmailConn } = ctx
   const lead = apt.leads as { first_name: string | null; last_name: string | null; phone: string; email: string | null } | null
@@ -152,6 +190,10 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
     .single()
 
   if (!apt) return
+  {
+    const blocked = await leadContactBlocked(apt.lead_id)
+    if (blocked) { await blockAndFlag(appointmentId, blocked); return }
+  }
   if (apt.confirmation_requested_at) return  // already sent
 
   const lead    = apt.leads as unknown as { first_name: string | null; phone: string } | null
@@ -244,6 +286,11 @@ export async function triggerNoResponseCall(appointmentId: string): Promise<void
     `)
     .eq("id", appointmentId)
     .single()
+
+  if (apt) {
+    const blocked = await leadContactBlocked(apt.lead_id)
+    if (blocked) { await blockAndFlag(appointmentId, blocked); return }
+  }
 
   if (!apt) return
   // Only call if still pending (not yet confirmed or cancelled)
@@ -417,6 +464,10 @@ export async function processAppointmentReminders() {
     const lead = apt.leads as unknown as { first_name: string | null; last_name: string | null; phone: string; email: string | null } | null
     const company = apt.companies as unknown as { name: string; service_type: string | null } | null
     if (!lead || !company) continue
+
+    // Opted-out / paused / closed leads get no reminders (adversarial finding 2)
+    const blocked = await leadContactBlocked(apt.lead_id)
+    if (blocked) { await blockAndFlag(apt.id, blocked); continue }
 
     const { data: agentCfg } = await supabase
       .from("ai_agent_config")

@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave, inferJobType } from "@/lib/ai-engine"
-import { sendSMS, formatPhone } from "@/lib/twilio"
+import { sendSMS, parseLeadPhone } from "@/lib/twilio"
 
 // Receives leads from Google Ads Lead Form Extensions.
 // Contractor pastes: https://app.leadreply.ai/api/webhooks/google?secret=WEBHOOK_SECRET
@@ -55,7 +55,10 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Phone required" }, { status: 400 })
   }
 
-  const phone = formatPhone(rawPhone)
+  const phone = parseLeadPhone(rawPhone)
+  if (!phone) {
+    return NextResponse.json({ error: "Phone not parseable" }, { status: 400 })
+  }
   const fullName = fields["full_name"] || ""
   const firstName = fields["given_name"] || fields["first_name"] || fullName.split(" ")[0] || null
   const lastName =
@@ -77,6 +80,12 @@ export async function POST(req: NextRequest) {
   let leadId: string
 
   if (existing) {
+    // Never revive an opted-out (ai_paused) lead (adversarial finding 3)
+    const { data: pausedCheck } = await supabase
+      .from("leads").select("ai_paused").eq("id", existing.id).single()
+    if (pausedCheck?.ai_paused) {
+      return NextResponse.json({ ok: true, skipped: "lead opted out" })
+    }
     if (existing.status === "cold" || existing.status === "closed_lost") {
       await supabase
         .from("leads")

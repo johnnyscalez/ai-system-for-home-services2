@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { isVoiceStep } from "@/lib/sequences"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { getSession, updateSession } from "@/lib/voice-session"
 import { getTwilioClient } from "@/lib/twilio"
@@ -40,11 +41,9 @@ export async function POST(req: NextRequest) {
       .eq("status", "pending")
       .order("scheduled_at", { ascending: true })
     // Skip voice steps: no_reply steps 1 & 4 are voice; replied_not_booked step 2 is voice
-    const next = pending?.find((s) => {
-      if (s.sequence_type === "no_reply") return s.step !== 1 && s.step !== 4
-      if (s.sequence_type === "replied_not_booked") return s.step !== 2
-      return true
-    })
+    // Use the canonical voice-step mapping — hardcoded step literals drifted
+    // from isVoiceStep() and could expedite ANOTHER CALL instead of the SMS
+    const next = pending?.find((s) => !isVoiceStep(s.sequence_type, s.step))
     if (next) {
       await db.from("sequences")
         .update({ scheduled_at: new Date(Date.now() + delayMs).toISOString() })

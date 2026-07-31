@@ -1099,11 +1099,37 @@ export async function processAndSave(
       // interpret in the COMPANY timezone.
       let scheduled_at = rawScheduledAt
       if (!/([zZ]|[+-]\d{2}:?\d{2})$/.test(rawScheduledAt.trim())) {
-        const { data: tzRow } = await supabase
-          .from("ai_agent_config").select("timezone").eq("company_id", companyId).single()
-        const { localSlotToUtcIso } = await import("@/lib/technician-booking")
-        const naive = rawScheduledAt.trim()
-        scheduled_at = localSlotToUtcIso(naive.slice(0, 10), naive.slice(11, 16) || "09:00", tzRow?.timezone ?? "America/New_York")
+        try {
+          const { data: tzRow } = await supabase
+            .from("ai_agent_config").select("timezone").eq("company_id", companyId).single()
+          const { localSlotToUtcIso } = await import("@/lib/technician-booking")
+          const naive = rawScheduledAt.trim()
+          scheduled_at = localSlotToUtcIso(naive.slice(0, 10), naive.slice(11, 16) || "09:00", tzRow?.timezone ?? "America/New_York")
+        } catch {
+          // Unparseable ("tomorrow 2pm") — leave as-is; the sanity gate below
+          // rejects it and re-asks instead of crashing mid-booking
+          scheduled_at = rawScheduledAt
+        }
+      }
+
+      // Sanity-gate the datetime BEFORE inserting anything. The model can emit
+      // garbage ("tomorrow 2pm" → RangeError AFTER the "you're booked" text
+      // was already saved; "2" → year 2001) — a crash here left a Messenger
+      // lead in total silence right after agreeing to book (adversarial
+      // finding 5). Invalid/past/absurd date → no appointment; replace the
+      // reply with a corrective slot re-ask.
+      const bookMs = Date.parse(scheduled_at)
+      const dateInvalid =
+        Number.isNaN(bookMs) ||
+        bookMs < Date.now() - 60 * 60 * 1000 ||
+        bookMs > Date.now() + 366 * 24 * 60 * 60 * 1000
+      if (dateInvalid) {
+        console.error(`[ai-engine] book_appointment rejected — unusable scheduled_at "${rawScheduledAt}" (normalized "${scheduled_at}") for lead ${leadId}`)
+        const corrective = "Almost there — which of the times I offered works best for you? I'll lock it in right away."
+        if (outboundConversationId) {
+          await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
+        }
+        return { response: corrective, action: undefined, outboundConversationId }
       }
 
       const inferredJobType = inferJobType(notes ?? "")

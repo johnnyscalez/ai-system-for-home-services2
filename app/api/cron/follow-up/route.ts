@@ -91,9 +91,20 @@ export async function GET(req: NextRequest) {
     // Decide: SMS or voice call for this step?
     const useVoice = isVoiceStep(step.sequence_type, step.step)
 
-    // Gate outbound voice calls to working hours — never call at 2 AM.
-    // SMS always goes through (that's the whole value prop).
-    if (useVoice) {
+    // Voice steps also respect the general AI pause (human takeover / opt-out).
+    // Gating only on ai_voice_paused let a paused lead still receive CALLS
+    // (adversarial finding 3).
+    if (useVoice && lead.ai_paused) {
+      await supabase.from("sequences").update({ status: "cancelled" }).eq("id", step.id)
+      continue
+    }
+
+    // Quiet hours — for EVERYTHING. Voice: company working hours. SMS: TCPA
+    // quiet hours (8 AM–9 PM recipient-local; we use company tz as the best
+    // proxy). Fixed offsets from an evening reply used to fire SMS at 3 AM
+    // (adversarial finding 7). Steps outside the window stay pending and fire
+    // on the first cron run inside it.
+    {
       const { data: agentCfg } = await supabase
         .from("ai_agent_config")
         .select("working_hours_start, working_hours_end, timezone")
@@ -104,12 +115,12 @@ export async function GET(req: NextRequest) {
       const hourNow = parseInt(
         new Date().toLocaleString("en-US", { timeZone: tz, hour: "numeric", hour12: false }),
         10
-      )
-      const start = agentCfg?.working_hours_start ?? 8
-      const end   = agentCfg?.working_hours_end   ?? 20
+      ) % 24
+      const start = useVoice ? (agentCfg?.working_hours_start ?? 8) : 8
+      const end   = useVoice ? (agentCfg?.working_hours_end   ?? 20) : 21
 
       if (hourNow < start || hourNow >= end) {
-        // Outside working hours — leave the step pending, cron will retry
+        // Outside allowed hours — leave the step pending, cron will retry
         continue
       }
     }
@@ -257,7 +268,7 @@ export async function GET(req: NextRequest) {
   // ── Process scheduled voice callbacks (lead-requested callbacks) ────────────
   const { data: dueCalls } = await supabase
     .from("scheduled_calls")
-    .select("*, leads(id, phone, status, ai_voice_paused, company_id)")
+    .select("*, leads(id, phone, status, ai_voice_paused, ai_paused, company_id)")
     .eq("status", "pending")
     .lte("scheduled_at", now.toISOString())
     .limit(20)
@@ -266,12 +277,12 @@ export async function GET(req: NextRequest) {
 
   for (const call of dueCalls ?? []) {
     const lead = call.leads as {
-      id: string; phone: string; status: string; ai_voice_paused: boolean; company_id: string
+      id: string; phone: string; status: string; ai_voice_paused: boolean; ai_paused: boolean; company_id: string
     } | null
 
     if (!lead) continue
 
-    if (lead.ai_voice_paused || isTerminalLeadStatus(lead.status)) {
+    if (lead.ai_voice_paused || lead.ai_paused || isTerminalLeadStatus(lead.status)) {
       await supabase.from("scheduled_calls").update({ status: "cancelled" }).eq("id", call.id)
       continue
     }

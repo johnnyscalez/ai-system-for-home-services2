@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave, inferJobType } from "@/lib/ai-engine"
-import { sendSMS, formatPhone } from "@/lib/twilio"
+import { sendSMS, formatPhone, parseLeadPhone } from "@/lib/twilio"
 import { notifyNewLead } from "@/lib/notifications"
 import { buildNoReplySchedule } from "@/lib/sequences"
 import { sendMessengerMessage, getMessengerProfile, messengerPlaceholderPhone } from "@/lib/messenger"
@@ -120,10 +120,9 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
       // could never push to HCP (audit H4)
       const phoneMatch = text.replace(/[^\d+]/g, " ").match(/(\+?1?\s*\d{3}\s*\d{3}\s*\d{4})\b/)
       if (phoneMatch) {
-        try {
-          const realPhone = formatPhone(phoneMatch[1].replace(/\s/g, ""))
-          await supabase.from("leads").update({ phone: realPhone }).eq("id", leadId)
-        } catch { /* not a parseable number — Linda keeps asking */ }
+        const realPhone = parseLeadPhone(phoneMatch[1].replace(/\s/g, ""))
+        if (realPhone) await supabase.from("leads").update({ phone: realPhone }).eq("id", leadId)
+        // invalid → Linda keeps asking
       }
     }
     // Same for email — capture the moment it's shared in conversation
@@ -200,6 +199,12 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     }
   } catch (e) {
     console.error("[webhook/facebook] Messenger AI error for lead:", leadId, e)
+    // Never leave a lead in dead silence mid-conversation — a crash after they
+    // just agreed to something reads as being ghosted (adversarial finding 5)
+    try {
+      await sendMessengerMessage(integration.fb_access_token, psid,
+        "Sorry — something glitched on my end for a second. Could you send that one more time?")
+    } catch { /* page token failure — nothing more we can do here */ }
   }
 }
 
@@ -331,8 +336,11 @@ export async function POST(req: NextRequest) {
         }
       }
 
-      let phone: string | null = null
-      try { phone = rawPhone ? formatPhone(rawPhone) : null } catch { phone = null }
+      // STRICT parse: returns valid E.164 or null. The lenient formatPhone
+      // turned "no phone" into "+" (an invisible, undeliverable lead that also
+      // dedupe-swallowed every later bad-phone lead) and "…ext 2" into a
+      // Dutch number (adversarial-verify finding 8).
+      const phone: string | null = parseLeadPhone(rawPhone)
 
       // Email: exact keys, then any key containing "email", then value match
       let leadEmail = fields["email"] || fields["email_address"] || ""
@@ -398,6 +406,10 @@ export async function POST(req: NextRequest) {
         extraParts.push(`${label}: ${v}`)
       }
       if (formZip) extraParts.push(`Zip: ${formZip}`)
+      // Unparseable phone: keep exactly what the lead typed — the owner may
+      // still be able to read a real number out of it ("'6305551234", "630 555
+      // 0187 ext 2"); losing it entirely made call-back impossible.
+      if (rawPhone && !parseLeadPhone(rawPhone)) extraParts.push(`Phone (as typed): ${rawPhone}`)
       const formNotes = extraParts.length > 0 ? extraParts.join(" | ") : null
 
       // NEVER drop a paid lead. If no phone could be extracted, the lead still
@@ -421,8 +433,19 @@ export async function POST(req: NextRequest) {
         .maybeSingle()
 
       let leadId: string
+      let isNewLead = false
 
       if (existing) {
+        // Opted-out leads stay opted out — a redelivered payload or genuine
+        // re-submission must NOT revive an ai_paused lead into the texting
+        // pipeline (adversarial-verify finding 3). Log + notify only.
+        const { data: fullExisting } = await supabase
+          .from("leads").select("ai_paused").eq("id", existing.id).single()
+        if (fullExisting?.ai_paused) {
+          console.log(`[webhook/facebook] leadgen for opted-out/paused lead ${existing.id} — not reviving, notifying owner`)
+          notifyNewLead(integration.company_id, "Opted-out lead re-submitted a form", phone ?? "", "facebook").catch(() => {})
+          continue
+        }
         if (existing.status === "cold" || existing.status === "closed_lost") {
           await supabase
             .from("leads")
@@ -431,6 +454,7 @@ export async function POST(req: NextRequest) {
         }
         leadId = existing.id
       } else {
+        isNewLead = true
         const { data: newLead } = await supabase
           .from("leads")
           .insert({
@@ -473,6 +497,20 @@ export async function POST(req: NextRequest) {
       // the owner was notified with needs_attention; texting a placeholder
       // would only generate Twilio errors.
       if (!phone) continue
+
+      // Meta redelivers webhooks whenever our (slow) first processing misses
+      // its timeout — the existing-lead path then ran processAndSave(null)
+      // again, generating a spurious follow-up seconds after the opener
+      // (adversarial-verify finding 1). Once a lead has ANY outbound message,
+      // subsequent leadgen deliveries only refresh the record — never re-text.
+      if (!isNewLead) {
+        const { count: outboundCount } = await supabase
+          .from("conversations")
+          .select("*", { count: "exact", head: true })
+          .eq("lead_id", leadId)
+          .eq("direction", "outbound")
+        if ((outboundCount ?? 0) > 0) continue
+      }
 
       // Get company's Twilio number and send AI opening message
       const { data: phoneNumber } = await supabase

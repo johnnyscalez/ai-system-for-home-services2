@@ -6,9 +6,11 @@ export function getTwilioClient() {
 }
 
 export async function sendSMS(to: string, body: string, from?: string, statusCallbackUrl?: string) {
-  // Messenger-only leads carry a "msgr:<psid>" placeholder phone — never let
-  // those reach Twilio (reminders, sequences, confirmations all route here).
-  if (!to || to.startsWith("msgr:")) {
+  // Placeholder leads carry "msgr:<psid>" / "fbform:<leadgen_id>" phones, and
+  // failed extraction historically produced garbage like "+". Never let any
+  // non-dialable value reach Twilio (reminders, sequences, confirmations all
+  // route here).
+  if (isPlaceholderPhone(to)) {
     throw new Error(`sendSMS: not a real phone number: "${to}"`)
   }
   const client = getTwilioClient()
@@ -83,6 +85,28 @@ export function validateTwilioSignature(
     url,
     params
   )
+}
+
+/** Strict lead-phone parser for INGESTION paths. Returns a valid E.164 string
+ *  or null — never a garbage value. formatPhone() (below) is lenient by
+ *  design for send paths; using it on raw form input produced "+" (from
+ *  "no phone") and +31255501872 (a Dutch number, from "312 555 0187 ext 2").
+ *  Ingestion must validate, not guess (adversarial-verify findings 8 + ext). */
+export function parseLeadPhone(raw: string | null | undefined): string | null {
+  if (!raw) return null
+  // Strip extension suffixes before digit-mangling: "ext 2", "x22", "extension 3"
+  const cleaned = raw.trim().replace(/[,;]?\s*(ext\.?|extension|x)\s*\d{1,6}\s*$/i, "")
+  if (!/\d{7}/.test(cleaned.replace(/\D/g, ""))) return null
+  let formatted: string
+  try { formatted = formatPhone(cleaned) } catch { return null }
+  if (!/^\+\d{10,15}$/.test(formatted)) return null
+  return formatted
+}
+
+/** True when a value is one of our internal placeholders (msgr:<psid>,
+ *  fbform:<leadgen_id>) or otherwise not a dialable E.164 number. */
+export function isPlaceholderPhone(phone: string | null | undefined): boolean {
+  return !phone || !/^\+\d{8,15}$/.test(phone)
 }
 
 export function formatPhone(phone: string): string {

@@ -205,12 +205,24 @@ export async function POST(req: NextRequest) {
 
   if (!lead) return twimlOk()
 
+  // ── Confirmation replies OUTRANK opt-out ──────────────────────────────────
+  // Our own confirmation SMS says "Reply RESCHEDULE or CANCEL if needed" — a
+  // "Cancel" from a booked lead means CANCEL THE APPOINTMENT, not opt out.
+  // The opt-out regex hijacked it: lead silently closed while the tech still
+  // got dispatched (adversarial finding 4). The interceptor only acts when a
+  // pending confirmation exists, so ordering it first is safe.
+  const wasConfirmationReply = await handleConfirmationReply(
+    lead.id, companyId, messageBody, normalizedFrom, to, supabase, channel
+  ).catch(() => false)
+
   // ── Deterministic opt-out — BEFORE any AI involvement (audit C8) ──────────
   // Twilio already blocks our sends after a carrier-level STOP; our job is to
   // kill every scheduled touch so nothing even attempts to fire. No goodbye
-  // reply: answering a hard STOP is itself a compliance risk.
-  const OPT_OUT_RE = /^\s*(stop|stopall|stop all|unsubscribe|cancel|end|quit|opt ?out|remove me|do not (text|contact|message) me|don'?t (text|contact|message) me)\s*[.!]*\s*$/i
-  if (OPT_OUT_RE.test(messageBody)) {
+  // reply: answering a hard STOP is itself a compliance risk. Bare "cancel",
+  // "end", "quit" are deliberately NOT here — they collide with appointment
+  // language; the carrier and the AI's own opt-out rules cover those.
+  const OPT_OUT_RE = /^\s*(stop|stopall|stop all|unsubscribe|opt ?out|remove me|quit texting( me)?|do not (text|contact|message) me|don'?t (text|contact|message) me)\s*[.!]*\s*$/i
+  if (!wasConfirmationReply && OPT_OUT_RE.test(messageBody)) {
     await supabase.from("conversations").insert({
       lead_id: lead.id, company_id: companyId, direction: "inbound",
       sent_by: "human", body: messageBody, twilio_sid: twilioSid ?? null, channel,
@@ -234,13 +246,6 @@ export async function POST(req: NextRequest) {
     .from("leads")
     .update({ last_inbound_at: new Date().toISOString(), is_active_conversation: true, channel })
     .eq("id", lead.id)
-
-  // ── Confirmation reply interception ───────────────────────────────────────
-  // If this lead has a pending confirmation AND their message is a clear YES/NO,
-  // handle it directly without burning an AI call.
-  const wasConfirmationReply = await handleConfirmationReply(
-    lead.id, companyId, messageBody, normalizedFrom, to, supabase, channel
-  ).catch(() => false)
 
   if (wasConfirmationReply) {
     // Still save the inbound message to conversations for CRM visibility

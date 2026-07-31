@@ -551,7 +551,7 @@ export function AgentDashboard({
                 const lead = b.leads
                 const name = [lead?.first_name, lead?.last_name].filter(Boolean).join(" ") || "Unknown lead"
                 return (
-                  <Link key={b.id} href={lead ? `/conversations?lead=${lead.id}` : "#"}
+                  <Link key={b.id} href={lead ? `/leads/${lead.id}` : "#"}
                     className="flex items-start gap-3 px-5 py-3.5 hover:bg-[#FAFAF8] transition-colors group">
                     <div className="w-9 h-9 rounded-full bg-[#F5F4F2] flex items-center justify-center shrink-0 mt-0.5">
                       <span className="text-xs font-bold text-[#78716C]">{name.slice(0, 1).toUpperCase()}</span>
@@ -620,7 +620,7 @@ export function AgentDashboard({
                   {callbacks.map((c) => {
                     const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown"
                     return (
-                      <Link key={c.id} href={`/conversations?lead=${c.id}`}
+                      <Link key={c.id} href={`/leads/${c.id}`}
                         className="flex items-center justify-between gap-2 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2 hover:bg-amber-50 transition-colors">
                         <div className="min-w-0">
                           <p className="text-[13px] font-semibold text-[#1C1917] truncate">{name}</p>

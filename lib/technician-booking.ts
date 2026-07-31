@@ -349,13 +349,23 @@ export async function techCanTakeBooking(
   const db = createServiceRoleClient()
   const { data: t } = await db
     .from("technicians")
-    .select("status, job_types, zip_codes, serves_all_areas")
+    .select("status, job_types, zip_codes, serves_all_areas, company_id")
     .eq("id", technicianId)
     .maybeSingle()
   if (!t || t.status !== "active") return false
   if (!techHandlesJob(t.job_types as string[], jobType)) return false
   const z = zip?.match(/\d{5}/)?.[0]
-  if (z && !(t.serves_all_areas || !(t.zip_codes as string[])?.length || (t.zip_codes as string[]).includes(z))) return false
+  if (z) {
+    // COMPANY service-area gate first — "serves_all_areas" on a tech means
+    // "all areas WE serve", never "anywhere in the US". Slot-offering enforced
+    // this; booking-time didn't, so an address arriving after the offer could
+    // book outside territory (adversarial finding: company boundary).
+    const { data: co } = await db
+      .from("companies").select("service_area_zips").eq("id", t.company_id).single()
+    const areaZips = (co?.service_area_zips as string[] | null) ?? null
+    if (areaZips && areaZips.length > 0 && !areaZips.includes(z)) return false
+    if (!(t.serves_all_areas || !(t.zip_codes as string[])?.length || (t.zip_codes as string[]).includes(z))) return false
+  }
   return true
 }
 
@@ -363,8 +373,12 @@ export async function techCanTakeBooking(
 function techHandlesJob(techJobTypes: string[] | null | undefined, jobType: string | null): boolean {
   if (!techJobTypes?.length) return true
   const wanted = canonJob(jobType)
-  // null = unclassifiable, "general" = explicit any-tech request — neither may gate
-  if (!wanted || wanted === "general") return true
+  // null = unclassifiable, "general" = explicit any-tech, "other" = the
+  // enum's own catch-all for nonstandard REAL requests. None may gate: the
+  // voice enum forces "other" for anything unusual, and hard-declining it
+  // closed real callers as lost (adversarial finding 6). An oddball job going
+  // to a dispatcher beats a customer being told "we don't do that."
+  if (!wanted || wanted === "general" || wanted === "other") return true
   return techJobTypes.some(cap => canonJob(cap) === wanted)
 }
 
@@ -409,17 +423,25 @@ export async function selectTechnician(
   // 1. Fetch all active technicians + company timezone (schedule checks must
   // run in COMPANY time — the server is UTC and every CT evening the server
   // weekday is already "tomorrow", audit C3)
-  const [{ data: allTechs }, { data: tzCfg }] = await Promise.all([
+  const [{ data: allTechs }, { data: tzCfg }, { data: companyArea }] = await Promise.all([
     db.from("technicians")
       .select("*")
       .eq("company_id", companyId)
       .eq("status", "active")
       .order("name"),
     db.from("ai_agent_config").select("timezone").eq("company_id", companyId).single(),
+    db.from("companies").select("service_area_zips").eq("id", companyId).single(),
   ])
 
   const techs = (allTechs ?? []) as Technician[]
   if (techs.length === 0) return { found: false, reason: "no_technicians" }
+
+  // Company-level service-area gate — mirrors findSlotsForLead so a booking
+  // whose address arrived after the slot offer can't land outside territory
+  const companyZips = (companyArea?.service_area_zips as string[] | null) ?? null
+  if (leadZip && companyZips && companyZips.length > 0 && !companyZips.includes(leadZip.slice(0, 5))) {
+    return { found: false, reason: "no_zip_match" }
+  }
 
   const tz = tzCfg?.timezone ?? "America/New_York"
   const aptDate = new Date(scheduledAt)

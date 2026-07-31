@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave, inferJobType } from "@/lib/ai-engine"
-import { sendSMS, formatPhone } from "@/lib/twilio"
+import { sendSMS, parseLeadPhone } from "@/lib/twilio"
 import { notifyNewLead } from "@/lib/notifications"
 import { normalizeLead, normalizeSource, channelForSource } from "@/lib/normalize-lead"
 import { buildNoReplySchedule } from "@/lib/sequences"
@@ -148,7 +148,10 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
   if (!lead.phone) {
     return NextResponse.json({ error: "Phone number required" }, { status: 400, headers: CORS_HEADERS })
   }
-  const phone = formatPhone(lead.phone)
+  const phone = parseLeadPhone(lead.phone)
+  if (!phone) {
+    return NextResponse.json({ error: `Phone number not parseable: "${lead.phone}"` }, { status: 400, headers: CORS_HEADERS })
+  }
 
   // Upsert lead — idempotent on phone + company_id. Excludes soft-deleted
   // leads (deleted_at set): a contractor who deletes a lead expects that
@@ -167,6 +170,13 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
   let leadId: string
 
   if (existing) {
+    // Never revive an opted-out (ai_paused) lead into automated outreach —
+    // re-delivered payloads must not undo a STOP (adversarial finding 3)
+    const { data: pausedCheck } = await supabase
+      .from("leads").select("ai_paused").eq("id", existing.id).single()
+    if (pausedCheck?.ai_paused) {
+      return NextResponse.json({ ok: true, skipped: "lead opted out" }, { headers: CORS_HEADERS })
+    }
     if (existing.status === "cold" || existing.status === "closed_lost") {
       await supabase
         .from("leads")
