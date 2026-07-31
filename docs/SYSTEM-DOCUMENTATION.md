@@ -1,6 +1,6 @@
 # FieldBuilt AI — Complete System Documentation
 
-**Last updated:** July 31, 2026 (post-audit, all C1–C9/H4/H5 fixes deployed)
+**Last updated:** July 31, 2026 (post-audit rounds 1+2: C1–C9/H4/H5 + all 9 adversarial seam fixes deployed)
 **Production:** https://fieldbuiltai.com · Railway (US East) · auto-deploys from `main` on GitHub `johnnyscalez/ai-system-for-home-services2`
 **Database:** Supabase project `lzeukaamhhoctahmgbha` (Postgres + Auth + RLS on all tables, scoped per `company_id`)
 
@@ -114,9 +114,13 @@ A tech locked in at slot-offer time is re-checked at booking (`techCanTakeBookin
 - **Cancellation rules:** booking cancels pending steps; any reply cancels no-reply steps; human takeover (`ai_paused`) cancels SMS steps; deleted leads cancel everything; **terminal statuses** (single source of truth `TERMINAL_LEAD_STATUSES` — includes BOTH `lost` and `closed_lost` vocabularies, `appointment_booked`, `closed_won`, `unqualified`) cancel everything; permanent Twilio errors (21610 opted-out / 21211 invalid number) cancel the lead's whole sequence.
 - **Messenger-only leads (placeholder phones) never enter SMS sequences.**
 
-### 4.2 Opt-out (STOP) handling — deterministic, pre-AI
+### 4.2 Opt-out (STOP) handling — deterministic, pre-AI, total
 
-On SMS **and** Messenger, a message matching the opt-out pattern (`stop`, `unsubscribe`, `opt out`, `don't text me`, …) short-circuits **before** any AI call: lead → `closed_lost` + `ai_paused`, ALL pending sequences and scheduled calls cancelled, message logged, **no reply sent** (Twilio handles the carrier-level STOP acknowledgment; answering a hard STOP is a compliance risk).
+On SMS **and** Messenger, a message matching the opt-out pattern (`stop`, `unsubscribe`, `opt out`, `don't text me`, …) short-circuits **before** any AI call: lead → `closed_lost` + `ai_paused`, ALL pending sequences and scheduled calls cancelled, message logged, **no reply sent**. Opt-out is enforced EVERYWHERE: the appointment pipeline (confirmations/reminders/no-response calls) checks lead state and flags standing appointments for manual decision; ingestion webhooks never revive an opted-out lead; cron voice steps respect the pause. Confirmation replies OUTRANK opt-out — a booked lead replying "CANCEL" (per our own confirmation SMS) cancels the appointment, not the relationship; bare cancel/end/quit are not opt-out keywords.
+
+**Quiet hours:** all follow-up SMS fire only 8 AM–9 PM company-local (TCPA); voice steps only within company working hours. Out-of-window steps wait for the next in-window cron run.
+
+**Delivery failures:** transient carrier errors retry exactly once per lead, ever. Permanent errors (A2P-unregistered sender 30034, landline, invalid, opt-out) never retry — all outreach is cancelled and the lead is flagged `needs_attention` for a manual call.
 
 ### 4.3 Appointment reminders (`/api/cron/appointment-reminders` every 10 min)
 
@@ -138,7 +142,7 @@ For every active HCP connection: re-import technicians (roster changes), pull re
 |---|---|---|
 | `/api/webhooks/sms` | Twilio | Inbound SMS/WhatsApp. Opt-out short-circuit → confirmation-reply interception → AI turn → reply. Auto-captures address/email from message text. Schedules/cancels sequences from post-turn status. |
 | `/api/webhooks/sms-status` | Twilio | Delivery receipts → `conversations.delivery_status` (failed sends get retried by channel fallback). |
-| `/api/webhooks/facebook` (+ alias `/facebook2`) | Meta | Page webhooks: **`leadgen`** (fetch lead fields via Graph, punctuation-tolerant + fuzzy phone/email/zip extraction, never drops silently — no-phone leads become `needs_attention` placeholders; creates lead → AI SMS opener → no-reply sequence) and **`messaging`** (Messenger conversations: find/create lead by PSID, opt-out check, human-takeover echo detection, ai_paused gate, AI reply). HMAC signature verified. `/facebook2` exists because Meta once wedged delivery to the original callback path. |
+| `/api/webhooks/facebook` (+ alias `/facebook2`) | Meta | Page webhooks: **`leadgen`** (fetch lead fields via Graph, punctuation-tolerant + fuzzy phone/email/zip extraction via the strict `parseLeadPhone` validator (extension-stripping, E.164-validated — garbage never becomes a phone), never drops silently — no-phone leads become `needs_attention` placeholders with the typed value kept in notes; creates lead → AI SMS opener → no-reply sequence. Duplicate Meta deliveries never re-text a lead that already has an outbound message; opted-out leads are never revived) and **`messaging`** (Messenger conversations: find/create lead by PSID, opt-out check, human-takeover echo detection, ai_paused gate, AI reply). HMAC signature verified. `/facebook2` exists because Meta once wedged delivery to the original callback path. |
 | `/api/webhooks/meta-whatsapp` | Meta Cloud API | WhatsApp messages/statuses/echoes per `phone_number_id`; echo without our sends → human takeover pause. |
 | `/api/webhooks/housecall` | HCP (if ever enabled) | Job created/updated/completed/canceled → upsert mirrored appointment, revenue attribution. Currently events do not arrive (no registration API); the reconcile cron covers this. |
 | `/api/webhooks/lead` | Anything (Zapier, Make, website forms, GHL) | Generic lead intake, secret-authenticated (`?secret=` / header / body). Normalizes any field naming, creates lead, AI opener, sequences. **This is the universal bridge** when a source can't integrate directly. |
