@@ -51,28 +51,58 @@ export async function POST(req: NextRequest) {
     .eq("id", conv.lead_id)
     .single()
 
-  const retryableStatuses = ["new", "contacted", "active_conversation", "qualified", "following_up", "nurturing"]
-  if (lead && !lead.ai_paused && retryableStatuses.includes(lead.status)) {
-    // Check we haven't already queued a retry for this conversation
-    const { count } = await db
-      .from("sequences")
-      .select("*", { count: "exact", head: true })
-      .eq("lead_id", conv.lead_id)
-      .eq("sequence_type", "sms_retry")
-      .eq("status", "pending")
+  // ── Permanent failures: retrying is pointless and loops forever ────────────
+  // 30034 = OUR number isn't A2P-registered (every US send fails until the
+  //         number is registered — retrying spams the CRM thread, audit incident:
+  //         148 identical sends to one lead)
+  // 30003/30004/30005/30006 = unreachable / blocked / unknown / landline
+  // 21610 = recipient opted out · 21211/21614 = invalid / not a mobile
+  const PERMANENT_SMS_ERRORS = new Set(["30034", "30003", "30004", "30005", "30006", "21610", "21211", "21614"])
+  const isPermanent = errorCode !== null && PERMANENT_SMS_ERRORS.has(errorCode)
 
-    if ((count ?? 0) === 0) {
-      await db.from("sequences").insert({
-        lead_id:       conv.lead_id,
-        company_id:    conv.company_id,
-        sequence_type: "sms_retry",
-        step:          1,
-        scheduled_at:  new Date(Date.now() + 60_000).toISOString(),
-        status:        "pending",
-        metadata:      { failed_conversation_id: conv.id, failed_body: conv.body },
-      })
+  // Retry ONCE, ever — count sms_retry rows of ANY status. The old check only
+  // looked for a *pending* retry, so after each retry was sent-and-failed a
+  // fresh one was created: an infinite 5-minute loop.
+  const { count: retriesEver } = await db
+    .from("sequences")
+    .select("*", { count: "exact", head: true })
+    .eq("lead_id", conv.lead_id)
+    .eq("sequence_type", "sms_retry")
+
+  const retryableStatuses = ["new", "contacted", "active_conversation", "qualified", "following_up", "nurturing"]
+  const leadEligible = lead && !lead.ai_paused && retryableStatuses.includes(lead.status)
+
+  if (isPermanent || (retriesEver ?? 0) >= 1 || !leadEligible) {
+    if (isPermanent || (retriesEver ?? 0) >= 1) {
+      // This number can't receive our SMS — stop ALL automated outreach to it
+      // and surface the lead for a manual call instead of grinding forever.
+      await db.from("sequences").update({ status: "cancelled" })
+        .eq("lead_id", conv.lead_id).eq("status", "pending")
+      const reason = isPermanent
+        ? `SMS undeliverable (Twilio error ${errorCode})`
+        : "SMS undeliverable (retry also failed)"
+      const { data: l2 } = await db.from("leads").select("notes, status").eq("id", conv.lead_id).single()
+      if (l2 && !["appointment_booked", "closed_won", "closed_lost", "lost"].includes(l2.status)) {
+        await db.from("leads").update({
+          status: "needs_attention",
+          notes: [l2.notes, `⚠️ ${reason} — call this lead manually.`].filter(Boolean).join(" | "),
+        }).eq("id", conv.lead_id)
+      }
+      console.warn(`[sms-status] ${reason} — outreach stopped for lead ${conv.lead_id}, flagged needs_attention`)
     }
+    return NextResponse.json({ ok: true })
   }
+
+  // Transient failure, first occurrence → schedule exactly one retry in 60s
+  await db.from("sequences").insert({
+    lead_id:       conv.lead_id,
+    company_id:    conv.company_id,
+    sequence_type: "sms_retry",
+    step:          1,
+    scheduled_at:  new Date(Date.now() + 60_000).toISOString(),
+    status:        "pending",
+    metadata:      { failed_conversation_id: conv.id, failed_body: conv.body },
+  })
 
   return NextResponse.json({ ok: true })
 }
