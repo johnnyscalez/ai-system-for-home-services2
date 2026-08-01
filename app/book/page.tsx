@@ -136,9 +136,8 @@ export default function BookPage() {
             className="font-extrabold tracking-tight mb-6"
             style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
                      fontSize: "clamp(2.3rem, 6.5vw, 3.9rem)", lineHeight: 1.05 }}>
-            4x Your Ducting / HVAC Jobs
-            <br />On Autopilot
-            <br /><span style={{ color: C.orange }}>Without Extra Work Or Hires</span>
+            4x Your Ducting / HVAC Jobs On Autopilot
+            <br /><span style={{ color: C.orange }}>Without Extra Ad Spend, Work Or Hires</span>
           </motion.h1>
 
           <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28, duration: 0.6 }}
