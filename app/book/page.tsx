@@ -127,8 +127,8 @@ export default function BookPage() {
 
         <div className="relative max-w-3xl mx-auto w-full text-center">
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full mb-7 text-xs font-bold uppercase tracking-widest"
-            style={{ background: "rgba(249,115,22,0.10)", color: C.orange, border: "1px solid rgba(249,115,22,0.25)", fontFamily: "var(--font-jetbrains)" }}>
+            className="inline-flex items-center gap-2 px-5 py-2 rounded-full mb-7 text-sm font-extrabold uppercase tracking-widest text-white"
+            style={{ background: C.orange, boxShadow: "0 4px 20px rgba(249,115,22,0.45)", fontFamily: "var(--font-jetbrains)" }}>
             For HVAC shops running 4+ techs
           </motion.div>
 
@@ -136,17 +136,16 @@ export default function BookPage() {
             className="font-extrabold tracking-tight mb-6"
             style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
                      fontSize: "clamp(2.3rem, 6.5vw, 3.9rem)", lineHeight: 1.05 }}>
-            Every tech booked with
-            <br />profitable work.
-            <br /><span style={{ color: C.orange }}>Without hiring anyone.</span>
+            4x Your Ducting / HVAC Jobs
+            <br />On Autopilot
+            <br /><span style={{ color: C.orange }}>Without Extra Work Or Hires</span>
           </motion.h1>
 
           <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28, duration: 0.6 }}
             className="text-lg leading-relaxed max-w-2xl mx-auto" style={{ color: "rgba(250,250,248,0.62)" }}>
-            FieldBuilt answers every lead in <strong style={{ color: "#F5F3F0" }}>2 seconds</strong> — qualifies
-            it, books the job, dispatches the right tech, and logs it to your CRM.
-            24/7, on every channel, with zero added admin work. Pick a time below
-            and watch it run on your own leads.
+            Get the full map of how HVAC companies get more booked jobs fast — with
+            no extra headache or ad spend. Pick a time, see it running, and see how
+            it can <strong style={{ color: "#F5F3F0" }}>4x your jobs</strong>.
           </motion.p>
         </div>
       </section>
@@ -160,18 +159,7 @@ export default function BookPage() {
                       WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 80%)",
                       maskImage: "radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 80%)" }} />
 
-        <div className="relative max-w-3xl mx-auto pt-20 pb-16">
-          <Reveal className="text-center mb-8">
-            <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight mb-4"
-                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
-              Pick a time. Twenty minutes, on screen.
-            </h2>
-            <p className="text-base leading-relaxed max-w-xl mx-auto" style={{ color: C.muted }}>
-              You&rsquo;ll watch the system handle a lead start to finish, and leave with a
-              map of exactly where your shop leaks jobs today — yours to keep either way.
-            </p>
-          </Reveal>
-
+        <div className="relative max-w-3xl mx-auto pt-16 pb-16">
           <Reveal delay={0.1}>
             <div className="rounded-3xl p-2 sm:p-3"
                  style={{ background: C.surface, border: `1px solid ${C.border}`,
