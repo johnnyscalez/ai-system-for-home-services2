@@ -18,7 +18,7 @@ import { useRef } from "react"
 import { motion, useInView } from "framer-motion"
 import {
   Zap, MessagesSquare, CalendarCheck, Route, ClipboardList, Repeat,
-  ArrowDown, CloudRain, Flame, Check, TrendingUp, Moon, BarChart3,
+  CloudRain, Flame, Check, TrendingUp, Moon, BarChart3,
 } from "lucide-react"
 import { C, FieldFMark, GhlBookingWidget, MinimalFooter } from "@/components/landing/shared"
 
@@ -106,14 +106,10 @@ export default function BookPage() {
             </span>
           </span>
         </div>
-        <a href="#book" className="hidden sm:inline-flex items-center gap-1.5 px-4 py-2 rounded-lg text-sm font-bold text-white transition-transform hover:scale-[1.03]"
-           style={{ background: C.orange, boxShadow: "0 4px 16px rgba(249,115,22,0.35)" }}>
-          Pick my time <ArrowDown className="w-3.5 h-3.5" aria-hidden="true" />
-        </a>
       </header>
 
       {/* ── 1. HERO ── */}
-      <section className="relative flex flex-col justify-center pt-32 pb-16 px-6 overflow-hidden"
+      <section className="relative flex flex-col justify-center pt-32 pb-12 px-6 overflow-hidden"
                style={{ background: "linear-gradient(180deg, #141110 0%, #1A1614 100%)" }}>
         <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
              style={{
@@ -146,23 +142,12 @@ export default function BookPage() {
           </motion.h1>
 
           <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28, duration: 0.6 }}
-            className="text-lg leading-relaxed max-w-2xl mx-auto mb-9" style={{ color: "rgba(250,250,248,0.62)" }}>
+            className="text-lg leading-relaxed max-w-2xl mx-auto" style={{ color: "rgba(250,250,248,0.62)" }}>
             FieldBuilt answers every lead in <strong style={{ color: "#F5F3F0" }}>2 seconds</strong> — qualifies
             it, books the job, dispatches the right tech, and logs it to your CRM.
             24/7, on every channel, with zero added admin work. Pick a time below
             and watch it run on your own leads.
           </motion.p>
-
-          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.42, duration: 0.55 }}>
-            <a href="#book" className="inline-flex items-center gap-2 px-8 py-4 rounded-xl text-base font-bold text-white transition-transform hover:scale-[1.03]"
-               style={{ background: C.orange, boxShadow: "0 8px 32px rgba(249,115,22,0.40)" }}>
-              Pick my time — 20 minutes
-              <ArrowDown className="w-4 h-4" aria-hidden="true" />
-            </a>
-            <p className="text-xs mt-4" style={{ color: "rgba(250,250,248,0.40)" }}>
-              Free 14-day setup after the call &middot; no contract &middot; you keep the results either way
-            </p>
-          </motion.div>
         </div>
       </section>
 
