@@ -171,11 +171,14 @@ export async function pushBookingToHcp(appointmentId: string): Promise<{ pushed:
     .single()
   if (!lead) return { pushed: false, reason: "lead not found" }
 
-  // Messenger-only leads carry a msgr:<psid> placeholder phone. Don't create
-  // an HCP customer with garbage contact info — skip now; the reconciliation
-  // cron re-pushes once the real phone is captured in conversation.
-  if (typeof lead.phone === "string" && lead.phone.startsWith("msgr:") && !lead.email) {
-    return { pushed: false, reason: "no real contact info yet (messenger lead)" }
+  // Leads without a REAL phone (msgr:/fbform: placeholders, garbage) never
+  // push — HCP requires a valid 10-digit mobile and rejects the create with a
+  // 400 anyway (verified live). The old guard only skipped when there was
+  // also no email, so placeholder+email leads burned a failing API call every
+  // retry. The reconciliation cron re-pushes once the real phone is captured.
+  const { isPlaceholderPhone } = await import("@/lib/twilio")
+  if (isPlaceholderPhone(lead.phone as string)) {
+    return { pushed: false, reason: "no real phone yet — will push when captured" }
   }
 
   const customerId = await resolveOrCreateCustomer(db, client, lead)

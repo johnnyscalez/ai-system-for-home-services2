@@ -485,7 +485,7 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
   // lead's message contains a zip code and no slot check has run this call, run
   // the lookup ourselves — deterministic, not dependent on model compliance.
   const forcedZip = !slotToolBlock && first.tools.length === 0 && userMessage && session.collected?.slots_offered !== "true"
-    ? userMessage.match(/\b(\d{5})\b/)?.[1] ?? null
+    ? (userMessage.match(/\b\d{5}\b/g)?.slice(-1)[0] ?? null)
     : null
   const isRealSlotCall = slotToolBlock !== null
 
@@ -750,7 +750,7 @@ async function executeTool(
       // vanish (audit C6). Still non-blocking for the caller experience.
       if (apt) {
         const { data: lead } = await db.from("leads").select("job_type").eq("id", session.lead_id).single()
-        const zip = address?.match(/\b(\d{5})\b/)?.[1] ?? null
+        const zip = address?.match(/\b\d{5}\b/g)?.slice(-1)[0] ?? null
         selectTechnician(session.company_id, apt.id, scheduled_at, lead?.job_type as string | null, zip)
           .then(async (res) => {
             if (!res.found) {

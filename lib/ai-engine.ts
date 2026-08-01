@@ -1931,8 +1931,10 @@ async function notifyTechnician(
 }
 
 function extractZip(address: string): string | null {
-  const match = address.match(/\b(\d{5})\b/)
-  return match ? match[1] : null
+  // LAST 5-digit group — zips end an address; 5-digit street numbers begin it
+  // ("29901 Common Rd ... 48066" must yield 48066, not 29901)
+  const matches = address.match(/\b\d{5}\b/g)
+  return matches?.length ? matches[matches.length - 1] : null
 }
 
 /**

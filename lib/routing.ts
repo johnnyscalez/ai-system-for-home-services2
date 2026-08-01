@@ -70,7 +70,13 @@ export function zipToPoint(zip: string | null | undefined): GeoPoint | null {
 
 /** Extract a 5-digit zip from a freeform address string. */
 export function zipFromAddress(address: string | null | undefined): string | null {
-  return address?.match(/\b(\d{5})(?:-\d{4})?\b/)?.[1] ?? null
+  // Take the LAST 5-digit group: US addresses put the zip at the end, and
+  // 5-digit STREET numbers are common ("29901 Common Rd ... 48066" — the
+  // first-match version returned 29901, a South Carolina zip, which broke
+  // tech assignment for a Michigan booking in live testing).
+  const matches = address?.match(/\b\d{5}(?:-\d{4})?\b/g)
+  if (!matches?.length) return null
+  return matches[matches.length - 1].slice(0, 5)
 }
 
 export function addressToPoint(address: string | null | undefined): GeoPoint | null {
