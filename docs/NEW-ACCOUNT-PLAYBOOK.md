@@ -1,6 +1,6 @@
 # FieldBuilt AI — New Account & New Agent Playbook
 
-**Purpose:** this is the map for launching every new account and every new chat/voice agent RIGHT the first time — one pass, no back-and-forth revisions. It is built from the complete July 2026 test campaign: two audit rounds, the adversarial seam-testing round, the exhaustive live-issue test pass, and every production incident (London Cook, Marilyn, the zip extractor, the A2P block). Every checklist item below exists because skipping it already burned us once.
+**Purpose:** this is the map for launching every new account and every new chat/voice agent RIGHT the first time — one pass, no back-and-forth revisions. It is built from the complete July–August 2026 test campaign: two audit rounds, the adversarial seam-testing round, the exhaustive live-issue test pass, the SMS/Messenger agent batteries, the live Housecall Pro write proof, and every production incident (London Cook, Marilyn, Nina, the zip extractor, the A2P block). Every checklist item below exists because skipping it already burned us once.
 
 **How to use:**
 1. Setting up a new account → run Phases 0–5 top to bottom, checking every box.
@@ -17,6 +17,7 @@
 | # | Check | Why (what broke before) |
 |---|---|---|
 | 0.1 | ☐ **A2P 10DLC registered** — Brand + Campaign approved in Twilio Console, number attached to the Messaging Service | THE hard blocker. An unregistered account = every SMS silently carrier-blocked with error 30034 while the dashboard looks fine. We ran for weeks with ZERO deliverable SMS. GHL accounts "just work" because LeadConnector registers under its ISV umbrella — a raw Twilio account does NOT. |
+| 0.1a | ☐ **Verify A2P by delivery statistics, never by a single thread.** Query Twilio for the number's last-7-day status breakdown and require ~0 messages with error 30034. | **The most dangerous trap in this document.** A2P is enforced per receiving carrier: T-Mobile hard-blocks, others don't. Top Air had a perfectly healthy-looking 4-message conversation with a real lead while the same week's totals were **187 sent → 9 delivered → 174 blocked (30034)**. One delivered thread, or even a lead replying, is NOT proof the channel works. Only the failure-code breakdown is. |
 | 0.2 | ☐ Twilio number provisioned, voice + SMS webhooks pointed at **https://fieldbuiltai.com** (never a railway.app URL) | All webhook URLs and OAuth redirects must use the production domain. |
 | 0.3 | ☐ `companies.is_pilot` set intentionally (`true` = billing gate never blocks; new signups default `false`) | F36: AI hard-stops when `plan='cancelled'` unless pilot. Forgetting the flag on a pilot = silent shutdown on cancellation. |
 | 0.4 | ☐ `ai_agent_config.timezone` set to the company's real timezone | Server is UTC. Every CT evening the server weekday is already "tomorrow" — schedule math, sequences, quiet hours, and slot generation all run in COMPANY time (audit C3). Wrong timezone = wrong workdays, 3 AM texts, phantom slots. |
@@ -44,8 +45,28 @@ Everything the agent says comes from `ai_agent_config.generated_system_prompt` +
 | 1.10 | ☐ **Declined services scripted** — what the agent says when asked for something the company doesn't do (polite decline + close) | Unscripted = the agent improvises or books the unbookable. |
 | 1.11 | ☐ **`knowledge_base` (pricing_info, services_offered) consistent with the prompt** — they are injected separately; a mismatch = the agent contradicts itself between messages | KB still said $399 after the prompt was fixed. |
 | 1.12 | ☐ **Owner sign-off on the KB** — the client reads what their agent believes and confirms it | KB ground truth cannot be verified from the outside; only the client knows. |
+| 1.13 | ☐ **Property types enumerated and priced** — single-family, townhome, condo, apartment, mobile home: which are served, and the price for each | The **Nina failure**: a condo unit was told "we only serve single-family residential homes." Condos were a real $249 product the whole time. |
+| 1.14 | ☐ **Every decline rule tested at its BOUNDARY** — list the rule's literal trigger words and ask: what legitimate customer also says these words? | Nina's decline rule triggered on "multi-unit" and "property management" — written to reject commercial buildings, it also rejected a condo unit and an authorized property manager. A decline rule is the most dangerous sentence in a prompt: it fires rarely and always ends a conversation. |
+| 1.15 | ☐ **Authorization sources listed** — owner, property manager, authorized rep, landlord-approved renter | "Renters may not have authority" cascaded into refusing an authorized manager. Authorization ≠ ownership. |
+| 1.16 | ☐ **Standalone price for every service that can be sold alone**, not just the bundles | Dryer vent cleaning is bundled into both duct packages but has no standalone price — the agent has to redirect to an estimate instead of quoting and booking it. Silent revenue leak. |
+| 1.17 | ☐ **Entry-hook prices vs the booking floor** — if ads run a low hook price, state explicitly which prices are quotable-but-never-bookable and what the hard minimum is | Top Air's $89/$99 ad prices are hooks; the floor is $189. Without an explicit floor the agent negotiates down under pressure. |
+| 1.18 | ☐ **Channel scoping deliberate** — any flow that should apply everywhere lives in the BASE prompt, not in `messenger_instructions` | The Nina root cause: the condo/duct playbook existed only in the Messenger block, so the SMS agent — which handles most Facebook duct leads — had never seen it. Channel-scoped instructions create two agents with different knowledge. |
+| 1.19 | ☐ **Multi-metro service scope** — if a metro can only do a subset of services (no tech for the rest), the prompt must say so per metro | Top Air's prompt advertises the full HVAC menu and says it serves metro Detroit — but only ductwork has a Michigan tech. A Detroit furnace lead gets encouraged, then dead-ends at booking. |
 
 **Consistency rule:** after any prompt/KB edit, grep the WHOLE prompt + KB for the old value. Partial patches are how $399 survived in 2 of 3 places.
+
+### 1.A — Know which knowledge-base fields actually reach a conversation
+
+Only **six** KB fields are injected at runtime by the SMS/Messenger and voice engines:
+
+`business_description` · `services_offered` · `service_areas` · `custom_ai_knowledge` · `financing_options` · `pricing_info`
+
+Every other field (`unique_selling_points`, `team_info`, `testimonials`, `certifications`, `years_in_business`, `custom_facts`…) is read **only when a system prompt is generated**. This split matters twice:
+
+- **Auditing live behavior?** Only those six fields can be causing it. A wrong fact elsewhere is dormant.
+- **⚠️ Regenerating a prompt is destructive.** The generator rebuilds from the KB, so it will (a) discard every hand-patch made to the prompt since onboarding, and (b) re-inject whatever stale content still sits in the non-runtime fields. Top Air's `unique_selling_points` held a `$399/system` line for weeks after $399 was purged from the prompt — one click of "regenerate" would have brought it back. `testimonials` still names technicians, which is exactly how phantom tech names entered the prompt originally.
+
+**Rule: before ever regenerating a prompt, clean the non-runtime KB fields first, and expect to re-apply every manual prompt fix afterward. For a mature account, edit the prompt directly instead.**
 
 ---
 
@@ -61,6 +82,8 @@ Everything the agent says comes from `ai_agent_config.generated_system_prompt` +
 | 2.6 | ☐ `hcp_employee_id` mapped for every bookable tech (V2 accounts) | Unmapped tech = HCP job created unassigned. |
 | 2.7 | ☐ Owner-slot pattern documented if applicable (e.g. "David G = whichever owner is in the country") | Encodes business reality the roster alone can't show. |
 | 2.8 | ☐ Company `service_area_zips` set from onboarding (office + radius) or intentionally empty | It's the first gate in slot-finding. |
+| 2.9 | ☐ **Advertised services ⊆ bookable job types** — take the service list from the prompt AND `services_offered`, map each through `canonJob()`, confirm an active tech covers it. Anything with no tech comes out of the prompt or gets a scripted decline | Top Air's prompt advertises **Thermostat Installation** and no technician has `thermostat` — the agent can promise it, then the booking dead-ends as `job_not_offered`. |
+| 2.10 | ☐ **Per-metro capability matrix** for multi-metro accounts — which job types are bookable in which metro | Only one Top Air tech does non-duct HVAC and he is Illinois-only, so metro Detroit is duct-only. Nothing in the prompt says that (see 1.19). |
 
 ---
 
@@ -70,7 +93,8 @@ Everything the agent says comes from `ai_agent_config.generated_system_prompt` +
 - ☐ Page connected via **"Edit settings"** in the FB Login dialog, granting the app BOTH the page and the business — `/me/accounts` only shows app-granted pages. Symptom of skipping: **"Cannot parse access token."**
 - ☐ Until Meta App Review passes: connect via the runbook (page shared to ScaleZ BM + app-role profile) — `docs/meta-integration-runbook.md`.
 - ☐ **Meta's own "Business Agent" AI switched OFF on the client page** — it intercepts messages before our webhook.
-- ☐ Page subscription matches intent: `leadgen` only (lead ads, team handles chat) vs `leadgen,messages,messaging_postbacks` (Messenger agent live). Top Air runs leadgen-only by owner decision.
+- ☐ Page subscription matches intent: `leadgen` only (lead ads, team handles chat) vs `leadgen,messages,messaging_postbacks` (Messenger agent live). Verify by READING the subscription back from Graph after any change — don't trust the POST's `{"success":true}` alone.
+- ☐ Turning the Messenger agent on/off is two steps, not one: the page subscription **and** the `ai_paused` flag on existing Messenger leads. When re-enabling, unpause only non-terminal leads — leads closed as `lost`/`closed_lost` stay paused forever.
 - ☐ Lead form field mapping tested with one real form submission: phone/email/zip extracted, `parseLeadPhone` accepts the format (it strips "ext. 12" suffixes and rejects garbage — a no-phone lead becomes a `needs_attention` placeholder, never a silent drop).
 - ☐ Messenger-specific: agent must collect a real mobile before booking (PSID leads carry `msgr:` placeholder phones — excluded from SMS sequences and HCP pushes until a real number is captured).
 - ☐ If the account uses a Messenger sales flow (`messenger_instructions`, e.g. Top Air's $189 duct upsell + `[[SILENT]]` close): test the flow AND that SMS/voice on the same account still use the normal flow.
@@ -79,6 +103,8 @@ Everything the agent says comes from `ai_agent_config.generated_system_prompt` +
 - ☐ API key valid (MAX/XL plan), `integration_mode` flipped to `housecall_pro`, employees imported.
 - ☐ Remember: **no HCP webhooks exist** — freshness is the 15-min reconcile cron only. Office-side cancels take up to 15 min to reach us.
 - ☐ Testing against a client's live HCP: **GET-only. Never write without explicit owner go-ahead.** Placeholder-phone leads never push (HCP 400s on non-10-digit mobiles — verified live).
+- ☐ **⚠️ HCP jobs cannot be deleted or cancelled through the API — it is create-and-read only.** Every cancel/update endpoint shape returns 404 (verified live, Aug 2026). Consequences: (a) an owner-approved live write test leaves a job that must be removed **by hand** in the HCP UI, so name the test customer something obvious like "test" and tell the owner immediately; (b) this is *why* the AI-cancels-a-synced-appointment flow notifies the office instead of cleaning up — the manual step is the ceiling of what HCP allows, not a shortcut.
+- ☐ Live write proof (once, with owner approval) verifies the whole chain at once: customer created, schedule + arrival window, **tech assignment via `hcp_employee_id`**, tags (`FieldBuilt AI` + job type), lead source, and the conversation summary in job notes.
 
 ### Voice
 - ☐ Inbound call answered by the agent with correct greeting/company name; forwarding from the office number self-verified (`/api/voice/verify-forwarding`).
@@ -157,6 +183,17 @@ These are the "invisible until tested" issues. Each entry: **symptom → root ca
 | H39 | 33 swallowed `catch {}` sites hide real failures | Accepted debt — when something "silently doesn't happen," suspect a swallowed catch and add logging at that site | — |
 | — | Meta wedged webhook delivery to the original callback path | `/facebook2` alias exists; if FB events stop arriving with no errors, try re-pointing the subscription | — |
 
+### I. The prompt contradicting itself (the Nina class — added Aug 2026)
+
+This class has no code guard, and that is the point: **the prompt is a program the model executes, and two clauses that disagree are a bug the model resolves at runtime — almost always toward the restrictive branch, stated as confident fact.** These are found only by reading the prompt adversarially and by boundary-testing declines.
+
+| ID | Symptom | Root cause | New-account check |
+|---|---|---|---|
+| I-1 | Agent told an authorized property manager of a condo unit: *"We only serve single-family residential homes"* — a sentence that appears **nowhere** in the prompt, refusing a real $249 product | A decline rule ("commercial, multi-unit, property management → disengage") and a pricing line ("$249 condo") contradicted each other. The model picked the restrictive one and **over-generalized it into a new, harsher rule.** | Boundary-test every decline rule (1.14). Ask the agent, as a lead, for each edge case the rule's trigger words could catch. |
+| I-2 | The Messenger agent knew the condo/duct playbook; the SMS agent — handling most Facebook duct leads — did not | Playbook lived in `messenger_instructions`, injected only when `channel = messenger` | Channel scoping must be deliberate (1.18). Run the SAME scenario on every live channel and diff the answers. |
+| I-3 | Agent negotiated toward a below-floor price under pressure (discounts, competitor match, sympathy) | Prompt said "never book the $89" but never stated a numeric floor, so anything ≥ $90 looked arguable | If ads run hook prices, state the hard floor explicitly and name the dodges (discount, price match, "ask your manager", cash). Then attack it (Phase 5 item 17). |
+| I-4 | A purged price survived in a KB field nobody was checking | `unique_selling_points` isn't runtime-injected, so a grep of "what the agent says" missed it — but it WOULD return via prompt regeneration | Grep every KB field, not just the runtime six (1.A). |
+
 ---
 
 ## Phase 5 — Pre-go-live test battery (run for EVERY new account/agent)
@@ -184,15 +221,22 @@ These are the "invisible until tested" issues. Each entry: **symptom → root ca
 13. ☐ **Voice** — call the number: agent answers with context, quotes only true facts, books with a real slot; hang-up mid-flow doesn't corrupt the lead; post-call summary lands on the lead.
 14. ☐ **Cross-channel** — same phone via form + chat → one lead, one agent. (C16)
 15. ☐ **Cleanup** — delete all test rows; verify dashboards show zero test residue.
+16. ☐ **Decline-boundary attack** (I-1) — for EVERY decline rule, play the customer who trips its trigger words but is legitimate business. For a "no commercial / no multi-unit" rule that means at minimum: a condo owner, an apartment renter with landlord approval, an authorized property manager, a townhome owner, and a genuinely commercial caller. Only the last one may be declined. Also try the awkward middle (a landlord wanting 12 units) — the answer should be "the office will call you," never a refusal and never invented bulk pricing.
+17. ☐ **Price-floor attack** (I-3) — if the account has a floor, try to break it from six angles: the hook price ("the ad said $89"), a flat discount beg, per-unit haggling ("$150 each"), competitor match ("they quoted $120 — you advertise a Best Price Guarantee"), authority appeal ("ask your manager", cash offer), and sympathy (fixed income/retiree). Pass = zero appointments below the floor AND the agent stays warm while refusing. Also verify the positive path: a lead who accepts after the pitch gets booked normally.
+18. ☐ **Channel parity** (I-2) — run the SAME 3 scenarios on every live channel (SMS, Messenger, voice) and diff the answers. Any difference must be a deliberate channel rule, not an accident of where an instruction was stored.
+19. ☐ **Authorization matrix** (1.15) — owner, property manager, landlord-approved renter all proceed; an unapproved renter is asked to get the OK and offered a tentative time, never refused outright.
+20. ☐ **Prompt self-contradiction read** (I-1) — before going live, read the assembled prompt looking only for pairs of clauses that could disagree: a decline rule vs a product line, a hard rule vs an exception, a scope limit in one section vs a broader claim in another. This is a reading task, not a testing task, and it is the cheapest bug-per-minute step in the whole playbook.
 
 **Known real-world untestables — verify in week 1 with real traffic instead:** actual SMS deliverability (A2P-dependent), real-caller STT quality, email spam-folder rates across providers, Messenger 24h-window behavior.
+
+**What "engine-level" testing does and doesn't prove.** Driving `processAndSave(...)` directly with test leads exercises the real brain, the real playbook injection, the real tools, routing and DB writes — so it proves reasoning, pricing, qualification, and booking logic. It does NOT prove the transport layer: Graph/Twilio delivery, webhook signature handling, or human-takeover echoes. Those need one real message on the live channel.
 
 ---
 
 ## Phase 6 — Go-live + first week
 
 - ☐ Flip the channel switches deliberately (e.g. leadgen first, Messenger agent later — Top Air pattern).
-- ☐ Day 1: watch `sms-status` for permanent errors (30034 = A2P problem; 21211 = form producing garbage phones).
+- ☐ Day 1: pull the Twilio **status breakdown** for the account's number (delivered vs undelivered vs failed, grouped by error code) — not a spot-check of one thread (0.1a). 30034 = A2P problem; 21211 = form producing garbage phones.
 - ☐ Day 1: confirm the three cron log lines cycle in Railway logs.
 - ☐ Days 1–7: review EVERY AI conversation transcript daily — this is where the next Marilyn-class seam shows itself. Anything the agent said that isn't literally true goes back into Phase 1 as a prompt/KB fix, then re-run battery item 3.
 - ☐ Week 1: check the `needs_attention` queue is being worked by the owner (F32 — it has no automated exit).
@@ -210,3 +254,20 @@ These are the "invisible until tested" issues. Each entry: **symptom → root ca
 - Placeholder-phone leads intentionally skip SMS sequences and HCP pushes until a real phone is captured.
 - Deleting a lead gives that person a clean slate on re-contact; it does not resurrect history.
 - Inactive technicians survive HCP re-imports on purpose; deleted ones come back — use `inactive`.
+- Housecall Pro jobs can be created and read through the API but **never cancelled or deleted** — manual removal in their UI is the only way, so the AI's cancel flow notifies the office by design.
+- Hook prices (e.g. an $89/$99 ad special) are quotable so the agent can explain the difference, but are never bookable. Quoting ≠ selling.
+- On a refused upsell the Messenger agent goes fully silent (`[[SILENT]]`), while the SMS agent sends one short polite close — a deliberate channel difference (dead air reads as a glitch over SMS).
+- Non-runtime KB fields (`unique_selling_points`, `testimonials`, `team_info`, …) do not affect live conversations; they only shape a regenerated prompt.
+
+---
+
+## Appendix B — open questions to settle per account (don't guess these)
+
+These are the questions that have actually blocked work. Get them answered at onboarding rather than mid-incident:
+
+- Does any advertised price have **tiers or conditions** (property type, access difficulty, metro, seasonal), and what exactly triggers each tier? A second price with no stated trigger is unusable — the agent cannot know when to quote it, and guessing produces a customer-facing wrong price.
+- Which services have a **standalone** price versus only existing inside a bundle?
+- Is there a **hard price floor**, and does it apply per unit or per job?
+- Which property types are served, and does each have its own price?
+- For multi-metro accounts: which services are available in which metro?
+- Who can authorize work besides the owner?
