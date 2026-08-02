@@ -181,7 +181,7 @@ Company `bc9fb131-2af2-4c31-8d79-f46bb9663e60` · V2 (HCP mode) · AI number +1 
 
 **Messenger duct-cleaning flow** (`messenger_instructions`; Top Air ONLY — their FB ads are all duct-cleaning): greet by first name → home/townhome/condo → furnace count → last cleaned → **sell the $189 full clean (per furnace; $249 condo)** — the $89 ad package is never bookable; if the lead refuses the upsell after a genuine expert pitch, the agent emits `[[SILENT]]` and the lead is closed with no further replies. SMS/voice on the same account use the normal flow.
 
-**Current operational state (July 31, 2026):** Messenger AI is **suspended** for live leads at the owner's request — the page subscription is `leadgen`-only (messages don't reach us; the team inbox handles chats) and existing Messenger leads are `ai_paused`. To re-enable: re-subscribe `messages,messaging_postbacks` with the stored page token and unpause. Facebook Lead Ads sync is LIVE (2 active duct forms; 17 dropped leads were backfilled as `needs_attention` on Jul 31 — owner to work that list).
+**Current operational state (Aug 2, 2026):** Messenger AI is **LIVE** — page subscription restored to `leadgen,messages,messaging_postbacks` and the two active-conversation Messenger leads unpaused (terminal/lost leads stay paused). To suspend again: re-subscribe `leadgen` only and set Messenger leads `ai_paused`. Facebook Lead Ads sync is LIVE (2 active duct forms; 17 dropped leads were backfilled as `needs_attention` on Jul 31 — owner to work that list).
 
 ---
 
