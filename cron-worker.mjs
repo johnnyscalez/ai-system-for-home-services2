@@ -10,6 +10,7 @@ async function runFollowUp() {
       headers: { Authorization: `Bearer ${SECRET}` },
     })
     const data = await res.json().catch(() => ({}))
+    if (res.status === 401) console.error("[cron] FOLLOW-UP AUTH FAILED (401) — CRON_SECRET mismatch, NO FOLLOW-UPS ARE RUNNING")
     console.log(`[cron] follow-up: ${res.status}`, data)
   } catch (err) {
     console.error("[cron] follow-up error:", err.message)
@@ -22,6 +23,7 @@ async function runAppointmentReminders() {
       headers: { Authorization: `Bearer ${SECRET}` },
     })
     const data = await res.json().catch(() => ({}))
+    if (res.status === 401) console.error("[cron] REMINDERS AUTH FAILED (401) — CRON_SECRET mismatch, NO REMINDERS ARE RUNNING")
     console.log(`[cron] appointment-reminders: ${res.status}`, data)
   } catch (err) {
     console.error("[cron] appointment-reminders error:", err.message)
@@ -34,6 +36,7 @@ async function runHcpSync() {
       headers: { Authorization: `Bearer ${SECRET}` },
     })
     const data = await res.json().catch(() => ({}))
+    if (res.status === 401) console.error("[cron] HCP-SYNC AUTH FAILED (401) — CRON_SECRET mismatch, NO HCP SYNC IS RUNNING")
     console.log(`[cron] hcp-sync: ${res.status}`, data)
   } catch (err) {
     console.error("[cron] hcp-sync error:", err.message)

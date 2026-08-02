@@ -29,14 +29,25 @@ function extractStreetAddress(text: string): string | null {
 
 // ─── Confirmation reply detection ─────────────────────────────────────────────
 
+// Anything suggesting the lead wants something DIFFERENT — a question, a time
+// change, a condition — must fall through to the AI, never auto-confirm.
+// The old prefix-only matcher confirmed "ok, actually can we move it to 2pm?"
+// and treated "no problem, see you then!" as a cancellation (live-reproduced).
+const COUNTER_SIGNALS = /\?|actually|instead|but |however|move|change|different|another|resched|earlier|later|can we|could we|what time|which time|not sure|maybe|except/i
+
 function isConfirmation(msg: string): boolean {
   const s = msg.toLowerCase().trim()
-  return /^(yes|y|yeah|yep|yup|confirmed|confirm|ok|okay|sure|sounds good|i.ll be there|will be there|i.m good|good|👍|✅|absolutely|definitely|for sure|i confirm|confirmed|great|perfect|works for me|that works|see you|see you then|i.ll be home|we.ll be there|we.ll be home)/.test(s)
+  if (COUNTER_SIGNALS.test(s)) return false
+  // Whole-message match (with optional trailing punctuation/pleasantries), not prefix
+  return /^(yes|y|yeah|yep|yup|si|sí|confirmed|confirm|ok|okay|okey|sure|sounds good|good|great|perfect|absolutely|definitely|for sure|i confirm|works for me|that works|see you|see you then|see you there|i.ll be there|will be there|we.ll be there|i.ll be home|we.ll be home|i.m good|👍|✅)[\s.!,🙂😊👍✅]*(thanks?|thank you|ty)?[\s.!]*$/.test(s)
 }
 
 function isCancellation(msg: string): boolean {
   const s = msg.toLowerCase().trim()
-  return /^(no|cancel|nope|nah|won.t make it|can.t make it|need to cancel|please cancel|cancel my appointment|reschedule|i need to reschedule|need to reschedule|can we reschedule|rescheduling|change)/.test(s)
+  // "no" only as a standalone answer — "no problem/no worries" are CONFIRMATIONS in spirit
+  if (/^no[.!\s]*$/.test(s)) return true
+  if (/^(no problem|no worries)/.test(s)) return false
+  return /^(cancel|nope|nah|won.?t make it|can.?t make it|cannot make it|need to cancel|please cancel|cancel my appointment|i need to reschedule|need to reschedule|can we reschedule|rescheduling|reschedule)\b/.test(s)
 }
 
 async function handleConfirmationReply(

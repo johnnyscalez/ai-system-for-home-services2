@@ -229,6 +229,15 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
 
   const body = `Hi ${firstName}, this is ${agentName} confirming your upcoming appointment on ${dayLabel} at ${timeLabel}. Can you confirm you'll be available? Reply YES to confirm or NO to reschedule.`
 
+  // Quiet hours — defer (flag stays unset; retried next cron pass in-window)
+  {
+    const localHour = parseInt(new Date().toLocaleString("en-US", { timeZone: timezone, hour: "numeric", hour12: false }), 10) % 24
+    if (localHour < 8 || localHour >= 21) {
+      console.log(`[reminders] quiet hours (${localHour}:00 local) — deferring confirmation request for apt ${appointmentId}`)
+      return
+    }
+  }
+
   try {
     const msg = await sendSMS(lead.phone, body, phoneNum.phone_number)
 
@@ -542,6 +551,15 @@ export async function processAppointmentReminders() {
 
     async function sendReminderSMS(body: string, column: string) {
       if (!phoneNum?.phone_number) return
+      // Quiet hours (TCPA 8am–9pm recipient-local; company tz as proxy) — a
+      // 2h reminder for an 8 AM job used to fire at 6 AM (finding G37). The
+      // send flag stays unset, so the reminder fires on the first cron pass
+      // inside the window instead.
+      const localHour = parseInt(new Date().toLocaleString("en-US", { timeZone: timezone, hour: "numeric", hour12: false }), 10) % 24
+      if (localHour < 8 || localHour >= 21) {
+        console.log(`[reminders] quiet hours (${localHour}:00 local) — deferring "${column}" for apt ${apt.id}`)
+        return
+      }
       try {
         const twilioMsg = await sendSMS(lead!.phone, body, phoneNum.phone_number)
         await supabase.from("conversations").insert({

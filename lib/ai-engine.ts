@@ -1148,7 +1148,7 @@ export async function processAndSave(
       // (audit C7). Invalid → drop it and let selectTechnician re-pick below.
       if (preSelected) {
         const { techCanTakeBooking } = await import("@/lib/technician-booking")
-        const stillValid = await techCanTakeBooking(preSelected.tech_id, bookJobType, bookZip).catch(() => false)
+        const stillValid = await techCanTakeBooking(preSelected.tech_id, bookJobType, bookZip, scheduled_at).catch(() => false)
         if (!stillValid) {
           console.warn(`[ai-engine] pre-selected tech ${preSelected.tech_name} no longer valid for job=${bookJobType} zip=${bookZip} — re-selecting`)
           preSelected = null
@@ -1276,6 +1276,28 @@ export async function processAndSave(
       }
     } else if (result.action.type === "cancel_appointment") {
       const { appointment_id, reason } = result.action
+      // Verify the ID belongs to THIS lead before touching anything. The model
+      // passes IDs as text — a hallucinated-but-valid ID could cancel another
+      // customer's appointment, and a bogus ID updated zero rows while the
+      // lead was still told "cancelled" (adversarial finding A7).
+      const { data: target } = await supabase
+        .from("appointments")
+        .select("id, hcp_job_id")
+        .eq("id", appointment_id)
+        .eq("company_id", companyId)
+        .eq("lead_id", leadId)
+        .eq("status", "scheduled")
+        .maybeSingle()
+
+      if (!target) {
+        console.warn(`[ai-engine] cancel_appointment: id ${appointment_id} not found for lead ${leadId} — correcting instead of confirming`)
+        const corrective = "Let me double-check your appointment before I change anything — one moment. Which day was it scheduled for?"
+        if (outboundConversationId) {
+          await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
+        }
+        return { response: corrective, action: undefined, outboundConversationId }
+      }
+
       await supabase
         .from("appointments")
         .update({
@@ -1283,8 +1305,17 @@ export async function processAndSave(
           cancelled_at: new Date().toISOString(),
           cancellation_reason: reason ?? null,
         })
-        .eq("id", appointment_id)
-        .eq("company_id", companyId)
+        .eq("id", target.id)
+
+      // One-way HCP sync gap: our cancel never removed the mirrored HCP job.
+      // Until HCP exposes a cancel API, flag the office loudly (finding F34).
+      if (target.hcp_job_id && !String(target.hcp_job_id).startsWith("pending")) {
+        const { notifyNeedsAttention } = await import("@/lib/notifications")
+        notifyNeedsAttention(companyId, `Appointment cancelled by lead — REMOVE the matching job from Housecall Pro (HCP job ${target.hcp_job_id})`, "").catch(() => {})
+        await supabase.from("appointments").update({
+          notes: `⚠️ Cancelled here — HCP job ${target.hcp_job_id} must be removed manually in Housecall Pro.`,
+        }).eq("id", target.id)
+      }
 
       await supabase
         .from("leads")
@@ -1294,13 +1325,25 @@ export async function processAndSave(
     } else if (result.action.type === "reschedule_appointment") {
       const { appointment_id, new_scheduled_at } = result.action
 
-      // Capture the old time before overwriting
+      // Same lead-scoped verification as cancel (finding A7): never touch an
+      // appointment that isn't this lead's, never confirm a change that
+      // matched zero rows.
       const { data: oldApt } = await supabase
         .from("appointments")
         .select("scheduled_at, google_event_id")
         .eq("id", appointment_id)
         .eq("company_id", companyId)
-        .single()
+        .eq("lead_id", leadId)
+        .maybeSingle()
+
+      if (!oldApt) {
+        console.warn(`[ai-engine] reschedule_appointment: id ${appointment_id} not found for lead ${leadId} — correcting instead of confirming`)
+        const corrective = "Let me pull up your appointment to make sure I move the right one — which day is it currently scheduled for?"
+        if (outboundConversationId) {
+          await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
+        }
+        return { response: corrective, action: undefined, outboundConversationId }
+      }
 
       await supabase
         .from("appointments")

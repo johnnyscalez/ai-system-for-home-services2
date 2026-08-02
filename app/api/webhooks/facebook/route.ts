@@ -191,6 +191,16 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
   try {
     const result = await processAndSave(leadId, integration.company_id, text, undefined, undefined, "messenger")
     if (result.response) {
+      // Re-check ai_paused RIGHT before sending (finding C19): a human can take
+      // over in the dashboard during the multi-second AI generation above — the
+      // stale check at the top of this function wouldn't see it, and the AI
+      // would talk over the team member.
+      const { data: freshLead } = await supabase
+        .from("leads").select("ai_paused").eq("id", leadId).maybeSingle()
+      if (freshLead?.ai_paused) {
+        console.log(`[webhook/facebook] lead ${leadId} became AI-paused mid-generation — reply suppressed`)
+        return
+      }
       await sendMessengerMessage(integration.fb_access_token, psid, result.response)
       await supabase
         .from("leads")

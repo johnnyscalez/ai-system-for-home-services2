@@ -218,6 +218,20 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
     notifyNewLead(company.id, leadName, phone, (body.source as string) ?? "webhook").catch(() => {})
   }
 
+  // Redelivery guard: sources retry on slow responses (Zapier/Make/Google all
+  // do) — once a lead has ANY outbound message, a re-delivered payload must
+  // never trigger a second opener (verified live: 2 POSTs = 2 openers).
+  {
+    const { count: outboundCount } = await supabase
+      .from("conversations")
+      .select("*", { count: "exact", head: true })
+      .eq("lead_id", leadId)
+      .eq("direction", "outbound")
+    if ((outboundCount ?? 0) > 0) {
+      return NextResponse.json({ ok: true, lead_id: leadId, deduped: true }, { headers: CORS_HEADERS })
+    }
+  }
+
   const { data: phoneNumber } = await supabase
     .from("phone_numbers")
     .select("phone_number")

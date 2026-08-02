@@ -344,7 +344,8 @@ function canonJob(jt: string | null | undefined): string | null {
 export async function techCanTakeBooking(
   technicianId: string,
   jobType: string | null,
-  zip: string | null
+  zip: string | null,
+  scheduledAt?: string | null
 ): Promise<boolean> {
   const db = createServiceRoleClient()
   const { data: t } = await db
@@ -354,6 +355,32 @@ export async function techCanTakeBooking(
     .maybeSingle()
   if (!t || t.status !== "active") return false
   if (!techHandlesJob(t.job_types as string[], jobType)) return false
+  // Time-conflict check — a stale slot map (or two leads accepting the same
+  // slot simultaneously) could double-book the same tech at the same instant
+  // (live-reproduced). Check OUR appointments and live HCP jobs in a 2h window.
+  if (scheduledAt) {
+    const startMs = Date.parse(scheduledAt)
+    if (!Number.isNaN(startMs)) {
+      const JOB_MS = 2 * 60 * 60 * 1000
+      const { data: overlaps } = await db
+        .from("appointments")
+        .select("id, scheduled_at")
+        .eq("technician_id", technicianId)
+        .eq("status", "scheduled")
+        .gte("scheduled_at", new Date(startMs - JOB_MS).toISOString())
+        .lte("scheduled_at", new Date(startMs + JOB_MS).toISOString())
+      if ((overlaps ?? []).length > 0) return false
+      try {
+        const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
+        const hcpBusy = await getHcpBusyIntervals(
+          t.company_id as string,
+          new Date(startMs - JOB_MS).toISOString(),
+          new Date(startMs + JOB_MS).toISOString()
+        )
+        if (hcpBusy.some(b => b.technicianId === technicianId && b.startMs < startMs + JOB_MS && b.endMs > startMs)) return false
+      } catch { /* HCP unreachable — local check already ran */ }
+    }
+  }
   const z = zip?.match(/\d{5}/)?.[0]
   if (z) {
     // COMPANY service-area gate first — "serves_all_areas" on a tech means
@@ -484,6 +511,13 @@ export async function selectTechnician(
       t.zip_codes.length === 0 ||
       t.zip_codes.includes(leadZip.slice(0, 5))
     )
+  } else {
+    // NO zip at all: if geography matters for this company (any tech is
+    // territory-restricted, e.g. a two-metro operation), assigning blind put a
+    // Michigan job on the Chicago crew (live-reproduced). Fail → the caller
+    // flags the appointment for manual dispatch instead of guessing a metro.
+    const geoMatters = candidates.some(t => !t.serves_all_areas && (t.zip_codes?.length ?? 0) > 0)
+    if (geoMatters) return { found: false, reason: "no_zip_match" }
   }
 
   if (candidates.length === 0) return { found: false, reason: "no_zip_match" }

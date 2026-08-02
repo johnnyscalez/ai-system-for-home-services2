@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   // ── Process pending sequence steps ─────────────────────────────────────────
   const { data: dueSteps } = await supabase
     .from("sequences")
-    .select("*, leads(id, phone, status, ai_paused, ai_voice_paused, first_name, last_name, service_type, deleted_at)")
+    .select("*, leads(id, phone, status, ai_paused, ai_voice_paused, is_active_conversation, first_name, last_name, service_type, deleted_at)")
     .eq("status", "pending")
     .lte("scheduled_at", now.toISOString())
     .order("scheduled_at", { ascending: true })  // oldest-first so no step is skipped
@@ -37,10 +37,16 @@ export async function GET(req: NextRequest) {
   for (const step of dueSteps ?? []) {
     const lead = step.leads as {
       id: string; phone: string; status: string; ai_paused: boolean; ai_voice_paused: boolean;
+      is_active_conversation: boolean;
       first_name: string | null; last_name: string | null; service_type: string | null; deleted_at: string | null;
     } | null
 
     if (!lead) continue
+
+    // Lead is actively texting RIGHT NOW — a follow-up firing mid-conversation
+    // contradicts whatever the AI just said (finding C17). Leave the step
+    // pending; the flag auto-clears 2h after their last inbound.
+    if (lead.is_active_conversation) continue
 
     const stepIsVoice = isVoiceStep(step.sequence_type, step.step)
 

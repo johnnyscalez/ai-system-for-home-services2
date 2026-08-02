@@ -68,10 +68,23 @@ export async function resolveOrCreateCustomer(
   const digits = last10(lead.phone)
   let found: HcpCustomer | undefined
 
-  // 2. Phone
+  // 2. Phone — priority order (finding E28: shared home/work landlines used
+  // to attach the booking to whoever matched FIRST — possibly the spouse or a
+  // different household on the same office line):
+  //   a. mobile match + name match  b. mobile-only match
+  //   c. home/work match ONLY when the name also matches — otherwise a shared
+  //      landline is not identity; create a fresh customer instead.
   if (digits) {
-    const byPhone = await searchCustomers(client, digits)
-    found = byPhone.find((c) => customerPhoneMatches(c, digits))
+    const byPhone = (await searchCustomers(client, digits)).filter((c) => customerPhoneMatches(c, digits))
+    const nameMatches = (c: HcpCustomer) =>
+      !!lead.first_name &&
+      (c.first_name ?? "").toLowerCase() === (lead.first_name ?? "").toLowerCase()
+    const mobileMatches = (c: HcpCustomer) =>
+      typeof c.mobile_number === "string" && c.mobile_number.replace(/\D/g, "").slice(-10) === digits
+    found =
+      byPhone.find((c) => mobileMatches(c) && nameMatches(c)) ??
+      byPhone.find(mobileMatches) ??
+      byPhone.find(nameMatches)
   }
 
   // 3. Email
@@ -157,19 +170,33 @@ export async function pushBookingToHcp(appointmentId: string): Promise<{ pushed:
   if (apt.origin === "hcp") return { pushed: false, reason: "originated in HCP" }
   if (apt.status !== "scheduled") return { pushed: false, reason: `status ${apt.status}` }
 
+  // Atomic claim (finding C18): booking-path push and the reconcile cron can
+  // race; the read-then-write hcp_job_id check let both create a job. Claim
+  // the row with a conditional write — only the winner proceeds. A crashed
+  // push leaves "pending:<ts>", which reconcile treats as retryable after 1h.
+  const claim = `pending:${Date.now()}`
+  const { data: claimed } = await db
+    .from("appointments")
+    .update({ hcp_job_id: claim })
+    .eq("id", appointmentId)
+    .is("hcp_job_id", null)
+    .select("id")
+  if (!claimed?.length) return { pushed: false, reason: "another push in flight" }
+  const releaseClaim = () => db.from("appointments").update({ hcp_job_id: null }).eq("id", appointmentId).eq("hcp_job_id", claim).then(() => {}, () => {})
+
   const { data: company } = await db
     .from("companies").select("integration_mode").eq("id", apt.company_id).single()
-  if (company?.integration_mode !== "housecall_pro") return { pushed: false, reason: "standalone mode" }
+  if (company?.integration_mode !== "housecall_pro") { await releaseClaim(); return { pushed: false, reason: "standalone mode" } }
 
   const client = await getHcpClient(apt.company_id)
-  if (!client) return { pushed: false, reason: "no HCP connection" }
+  if (!client) { await releaseClaim(); return { pushed: false, reason: "no HCP connection" } }
 
   const { data: lead } = await db
     .from("leads")
     .select("id, first_name, last_name, phone, email, address, job_type, source, hcp_customer_id")
     .eq("id", apt.lead_id)
     .single()
-  if (!lead) return { pushed: false, reason: "lead not found" }
+  if (!lead) { await releaseClaim(); return { pushed: false, reason: "lead not found" } }
 
   // Leads without a REAL phone (msgr:/fbform: placeholders, garbage) never
   // push — HCP requires a valid 10-digit mobile and rejects the create with a
@@ -178,10 +205,13 @@ export async function pushBookingToHcp(appointmentId: string): Promise<{ pushed:
   // retry. The reconciliation cron re-pushes once the real phone is captured.
   const { isPlaceholderPhone } = await import("@/lib/twilio")
   if (isPlaceholderPhone(lead.phone as string)) {
+    await releaseClaim()
     return { pushed: false, reason: "no real phone yet — will push when captured" }
   }
 
-  const customerId = await resolveOrCreateCustomer(db, client, lead)
+  let customerId: string
+  try {
+    customerId = await resolveOrCreateCustomer(db, client, lead)
   const addressId = await ensureServiceAddress(client, customerId, apt.address ?? lead.address)
 
   // Map our assigned tech → HCP employee
@@ -225,6 +255,11 @@ export async function pushBookingToHcp(appointmentId: string): Promise<{ pushed:
   }).eq("id", apt.id)
 
   return { pushed: true }
+  } catch (err) {
+    // Release the claim so the reconcile cron can retry this push
+    await releaseClaim()
+    throw err
+  }
 }
 
 // ── Flow B/C shared: bring one HCP job into coherence with our system ─────────
@@ -504,6 +539,20 @@ export async function reconcileCompany(companyId: string): Promise<{
     if (jobs.length < 50 || (res.total_pages && page >= res.total_pages)) break
   }
 
+  // Stale push claims: a crashed push leaves hcp_job_id = "pending:<ts>".
+  // Older than 1h = the pusher died — clear so the retry below picks it up.
+  const { data: stale } = await db
+    .from("appointments")
+    .select("id, hcp_job_id")
+    .eq("company_id", companyId)
+    .like("hcp_job_id", "pending:%")
+  for (const s of stale ?? []) {
+    const ts = Number(String(s.hcp_job_id).split(":")[1] ?? 0)
+    if (Date.now() - ts > 60 * 60 * 1000) {
+      await db.from("appointments").update({ hcp_job_id: null }).eq("id", s.id).eq("hcp_job_id", s.hcp_job_id)
+    }
+  }
+
   // Retry AI bookings that never made it into HCP (Flow A failures)
   const { data: unpushed } = await db
     .from("appointments")
@@ -553,7 +602,7 @@ export async function getHcpBusyIntervals(
   if (byHcpId.size === 0) return []
 
   const intervals: BusyInterval[] = []
-  for (let page = 1; page <= 3; page++) {
+  for (let page = 1; page <= 10; page++) { // 1000-job window (finding D22: 300 was headroom-tight)
     const res = await client.get<{ jobs?: HcpJob[]; total_pages?: number }>(
       `/jobs?scheduled_start_min=${encodeURIComponent(fromIso)}&scheduled_start_max=${encodeURIComponent(toIso)}&page=${page}&page_size=100`
     )

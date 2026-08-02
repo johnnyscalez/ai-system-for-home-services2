@@ -120,6 +120,20 @@ export async function POST(req: NextRequest) {
   }
 
   // Get Twilio number and run AI engine
+  // Redelivery guard: sources retry on slow responses (Zapier/Make/Google all
+  // do) — once a lead has ANY outbound message, a re-delivered payload must
+  // never trigger a second opener (verified live: 2 POSTs = 2 openers).
+  {
+    const { count: outboundCount } = await supabase
+      .from("conversations")
+      .select("*", { count: "exact", head: true })
+      .eq("lead_id", leadId)
+      .eq("direction", "outbound")
+    if ((outboundCount ?? 0) > 0) {
+      return NextResponse.json({ ok: true, deduped: true })
+    }
+  }
+
   const { data: phoneNumber } = await supabase
     .from("phone_numbers")
     .select("phone_number")
