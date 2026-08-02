@@ -12,13 +12,18 @@ async function leadContactBlocked(leadId: string): Promise<string | null> {
   const db = createServiceRoleClient()
   const { data: l } = await db
     .from("leads")
-    .select("ai_paused, status, deleted_at, phone")
+    .select("ai_paused, status, deleted_at, phone, company_id")
     .eq("id", leadId)
     .maybeSingle()
   if (!l) return "lead missing"
   if (l.deleted_at) return "lead deleted"
   if (l.ai_paused) return "AI paused (opt-out or human takeover)"
   if (["closed_lost", "lost"].includes(l.status)) return "lead closed"
+  // Billing gate (F36): cancelled subscription stops reminders, confirmation
+  // requests, and no-response calls too (pilots exempt)
+  const { companyAiBlocked } = await import("@/lib/billing-gate")
+  const billingBlock = await companyAiBlocked(l.company_id)
+  if (billingBlock) return billingBlock
   return null
 }
 

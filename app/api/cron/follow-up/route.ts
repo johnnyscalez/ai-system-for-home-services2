@@ -34,6 +34,10 @@ export async function GET(req: NextRequest) {
 
   let processed = 0
 
+  // Billing gate (F36) — one lookup per company per run
+  const { companyAiBlocked } = await import("@/lib/billing-gate")
+  const billingBlockCache = new Map<string, string | null>()
+
   for (const step of dueSteps ?? []) {
     const lead = step.leads as {
       id: string; phone: string; status: string; ai_paused: boolean; ai_voice_paused: boolean;
@@ -47,6 +51,16 @@ export async function GET(req: NextRequest) {
     // contradicts whatever the AI just said (finding C17). Leave the step
     // pending; the flag auto-clears 2h after their last inbound.
     if (lead.is_active_conversation) continue
+
+    // Billing gate (F36): cancelled subscription = no automated outreach
+    // (pilots exempt). Steps stay pending so the sequence resumes untouched
+    // if the company resubscribes.
+    let billingBlock = billingBlockCache.get(step.company_id)
+    if (billingBlock === undefined) {
+      billingBlock = await companyAiBlocked(step.company_id)
+      billingBlockCache.set(step.company_id, billingBlock)
+    }
+    if (billingBlock) continue
 
     const stepIsVoice = isVoiceStep(step.sequence_type, step.step)
 

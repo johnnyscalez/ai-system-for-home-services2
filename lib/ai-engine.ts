@@ -1018,6 +1018,18 @@ export async function processAndSave(
       .in("status", ["just_came_in", "new", "contacted", "following_up", "followed_up", "nurturing", "cold"])
   }
 
+  // Billing gate (F36): cancelled subscription = AI hard-stop (pilots exempt).
+  // The inbound message above is still recorded so the team sees the thread —
+  // the AI just never answers or opens.
+  {
+    const { companyAiBlocked } = await import("@/lib/billing-gate")
+    const billingBlock = await companyAiBlocked(companyId)
+    if (billingBlock) {
+      console.log(`[ai-engine] company ${companyId} blocked (${billingBlock}) — no AI reply for lead ${leadId}`)
+      return { response: "", silent: true }
+    }
+  }
+
   // Run the AI engine — wrapped so any internal crash still gets a reply to the lead
   let result: EngineResult
   try {

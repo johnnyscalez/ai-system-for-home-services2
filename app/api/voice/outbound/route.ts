@@ -36,6 +36,13 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ error: "Lead is closed" }, { status: 400 })
   }
 
+  // Billing gate (F36): cancelled subscription = no AI calls (pilots exempt)
+  const { companyAiBlocked } = await import("@/lib/billing-gate")
+  const billingBlock = await companyAiBlocked(lead.company_id)
+  if (billingBlock) {
+    return NextResponse.json({ error: `AI is disabled: ${billingBlock}` }, { status: 403 })
+  }
+
   const { data: phoneRecord } = await db
     .from("phone_numbers")
     .select("phone_number")

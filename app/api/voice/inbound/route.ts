@@ -154,6 +154,17 @@ export async function POST(req: NextRequest) {
     leadServiceType = lead.service_type ?? null
   }
 
+  // Billing gate (F36): cancelled subscription = voice AI does not answer
+  // (pilots exempt). Caller hears the polite fallback instead of the agent.
+  {
+    const { companyAiBlocked } = await import("@/lib/billing-gate")
+    const billingBlock = await companyAiBlocked(companyId)
+    if (billingBlock) {
+      console.log(`[voice/inbound] company ${companyId} blocked (${billingBlock}) — declining AI call`)
+      return twiml(errorTwiML(appUrl))
+    }
+  }
+
   // Any real forwarded call also proves forwarding works — self-verify silently.
   if (forwardedFrom) {
     db.from("companies")
