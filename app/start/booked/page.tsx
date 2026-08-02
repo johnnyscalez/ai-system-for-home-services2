@@ -24,7 +24,7 @@
 // Both are optional — the page reads fine without them.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { Suspense, useEffect, useRef } from "react"
+import { Suspense, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion, useInView } from "framer-motion"
 import {
@@ -309,15 +309,11 @@ function TourItem({ index, title, caption, children }: {
 function BookedContent() {
   const params = useSearchParams()
 
-  // Meta pixel Schedule event — this page is the GHL calendar's post-booking
-  // redirect target, so landing here = a booked call. Tracked for measurement
-  // and future optimization switching; the ad set optimizes on Lead for now
-  // (booking volume is nowhere near Meta's ~50/week learning threshold).
-  useEffect(() => {
-    if (typeof window !== "undefined" && typeof window.fbq === "function") {
-      window.fbq("track", "Schedule")
-    }
-  }, [])
+  // NOTE: no Schedule pixel event here. GHL's pixel integration fires
+  // Schedule natively from inside the booking widget the moment a booking is
+  // submitted (verified on the wire 2026-08) — on /book, /start, and anywhere
+  // else the calendar is embedded. Firing it here too would double-count, and
+  // would also re-fire on every refresh/revisit of this page.
   const name = params.get("name")
   const timeRaw = params.get("time")
   const parsed = timeRaw ? new Date(timeRaw) : null
