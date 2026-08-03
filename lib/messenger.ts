@@ -72,3 +72,117 @@ export function messengerPlaceholderPhone(psid: string): string {
 export function isMessengerPlaceholderPhone(phone: string | null | undefined): boolean {
   return typeof phone === "string" && phone.startsWith("msgr:")
 }
+
+// ── Conversation history import (the Nicole incident, Aug 2026) ──────────────
+//
+// A Messenger thread can have a life BEFORE our system ever sees it: Meta
+// inbox automations, office reps replying by hand, months of back-and-forth.
+// When such a person sends anything after we connect (or reconnect), the
+// webhook meets an unknown PSID, creates a blank lead, and the AI restarts
+// intake from zero — observed live: the AI re-opened a conversation minutes
+// after a human rep had told the customer "we do not service your area."
+//
+// Fix: on first contact with a PSID, read the thread's recent history from
+// the Conversations API (works with the standard page token — verified live)
+// and (a) write it into our conversation log so the AI has full context,
+// (b) detect page-side messages we didn't send — a human or automation
+// already owns this thread, so the AI stays OUT until the office resumes it.
+
+export type HistoryMessage = {
+  fromPage: boolean
+  text: string
+  createdTime: string
+}
+
+export async function fetchConversationHistory(
+  pageAccessToken: string,
+  pageId: string,
+  psid: string,
+  limit = 25
+): Promise<HistoryMessage[]> {
+  try {
+    const res = await fetch(
+      `${GRAPH}/${pageId}/conversations?user_id=${psid}&fields=messages.limit(${limit}){message,from,created_time}&access_token=${pageAccessToken}`
+    )
+    if (!res.ok) {
+      console.warn(`[messenger] history fetch failed for psid ${psid}: HTTP ${res.status}`)
+      return []
+    }
+    const data = (await res.json()) as {
+      data?: Array<{ messages?: { data?: Array<{ message?: string; from?: { id?: string }; created_time?: string }> } }>
+    }
+    const raw = data.data?.[0]?.messages?.data ?? []
+    return raw
+      .filter((m) => (m.message ?? "").trim() && m.created_time)
+      .map((m) => ({
+        fromPage: m.from?.id === pageId,
+        text: (m.message ?? "").trim(),
+        createdTime: m.created_time!,
+      }))
+      .reverse() // Graph returns newest-first; we want chronological
+  } catch (err) {
+    console.warn("[messenger] history fetch error:", err)
+    return []
+  }
+}
+
+export type HistoryImportResult = {
+  imported: number
+  /** Page-side activity in the recent window that we did not send — a human
+   *  rep or inbox automation already engaged this person. */
+  humanOwned: boolean
+}
+
+/**
+ * Import a PSID's prior Messenger history into our conversation log.
+ * Call ONLY when the lead was just created (unknown PSID) — an existing lead
+ * already has its history. `currentText` is the inbound that triggered lead
+ * creation; it appears in the fetched history too and must not be duplicated
+ * (the webhook inserts it through the normal flow).
+ */
+export async function importMessengerHistory(
+  db: { from: (t: string) => any },
+  leadId: string,
+  companyId: string,
+  pageAccessToken: string,
+  pageId: string,
+  psid: string,
+  currentText: string,
+  humanOwnedWindowDays = 14
+): Promise<HistoryImportResult> {
+  const history = await fetchConversationHistory(pageAccessToken, pageId, psid)
+  if (history.length === 0) return { imported: 0, humanOwned: false }
+
+  // Drop the triggering message (newest lead-side entry matching its text)
+  let dropped = false
+  const toImport = [...history].reverse().filter((m) => {
+    if (!dropped && !m.fromPage && m.text === currentText.trim()) { dropped = true; return false }
+    return true
+  }).reverse()
+
+  const cutoff = Date.now() - humanOwnedWindowDays * 24 * 60 * 60 * 1000
+  // The lead was created milliseconds ago, so we have sent NOTHING to this
+  // PSID — every page-side message in the history is by definition not ours.
+  const humanOwned = toImport.some(
+    (m) => m.fromPage && new Date(m.createdTime).getTime() >= cutoff
+  )
+
+  if (toImport.length > 0) {
+    const rows = toImport.map((m) => ({
+      lead_id: leadId,
+      company_id: companyId,
+      direction: m.fromPage ? "outbound" : "inbound",
+      sent_by: "human", // page side = rep/automation (not our AI); lead side = the lead
+      body: m.text,
+      channel: "messenger",
+      created_at: m.createdTime,
+    }))
+    const { error } = await db.from("conversations").insert(rows)
+    if (error) {
+      console.error("[messenger] history import insert failed:", error.message)
+      return { imported: 0, humanOwned }
+    }
+  }
+  console.log(`[messenger] imported ${toImport.length} historical messages for lead ${leadId} (humanOwned=${humanOwned})`)
+  return { imported: toImport.length, humanOwned }
+}

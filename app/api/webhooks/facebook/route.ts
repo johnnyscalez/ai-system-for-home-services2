@@ -152,6 +152,42 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
 
     const leadName = `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim() || "Messenger lead"
     notifyNewLead(integration.company_id, leadName, "via Messenger", "facebook").catch(() => {})
+
+    // FIRST CONTACT with this PSID — the thread may have a life we never saw
+    // (Meta inbox automations, office reps, pre-connect history). Import it so
+    // the AI is never history-blind, and if a human/automation already engaged
+    // this person recently, the thread is THEIRS: pause the AI and tell the
+    // office instead of talking over them. (The Nicole incident: the AI
+    // restarted intake minutes after a rep said "we don't service your area".)
+    try {
+      const { importMessengerHistory } = await import("@/lib/messenger")
+      const { imported, humanOwned } = await importMessengerHistory(
+        supabase, leadId, integration.company_id,
+        integration.fb_access_token, pageId, psid, text
+      )
+      if (humanOwned) {
+        await supabase.from("conversations").insert({
+          lead_id: leadId, company_id: integration.company_id,
+          direction: "inbound", sent_by: "human", body: text, channel: "messenger",
+        })
+        await supabase.from("leads").update({
+          ai_paused: true,
+          status: "needs_attention",
+          last_message_at: new Date().toISOString(),
+        }).eq("id", leadId)
+        const { notifyNeedsAttention } = await import("@/lib/notifications")
+        notifyNeedsAttention(
+          integration.company_id,
+          `${leadName} (existing Messenger thread — a team member or page automation already engaged; AI is holding back. Review the imported history and Resume AI if wanted.)`,
+          "via Messenger"
+        ).catch(() => {})
+        console.log(`[webhook/facebook] lead ${leadId}: ${imported} msgs imported, HUMAN-OWNED thread — AI paused, office notified`)
+        return
+      }
+      if (imported > 0) console.log(`[webhook/facebook] lead ${leadId}: ${imported} historical messages imported — AI has full context`)
+    } catch (err) {
+      console.error("[webhook/facebook] history import failed (continuing without):", err)
+    }
   }
 
   // Deterministic opt-out — Messenger has no carrier backstop like SMS, so
