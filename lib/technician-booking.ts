@@ -105,6 +105,19 @@ export async function findSlotsForLead(
   // Minimum lead time, in COMPANY-LOCAL days. 2 = today and tomorrow are
   // never offered (Top Air: "if it's Monday, never give Tuesday").
   const minLeadDays  = (config?.min_booking_lead_days as number | null) ?? 0
+
+  // ── Anchor-day policy (product decision Aug 2026) ──────────────────────────
+  // A tech may only be offered on a day where they ALREADY have at least one
+  // booked job (ours or office-booked in HCP) — new jobs join existing routes,
+  // they don't open dead days. The anchored search looks at least 3 weeks out
+  // regardless of the company's normal horizon. ONLY if that whole search
+  // yields nothing do we fall back to open days — and those are pushed at
+  // least a week out (never "in 2-3 days"), so the office has time to build a
+  // route around the first job of a fresh day.
+  const ANCHOR_HORIZON_DAYS = 21
+  const FALLBACK_MIN_LEAD_DAYS = 7
+  const MAX_ANCHOR_INSERT_MIN = 45 // route-fit ceiling for joining an existing day
+  const scanHorizon = Math.max(horizonDays, ANCHOR_HORIZON_DAYS)
   const availDays    = (config?.available_days as string[] | null) ?? DEFAULT_DAYS
   const windows      = ((config?.appointment_windows as AppointmentWindow[] | null) ?? DEFAULT_WINDOWS)
                          .filter(w => w.enabled)
@@ -144,7 +157,7 @@ export async function findSlotsForLead(
   // 3. Load existing appointments for these techs in the horizon
   const techIds    = candidates.map(t => t.id)
   const now        = new Date()
-  const horizonEnd = new Date(now.getTime() + horizonDays * 24 * 60 * 60 * 1000)
+  const horizonEnd = new Date(now.getTime() + scanHorizon * 24 * 60 * 60 * 1000)
 
   const [{ data: existingApts }, { data: companyRow }] = await Promise.all([
     db.from("appointments")
@@ -219,6 +232,16 @@ export async function findSlotsForLead(
     // HCP unreachable — degrade to our own data rather than failing the booking
     console.warn("[slots] HCP availability unavailable, using local only:", err)
   }
+  // Anchor set: (tech, company-local day) pairs that already have ≥1 real job.
+  // Built from busyIntervals because that map holds BOTH our appointments and
+  // office-booked HCP jobs — exactly the definition of an existing work day.
+  const anchorDays = new Set<string>()
+  for (const [techId, jobs] of busyIntervals) {
+    for (const j of jobs) {
+      anchorDays.add(`${techId}|${new Date(j.startMs).toLocaleDateString("en-CA", { timeZone: tz })}`)
+    }
+  }
+
   const isBusy = (techId: string, slotStartMs: number, slotEndMs: number, dateStr: string, windowId: string) =>
     (ourWindowBookings.get(techId)?.has(`${dateStr}|${windowId}`) ?? false) ||
     (foreignIntervals.get(techId) ?? []).some((b) => b.startMs < slotEndMs && b.endMs > slotStartMs)
@@ -249,69 +272,89 @@ export async function findSlotsForLead(
       weeklyCount[a.technician_id] = (weeklyCount[a.technician_id] ?? 0) + 1
   }
 
-  // 4. Generate slots day by day, window by window — only include slots with an available tech
-  const scored: Array<{ slot: SlotWithTech; cost: number }> = []
+  // 4. Generate slots day by day, window by window — two passes:
+  //    PASS 1 (anchored): only techs on days where they already have a job,
+  //            searched ≥3 weeks out, with an absolute route-fit ceiling.
+  //    PASS 2 (fallback): only if pass 1 found NOTHING — open days allowed,
+  //            but never sooner than a week out.
+  const runPass = (requireAnchor: boolean, earliestDateStr: string): Array<{ slot: SlotWithTech; cost: number }> => {
+    const scored: Array<{ slot: SlotWithTech; cost: number }> = []
+    for (let offset = 0; offset <= scanHorizon && scored.length < 16; offset++) {
+      const day     = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000)
+      // Weekday MUST come from the company timezone, same as dateStr. Using the
+      // server's weekday (UTC on Railway) shifted every evening (7 PM–midnight
+      // CT) one day forward: Sunday slots offered, Friday slots hidden (audit C3).
+      const dayName = day.toLocaleDateString("en-US", { weekday: "long", timeZone: tz }).toLowerCase()
+      if (!availDays.includes(dayName)) continue
 
-  // Lead-time gate computed as a LOCAL date string — "no earlier than N days
+      const dateStr = day.toLocaleDateString("en-CA", { timeZone: tz }) // YYYY-MM-DD
+      if (dateStr < earliestDateStr) continue
+
+      for (const win of windows) {
+        // Convert local slot times to UTC so stored scheduled_at values are always UTC
+        const isoStart = localSlotToUtcIso(dateStr, win.start, tz)
+        const isoEnd   = localSlotToUtcIso(dateStr, win.end,   tz)
+        if (new Date(isoStart) <= now) continue
+
+        const [slotH, slotM] = win.start.split(":").map(Number)
+        const slotMinutes    = slotH * 60 + slotM
+
+        const slotStartMs = new Date(isoStart).getTime()
+        const slotEndMs   = new Date(isoEnd).getTime()
+        const avail = candidates
+          .filter(t => {
+            if (requireAnchor && !anchorDays.has(`${t.id}|${dateStr}`)) return false
+            const sched = t.schedule[dayName as keyof Technician["schedule"]] as
+              { enabled: boolean; start: string; end: string } | undefined
+            if (!sched?.enabled) return false
+            const [sh, sm] = sched.start.split(":").map(Number)
+            const [eh, em] = sched.end.split(":").map(Number)
+            if (slotMinutes < sh * 60 + sm || slotMinutes >= eh * 60 + em) return false
+            return !isBusy(t.id, slotStartMs, slotEndMs, dateStr, win.id)
+          })
+          .map(t => {
+            const sched = t.schedule[dayName as keyof Technician["schedule"]] as { end: string }
+            const dayEndMs = new Date(localSlotToUtcIso(dateStr, sched.end, tz)).getTime()
+            return { t, cost: routeCost(t.id, slotStartMs, slotEndMs, dayEndMs) }
+          })
+          // Anchored pass: the lead's address must genuinely FIT the existing
+          // route — an absolute ceiling, not just relative ranking. (Fallback
+          // pass has no ceiling: an empty day's baseline is the office, and an
+          // absolute cap would make far-but-served territories unbookable.)
+          .filter(x => !requireAnchor || x.cost <= MAX_ANCHOR_INSERT_MIN)
+          // Route-first ranking: least added drive wins; workload breaks ties
+          .sort((a, b) => (a.cost - b.cost) || ((weeklyCount[a.t.id] ?? 0) - (weeklyCount[b.t.id] ?? 0)))
+
+        if (avail.length === 0) continue
+
+        const best     = avail[0].t
+        const dayLabel = day.toLocaleDateString("en-US", { timeZone: tz, weekday: "long", month: "short", day: "numeric" })
+        scored.push({
+          cost: avail[0].cost,
+          slot: {
+            label:    `${dayLabel} — ${win.label} (${fmt12(win.start)}–${fmt12(win.end)})`,
+            isoStart,
+            isoEnd,
+            techId:   best.id,
+            techName: best.name,
+          },
+        })
+      }
+    }
+    return scored
+  }
+
+  // Lead-time gates computed as LOCAL date strings — "no earlier than N days
   // out" must roll over at the company's midnight, not the server's (UTC).
-  const earliestDateStr = new Date(now.getTime() + minLeadDays * 24 * 60 * 60 * 1000)
+  const anchoredEarliest = new Date(now.getTime() + minLeadDays * 24 * 60 * 60 * 1000)
+    .toLocaleDateString("en-CA", { timeZone: tz })
+  const fallbackEarliest = new Date(now.getTime() + Math.max(FALLBACK_MIN_LEAD_DAYS, minLeadDays) * 24 * 60 * 60 * 1000)
     .toLocaleDateString("en-CA", { timeZone: tz })
 
-  for (let offset = 0; offset <= horizonDays && scored.length < 16; offset++) {
-    const day     = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000)
-    // Weekday MUST come from the company timezone, same as dateStr. Using the
-    // server's weekday (UTC on Railway) shifted every evening (7 PM–midnight
-    // CT) one day forward: Sunday slots offered, Friday slots hidden (audit C3).
-    const dayName = day.toLocaleDateString("en-US", { weekday: "long", timeZone: tz }).toLowerCase()
-    if (!availDays.includes(dayName)) continue
-
-    const dateStr = day.toLocaleDateString("en-CA", { timeZone: tz }) // YYYY-MM-DD
-    if (dateStr < earliestDateStr) continue
-
-    for (const win of windows) {
-      // Convert local slot times to UTC so stored scheduled_at values are always UTC
-      const isoStart = localSlotToUtcIso(dateStr, win.start, tz)
-      const isoEnd   = localSlotToUtcIso(dateStr, win.end,   tz)
-      if (new Date(isoStart) <= now) continue
-
-      const [slotH, slotM] = win.start.split(":").map(Number)
-      const slotMinutes    = slotH * 60 + slotM
-
-      const slotStartMs = new Date(isoStart).getTime()
-      const slotEndMs   = new Date(isoEnd).getTime()
-      const avail = candidates
-        .filter(t => {
-          const sched = t.schedule[dayName as keyof Technician["schedule"]] as
-            { enabled: boolean; start: string; end: string } | undefined
-          if (!sched?.enabled) return false
-          const [sh, sm] = sched.start.split(":").map(Number)
-          const [eh, em] = sched.end.split(":").map(Number)
-          if (slotMinutes < sh * 60 + sm || slotMinutes >= eh * 60 + em) return false
-          return !isBusy(t.id, slotStartMs, slotEndMs, dateStr, win.id)
-        })
-        .map(t => {
-          const sched = t.schedule[dayName as keyof Technician["schedule"]] as { end: string }
-          const dayEndMs = new Date(localSlotToUtcIso(dateStr, sched.end, tz)).getTime()
-          return { t, cost: routeCost(t.id, slotStartMs, slotEndMs, dayEndMs) }
-        })
-        // Route-first ranking: least added drive wins; workload breaks ties
-        .sort((a, b) => (a.cost - b.cost) || ((weeklyCount[a.t.id] ?? 0) - (weeklyCount[b.t.id] ?? 0)))
-
-      if (avail.length === 0) continue
-
-      const best     = avail[0].t
-      const dayLabel = day.toLocaleDateString("en-US", { timeZone: tz, weekday: "long", month: "short", day: "numeric" })
-      scored.push({
-        cost: avail[0].cost,
-        slot: {
-          label:    `${dayLabel} — ${win.label} (${fmt12(win.start)}–${fmt12(win.end)})`,
-          isoStart,
-          isoEnd,
-          techId:   best.id,
-          techName: best.name,
-        },
-      })
-    }
+  let scored = runPass(true, anchoredEarliest)
+  if (scored.length === 0) {
+    console.log(`[slots] no anchored slots in ${scanHorizon}d for company ${companyId} — open-day fallback (≥${Math.max(FALLBACK_MIN_LEAD_DAYS, minLeadDays)}d out)`)
+    scored = runPass(false, fallbackEarliest)
   }
 
   if (scored.length === 0) return { found: false, reason: "no_slots" }
@@ -391,7 +434,8 @@ export async function techCanTakeBooking(
   technicianId: string,
   jobType: string | null,
   zip: string | null,
-  scheduledAt?: string | null
+  scheduledAt?: string | null,
+  leadId?: string | null
 ): Promise<boolean> {
   const db = createServiceRoleClient()
   const { data: t } = await db
@@ -471,21 +515,69 @@ export async function techCanTakeBooking(
         //    conservatively block any window their real interval overlaps
         const winStartMs = startMs - (target.mins - toMin(targetWin.start)) * 60 * 1000
         const winEndMs = winStartMs + (toMin(targetWin.end) - toMin(targetWin.start)) * 60 * 1000
+        let hcpDayJobs = 0
         try {
           const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
           const hcpBusy = await getHcpBusyIntervals(
             t.company_id as string,
-            new Date(winStartMs - 12 * 60 * 60 * 1000).toISOString(),
-            new Date(winEndMs).toISOString(),
+            new Date(winStartMs - 24 * 60 * 60 * 1000).toISOString(),
+            new Date(winEndMs + 12 * 60 * 60 * 1000).toISOString(),
             { excludeOurJobs: true }
           )
           if (hcpBusy.some((b) => b.technicianId === technicianId && b.startMs < winEndMs && b.endMs > winStartMs)) return false
+          hcpDayJobs = hcpBusy.filter(
+            (b) => b.technicianId === technicianId && localParts(b.startMs).dateStr === target.dateStr
+          ).length
         } catch { /* HCP unreachable — local checks already ran */ }
+
+        // 4. Anchor-day rule: a booking may only land on a day where this tech
+        //    already has work — UNLESS this exact time was offered by the slot
+        //    tool (leads.selected_slots), which already applied the anchored
+        //    search and its own week-out fallback. This closes the last door:
+        //    a model hand-writing an ISO for an empty day under lead pressure.
+        const anchored = sameDay.length > 0 || hcpDayJobs > 0
+        if (!anchored) {
+          let offered = false
+          if (leadId) {
+            const { data: leadRow } = await db
+              .from("leads").select("selected_slots").eq("id", leadId).maybeSingle()
+            const slotMap = (leadRow?.selected_slots ?? {}) as Record<string, unknown>
+            offered = !!slotMap[new Date(startMs).toISOString().substring(0, 16)]
+          }
+          if (!offered) return false
+        }
       } else {
         // Time outside every configured window (legacy/manual booking) — fall
         // back to the old ±2h overlap rule so oddball times still can't stack.
         const JOB_MS = 2 * 60 * 60 * 1000
         if (sameDay.some((a) => Math.abs(Date.parse(a.scheduled_at) - startMs) < JOB_MS)) return false
+        // Anchor rule applies here too — an oddball time must not become the
+        // back door onto an empty day. sameDay covers our jobs; check HCP for
+        // office work, then the tool-offered escape.
+        if (sameDay.length === 0) {
+          let anchored = false
+          try {
+            const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
+            const DAY_MS = 24 * 60 * 60 * 1000
+            const busy = await getHcpBusyIntervals(
+              t.company_id as string,
+              new Date(startMs - DAY_MS).toISOString(),
+              new Date(startMs + DAY_MS).toISOString(),
+              { excludeOurJobs: true }
+            )
+            anchored = busy.some((b) => b.technicianId === technicianId && localParts(b.startMs).dateStr === target.dateStr)
+          } catch { anchored = true /* HCP unreachable — can't prove empty */ }
+          if (!anchored) {
+            let offered = false
+            if (leadId) {
+              const { data: leadRow } = await db
+                .from("leads").select("selected_slots").eq("id", leadId).maybeSingle()
+              const slotMap = (leadRow?.selected_slots ?? {}) as Record<string, unknown>
+              offered = !!slotMap[new Date(startMs).toISOString().substring(0, 16)]
+            }
+            if (!offered) return false
+          }
+        }
       }
     }
   }
@@ -502,6 +594,52 @@ export async function techCanTakeBooking(
     if (!(t.serves_all_areas || !(t.zip_codes as string[])?.length || (t.zip_codes as string[]).includes(z))) return false
   }
   return true
+}
+
+/** Is this tech's day already a real work day (≥1 other job, ours or HCP)?
+ *  Used to stamp bookings that OPEN a fresh route day (the anchored search
+ *  fell back to an open day) so the office knows to build a route around it. */
+export async function techAnchoredOn(
+  companyId: string,
+  technicianId: string,
+  scheduledAtIso: string,
+  excludeAppointmentId?: string
+): Promise<boolean> {
+  const db = createServiceRoleClient()
+  const { data: cfg } = await db
+    .from("ai_agent_config").select("timezone").eq("company_id", companyId).maybeSingle()
+  const tz = (cfg?.timezone as string | null) ?? "America/New_York"
+  const startMs = Date.parse(scheduledAtIso)
+  if (Number.isNaN(startMs)) return true // unparseable — don't stamp noise
+  const dateStr = new Date(startMs).toLocaleDateString("en-CA", { timeZone: tz })
+  const DAY = 24 * 60 * 60 * 1000
+
+  let q = db.from("appointments")
+    .select("id, scheduled_at")
+    .eq("technician_id", technicianId)
+    .eq("status", "scheduled")
+    .gte("scheduled_at", new Date(startMs - DAY).toISOString())
+    .lte("scheduled_at", new Date(startMs + DAY).toISOString())
+  if (excludeAppointmentId) q = q.neq("id", excludeAppointmentId)
+  const { data: apts } = await q
+  if ((apts ?? []).some((a) => new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: tz }) === dateStr)) {
+    return true
+  }
+  try {
+    const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
+    const busy = await getHcpBusyIntervals(
+      companyId,
+      new Date(startMs - DAY).toISOString(),
+      new Date(startMs + DAY).toISOString(),
+      { excludeOurJobs: true }
+    )
+    return busy.some((b) =>
+      b.technicianId === technicianId &&
+      new Date(b.startMs).toLocaleDateString("en-CA", { timeZone: tz }) === dateStr
+    )
+  } catch {
+    return true // HCP unreachable — can't prove it's empty, don't stamp
+  }
 }
 
 /** Does a tech (with its configured job_types) handle this job type? Empty = all. */

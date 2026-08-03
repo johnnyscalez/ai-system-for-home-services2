@@ -1181,7 +1181,7 @@ export async function processAndSave(
       // (audit C7). Invalid → drop it and let selectTechnician re-pick below.
       if (preSelected) {
         const { techCanTakeBooking } = await import("@/lib/technician-booking")
-        const stillValid = await techCanTakeBooking(preSelected.tech_id, bookJobType, bookZip, scheduled_at).catch(() => false)
+        const stillValid = await techCanTakeBooking(preSelected.tech_id, bookJobType, bookZip, scheduled_at, leadId).catch(() => false)
         if (!stillValid) {
           console.warn(`[ai-engine] pre-selected tech ${preSelected.tech_name} no longer valid for job=${bookJobType} zip=${bookZip} — re-selecting`)
           preSelected = null
@@ -1249,6 +1249,30 @@ export async function processAndSave(
           .single()
         await notifyTechnician(supabase, companyId, leadId, scheduled_at, address, notes,
           preSelected.tech_id, preSelected.tech_name, tech?.phone ?? null)
+      }
+
+      // New-route-day stamp: if this booking landed on a day where the tech
+      // has NO other work (the anchored slot search fell back to an open day),
+      // tell the office in the appointment notes so they can build a route
+      // around it. Awaited so the HCP push below carries the note.
+      if (apt) {
+        try {
+          // Re-read: the tech may have been assigned AFTER insert (selectTechnician path)
+          const { data: freshApt } = await supabase
+            .from("appointments").select("technician_id, notes").eq("id", apt.id).maybeSingle()
+          if (freshApt?.technician_id) {
+            const { techAnchoredOn } = await import("@/lib/technician-booking")
+            const anchored = await techAnchoredOn(companyId, freshApt.technician_id, scheduled_at, apt.id)
+            if (!anchored) {
+              const marker = "⚠️ NEW ROUTE DAY — first job scheduled for this technician on this day; plan the route around it."
+              await supabase.from("appointments").update({
+                notes: freshApt.notes ? `${freshApt.notes}\n${marker}` : marker,
+              }).eq("id", apt.id)
+            }
+          }
+        } catch (err) {
+          console.error("[ai-engine] new-route-day stamp failed:", err)
+        }
       }
 
       // Name backstop: the agent is told to save names via update_lead_details
