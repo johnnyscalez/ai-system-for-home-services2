@@ -17,6 +17,8 @@ export type AvailabilitySettings = {
   max_appointments_per_day: number | null
   timezone: string
   per_day_slots?: PerDaySlots | null
+  /** Minimum lead time in company-local days (0 = same-day OK, 2 = earliest is the day after tomorrow) */
+  min_booking_lead_days?: number | null
 }
 
 // The four standard ARRIVAL windows (product decision, Aug 2026): a booking
@@ -78,6 +80,10 @@ export function getAvailableSlots(
   const horizon = Math.min(settings.booking_horizon_days || 7, 14)
   const slots: AvailableSlot[] = []
   const now = new Date()
+  // Lead-time gate (company-local date, matching findSlotsForLead)
+  const minLead = settings.min_booking_lead_days ?? 0
+  const earliestDateStr = new Date(now.getTime() + minLead * 24 * 60 * 60 * 1000)
+    .toLocaleDateString("en-CA", { timeZone: tz })
 
   // Per-day mode (new): each day has its own custom time slots
   if (settings.per_day_slots && Object.keys(settings.per_day_slots).length > 0) {
@@ -93,6 +99,7 @@ export function getAvailableSlots(
       if (!dayConfig?.enabled || !dayConfig.slots?.length) continue
 
       const localDateStr = date.toLocaleDateString("en-CA", { timeZone: tz })
+      if (localDateStr < earliestDateStr) continue
       const bookedThisDay = companyAppointments.filter((a) =>
         new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: tz }) === localDateStr
       )
@@ -150,6 +157,7 @@ export function getAvailableSlots(
     if (!enabledDays.includes(dayName)) continue
 
     const localDateStr = date.toLocaleDateString("en-CA", { timeZone: tz })
+    if (localDateStr < earliestDateStr) continue
     const bookedThisDay = companyAppointments.filter((a) => {
       return new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: tz }) === localDateStr
     })

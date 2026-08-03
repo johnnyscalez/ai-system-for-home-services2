@@ -154,7 +154,7 @@ export async function runConversation(
       .order("created_at", { ascending: true }),
     supabase
       .from("ai_agent_config")
-      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, per_day_slots, disqualifiers, qualifying_questions, messenger_instructions")
+      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, per_day_slots, min_booking_lead_days, disqualifiers, qualifying_questions, messenger_instructions")
       .eq("company_id", companyId)
       .single(),
     supabase
@@ -243,6 +243,7 @@ export async function runConversation(
       max_appointments_per_day: agent?.max_appointments_per_day ?? null,
       timezone: tz,
       per_day_slots: (agent?.per_day_slots as PerDaySlots | null) ?? null,
+      min_booking_lead_days: (agent?.min_booking_lead_days as number | null) ?? 0,
     },
     companyApts,
     googleBusyTimes
@@ -1739,7 +1740,7 @@ ${mark(hasAddress, "Property address")}
 ${mark(hasJobType, "Job type", jobTypeStr || undefined)}
 
 REQUIRED BEFORE BOOKING: ${requiredMissing.length > 0 ? requiredMissing.join(", ") : "nothing — all booking fields are on file"}
-${!hasEmail ? "NICE TO HAVE: email — ask ONCE, casually, for the confirmation email (\"Want the confirmation by email too?\"). If they skip it, book anyway. Never let email block a booking." : ""}
+${!hasEmail ? "EMAIL — REQUIRED ASK: you must ask for their email while collecting the booking details, phrased as the reason it exists: \"And what's your email for the confirmation?\" This is a normal booking step, not an optional extra — the confirmation email and the office records need it. Save it with update_lead_details the moment they give it. HOWEVER: if they decline or ignore ONE direct ask, book anyway and move on — a booking is never lost over email, and you never ask twice." : ""}
 
 CONTACT COLLECTION RULES:
 • NEVER ask for anything marked ✓ — re-asking for info already on file destroys trust instantly.

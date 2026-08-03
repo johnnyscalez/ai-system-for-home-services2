@@ -82,7 +82,7 @@ export async function findSlotsForLead(
   const [techRes, configRes, companyAreaRes] = await Promise.all([
     db.from("technicians").select("*").eq("company_id", companyId).eq("status", "active").order("name"),
     db.from("ai_agent_config")
-      .select("available_days, appointment_windows, booking_horizon_days, timezone")
+      .select("available_days, appointment_windows, booking_horizon_days, timezone, min_booking_lead_days")
       .eq("company_id", companyId)
       .single(),
     db.from("companies").select("service_area_zips").eq("id", companyId).single(),
@@ -102,6 +102,9 @@ export async function findSlotsForLead(
   const config       = configRes.data
   const tz           = (config?.timezone as string | null) ?? "America/New_York"
   const horizonDays  = (config?.booking_horizon_days as number | null) ?? 7
+  // Minimum lead time, in COMPANY-LOCAL days. 2 = today and tomorrow are
+  // never offered (Top Air: "if it's Monday, never give Tuesday").
+  const minLeadDays  = (config?.min_booking_lead_days as number | null) ?? 0
   const availDays    = (config?.available_days as string[] | null) ?? DEFAULT_DAYS
   const windows      = ((config?.appointment_windows as AppointmentWindow[] | null) ?? DEFAULT_WINDOWS)
                          .filter(w => w.enabled)
@@ -249,6 +252,11 @@ export async function findSlotsForLead(
   // 4. Generate slots day by day, window by window — only include slots with an available tech
   const scored: Array<{ slot: SlotWithTech; cost: number }> = []
 
+  // Lead-time gate computed as a LOCAL date string — "no earlier than N days
+  // out" must roll over at the company's midnight, not the server's (UTC).
+  const earliestDateStr = new Date(now.getTime() + minLeadDays * 24 * 60 * 60 * 1000)
+    .toLocaleDateString("en-CA", { timeZone: tz })
+
   for (let offset = 0; offset <= horizonDays && scored.length < 16; offset++) {
     const day     = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000)
     // Weekday MUST come from the company timezone, same as dateStr. Using the
@@ -258,6 +266,7 @@ export async function findSlotsForLead(
     if (!availDays.includes(dayName)) continue
 
     const dateStr = day.toLocaleDateString("en-CA", { timeZone: tz }) // YYYY-MM-DD
+    if (dateStr < earliestDateStr) continue
 
     for (const win of windows) {
       // Convert local slot times to UTC so stored scheduled_at values are always UTC
@@ -402,10 +411,20 @@ export async function techCanTakeBooking(
     if (!Number.isNaN(startMs)) {
       const { data: cfg } = await db
         .from("ai_agent_config")
-        .select("appointment_windows, timezone")
+        .select("appointment_windows, timezone, min_booking_lead_days")
         .eq("company_id", t.company_id as string)
         .maybeSingle()
       const tz = (cfg?.timezone as string | null) ?? "America/New_York"
+
+      // Lead-time gate at booking time too — the slot list already enforces
+      // it, but a model writing its own ISO for "tomorrow" must also bounce.
+      const minLead = (cfg?.min_booking_lead_days as number | null) ?? 0
+      if (minLead > 0) {
+        const earliest = new Date(Date.now() + minLead * 24 * 60 * 60 * 1000)
+          .toLocaleDateString("en-CA", { timeZone: tz })
+        const bookingDate = new Date(startMs).toLocaleDateString("en-CA", { timeZone: tz })
+        if (bookingDate < earliest) return false
+      }
       const { DEFAULT_WINDOWS } = await import("@/lib/availability")
       const windows = ((cfg?.appointment_windows as Array<{ id: string; start: string; end: string; enabled: boolean }> | null) ?? DEFAULT_WINDOWS)
         .filter((w) => w.enabled)
