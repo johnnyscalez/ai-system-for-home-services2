@@ -206,3 +206,18 @@ export function buildRepliedNotBookedSchedule(lastReplyAt: Date, timezone: strin
     },
   ]
 }
+
+
+// ── Pipeline status ordering guard ────────────────────────────────────────────
+// A lead who has BOOKED must never slide back to a discovery-stage status
+// because the model calls update_lead_status("qualified") on a post-booking
+// "thanks!" turn (observed live: Tasha Gaskin showed `qualified` in the CRM
+// while her appointment stood). Forward moves and terminal moves stay legal.
+const PRE_BOOKING_STATUSES = new Set([
+  "new", "just_came_in", "contacted", "active_conversation", "following_up",
+  "followed_up", "nurturing", "cold", "qualified",
+])
+export function isStatusDowngrade(current: string | null | undefined, next: string | null | undefined): boolean {
+  if (!current || !next) return false
+  return current === "appointment_booked" && PRE_BOOKING_STATUSES.has(next)
+}

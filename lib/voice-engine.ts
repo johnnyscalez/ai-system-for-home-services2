@@ -923,7 +923,13 @@ async function executeTool(
 
     case "update_lead_status": {
       const { status } = tool.input as { status: string }
-      await db.from("leads").update({ status, last_message_at: new Date().toISOString() }).eq("id", session.lead_id)
+      // Never let a post-booking status call slide a booked lead back to a
+      // discovery stage (same guard as the SMS engine)
+      const { isStatusDowngrade } = await import("@/lib/sequences")
+      const { data: cur } = await db.from("leads").select("status").eq("id", session.lead_id).maybeSingle()
+      if (!isStatusDowngrade(cur?.status, status)) {
+        await db.from("leads").update({ status, last_message_at: new Date().toISOString() }).eq("id", session.lead_id)
+      }
       await updateSession(session.call_sid, { stage: status === "closed_lost" ? "closing" : session.stage })
       return { type: "continue" }
     }

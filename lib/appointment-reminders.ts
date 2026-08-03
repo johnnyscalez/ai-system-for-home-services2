@@ -1,4 +1,5 @@
 import { createServiceRoleClient } from "@/lib/supabase-server"
+import { serviceTimeZone } from "@/lib/timezones"
 import { sendAppointmentEmail, type EmailTemplateType, type GmailCredentials } from "@/lib/email"
 import { sendSMS, getTwilioClient } from "@/lib/twilio"
 
@@ -102,7 +103,9 @@ export async function sendConfirmations(appointmentId: string) {
   const company = apt.companies as { name: string; service_type: string | null } | null
   if (!lead || !company) return
 
-  const timezone = agentCfg?.timezone ?? "America/New_York"
+  // Customer-facing clock = SERVICE ADDRESS timezone (Tasha incident: a
+  // Michigan customer was confirmed in Chicago time, one hour off her door)
+  const timezone = serviceTimeZone(apt.address ?? (lead as { address?: string | null }).address ?? null, agentCfg?.timezone ?? "America/New_York")
   const leadName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "there"
   const companyName = emailTpl?.from_name || company.name
 
@@ -187,7 +190,7 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
   const { data: apt } = await supabase
     .from("appointments")
     .select(`
-      id, lead_id, company_id, scheduled_at, confirmation_requested_at,
+      id, lead_id, company_id, scheduled_at, confirmation_requested_at, address,
       leads(first_name, phone),
       companies(name)
     `)
@@ -220,7 +223,7 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
 
   if (!phoneNum?.phone_number) return
 
-  const timezone  = agentCfg?.timezone  ?? "America/New_York"
+  const timezone  = serviceTimeZone((apt as { address?: string | null }).address ?? null, agentCfg?.timezone ?? "America/New_York")
   const agentName = agentCfg?.agent_name ?? company.name
   const firstName = lead.first_name ?? "there"
 
@@ -518,7 +521,7 @@ export async function processAppointmentReminders() {
         }
       : null
 
-    const timezone  = agentCfg?.timezone   ?? "America/New_York"
+    const timezone  = serviceTimeZone(apt.address, agentCfg?.timezone ?? "America/New_York")
     const agentName = agentCfg?.agent_name ?? company.name
     const leadName  = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "there"
     const firstName = lead.first_name ?? "there"

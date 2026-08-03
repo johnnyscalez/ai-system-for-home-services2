@@ -548,9 +548,20 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       returning_client: "contacted",
     }
     try {
+      const next = legacyMap[status] ?? status
+      // A booked lead must never slide back to a discovery-stage status just
+      // because the model calls update_lead_status("qualified") on a
+      // post-booking "thanks!" turn (observed live: booked lead showed
+      // `qualified` in the CRM pipeline).
+      const { isStatusDowngrade } = await import("@/lib/sequences")
+      const { data: cur } = await supabase.from("leads").select("status").eq("id", leadId).maybeSingle()
+      if (isStatusDowngrade(cur?.status, next)) {
+        console.log(`[ai-engine] status downgrade blocked: ${cur?.status} → ${next} for lead ${leadId}`)
+        return
+      }
       await supabase
         .from("leads")
-        .update({ status: legacyMap[status] ?? status, last_message_at: new Date().toISOString() })
+        .update({ status: next, last_message_at: new Date().toISOString() })
         .eq("id", leadId)
     } catch (err) {
       console.error("[ai-engine] update_lead_status write failed:", err)

@@ -15,6 +15,7 @@ import { DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
 import type { AppointmentWindow } from "@/lib/availability"
 import type { Technician } from "@/types/database"
 import { zipToPoint, addressToPoint, insertionCostMin, returnOvertimeMin, sameLocalDay, ROUTE_SLACK_MIN, type LocatedJob, type GeoPoint } from "@/lib/routing"
+import { zipToTimeZone } from "@/lib/timezones"
 
 /**
  * Convert a local slot time (e.g. "08:00" on "2026-06-17" in "America/New_York")
@@ -100,7 +101,13 @@ export async function findSlotsForLead(
   if (allTechs.length === 0) return { found: false, reason: "no_technicians" }
 
   const config       = configRes.data
-  const tz           = (config?.timezone as string | null) ?? "America/New_York"
+  const companyTz    = (config?.timezone as string | null) ?? "America/New_York"
+  // Customer-facing clock (Tasha incident): windows, labels, day boundaries,
+  // and anchor dates are all interpreted in the LEAD's timezone when the zip
+  // reveals one — a Michigan lead gets 8–11am EASTERN windows, not Chicago
+  // numbers that are off by an hour at their front door. Unknown zip →
+  // company timezone (identical to the old behavior).
+  const tz           = zipToTimeZone(zip) ?? companyTz
   const horizonDays  = (config?.booking_horizon_days as number | null) ?? 7
   // Minimum lead time, in COMPANY-LOCAL days. 2 = today and tomorrow are
   // never offered (Top Air: "if it's Monday, never give Tuesday").
@@ -481,7 +488,9 @@ export async function techCanTakeBooking(
         db.from("companies").select("integration_mode").eq("id", t.company_id as string).maybeSingle(),
       ])
       const hcpMode = coMode?.integration_mode === "housecall_pro"
-      const tz = (cfg?.timezone as string | null) ?? "America/New_York"
+      // Same customer-clock rule as findSlotsForLead — the two MUST agree or
+      // the guard would reject every slot the tool legitimately offered.
+      const tz = zipToTimeZone(zip) ?? (cfg?.timezone as string | null) ?? "America/New_York"
 
       // Lead-time gate at booking time too — the slot list already enforces
       // it, but a model writing its own ISO for "tomorrow" must also bounce.

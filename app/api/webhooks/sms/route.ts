@@ -62,7 +62,7 @@ async function handleConfirmationReply(
   // Find the most recent appointment pending confirmation for this lead
   const { data: apt } = await supabase
     .from("appointments")
-    .select("id, scheduled_at, confirmation_status, confirmation_requested_at, leads(first_name)")
+    .select("id, scheduled_at, confirmation_status, confirmation_requested_at, address, leads(first_name)")
     .eq("lead_id", leadId)
     .eq("status", "scheduled")
     .not("confirmation_requested_at", "is", null)
@@ -84,7 +84,8 @@ async function handleConfirmationReply(
     .eq("id", companyId)
     .single()
 
-  const timezone  = agentCfg?.timezone  ?? "America/New_York"
+  const { serviceTimeZone } = await import("@/lib/timezones")
+  const timezone  = serviceTimeZone((apt as { address?: string | null }).address ?? null, agentCfg?.timezone ?? "America/New_York")
   const agentName = agentCfg?.agent_name ?? company?.name ?? "us"
   const firstName = (apt.leads as unknown as { first_name: string | null } | null)?.first_name ?? null
   const timeLabel = new Date(apt.scheduled_at).toLocaleString("en-US", {
