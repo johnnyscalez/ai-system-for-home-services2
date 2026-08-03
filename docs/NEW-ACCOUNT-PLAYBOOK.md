@@ -288,6 +288,8 @@ The agent can say something back to the customer and still not have *saved* it. 
 - The name backstop only ever *fills* a blank name — it never overwrites one already on file, because an earlier capture (form, prior conversation) beats one heard mid-call.
 - `/email` is reachable in Housecall Pro mode on purpose: we own the confirmation and reminder emails in both modes, even though their CRM owns the pipeline.
 - The voice agent takes no notes during a live call (dead air); identity and job details are extracted from the transcript after the call ends.
+- **Bookings are 3-hour ARRIVAL windows** (8–11 / 10–1 / 12–3 / 3–6 company-local, product standard Aug 2026), and the windows deliberately overlap. Capacity is one job per window per tech (max 4/day) enforced by **window-bucket** logic — never "fix" it back to time-overlap checks, which cap techs at ~2 jobs/day; and never count our own HCP job mirrors as busy intervals (`excludeOurJobs`), which cross-blocks adjacent windows. Office-booked HCP jobs DO block every window they overlap, on purpose.
+- Technician weekly schedules gate the window START (a 3–6 window is offered to a tech whose shift ends at 5) — the arrival promise is what's sold; dispatch sequences the day.
 
 ---
 
