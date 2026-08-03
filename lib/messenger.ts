@@ -47,7 +47,16 @@ export async function getMessengerProfile(
     const res = await fetch(
       `${GRAPH}/${psid}?fields=first_name,last_name&access_token=${pageAccessToken}`
     )
-    if (!res.ok) return { firstName: null, lastName: null }
+    if (!res.ok) {
+      // Silently returning null here hid a real failure for weeks: without
+      // Advanced Access this call 400s, so every Messenger lead was nameless
+      // and reached Housecall Pro as customer "Unknown". The agent asks for
+      // the name in-conversation as the primary path — this log tells us
+      // whether the profile fallback is actually available.
+      const body = await res.text().catch(() => "")
+      console.warn(`[messenger] profile lookup failed for psid ${psid} (HTTP ${res.status}) — agent must collect the name in conversation. ${body.slice(0, 200)}`)
+      return { firstName: null, lastName: null }
+    }
     const data = (await res.json()) as { first_name?: string; last_name?: string }
     return { firstName: data.first_name ?? null, lastName: data.last_name ?? null }
   } catch {

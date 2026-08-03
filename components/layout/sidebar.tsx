@@ -27,10 +27,14 @@ const CRM_NAV = [
 
 // Agent-product navigation — Housecall Pro mode. Their CRM owns the pipeline,
 // calendar, invoicing, and reporting; we only surface the AI agent itself.
+// "Email & SMS" belongs here even though the CRM pages don't: WE send the
+// confirmations and reminders in both modes, so the sending identity and the
+// templates must be configurable by HCP accounts too.
 const AGENT_NAV = [
   { href: "/dashboard",     icon: LayoutDashboard, label: "AI Performance" },
   { href: "/conversations", icon: MessageSquare,   label: "Conversations" },
   { href: "/technicians",   icon: HardHat,         label: "Dispatch Setup" },
+  { href: "/email",         icon: Mail,            label: "Email & SMS" },
   { href: "/integrations",  icon: Plug,            label: "Integrations" },
 ]
 

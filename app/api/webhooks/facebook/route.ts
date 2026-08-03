@@ -2,7 +2,7 @@ import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave, inferJobType } from "@/lib/ai-engine"
 import { sendSMS, formatPhone, parseLeadPhone } from "@/lib/twilio"
-import { notifyNewLead } from "@/lib/notifications"
+import { notifyNewLead, notifyAppointmentBooked, notifyNeedsAttention } from "@/lib/notifications"
 import { buildNoReplySchedule } from "@/lib/sequences"
 import { sendMessengerMessage, getMessengerProfile, messengerPlaceholderPhone } from "@/lib/messenger"
 import crypto from "crypto"
@@ -206,6 +206,44 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
         .from("leads")
         .update({ last_message_at: new Date().toISOString() })
         .eq("id", leadId)
+    }
+
+    // Post-booking follow-through. This block existed on SMS and voice but NOT
+    // here, so Messenger bookings sent no confirmation SMS/email and never
+    // notified the owner — two live bookings landed completely silently.
+    // Keyed off THIS turn's action (not lead status), so a later "thanks!"
+    // can't re-fire it.
+    if (result.action?.type === "book_appointment" || result.action?.type === "reschedule_appointment") {
+      const { data: bookedApt } = await supabase
+        .from("appointments")
+        .select("id, scheduled_at, address")
+        .eq("lead_id", leadId)
+        .eq("status", "scheduled")
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+      if (bookedApt) {
+        const { sendConfirmations } = await import("@/lib/appointment-reminders")
+        sendConfirmations(bookedApt.id).catch((e) =>
+          console.error("[webhook/facebook] sendConfirmations failed:", e))
+
+        const { data: leadData } = await supabase
+          .from("leads").select("first_name, last_name, phone").eq("id", leadId).single()
+        if (leadData) {
+          const name = `${leadData.first_name ?? ""} ${leadData.last_name ?? ""}`.trim() || leadData.phone
+          notifyAppointmentBooked(integration.company_id, name, bookedApt.scheduled_at, bookedApt.address ?? "")
+            .catch(() => {})
+        }
+      }
+    }
+
+    if (result.action?.type === "update_status" && result.action.status === "needs_attention") {
+      const { data: leadData } = await supabase
+        .from("leads").select("first_name, last_name, phone").eq("id", leadId).single()
+      if (leadData) {
+        const name = `${leadData.first_name ?? ""} ${leadData.last_name ?? ""}`.trim() || leadData.phone
+        notifyNeedsAttention(integration.company_id, name, leadData.phone).catch(() => {})
+      }
     }
   } catch (e) {
     console.error("[webhook/facebook] Messenger AI error for lead:", leadId, e)

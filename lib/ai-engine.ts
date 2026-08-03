@@ -110,10 +110,13 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "update_lead_details",
     description:
-      "Save job details to the lead's file the MOMENT you learn them mid-conversation — do not wait for booking. Call it as soon as the lead reveals or confirms: what the job is (job_type), what system they have (system_type), how old it is (system_age), or anything else meaningful (situation_notes). The CRM, dispatch logic, and reports all read these fields — and situation_notes is how the office and the tech see the lead's real situation even if they never book. Calling this sends no message and costs nothing — you can call it alongside your normal reply in the same turn. Only pass the fields you actually learned; never guess.",
+      "Save lead details to their file the MOMENT you learn them mid-conversation — do not wait for booking. Call it as soon as the lead reveals or confirms: their name (first_name / last_name), their email, what the job is (job_type), what system they have (system_type), how old it is (system_age), or anything else meaningful (situation_notes). The CRM, dispatch logic, the technician's job record, and reports all read these fields — and situation_notes is how the office and the tech see the lead's real situation even if they never book. NAME IS CRITICAL: the moment a lead tells you their name, save it here — a name written only into situation_notes does NOT reach the CRM or the technician's schedule, and the customer shows up as \"Unknown\". Calling this sends no message and costs nothing — you can call it alongside your normal reply in the same turn. Only pass the fields you actually learned; never guess.",
     input_schema: {
       type: "object" as const,
       properties: {
+        first_name: { type: "string", description: "The lead's first name exactly as they gave it. Save it the moment you learn it." },
+        last_name: { type: "string", description: "The lead's last name / surname, if they gave one. Never invent one." },
+        email: { type: "string", description: "The lead's email address, if they give one." },
         job_type: {
           type: "string",
           description: "One of: ac_repair, ac_installation, ac_not_cooling, furnace_repair, furnace_not_working, heat_pump_repair, heat_pump_installation, mini_split_repair, mini_split_installation, duct_cleaning, duct_repair, boiler_repair, commercial_hvac, hvac_tune_up, hvac_replacement, air_quality, electrical, plumbing, general",
@@ -318,6 +321,7 @@ You are not a script-follower. You are a sharp human rep who thinks before every
 
 1. JOB — What exactly does this lead need? If you can't name the job type yet, your next message asks it — nothing else matters until you know. The moment you learn it (or any system details), call update_lead_details so it's saved to their file.
 2. KNOWN — What has this lead already told me, anywhere? Re-read the lead file and the whole conversation, including things they volunteered without being asked. Never re-ask any of it. Volunteered info counts as captured.
+2b. NAME — Do I have this lead's name on file? If the lead file shows no name, getting it is part of the job: ask for it naturally early on ("Who am I speaking with?"), and when they give only a first name, ask for the last name once at booking time ("And your last name for the appointment?"). The moment they tell you ANY part of their name, call update_lead_details with first_name (and last_name) — writing it into situation_notes does NOT save it, and the customer then reaches the technician's schedule as "Unknown". Never invent, guess, or infer a name, and never nag: ask for the surname once, and if they don't give it, book with the first name and move on.
 3. GATE — For this job type, which required discovery/qualification items are still missing? (Your playbook defines them; your QUALIFICATION RULES define who qualifies.) Count them one by one — one covered item does not check off the others.
 4. QUALIFIED? — Based on what I know: qualified (say so via update_lead_status and move toward booking), disqualified (handle it with respect, per the rules), or not enough information yet (keep discovering).
 5. NEXT — What is the single most useful question or action right now, and why am I asking it? Every question should have a purpose you could explain: it qualifies them, sizes the job for the tech, or sets urgency. If you can't say why you're asking, don't ask it.
@@ -487,8 +491,24 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   // deliberately NOT routed through the single `action` slot, so it can
   // never clobber (or be clobbered by) a booking/status action called in
   // the same turn.
-  const saveLeadDetails = async (input: { job_type?: string; system_type?: string; system_age?: string; situation_notes?: string }) => {
+  const saveLeadDetails = async (input: { first_name?: string; last_name?: string; email?: string; job_type?: string; system_type?: string; system_age?: string; situation_notes?: string }) => {
     const patch: Record<string, string> = {}
+    // Identity first (finding: the agent had no way to save a name, so names
+    // lived only in notes and every HCP customer was created as "Unknown").
+    // Never let the model overwrite a real name with junk or a placeholder.
+    const cleanName = (v: string | undefined) => {
+      const s = (v ?? "").trim().replace(/^[\s,.]+|[\s,.]+$/g, "")
+      if (!s || s.length > 60) return null
+      if (/^(unknown|n\/?a|none|null|customer|lead|there|sir|ma.?am)$/i.test(s)) return null
+      return s
+    }
+    const first = cleanName(input.first_name)
+    const last = cleanName(input.last_name)
+    if (first) patch.first_name = first
+    if (last) patch.last_name = last
+    if (input.email && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(input.email.trim())) {
+      patch.email = input.email.trim().toLowerCase()
+    }
     if (input.job_type) patch.job_type = input.job_type
     if (input.system_type) patch.system_type = input.system_type
     if (input.system_age) patch.system_age = input.system_age
@@ -1228,6 +1248,21 @@ export async function processAndSave(
           .single()
         await notifyTechnician(supabase, companyId, leadId, scheduled_at, address, notes,
           preSelected.tech_id, preSelected.tech_name, tech?.phone ?? null)
+      }
+
+      // Name backstop: the agent is told to save names via update_lead_details
+      // but doesn't always call it (seen live on a Spanish thread where it
+      // greeted the customer by name and never saved it). Recover it from the
+      // transcript BEFORE the HCP push and the confirmation go out — those are
+      // the two places a missing name becomes visible to the customer and the
+      // technician. Awaited so the push below sees the recovered name.
+      if (apt) {
+        try {
+          const { ensureLeadName } = await import("@/lib/lead-name")
+          await ensureLeadName(leadId)
+        } catch (err) {
+          console.error("[ai-engine] name backstop failed:", err)
+        }
       }
 
       // HCP-mode companies: mirror the booking into Housecall Pro as a real job.

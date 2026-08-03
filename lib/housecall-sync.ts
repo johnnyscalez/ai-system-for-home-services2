@@ -65,6 +65,21 @@ export async function resolveOrCreateCustomer(
 ): Promise<string> {
   if (lead.hcp_customer_id) return lead.hcp_customer_id
 
+  // Last line of defence before a customer is created in the contractor's CRM:
+  // if we still have no name, mine it out of the transcript. Without this the
+  // create below falls back to "Unknown", which is what the tech sees.
+  if (!lead.first_name) {
+    try {
+      const { ensureLeadName } = await import("@/lib/lead-name")
+      await ensureLeadName(lead.id)
+      const { data: refreshed } = await db
+        .from("leads").select("first_name, last_name").eq("id", lead.id).maybeSingle()
+      if (refreshed?.first_name) {
+        lead = { ...lead, first_name: refreshed.first_name, last_name: refreshed.last_name }
+      }
+    } catch { /* name recovery is best-effort — never block the push */ }
+  }
+
   const digits = last10(lead.phone)
   let found: HcpCustomer | undefined
 

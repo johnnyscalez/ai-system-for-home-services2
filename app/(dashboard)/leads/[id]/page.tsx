@@ -12,6 +12,7 @@ import { CallLeadButton } from "@/components/leads/CallLeadButton"
 import { DeleteLeadButton } from "@/components/leads/DeleteLeadButton"
 import { getJobTypeLabel, getJobTypeColor } from "@/lib/job-types"
 import { LeadPropertyImage } from "@/components/leads/LeadPropertyImage"
+import { EditLeadDetails } from "@/components/leads/EditLeadDetails"
 
 const STATUS_STYLES: Record<string, string> = {
   new: "bg-sky-500/15 text-sky-400 border-sky-500/20",
@@ -130,11 +131,24 @@ export default async function LeadDetailPage({
             </div>
             <div>
               <h2 className="font-semibold text-base">
-                {lead.first_name} {lead.last_name}
+                {(`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim()) || (
+                  <span className="text-muted-foreground italic font-normal">No name yet</span>
+                )}
               </h2>
               <p className="text-xs text-muted-foreground capitalize">
                 {lead.source} lead · {formatDistanceToNow(lead.created_at)} ago
               </p>
+              <div className="mt-1.5">
+                <EditLeadDetails
+                  leadId={id}
+                  firstName={lead.first_name as string | null}
+                  lastName={lead.last_name as string | null}
+                  email={lead.email as string | null}
+                  phone={lead.phone as string}
+                  address={lead.address as string | null}
+                  syncedToHcp={!!lead.hcp_customer_id}
+                />
+              </div>
               {lead.messenger_psid && (
                 <span className="inline-flex items-center gap-1 mt-1.5 text-[11px] font-semibold px-2 py-0.5 rounded-full"
                   style={{ color: "#0084FF", background: "rgba(0,132,255,0.10)", border: "1px solid rgba(0,132,255,0.25)" }}>

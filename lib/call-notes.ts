@@ -15,6 +15,9 @@ import type { VoiceSession } from "@/lib/voice-session"
 // extraction is at least as complete as the incremental version was.
 
 type ExtractedIntel = {
+  first_name?: string
+  last_name?: string
+  email?: string
   job_type?: string
   system_type?: string
   system_age?: string
@@ -27,6 +30,18 @@ const EXTRACT_TOOL = {
   input_schema: {
     type: "object" as const,
     properties: {
+      first_name: {
+        type: "string",
+        description: "The caller's first name, ONLY if they actually said it on the call. Never guess from the phone number or infer it. Omit if never stated.",
+      },
+      last_name: {
+        type: "string",
+        description: "The caller's last name, ONLY if actually stated. Omit if never stated.",
+      },
+      email: {
+        type: "string",
+        description: "The caller's email address, ONLY if they spelled it out or stated it. Omit otherwise.",
+      },
       job_type: {
         type: "string",
         enum: JOB_TYPES as unknown as string[],
@@ -114,6 +129,26 @@ export async function summarizeCompletedCall(session: VoiceSession): Promise<voi
   }
   if (intel.system_type?.trim()) updates.system_type = intel.system_type.trim()
   if (intel.system_age?.trim())  updates.system_age  = intel.system_age.trim()
+
+  // Identity: fill ONLY what's still blank — a name captured earlier (lead
+  // form, prior conversation) is more trustworthy than one heard over the
+  // phone, and must never be overwritten by a transcription artifact.
+  const cleanName = (v: string | undefined) => {
+    const s = (v ?? "").trim().replace(/^[\s,.]+|[\s,.]+$/g, "")
+    if (!s || s.length > 60) return null
+    if (/^(unknown|n\/?a|none|null|customer|caller|sir|ma.?am)$/i.test(s)) return null
+    return s
+  }
+  const { data: existing } = await db
+    .from("leads").select("first_name, last_name, email").eq("id", session.lead_id).single()
+  const first = cleanName(intel.first_name)
+  const last = cleanName(intel.last_name)
+  if (first && !existing?.first_name) updates.first_name = first
+  if (last && !existing?.last_name) updates.last_name = last
+  if (intel.email && !existing?.email && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(intel.email.trim())) {
+    updates.email = intel.email.trim().toLowerCase()
+  }
+
   if (Object.keys(updates).length > 0) {
     await db.from("leads").update(updates).eq("id", session.lead_id)
   }
