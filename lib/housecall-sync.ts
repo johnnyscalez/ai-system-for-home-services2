@@ -600,13 +600,13 @@ export async function reconcileCompany(companyId: string): Promise<{
 // The office books jobs in Housecall Pro that never touch our system. Slot
 // generation must see them, or the AI double-books technicians.
 
-export type BusyInterval = { technicianId: string; startMs: number; endMs: number; point: { lat: number; lng: number } | null }
+export type BusyInterval = { technicianId: string; startMs: number; endMs: number; point: { lat: number; lng: number } | null; ours?: boolean }
 
 export async function getHcpBusyIntervals(
   companyId: string,
   fromIso: string,
   toIso: string,
-  opts?: { excludeOurJobs?: boolean }
+  opts?: { excludeOurJobs?: boolean; markOurJobs?: boolean }
 ): Promise<BusyInterval[]> {
   const client = await getHcpClient(companyId)
   if (!client) return []
@@ -626,7 +626,7 @@ export async function getHcpBusyIntervals(
   // interval would cross-block ADJACENT overlapping arrival windows (our 8–11
   // job spans into the 10–1 window's range) and halve daily capacity.
   let ourJobIds = new Set<string>()
-  if (opts?.excludeOurJobs) {
+  if (opts?.excludeOurJobs || opts?.markOurJobs) {
     const { data: ours } = await db
       .from("appointments")
       .select("hcp_job_id")
@@ -644,7 +644,8 @@ export async function getHcpBusyIntervals(
     const jobs = res.jobs ?? []
     for (const job of jobs) {
       if (/cancel/i.test(job.work_status ?? "")) continue
-      if (job.id && ourJobIds.has(job.id)) continue
+      const isOurs = !!(job.id && ourJobIds.has(job.id))
+      if (opts?.excludeOurJobs && isOurs) continue
       const start = job.schedule?.scheduled_start
       if (!start) continue
       const end = job.schedule?.scheduled_end ?? new Date(new Date(start).getTime() + 2 * 60 * 60 * 1000).toISOString()
@@ -654,7 +655,7 @@ export async function getHcpBusyIntervals(
       const point = zipToPoint(jobZip)
       for (const empId of employees) {
         const techId = byHcpId.get(empId)
-        if (techId) intervals.push({ technicianId: techId, startMs: new Date(start).getTime(), endMs: new Date(end).getTime(), point })
+        if (techId) intervals.push({ technicianId: techId, startMs: new Date(start).getTime(), endMs: new Date(end).getTime(), point, ours: isOurs || undefined })
       }
     }
     if (jobs.length < 100 || (res.total_pages && page >= res.total_pages)) break

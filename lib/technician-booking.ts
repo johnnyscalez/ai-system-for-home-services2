@@ -85,7 +85,7 @@ export async function findSlotsForLead(
       .select("available_days, appointment_windows, booking_horizon_days, timezone, min_booking_lead_days")
       .eq("company_id", companyId)
       .single(),
-    db.from("companies").select("service_area_zips").eq("id", companyId).single(),
+    db.from("companies").select("service_area_zips, integration_mode").eq("id", companyId).single(),
   ])
 
   // Company-level service radius gate (set at onboarding: office + radius →
@@ -221,24 +221,44 @@ export async function findSlotsForLead(
       addForeign(a.technician_id, startMs, startMs + JOB_MS)
     }
   }
+  // Anchor source (owner decision Aug 2026, V2 accounts): HCP CRM is the ONLY
+  // truth for "this tech has a work day" — a local appointment that never made
+  // it into HCP does not anchor. Window CAPACITY still counts local rows
+  // (push latency + placeholder-phone bookings must still block double-books).
+  const hcpAnchorDays = new Set<string>()
+  let hcpReachable = false
   try {
     const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
-    const hcpBusy = await getHcpBusyIntervals(companyId, now.toISOString(), horizonEnd.toISOString(), { excludeOurJobs: true })
+    const hcpBusy = await getHcpBusyIntervals(companyId, now.toISOString(), horizonEnd.toISOString(), { markOurJobs: true })
+    hcpReachable = true
     for (const b of hcpBusy) {
-      addBusy(b.technicianId, b.startMs, b.endMs, b.point)
-      addForeign(b.technicianId, b.startMs, b.endMs)
+      hcpAnchorDays.add(`${b.technicianId}|${new Date(b.startMs).toLocaleDateString("en-CA", { timeZone: tz })}`)
+      if (!b.ours) {
+        // Office-booked jobs: real busy intervals for blocking + routing.
+        // Our own HCP mirrors are skipped here — the local rows already
+        // window-bucket them, and double-counting cross-blocks windows.
+        addBusy(b.technicianId, b.startMs, b.endMs, b.point)
+        addForeign(b.technicianId, b.startMs, b.endMs)
+      }
     }
   } catch (err) {
     // HCP unreachable — degrade to our own data rather than failing the booking
     console.warn("[slots] HCP availability unavailable, using local only:", err)
   }
-  // Anchor set: (tech, company-local day) pairs that already have ≥1 real job.
-  // Built from busyIntervals because that map holds BOTH our appointments and
-  // office-booked HCP jobs — exactly the definition of an existing work day.
+  // Anchor set: (tech, company-local day) pairs with ≥1 real job.
+  //   V2 (housecall_pro) + HCP reachable → HCP jobs ONLY (incl. our mirrors —
+  //     they are real jobs in the CRM). The office's calendar is the truth.
+  //   Standalone, or HCP down → local appointments (otherwise standalone
+  //     accounts would never have an anchor and live in permanent fallback).
+  const hcpMode = (companyAreaRes.data as { integration_mode?: string } | null)?.integration_mode === "housecall_pro"
   const anchorDays = new Set<string>()
-  for (const [techId, jobs] of busyIntervals) {
-    for (const j of jobs) {
-      anchorDays.add(`${techId}|${new Date(j.startMs).toLocaleDateString("en-CA", { timeZone: tz })}`)
+  if (hcpMode && hcpReachable) {
+    for (const d of hcpAnchorDays) anchorDays.add(d)
+  } else {
+    for (const [techId, jobs] of busyIntervals) {
+      for (const j of jobs) {
+        anchorDays.add(`${techId}|${new Date(j.startMs).toLocaleDateString("en-CA", { timeZone: tz })}`)
+      }
     }
   }
 
@@ -453,11 +473,14 @@ export async function techCanTakeBooking(
   if (scheduledAt) {
     const startMs = Date.parse(scheduledAt)
     if (!Number.isNaN(startMs)) {
-      const { data: cfg } = await db
-        .from("ai_agent_config")
-        .select("appointment_windows, timezone, min_booking_lead_days")
-        .eq("company_id", t.company_id as string)
-        .maybeSingle()
+      const [{ data: cfg }, { data: coMode }] = await Promise.all([
+        db.from("ai_agent_config")
+          .select("appointment_windows, timezone, min_booking_lead_days")
+          .eq("company_id", t.company_id as string)
+          .maybeSingle(),
+        db.from("companies").select("integration_mode").eq("id", t.company_id as string).maybeSingle(),
+      ])
+      const hcpMode = coMode?.integration_mode === "housecall_pro"
       const tz = (cfg?.timezone as string | null) ?? "America/New_York"
 
       // Lead-time gate at booking time too — the slot list already enforces
@@ -516,15 +539,19 @@ export async function techCanTakeBooking(
         const winStartMs = startMs - (target.mins - toMin(targetWin.start)) * 60 * 1000
         const winEndMs = winStartMs + (toMin(targetWin.end) - toMin(targetWin.start)) * 60 * 1000
         let hcpDayJobs = 0
+        let hcpReachable = false
         try {
           const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
           const hcpBusy = await getHcpBusyIntervals(
             t.company_id as string,
             new Date(winStartMs - 24 * 60 * 60 * 1000).toISOString(),
             new Date(winEndMs + 12 * 60 * 60 * 1000).toISOString(),
-            { excludeOurJobs: true }
+            { markOurJobs: true }
           )
-          if (hcpBusy.some((b) => b.technicianId === technicianId && b.startMs < winEndMs && b.endMs > winStartMs)) return false
+          hcpReachable = true
+          // Overlap-blocking: OFFICE jobs only — our mirrors are bucket-counted locally
+          if (hcpBusy.some((b) => !b.ours && b.technicianId === technicianId && b.startMs < winEndMs && b.endMs > winStartMs)) return false
+          // Anchor counting: ANY job in the CRM that day, ours included
           hcpDayJobs = hcpBusy.filter(
             (b) => b.technicianId === technicianId && localParts(b.startMs).dateStr === target.dateStr
           ).length
@@ -535,7 +562,9 @@ export async function techCanTakeBooking(
         //    tool (leads.selected_slots), which already applied the anchored
         //    search and its own week-out fallback. This closes the last door:
         //    a model hand-writing an ISO for an empty day under lead pressure.
-        const anchored = sameDay.length > 0 || hcpDayJobs > 0
+        //    V2 accounts: HCP CRM is the ONLY anchor truth (owner decision) —
+        //    a local row that never reached HCP does not make a work day.
+        const anchored = hcpMode && hcpReachable ? hcpDayJobs > 0 : (sameDay.length > 0 || hcpDayJobs > 0)
         if (!anchored) {
           let offered = false
           if (leadId) {
@@ -554,8 +583,8 @@ export async function techCanTakeBooking(
         // Anchor rule applies here too — an oddball time must not become the
         // back door onto an empty day. sameDay covers our jobs; check HCP for
         // office work, then the tool-offered escape.
-        if (sameDay.length === 0) {
-          let anchored = false
+        if (hcpMode || sameDay.length === 0) {
+          let anchored = !hcpMode && sameDay.length > 0
           try {
             const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
             const DAY_MS = 24 * 60 * 60 * 1000
@@ -563,9 +592,9 @@ export async function techCanTakeBooking(
               t.company_id as string,
               new Date(startMs - DAY_MS).toISOString(),
               new Date(startMs + DAY_MS).toISOString(),
-              { excludeOurJobs: true }
+              { markOurJobs: true }
             )
-            anchored = busy.some((b) => b.technicianId === technicianId && localParts(b.startMs).dateStr === target.dateStr)
+            anchored = anchored || busy.some((b) => b.technicianId === technicianId && localParts(b.startMs).dateStr === target.dateStr)
           } catch { anchored = true /* HCP unreachable — can't prove empty */ }
           if (!anchored) {
             let offered = false
@@ -614,24 +643,32 @@ export async function techAnchoredOn(
   const dateStr = new Date(startMs).toLocaleDateString("en-CA", { timeZone: tz })
   const DAY = 24 * 60 * 60 * 1000
 
-  let q = db.from("appointments")
-    .select("id, scheduled_at")
-    .eq("technician_id", technicianId)
-    .eq("status", "scheduled")
-    .gte("scheduled_at", new Date(startMs - DAY).toISOString())
-    .lte("scheduled_at", new Date(startMs + DAY).toISOString())
-  if (excludeAppointmentId) q = q.neq("id", excludeAppointmentId)
-  const { data: apts } = await q
-  if ((apts ?? []).some((a) => new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: tz }) === dateStr)) {
-    return true
+  const { data: coMode } = await db
+    .from("companies").select("integration_mode").eq("id", companyId).maybeSingle()
+  const hcpMode = coMode?.integration_mode === "housecall_pro"
+
+  if (!hcpMode) {
+    // Standalone: local appointments are the only schedule there is
+    let q = db.from("appointments")
+      .select("id, scheduled_at")
+      .eq("technician_id", technicianId)
+      .eq("status", "scheduled")
+      .gte("scheduled_at", new Date(startMs - DAY).toISOString())
+      .lte("scheduled_at", new Date(startMs + DAY).toISOString())
+    if (excludeAppointmentId) q = q.neq("id", excludeAppointmentId)
+    const { data: apts } = await q
+    return (apts ?? []).some((a) => new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: tz }) === dateStr)
   }
+
+  // V2: HCP CRM is the only anchor truth (this appointment isn't pushed yet
+  // when the stamp runs, so it can't count itself)
   try {
     const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
     const busy = await getHcpBusyIntervals(
       companyId,
       new Date(startMs - DAY).toISOString(),
       new Date(startMs + DAY).toISOString(),
-      { excludeOurJobs: true }
+      { markOurJobs: true }
     )
     return busy.some((b) =>
       b.technicianId === technicianId &&
