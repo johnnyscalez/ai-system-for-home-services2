@@ -157,31 +157,68 @@ export async function findSlotsForLead(
   const officePoint: GeoPoint | null = addressToPoint(companyRow?.office_address)
   const leadPoint: GeoPoint | null = zipToPoint(zip)
 
-  // The tech's REAL day = our appointments + every job booked directly in
-  // Housecall Pro by the office. Both become busy intervals; a slot is taken
-  // if any interval overlaps it — not just exact start-time matches.
+  // Capacity model (product decision Aug 2026): bookings are ARRIVAL WINDOWS
+  // that deliberately overlap (8–11 / 10–1 / 12–3 / 3–6). A tech holds ONE job
+  // per window — max 4/day. That means "taken" is decided per WINDOW BUCKET
+  // for our own bookings, never by raw time overlap (a 10–1 job time-overlaps
+  // the 8–11 range and would wrongly kill it, capping techs at ~2 jobs/day).
+  //
+  //   - OUR appointments  → consume exactly the window they were booked into.
+  //   - OFFICE jobs booked directly in HCP (arbitrary times, unknown
+  //     semantics) → conservatively block every window they overlap.
+  //   - Route scoring still sees ALL jobs as real time intervals.
   const JOB_MS = 2 * 60 * 60 * 1000
-  const busyIntervals = new Map<string, Array<LocatedJob>>()
+  const busyIntervals = new Map<string, Array<LocatedJob>>()          // routing only
+  const foreignIntervals = new Map<string, Array<{ startMs: number; endMs: number }>>()
+  const ourWindowBookings = new Map<string, Set<string>>()            // techId → "date|windowId"
   const addBusy = (techId: string, startMs: number, endMs: number, point: GeoPoint | null) => {
     if (!busyIntervals.has(techId)) busyIntervals.set(techId, [])
     busyIntervals.get(techId)!.push({ startMs, endMs, point })
   }
+  const addForeign = (techId: string, startMs: number, endMs: number) => {
+    if (!foreignIntervals.has(techId)) foreignIntervals.set(techId, [])
+    foreignIntervals.get(techId)!.push({ startMs, endMs })
+  }
+  // Bucket a booking into a window: exact local start-time match first, then
+  // first window containing it (legacy bookings made under the old 2h grid).
+  const bucketOf = (ms: number): { dateStr: string; windowId: string } | null => {
+    const d = new Date(ms)
+    const dateStr = d.toLocaleDateString("en-CA", { timeZone: tz })
+    const hm = d.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit" })
+    const mins = parseInt(hm.slice(0, 2), 10) * 60 + parseInt(hm.slice(3, 5), 10)
+    const toMin = (t: string) => parseInt(t.slice(0, 2), 10) * 60 + parseInt(t.slice(3, 5), 10)
+    const exact = windows.find((w) => toMin(w.start) === mins)
+    if (exact) return { dateStr, windowId: exact.id }
+    const containing = windows.find((w) => mins >= toMin(w.start) && mins < toMin(w.end))
+    return containing ? { dateStr, windowId: containing.id } : null
+  }
   for (const a of existingApts ?? []) {
-    if (a.technician_id) {
-      const startMs = new Date(a.scheduled_at).getTime()
-      addBusy(a.technician_id, startMs, startMs + JOB_MS, addressToPoint(a.address))
+    if (!a.technician_id) continue
+    const startMs = new Date(a.scheduled_at).getTime()
+    addBusy(a.technician_id, startMs, startMs + JOB_MS, addressToPoint(a.address))
+    const bucket = bucketOf(startMs)
+    if (bucket) {
+      if (!ourWindowBookings.has(a.technician_id)) ourWindowBookings.set(a.technician_id, new Set())
+      ourWindowBookings.get(a.technician_id)!.add(`${bucket.dateStr}|${bucket.windowId}`)
+    } else {
+      // Unbucketable oddball (manual booking at 6:45am) — block by overlap
+      addForeign(a.technician_id, startMs, startMs + JOB_MS)
     }
   }
   try {
     const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
-    const hcpBusy = await getHcpBusyIntervals(companyId, now.toISOString(), horizonEnd.toISOString())
-    for (const b of hcpBusy) addBusy(b.technicianId, b.startMs, b.endMs, b.point)
+    const hcpBusy = await getHcpBusyIntervals(companyId, now.toISOString(), horizonEnd.toISOString(), { excludeOurJobs: true })
+    for (const b of hcpBusy) {
+      addBusy(b.technicianId, b.startMs, b.endMs, b.point)
+      addForeign(b.technicianId, b.startMs, b.endMs)
+    }
   } catch (err) {
     // HCP unreachable — degrade to our own data rather than failing the booking
     console.warn("[slots] HCP availability unavailable, using local only:", err)
   }
-  const isBusy = (techId: string, slotStartMs: number, slotEndMs: number) =>
-    (busyIntervals.get(techId) ?? []).some((b) => b.startMs < slotEndMs && b.endMs > slotStartMs)
+  const isBusy = (techId: string, slotStartMs: number, slotEndMs: number, dateStr: string, windowId: string) =>
+    (ourWindowBookings.get(techId)?.has(`${dateStr}|${windowId}`) ?? false) ||
+    (foreignIntervals.get(techId) ?? []).some((b) => b.startMs < slotEndMs && b.endMs > slotStartMs)
   // Insertion cost of THIS lead's job in THIS tech's day around the slot,
   // plus the overtime penalty if it would strand him far from the office
   // past his day end.
@@ -241,7 +278,7 @@ export async function findSlotsForLead(
           const [sh, sm] = sched.start.split(":").map(Number)
           const [eh, em] = sched.end.split(":").map(Number)
           if (slotMinutes < sh * 60 + sm || slotMinutes >= eh * 60 + em) return false
-          return !isBusy(t.id, slotStartMs, slotEndMs)
+          return !isBusy(t.id, slotStartMs, slotEndMs, dateStr, win.id)
         })
         .map(t => {
           const sched = t.schedule[dayName as keyof Technician["schedule"]] as { end: string }
@@ -355,30 +392,82 @@ export async function techCanTakeBooking(
     .maybeSingle()
   if (!t || t.status !== "active") return false
   if (!techHandlesJob(t.job_types as string[], jobType)) return false
-  // Time-conflict check — a stale slot map (or two leads accepting the same
-  // slot simultaneously) could double-book the same tech at the same instant
-  // (live-reproduced). Check OUR appointments and live HCP jobs in a 2h window.
+  // Window-capacity conflict check (product decision Aug 2026): bookings are
+  // overlapping ARRIVAL windows and a tech holds one job per window, max 4 a
+  // day. Same window twice = double-booked (live-reproduced under the old
+  // model); a DIFFERENT window the same day is normal capacity, even though
+  // the wall-clock ranges overlap — never block on raw time proximity.
   if (scheduledAt) {
     const startMs = Date.parse(scheduledAt)
     if (!Number.isNaN(startMs)) {
-      const JOB_MS = 2 * 60 * 60 * 1000
-      const { data: overlaps } = await db
+      const { data: cfg } = await db
+        .from("ai_agent_config")
+        .select("appointment_windows, timezone")
+        .eq("company_id", t.company_id as string)
+        .maybeSingle()
+      const tz = (cfg?.timezone as string | null) ?? "America/New_York"
+      const { DEFAULT_WINDOWS } = await import("@/lib/availability")
+      const windows = ((cfg?.appointment_windows as Array<{ id: string; start: string; end: string; enabled: boolean }> | null) ?? DEFAULT_WINDOWS)
+        .filter((w) => w.enabled)
+
+      const toMin = (s: string) => parseInt(s.slice(0, 2), 10) * 60 + parseInt(s.slice(3, 5), 10)
+      const localParts = (ms: number) => {
+        const d = new Date(ms)
+        return {
+          dateStr: d.toLocaleDateString("en-CA", { timeZone: tz }),
+          mins: (() => { const hm = d.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit" }); return parseInt(hm.slice(0, 2), 10) * 60 + parseInt(hm.slice(3, 5), 10) })(),
+        }
+      }
+      const target = localParts(startMs)
+      const targetWin =
+        windows.find((w) => toMin(w.start) === target.mins) ??
+        windows.find((w) => target.mins >= toMin(w.start) && target.mins < toMin(w.end)) ??
+        null
+
+      // The tech's whole local day, ±1 calendar day of slack for UTC offsets
+      const DAY = 24 * 60 * 60 * 1000
+      const { data: dayApts } = await db
         .from("appointments")
         .select("id, scheduled_at")
         .eq("technician_id", technicianId)
         .eq("status", "scheduled")
-        .gte("scheduled_at", new Date(startMs - JOB_MS).toISOString())
-        .lte("scheduled_at", new Date(startMs + JOB_MS).toISOString())
-      if ((overlaps ?? []).length > 0) return false
-      try {
-        const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
-        const hcpBusy = await getHcpBusyIntervals(
-          t.company_id as string,
-          new Date(startMs - JOB_MS).toISOString(),
-          new Date(startMs + JOB_MS).toISOString()
-        )
-        if (hcpBusy.some(b => b.technicianId === technicianId && b.startMs < startMs + JOB_MS && b.endMs > startMs)) return false
-      } catch { /* HCP unreachable — local check already ran */ }
+        .gte("scheduled_at", new Date(startMs - DAY).toISOString())
+        .lte("scheduled_at", new Date(startMs + DAY).toISOString())
+      const sameDay = (dayApts ?? []).filter((a) => localParts(Date.parse(a.scheduled_at)).dateStr === target.dateStr)
+
+      if (targetWin) {
+        // 1. Same window already booked → conflict
+        const winOf = (ms: number) => {
+          const p = localParts(ms)
+          return (
+            windows.find((w) => toMin(w.start) === p.mins) ??
+            windows.find((w) => p.mins >= toMin(w.start) && p.mins < toMin(w.end)) ??
+            null
+          )
+        }
+        if (sameDay.some((a) => winOf(Date.parse(a.scheduled_at))?.id === targetWin.id)) return false
+        // 2. Daily cap: one job per enabled window
+        if (sameDay.length >= windows.length) return false
+        // 3. Office-booked HCP jobs (ours excluded — they're counted above)
+        //    conservatively block any window their real interval overlaps
+        const winStartMs = startMs - (target.mins - toMin(targetWin.start)) * 60 * 1000
+        const winEndMs = winStartMs + (toMin(targetWin.end) - toMin(targetWin.start)) * 60 * 1000
+        try {
+          const { getHcpBusyIntervals } = await import("@/lib/housecall-sync")
+          const hcpBusy = await getHcpBusyIntervals(
+            t.company_id as string,
+            new Date(winStartMs - 12 * 60 * 60 * 1000).toISOString(),
+            new Date(winEndMs).toISOString(),
+            { excludeOurJobs: true }
+          )
+          if (hcpBusy.some((b) => b.technicianId === technicianId && b.startMs < winEndMs && b.endMs > winStartMs)) return false
+        } catch { /* HCP unreachable — local checks already ran */ }
+      } else {
+        // Time outside every configured window (legacy/manual booking) — fall
+        // back to the old ±2h overlap rule so oddball times still can't stack.
+        const JOB_MS = 2 * 60 * 60 * 1000
+        if (sameDay.some((a) => Math.abs(Date.parse(a.scheduled_at) - startMs) < JOB_MS)) return false
+      }
     }
   }
   const z = zip?.match(/\d{5}/)?.[0]

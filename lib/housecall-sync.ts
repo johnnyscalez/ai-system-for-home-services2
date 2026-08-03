@@ -14,7 +14,11 @@ import { getHcpClient, HcpClient, HcpCustomer, HcpJob } from "@/lib/housecall"
 
 const AI_TAG = "FieldBuilt AI"
 const DEFAULT_JOB_HOURS = 2
-const ARRIVAL_WINDOW_MIN = 60
+// Bookings are 3-hour ARRIVAL windows (8–11, 10–1, 12–3, 3–6 company-local):
+// the HCP job mirrors the promise made to the customer — scheduled_start at
+// window open, scheduled_end at window close, arrival window the full 180 min.
+const WINDOW_HOURS = 3
+const ARRIVAL_WINDOW_MIN = 180
 
 type Db = ReturnType<typeof createServiceRoleClient>
 
@@ -238,7 +242,7 @@ export async function pushBookingToHcp(appointmentId: string): Promise<{ pushed:
   }
 
   const start = new Date(apt.scheduled_at)
-  const end = new Date(start.getTime() + DEFAULT_JOB_HOURS * 60 * 60 * 1000)
+  const end = new Date(start.getTime() + WINDOW_HOURS * 60 * 60 * 1000)
 
   const noteLines = [
     `BOOKED BY ${AI_TAG}`,
@@ -601,7 +605,8 @@ export type BusyInterval = { technicianId: string; startMs: number; endMs: numbe
 export async function getHcpBusyIntervals(
   companyId: string,
   fromIso: string,
-  toIso: string
+  toIso: string,
+  opts?: { excludeOurJobs?: boolean }
 ): Promise<BusyInterval[]> {
   const client = await getHcpClient(companyId)
   if (!client) return []
@@ -616,6 +621,21 @@ export async function getHcpBusyIntervals(
   for (const t of techs ?? []) byHcpId.set(t.hcp_employee_id as string, t.id)
   if (byHcpId.size === 0) return []
 
+  // Jobs WE pushed are already counted from the local appointments table with
+  // window-bucket semantics. Counting their HCP mirror again as a raw time
+  // interval would cross-block ADJACENT overlapping arrival windows (our 8–11
+  // job spans into the 10–1 window's range) and halve daily capacity.
+  let ourJobIds = new Set<string>()
+  if (opts?.excludeOurJobs) {
+    const { data: ours } = await db
+      .from("appointments")
+      .select("hcp_job_id")
+      .eq("company_id", companyId)
+      .not("hcp_job_id", "is", null)
+      .not("hcp_job_id", "like", "pending:%")
+    ourJobIds = new Set((ours ?? []).map((a) => a.hcp_job_id as string))
+  }
+
   const intervals: BusyInterval[] = []
   for (let page = 1; page <= 10; page++) { // 1000-job window (finding D22: 300 was headroom-tight)
     const res = await client.get<{ jobs?: HcpJob[]; total_pages?: number }>(
@@ -624,6 +644,7 @@ export async function getHcpBusyIntervals(
     const jobs = res.jobs ?? []
     for (const job of jobs) {
       if (/cancel/i.test(job.work_status ?? "")) continue
+      if (job.id && ourJobIds.has(job.id)) continue
       const start = job.schedule?.scheduled_start
       if (!start) continue
       const end = job.schedule?.scheduled_end ?? new Date(new Date(start).getTime() + 2 * 60 * 60 * 1000).toISOString()

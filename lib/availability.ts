@@ -19,11 +19,16 @@ export type AvailabilitySettings = {
   per_day_slots?: PerDaySlots | null
 }
 
+// The four standard ARRIVAL windows (product decision, Aug 2026): a booking
+// promises the tech arrives inside the window, not an exact time. Windows
+// deliberately OVERLAP (8–11 and 10–1 share an hour) — capacity is one job
+// per window per tech (max 4/day), enforced by window-bucket logic, NOT by
+// time-overlap checks, which would wrongly cap a tech at ~2 jobs/day.
 export const DEFAULT_WINDOWS: AppointmentWindow[] = [
-  { id: "morning",      label: "Morning",       start: "08:00", end: "10:00", enabled: true  },
-  { id: "midmorning",   label: "Mid-morning",   start: "10:00", end: "12:00", enabled: true  },
-  { id: "afternoon",    label: "Afternoon",     start: "13:00", end: "15:00", enabled: true  },
-  { id: "late_afternoon", label: "Late afternoon", start: "15:00", end: "17:00", enabled: false },
+  { id: "w8_11",  label: "Morning",         start: "08:00", end: "11:00", enabled: true },
+  { id: "w10_13", label: "Late morning",    start: "10:00", end: "13:00", enabled: true },
+  { id: "w12_15", label: "Early afternoon", start: "12:00", end: "15:00", enabled: true },
+  { id: "w15_18", label: "Afternoon",       start: "15:00", end: "18:00", enabled: true },
 ]
 
 export const DEFAULT_DAYS = ["monday", "tuesday", "wednesday", "thursday", "friday"]
@@ -163,10 +168,13 @@ export function getAvailableSlots(
       const slotStart = localWallClockToUtc(localDateStr, startH, startM, tz)
       const slotEnd   = localWallClockToUtc(localDateStr, endH, endM, tz)
 
-      const taken = bookedThisDay.some((a) => {
-        const t = new Date(a.scheduled_at)
-        return t >= slotStart && t < slotEnd
-      })
+      // Window-bucket semantics: a window is taken only by a booking that
+      // STARTS at this window's start. Range-containment would let one
+      // booking swallow two overlapping windows (a 10:00 job is inside both
+      // 8–11 and 10–1) and silently halve daily capacity.
+      const taken = bookedThisDay.some((a) =>
+        new Date(a.scheduled_at).getTime() === slotStart.getTime()
+      )
       if (taken) continue
 
       const gcalBlocked = googleBusyTimes.some((busy) => {
