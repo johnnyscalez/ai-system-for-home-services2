@@ -221,3 +221,25 @@ export function isStatusDowngrade(current: string | null | undefined, next: stri
   if (!current || !next) return false
   return current === "appointment_booked" && PRE_BOOKING_STATUSES.has(next)
 }
+
+/**
+ * The complete guard: a downgrade is only blocked while the lead ACTUALLY
+ * still has a scheduled appointment. Without this check, an appointment
+ * cancelled by any path that doesn't touch lead.status (office cancels in
+ * HCP → reconcile mirrors it) left the lead frozen at appointment_booked
+ * forever, with every legitimate status move rejected.
+ */
+export async function statusDowngradeBlocked(
+  db: { from: (t: string) => any },
+  leadId: string,
+  current: string | null | undefined,
+  next: string | null | undefined
+): Promise<boolean> {
+  if (!isStatusDowngrade(current, next)) return false
+  const { count } = await db
+    .from("appointments")
+    .select("*", { count: "exact", head: true })
+    .eq("lead_id", leadId)
+    .eq("status", "scheduled")
+  return (count ?? 0) > 0
+}

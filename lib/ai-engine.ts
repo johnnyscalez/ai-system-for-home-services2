@@ -553,10 +553,10 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       // because the model calls update_lead_status("qualified") on a
       // post-booking "thanks!" turn (observed live: booked lead showed
       // `qualified` in the CRM pipeline).
-      const { isStatusDowngrade } = await import("@/lib/sequences")
+      const { statusDowngradeBlocked } = await import("@/lib/sequences")
       const { data: cur } = await supabase.from("leads").select("status").eq("id", leadId).maybeSingle()
-      if (isStatusDowngrade(cur?.status, next)) {
-        console.log(`[ai-engine] status downgrade blocked: ${cur?.status} → ${next} for lead ${leadId}`)
+      if (await statusDowngradeBlocked(supabase, leadId, cur?.status, next)) {
+        console.log(`[ai-engine] status downgrade blocked: ${cur?.status} → ${next} for lead ${leadId} (scheduled appointment exists)`)
         return
       }
       await supabase

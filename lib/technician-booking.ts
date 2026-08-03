@@ -762,7 +762,11 @@ export async function selectTechnician(
     return { found: false, reason: "no_zip_match" }
   }
 
-  const tz = tzCfg?.timezone ?? "America/New_York"
+  // Same customer-clock rule as findSlotsForLead/techCanTakeBooking: an
+  // 8–11am EASTERN booking must be judged against the tech's day in EASTERN,
+  // or a Michigan morning window reads as 7am Chicago and fails the shift
+  // check (found in the post-timezone-fix regression audit).
+  const tz = zipToTimeZone(leadZip) ?? tzCfg?.timezone ?? "America/New_York"
   const aptDate = new Date(scheduledAt)
   const dayName = aptDate.toLocaleDateString("en-US", { weekday: "long", timeZone: tz })
     .toLowerCase() as keyof Technician["schedule"]
