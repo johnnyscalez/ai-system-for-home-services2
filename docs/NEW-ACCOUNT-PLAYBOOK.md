@@ -10,6 +10,8 @@
 
 **The one law learned from all of this:** *two subsystems that are each correct in isolation will disagree at their seam, and the failure surfaces as a confident false statement to a customer.* ("I'm sorry Marilyn, it looks like we don't actually service the 60619 zip code.") The only defense is testing the seams with real-shaped data before a real lead hits them.
 
+**Its corollary, learned the expensive way:** *a conversation that looks perfect can still be failing silently downstream.* Both Messenger bookings that prompted class J and class K read beautifully end to end — and produced customers named "Unknown" in the client's CRM with no confirmation sent to anyone. **Never judge a channel by its transcript. Follow one booking all the way through to the CRM record, the confirmation, and the owner's notification.**
+
 ---
 
 ## Phase 0 — Infrastructure (before anything else)
@@ -24,6 +26,7 @@
 | 0.5 | ☐ Cron worker verified ALIVE post-deploy: Railway logs show `[cron] follow-up: 200`, `appointment-reminders: 200`, `hcp-sync: 200` | Audit C4: the HCP sync cron was **never scheduled** — sync was dead for weeks and nothing complained. H40: a CRON_SECRET mismatch used to 401 silently; it now logs `AUTH FAILED` loudly — grep for it. |
 | 0.6 | ☐ Exactly ONE active row in `phone_numbers` per company | Two active rows break every `.single()` phone lookup — reminders and confirmation requests silently stop. |
 | 0.7 | ☐ `CRON_SECRET`, `ANTHROPIC_API_KEY`, Twilio, Resend, ElevenLabs env vars present on Railway | AI-engine calls only work where the key lives. |
+| 0.8 | ☐ **Email sender identity decided** — either connect the client's Gmail (Email & SMS page) or confirm `RESEND_FROM_EMAIL` is set to a verified branded domain | With neither, every confirmation goes out from **`onboarding@resend.dev`** — the Resend sandbox default. It looks like spam, reads as fake to the homeowner, and is a deliverability problem. Top Air ran this way unnoticed because the page was gated out of their product mode. |
 
 ---
 
@@ -52,6 +55,7 @@ Everything the agent says comes from `ai_agent_config.generated_system_prompt` +
 | 1.17 | ☐ **Entry-hook prices vs the booking floor** — if ads run a low hook price, state explicitly which prices are quotable-but-never-bookable and what the hard minimum is | Top Air's $89/$99 ad prices are hooks; the floor is $189. Without an explicit floor the agent negotiates down under pressure. |
 | 1.18 | ☐ **Channel scoping deliberate** — any flow that should apply everywhere lives in the BASE prompt, not in `messenger_instructions` | The Nina root cause: the condo/duct playbook existed only in the Messenger block, so the SMS agent — which handles most Facebook duct leads — had never seen it. Channel-scoped instructions create two agents with different knowledge. |
 | 1.19 | ☐ **Multi-metro service scope** — if a metro can only do a subset of services (no tech for the rest), the prompt must say so per metro | Top Air's prompt advertises the full HVAC menu and says it serves metro Detroit — but only ductwork has a Michigan tech. A Detroit furnace lead gets encouraged, then dead-ends at booking. |
+| 1.20 | ☐ **Name capture confirmed working** — run one test conversation per live channel and check `leads.first_name` is populated, not just mentioned in notes | Two live Messenger bookings reached the client's CRM as customer **"Unknown"** — the technician's schedule showed "Unknown" for a real job. See class J. |
 
 **Consistency rule:** after any prompt/KB edit, grep the WHOLE prompt + KB for the old value. Partial patches are how $399 survived in 2 of 3 places.
 
@@ -194,6 +198,25 @@ This class has no code guard, and that is the point: **the prompt is a program t
 | I-3 | Agent negotiated toward a below-floor price under pressure (discounts, competitor match, sympathy) | Prompt said "never book the $89" but never stated a numeric floor, so anything ≥ $90 looked arguable | If ads run hook prices, state the hard floor explicitly and name the dodges (discount, price match, "ask your manager", cash). Then attack it (Phase 5 item 17). |
 | I-4 | A purged price survived in a KB field nobody was checking | `unique_selling_points` isn't runtime-injected, so a grep of "what the agent says" missed it — but it WOULD return via prompt regeneration | Grep every KB field, not just the runtime six (1.A). |
 
+### J. Data captured in conversation that never reaches a system (added Aug 2026)
+
+The agent can say something back to the customer and still not have *saved* it. Anything the agent only "knows" inside the conversation is lost to the CRM, the confirmation, the technician, and the client's CRM. **If a fact matters downstream, there must be a tool field for it AND a deterministic backstop — a prompt instruction alone is not a guarantee.**
+
+| ID | Symptom | Root cause | Guard now in place |
+|---|---|---|---|
+| J-1 | Two booked customers appeared in the client's Housecall Pro as **"Unknown"**; techs saw "Unknown" on their schedule | `update_lead_details` had fields for job/system/notes but **none for name or email** — the agent had no way to save a name, so it wrote "Customer name: Mourad" into notes. `resolveOrCreateCustomer` then does `first_name ?? "Unknown"` | Name/email fields added to the tool (SMS + voice extractor), with sanitising that rejects "unknown"/"n/a"/junk |
+| J-2 | Agent greeted a customer by name in its reply and still never saved it (seen on a Spanish thread) | Prompt instructions are probabilistic — the model complies most turns, not every turn | **Deterministic backstop** `ensureLeadName()`: at booking, and again before an HCP customer is created, the transcript is re-read by one cheap Haiku call if the name is still blank. Ignores agent/company/street names; saves nothing when no name was given |
+| J-3 | Only first names were ever collected | The agent asked "What's your name?" and accepted whatever came back | Instructed to ask for the surname **once** at booking, then move on. Never nag, never invent |
+| J-4 | Messenger leads were nameless even before the conversation started | The Meta profile lookup 400s without Advanced Access and the failure was swallowed by a bare `catch` (class H39) | Now logs loudly; in-conversation capture is the primary path, profile lookup only a bonus |
+| J-5 | Owner had no way to fix a wrong/missing name | No edit UI existed on the lead page, and in HCP mode most CRM surfaces are gated off | **Edit details** dialog on the lead page in both modes → validates phone, blocks duplicates, and pushes the corrected name to the linked HCP customer |
+
+### K. Channel drift — a capability wired on one channel only (added Aug 2026)
+
+| ID | Symptom | Root cause | New-account check |
+|---|---|---|---|
+| K-1 | Two Messenger bookings sent **no confirmation SMS, no confirmation email, and no owner notification** — they landed completely silently | The post-booking block (`sendConfirmations` + `notifyAppointmentBooked`) existed in the SMS webhook and the voice route but was never added to the Facebook webhook | Now wired in all three. **Whenever you add a channel or a post-action side effect, diff the channel handlers against each other** — that is the whole lesson of this class (see also I-2, where the playbook itself was channel-scoped) |
+| K-2 | HCP-mode accounts could not configure who their emails come from | `/email` was in the CRM-only gate list, but we send confirmations in BOTH modes | `/email` ungated + added to the agent-mode nav. Check 0.8 |
+
 ---
 
 ## Phase 5 — Pre-go-live test battery (run for EVERY new account/agent)
@@ -226,6 +249,10 @@ This class has no code guard, and that is the point: **the prompt is a program t
 18. ☐ **Channel parity** (I-2) — run the SAME 3 scenarios on every live channel (SMS, Messenger, voice) and diff the answers. Any difference must be a deliberate channel rule, not an accident of where an instruction was stored.
 19. ☐ **Authorization matrix** (1.15) — owner, property manager, landlord-approved renter all proceed; an unapproved renter is asked to get the OK and offered a tentative time, never refused outright.
 20. ☐ **Prompt self-contradiction read** (I-1) — before going live, read the assembled prompt looking only for pairs of clauses that could disagree: a decline rule vs a product line, a hard rule vs an exception, a scope limit in one section vs a broader claim in another. This is a reading task, not a testing task, and it is the cheapest bug-per-minute step in the whole playbook.
+21. ☐ **Identity round-trip** (class J) — book a test lead who states a full name mid-conversation, then check the whole chain: `leads.first_name`/`last_name` populated (NOT just in notes) → the name on the confirmation → the HCP customer record. Repeat once in the client's second language if they get non-English leads. A name that only appears in `notes` is a failure, not a pass.
+22. ☐ **Channel side-effect diff** (class K) — for each live channel, book one test appointment and confirm all four downstream effects fire: appointment row, confirmation email, confirmation SMS, owner notification. Missing effects on one channel and not another is the signature of this class.
+23. ☐ **Email sender check** (0.8) — trigger one confirmation email and look at the actual From address. If it reads `onboarding@resend.dev`, the account is not ready to go live.
+24. ☐ **Manual repair path** — open a lead, use **Edit details**, change the name, and confirm it saves and (in HCP mode) updates the customer in Housecall Pro. The owner needs this to work before they need it in anger.
 
 **Known real-world untestables — verify in week 1 with real traffic instead:** actual SMS deliverability (A2P-dependent), real-caller STT quality, email spam-folder rates across providers, Messenger 24h-window behavior.
 
@@ -258,6 +285,9 @@ This class has no code guard, and that is the point: **the prompt is a program t
 - Hook prices (e.g. an $89/$99 ad special) are quotable so the agent can explain the difference, but are never bookable. Quoting ≠ selling.
 - On a refused upsell the Messenger agent goes fully silent (`[[SILENT]]`), while the SMS agent sends one short polite close — a deliberate channel difference (dead air reads as a glitch over SMS).
 - Non-runtime KB fields (`unique_selling_points`, `testimonials`, `team_info`, …) do not affect live conversations; they only shape a regenerated prompt.
+- The name backstop only ever *fills* a blank name — it never overwrites one already on file, because an earlier capture (form, prior conversation) beats one heard mid-call.
+- `/email` is reachable in Housecall Pro mode on purpose: we own the confirmation and reminder emails in both modes, even though their CRM owns the pipeline.
+- The voice agent takes no notes during a live call (dead air); identity and job details are extracted from the transcript after the call ends.
 
 ---
 
