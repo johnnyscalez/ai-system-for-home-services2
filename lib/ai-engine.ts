@@ -9,7 +9,7 @@ import { selectTechnician, flagNoTechAvailable, findSlotsForLead, getTechnicianC
 import type { AppointmentWindow, PerDaySlots } from "@/lib/availability"
 
 export type ConversationAction =
-  | { type: "book_appointment"; scheduled_at: string; address?: string; notes?: string }
+  | { type: "book_appointment"; scheduled_at: string; address?: string; notes?: string; quoted_total?: number; unit_count?: number; property_type?: string }
   | { type: "update_status"; status: "qualified" | "closed_lost" | "needs_attention" }
   | { type: "cancel_appointment"; appointment_id: string; reason?: string }
   | { type: "reschedule_appointment"; appointment_id: string; new_scheduled_at: string }
@@ -55,6 +55,9 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
         scheduled_at: { type: "string", description: "ISO 8601 datetime e.g. 2024-06-15T14:00:00" },
         address: { type: "string", description: "Full service address (street, city, state). REQUIRED — do not call this tool without it." },
         notes: { type: "string", description: "Summary of the job: system type, age, issue description, urgency level, ownership status" },
+        quoted_total: { type: "number", description: "The TOTAL price in dollars the customer just agreed to for this job — all units combined (e.g. two furnaces at $189 each = 378). Pass it whenever a fixed price was agreed in the conversation; the office and the technician see this amount on the job. Omit ONLY for free-estimate/diagnostic visits where no price was agreed. Never invent or estimate a number the customer did not accept." },
+        unit_count: { type: "number", description: "How many units the price covers (furnaces / systems / AC units). 1 if a single unit." },
+        property_type: { type: "string", description: "one of: house, townhome, condo, apartment" },
       },
       required: ["scheduled_at", "address"],
     },
@@ -1128,7 +1131,7 @@ export async function processAndSave(
   // Handle actions
   if (result.action) {
     if (result.action.type === "book_appointment") {
-      const { scheduled_at: rawScheduledAt, address, notes } = result.action
+      const { scheduled_at: rawScheduledAt, address, notes, quoted_total, unit_count, property_type } = result.action
 
       // Look up pre-selected tech from find_available_slots (saved to leads.selected_slots mid-conversation)
       const { data: freshLead } = await supabase
@@ -1260,6 +1263,25 @@ export async function processAndSave(
           .single()
         await notifyTechnician(supabase, companyId, leadId, scheduled_at, address, notes,
           preSelected.tech_id, preSelected.tech_name, tech?.phone ?? null)
+      }
+
+      // Quoted value: record what the AI actually SOLD, so the job carries a
+      // price for the technician and "Potential revenue" is real rather than
+      // inferred later from invoices. Awaited so the HCP push carries it.
+      if (apt) {
+        try {
+          const { resolveQuotedAmount, saveQuotedAmount } = await import("@/lib/pricing")
+          const q = await resolveQuotedAmount({
+            companyId, leadId,
+            jobType: bookJobType,
+            agentTotalCents: typeof quoted_total === "number" ? Math.round(quoted_total * 100) : null,
+            agentUnitCount: typeof unit_count === "number" ? Math.round(unit_count) : null,
+            agentPropertyType: property_type ?? null,
+          })
+          await saveQuotedAmount(apt.id, leadId, q)
+        } catch (err) {
+          console.error("[ai-engine] quoted-amount resolution failed:", err)
+        }
       }
 
       // New-route-day stamp: if this booking landed on a day where the tech

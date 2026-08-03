@@ -181,7 +181,7 @@ export async function pushBookingToHcp(appointmentId: string): Promise<{ pushed:
 
   const { data: apt } = await db
     .from("appointments")
-    .select("id, company_id, lead_id, scheduled_at, address, notes, status, technician_id, technician_name, hcp_job_id, origin")
+    .select("id, company_id, lead_id, scheduled_at, address, notes, status, technician_id, technician_name, hcp_job_id, origin, quoted_amount_cents")
     .eq("id", appointmentId)
     .maybeSingle()
   if (!apt) return { pushed: false, reason: "appointment not found" }
@@ -244,8 +244,14 @@ export async function pushBookingToHcp(appointmentId: string): Promise<{ pushed:
   const start = new Date(apt.scheduled_at)
   const end = new Date(start.getTime() + WINDOW_HOURS * 60 * 60 * 1000)
 
+  const quoted = apt.quoted_amount_cents as number | null
+  const priceLine = quoted != null ? `AGREED PRICE: $${(quoted / 100).toFixed(2)}` : null
   const noteLines = [
     `BOOKED BY ${AI_TAG}`,
+    // The tech opens the job and sees the number the customer agreed to —
+    // HCP's public API has no price/line-item write, so the notes and the
+    // description carry it.
+    priceLine,
     lead.job_type ? `Job type: ${lead.job_type}` : null,
     lead.source ? `Lead source: ${lead.source}` : null,
     apt.notes ? `Summary: ${apt.notes}` : null,
@@ -264,7 +270,7 @@ export async function pushBookingToHcp(appointmentId: string): Promise<{ pushed:
     assigned_employee_ids: hcpEmployeeIds,
     tags: [AI_TAG, ...(lead.job_type ? [lead.job_type] : [])],
     lead_source: leadSource,
-    description: lead.job_type ?? "Service call",
+    description: [lead.job_type ?? "Service call", priceLine].filter(Boolean).join(" — "),
     notes: noteLines.join("\n"),
   })
 

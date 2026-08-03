@@ -79,6 +79,8 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
         scheduled_at: { type: "string", description: "ISO 8601 datetime" },
         address: { type: "string", description: "Full service address. REQUIRED." },
         notes: { type: "string", description: "System type, age, issue description, urgency" },
+        quoted_total: { type: "number", description: "TOTAL dollars the caller agreed to for this job, all units combined. Pass whenever a fixed price was agreed. Omit for free-estimate visits. Never invent a number." },
+        unit_count: { type: "number", description: "How many units the price covers (furnaces / systems)." },
       },
       required: ["scheduled_at", "address"],
     },
@@ -714,7 +716,7 @@ async function executeTool(
       return { type: "continue" }
 
     case "book_appointment": {
-      const { scheduled_at, address, notes } = tool.input as { scheduled_at: string; address: string; notes?: string }
+      const { scheduled_at, address, notes, quoted_total, unit_count } = tool.input as { scheduled_at: string; address: string; notes?: string; quoted_total?: number; unit_count?: number }
 
       // Guard: the model must pass a parseable datetime. A bad value would
       // fail the insert silently while the lead is told they're booked.
@@ -751,6 +753,20 @@ async function executeTool(
       if (apt) {
         const { data: lead } = await db.from("leads").select("job_type").eq("id", session.lead_id).single()
         const zip = address?.match(/\b\d{5}\b/g)?.slice(-1)[0] ?? null
+
+        // Record what was SOLD (same ladder as SMS/Messenger). Non-blocking:
+        // never delay a live call on pricing bookkeeping.
+        import("@/lib/pricing").then(async ({ resolveQuotedAmount, saveQuotedAmount }) => {
+          const q = await resolveQuotedAmount({
+            companyId: session.company_id, leadId: session.lead_id,
+            jobType: (lead?.job_type as string | null) ?? null,
+            agentTotalCents: typeof quoted_total === "number" ? Math.round(quoted_total * 100) : null,
+            agentUnitCount: typeof unit_count === "number" ? Math.round(unit_count) : null,
+            agentPropertyType: null,
+          })
+          await saveQuotedAmount(apt.id, session.lead_id, q)
+        }).catch((e) => console.error("[voice] quoted-amount resolution failed:", e))
+
         selectTechnician(session.company_id, apt.id, scheduled_at, lead?.job_type as string | null, zip)
           .then(async (res) => {
             if (!res.found) {
