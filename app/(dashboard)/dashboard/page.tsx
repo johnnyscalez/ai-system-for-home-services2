@@ -3,7 +3,12 @@ import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { DashboardClient } from "@/components/dashboard/DashboardClient"
 import { AgentDashboard, type AgentBooking, type LeadRow, type RevenueEventRow } from "@/components/dashboard/AgentDashboard"
 
-export default async function DashboardPage() {
+export default async function DashboardPage({
+  searchParams,
+}: {
+  searchParams: Promise<{ from?: string; to?: string }>
+}) {
+  const sp = await searchParams
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
@@ -25,7 +30,16 @@ export default async function DashboardPage() {
 
   // ── HCP integration mode → AI-agent performance dashboard (not a CRM) ──────
   if (company?.integration_mode === "housecall_pro") {
-    return <HcpAgentDashboard companyId={profile.company_id} firstName={firstName} company={company} supabase={supabase} />
+    return (
+      <HcpAgentDashboard
+        companyId={profile.company_id}
+        firstName={firstName}
+        company={company}
+        supabase={supabase}
+        requestedFrom={sp.from}
+        requestedTo={sp.to}
+      />
+    )
   }
 
   // ── Standalone mode → the full CRM dashboard ────────────────────────────────
@@ -149,11 +163,13 @@ export default async function DashboardPage() {
 // HCP-mode data assembly
 // ─────────────────────────────────────────────────────────────────────────────
 
-async function HcpAgentDashboard({ companyId, firstName, company, supabase }: {
+async function HcpAgentDashboard({ companyId, firstName, company, supabase, requestedFrom, requestedTo }: {
   companyId: string
   firstName: string
   company: { name: string; avg_job_value: number }
   supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>
+  requestedFrom?: string
+  requestedTo?: string
 }) {
   const now = new Date()
 
@@ -163,8 +179,24 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase }: {
   const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
   const nightLabel = "Your AI agent — last 30 days, around the clock"
 
-  // Raw 90-day window — the client filters by source + time range without refetching
-  const since90d = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000).toISOString()
+  const { data: agentCfg } = await supabase
+    .from("ai_agent_config")
+    .select("timezone")
+    .eq("company_id", companyId)
+    .maybeSingle()
+  const tz = (agentCfg?.timezone as string | null) ?? "America/New_York"
+
+  // Data window shipped to the client. Default 90 days (covers every preset,
+  // filtered instantly client-side). A custom range reaching further back
+  // widens it here — otherwise the dashboard would render an empty chart for
+  // a range it has no rows for, which reads as "no leads" instead of "no data".
+  const defaultFrom = new Date(now.getTime() - 90 * 24 * 60 * 60 * 1000)
+  const requestedFromDate = requestedFrom ? new Date(requestedFrom) : null
+  const windowFrom =
+    requestedFromDate && !isNaN(requestedFromDate.getTime()) && requestedFromDate < defaultFrom
+      ? requestedFromDate
+      : defaultFrom
+  const since90d = windowFrom.toISOString()
 
   const [
     { count: nightBooked },
@@ -247,6 +279,8 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase }: {
         callbacks: callbackCount ?? 0,
       }}
       avgJobValueCents={(company.avg_job_value ?? 0) * 100}
+      timezone={tz}
+      dataFromIso={since90d}
       bookings={(bookingsData ?? []) as unknown as AgentBooking[]}
       leadsAll={[...leadMap.values()]}
       revenueEvents={(revenueEvents ?? []) as RevenueEventRow[]}

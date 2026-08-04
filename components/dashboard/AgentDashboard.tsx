@@ -3,6 +3,7 @@
 import { motion, useInView } from "framer-motion"
 import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   Moon, CalendarCheck, MessagesSquare, UserPlus, PhoneCall,
   DollarSign, TrendingUp, Sparkles, ArrowRight, Phone, MessageSquare,
@@ -279,6 +280,10 @@ type Props = {
   leadsAll: LeadRow[]             // last 90 days + all current needs_attention
   revenueEvents: RevenueEventRow[] // last 90 days
   hcpConnected: boolean
+  timezone: string
+  /** Oldest moment the server actually shipped rows for — anything earlier
+   *  needs a refetch, otherwise an empty chart would masquerade as "no leads". */
+  dataFromIso: string
 }
 
 // ── Filters ────────────────────────────────────────────────────────────────────
@@ -288,26 +293,94 @@ const RANGES = [
   { key: "7d",    label: "7 days", days: 7 },
   { key: "30d",   label: "30 days", days: 30 },
   { key: "90d",   label: "90 days", days: 90 },
+  { key: "custom", label: "Custom", days: 0 },
 ] as const
 type RangeKey = typeof RANGES[number]["key"]
+
+// ── Calendar-day math in the COMPANY's timezone ─────────────────────────────
+// Every boundary the owner sees must be their business day, not the browser's.
+// A shop in Chicago viewing from a phone set to UTC was seeing "Today" start
+// at 7 PM the previous evening, and chart bars labelled with dates whose
+// contents belonged to the day before.
+
+/** "YYYY-MM-DD" for a moment, in the given timezone. */
+function dayKey(ms: number, tz: string): string {
+  return new Date(ms).toLocaleDateString("en-CA", { timeZone: tz })
+}
+
+/** Epoch ms of 00:00:00 on `key` (YYYY-MM-DD) in the given timezone. */
+function startOfDay(key: string, tz: string): number {
+  const naiveUtc = new Date(`${key}T00:00:00Z`).getTime()
+  const parts = new Intl.DateTimeFormat("en-US", {
+    timeZone: tz, year: "numeric", month: "2-digit", day: "2-digit",
+    hour: "2-digit", minute: "2-digit", second: "2-digit", hour12: false,
+  }).formatToParts(new Date(naiveUtc))
+  const get = (t: string) => parseInt(parts.find((p) => p.type === t)?.value ?? "0", 10)
+  const asLocal = Date.UTC(get("year"), get("month") - 1, get("day"), get("hour") % 24, get("minute"), get("second"))
+  return naiveUtc + (naiveUtc - asLocal)
+}
+
+/** Add whole days to a YYYY-MM-DD key (calendar-safe, DST-safe). */
+function addDays(key: string, n: number): string {
+  const d = new Date(`${key}T12:00:00Z`)
+  d.setUTCDate(d.getUTCDate() + n)
+  return d.toISOString().slice(0, 10)
+}
+
+/** Inclusive list of day keys from `fromKey` to `toKey`. */
+function dayRange(fromKey: string, toKey: string): string[] {
+  const out: string[] = []
+  for (let k = fromKey; k <= toKey && out.length < 400; k = addDays(k, 1)) out.push(k)
+  return out
+}
 
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 export function AgentDashboard({
   firstName, companyName, nightLabel, night,
-  bookings, leadsAll, revenueEvents, hcpConnected,
+  bookings, leadsAll, revenueEvents, hcpConnected, timezone, dataFromIso,
 }: Props) {
+  const router = useRouter()
   const [range, setRange] = useState<RangeKey>("30d")
   const [sourceFilter, setSourceFilter] = useState<string | null>(null)
   const [originFilter, setOriginFilter] = useState<"all" | "ai" | "hcp">("all")
 
-  const rangeDays = RANGES.find(r => r.key === range)?.days ?? 30
+  const todayKey = dayKey(Date.now(), timezone)
+  const [customFrom, setCustomFrom] = useState(addDays(todayKey, -13))
+  const [customTo, setCustomTo] = useState(todayKey)
 
-  const { filteredBookings, money, bars, barUnit, sources, callbacks, totalLeadsInRange, aiBookedCount, officeBookedCount } = useMemo(() => {
-    const now = Date.now()
-    const cutoff = range === "today"
-      ? new Date(new Date().setHours(0, 0, 0, 0)).getTime()
-      : now - rangeDays * 24 * 60 * 60 * 1000
+  // The selected window as inclusive calendar days in the company's timezone.
+  // Presets are calendar-day windows too ("7 days" = the last 7 business days
+  // including today), so the range and the chart always describe the same
+  // thing — a rolling 168-hour window silently disagreed with day-labelled bars.
+  const { fromKey, toKey } = useMemo(() => {
+    if (range === "custom") {
+      return customFrom <= customTo
+        ? { fromKey: customFrom, toKey: customTo }
+        : { fromKey: customTo, toKey: customFrom } // tolerate reversed entry
+    }
+    const days = RANGES.find(r => r.key === range)?.days ?? 30
+    return { fromKey: addDays(todayKey, -(days - 1)), toKey: todayKey }
+  }, [range, customFrom, customTo, todayKey])
+
+  const fromMs = useMemo(() => startOfDay(fromKey, timezone), [fromKey, timezone])
+  // Exclusive end = midnight after the last selected day, so "to = today"
+  // includes everything that happened today, not just up to this second.
+  const toMs = useMemo(() => startOfDay(addDays(toKey, 1), timezone), [toKey, timezone])
+
+  // Does the selection reach further back than the rows the server sent?
+  const dataFromMs = useMemo(() => new Date(dataFromIso).getTime(), [dataFromIso])
+  const needsWiderData = fromMs < dataFromMs - 60_000
+
+  const rangeLabel = range === "custom"
+    ? `${fromKey} → ${toKey}`
+    : RANGES.find(r => r.key === range)?.label ?? ""
+
+  const { filteredBookings, money, bars, barUnit, sources, callbacks, totalLeadsInRange, aiBookedCount, officeBookedCount, bookingsTotal } = useMemo(() => {
+    const inWindow = (iso: string) => {
+      const t = new Date(iso).getTime()
+      return t >= fromMs && t < toMs
+    }
 
     // Group facebook aliases for filter matching
     const norm = (s: string | null) => {
@@ -322,11 +395,11 @@ export function AgentDashboard({
     const leadSource = new Map<string, string | null>()
     for (const l of leadsAll) leadSource.set(l.id, l.source)
 
-    const inRangeLeads = leadsAll.filter(l => new Date(l.created_at).getTime() >= cutoff)
+    const inRangeLeads = leadsAll.filter(l => inWindow(l.created_at))
     const totalLeadsInRange = inRangeLeads.filter(l => matchesSource(l.source)).length
 
     const rangeSourceBookings = bookings.filter(b =>
-      new Date(b.created_at).getTime() >= cutoff && matchesSource(b.leads?.source ?? null)
+      inWindow(b.created_at) && matchesSource(b.leads?.source ?? null)
     )
     const aiBookedCount = rangeSourceBookings.filter(b => b.origin !== "hcp").length
     const officeBookedCount = rangeSourceBookings.filter(b => b.origin === "hcp").length
@@ -336,7 +409,7 @@ export function AgentDashboard({
 
     // Money — revenue events in range, source-matched via the lead they belong to
     const evMatches = (e: RevenueEventRow) => {
-      if (new Date(e.created_at).getTime() < cutoff) return false
+      if (!inWindow(e.created_at)) return false
       if (!sourceFilter) return true
       const src = e.lead_id ? leadSource.get(e.lead_id) ?? null : null
       return norm(src) === sourceFilter
@@ -357,24 +430,29 @@ export function AgentDashboard({
     const potentialPriced = aiBookings.filter(b => b.quoted_amount_cents != null).length
     const potentialUnpriced = aiBookings.length - potentialPriced
 
-    // Bars — bucket by day (or by week for 90d)
-    const weekly = rangeDays > 35
-    const bucketCount = range === "today" ? 1 : weekly ? Math.ceil(rangeDays / 7) : rangeDays
-    const bucketMs = (weekly ? 7 : 1) * 24 * 60 * 60 * 1000
-    const buckets: Array<{ key: string; label: string; count: number; start: number }> = []
-    for (let i = bucketCount - 1; i >= 0; i--) {
-      const start = range === "today"
-        ? new Date(new Date().setHours(0, 0, 0, 0)).getTime()
-        : now - (i + 1) * bucketMs
-      const d = new Date(range === "today" ? start : start + bucketMs)
-      const label = d.toLocaleDateString("en-US", { month: "short", day: "numeric" })
-      buckets.push({ key: `${i}`, label, count: 0, start })
+    // Bars — one bucket per calendar day in the company's timezone (grouped
+    // into weeks past ~5 weeks so the axis stays readable). Bookings are
+    // assigned by their own local day, so a bar labelled "Aug 4" contains
+    // exactly the jobs booked on August 4 in the company's own time.
+    const days = dayRange(fromKey, toKey)
+    const weekly = days.length > 35
+    const groupSize = weekly ? 7 : 1
+    const buckets: Array<{ key: string; label: string; count: number; days: Set<string> }> = []
+    for (let i = 0; i < days.length; i += groupSize) {
+      const chunk = days.slice(i, i + groupSize)
+      const first = chunk[0]
+      buckets.push({
+        key: first,
+        label: new Date(`${first}T12:00:00Z`).toLocaleDateString("en-US", { month: "short", day: "numeric" }),
+        count: 0,
+        days: new Set(chunk),
+      })
     }
+    const bucketOfDay = new Map<string, number>()
+    buckets.forEach((b, i) => b.days.forEach((d) => bucketOfDay.set(d, i)))
     for (const b of filteredBookings) {
-      const t = new Date(b.created_at).getTime()
-      for (let i = buckets.length - 1; i >= 0; i--) {
-        if (t >= buckets[i].start) { buckets[i].count++; break }
-      }
+      const idx = bucketOfDay.get(dayKey(new Date(b.created_at).getTime(), timezone))
+      if (idx !== undefined) buckets[idx].count++
     }
 
     // Source breakdown for the range (unfiltered by source — it IS the filter UI)
@@ -394,6 +472,7 @@ export function AgentDashboard({
       .slice(0, 6)
 
     return {
+      bookingsTotal: filteredBookings.length,
       filteredBookings: filteredBookings.slice(0, 15),
       money: { bookedCents, bookedCount: bookedEvents.length, sourcedCents, potentialCents, potentialPriced, potentialUnpriced },
       bars: buckets,
@@ -404,7 +483,7 @@ export function AgentDashboard({
       aiBookedCount,
       officeBookedCount,
     }
-  }, [bookings, leadsAll, revenueEvents, range, sourceFilter, originFilter, rangeDays])
+  }, [bookings, leadsAll, revenueEvents, sourceFilter, originFilter, fromMs, toMs, fromKey, toKey, timezone])
 
   // Hero revenue — fixed 30-day window, independent of the filters below,
   // matching the hero's fixed "last night" framing. Revenue the AI booked is
@@ -521,6 +600,41 @@ export function AgentDashboard({
           <span className="ml-auto text-[12px] text-[#78716C] font-medium tabular-nums">
             {totalLeadsInRange} {totalLeadsInRange === 1 ? "lead" : "leads"} in this view
           </span>
+
+          {/* Custom range — native date inputs: no dependency, and they bring
+              each platform's own calendar UI and keyboard entry for free. */}
+          {range === "custom" && (
+            <div className="w-full flex flex-wrap items-center gap-2 mt-1">
+              <div className="inline-flex items-center gap-2 rounded-xl bg-white border border-[#E7E5E4]/80 px-3 py-2 shadow-sm">
+                <label className="text-[11px] font-bold uppercase tracking-wider text-[#A8A29E]">From</label>
+                <input
+                  type="date" value={customFrom} max={todayKey}
+                  onChange={(e) => setCustomFrom(e.target.value || customFrom)}
+                  className="text-[13px] font-semibold text-[#1C1917] bg-transparent outline-none tabular-nums"
+                />
+                <span className="text-[#D6D3D1]">→</span>
+                <label className="text-[11px] font-bold uppercase tracking-wider text-[#A8A29E]">To</label>
+                <input
+                  type="date" value={customTo} max={todayKey}
+                  onChange={(e) => setCustomTo(e.target.value || customTo)}
+                  className="text-[13px] font-semibold text-[#1C1917] bg-transparent outline-none tabular-nums"
+                />
+              </div>
+
+              {/* Honesty guard: the selection predates the rows we were sent,
+                  so the numbers below would understate reality. Say so, and
+                  offer the refetch — never render a misleadingly empty chart. */}
+              {needsWiderData && (
+                <button
+                  onClick={() => router.push(`/dashboard?from=${fromKey}&to=${toKey}`)}
+                  className="inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-[12px] font-bold text-white transition-transform hover:-translate-y-0.5"
+                  style={{ background: "#F97316", boxShadow: "0 4px 14px rgba(249,115,22,0.32)" }}
+                >
+                  Load data before {new Date(dataFromIso).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                </button>
+              )}
+            </div>
+          )}
         </motion.div>
 
         {/* ── Money row ── */}
@@ -552,7 +666,10 @@ export function AgentDashboard({
                     Jobs on the books
                   </h2>
                   <p className="text-[11px] text-[#78716C]">
-                    {sourceFilter ? `${sourceMeta(sourceFilter).label} leads only · ` : ""}Every appointment, who booked it, and where the lead came from
+                    {sourceFilter ? `${sourceMeta(sourceFilter).label} leads only · ` : ""}
+                    {bookingsTotal > filteredBookings.length
+                      ? `Showing the ${filteredBookings.length} most recent of ${bookingsTotal}`
+                      : "Every appointment, who booked it, and where the lead came from"}
                   </p>
                 </div>
               </div>
@@ -685,7 +802,7 @@ export function AgentDashboard({
                     Bookings per {barUnit}
                   </h2>
                   <p className="text-[11px] text-[#78716C]">
-                    {RANGES.find(r => r.key === range)?.label}{sourceFilter ? ` · ${sourceMeta(sourceFilter).label}` : ""}
+                    {rangeLabel}{sourceFilter ? ` · ${sourceMeta(sourceFilter).label}` : ""}
                   </p>
                 </div>
               </div>
