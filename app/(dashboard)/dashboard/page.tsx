@@ -48,6 +48,8 @@ export default async function DashboardPage() {
   ] = await Promise.all([
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       .gte("created_at", sinceIso),
     supabase.from("appointments").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)
@@ -55,14 +57,20 @@ export default async function DashboardPage() {
       .gte("created_at", sinceIso),
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       .in("status", ["active_conversation", "qualified", "nurturing"])
       .gte("last_inbound_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       .not("status", "in", '("closed","closed_won","closed_lost","unqualified","appointment_booked","needs_attention")')
       .lt("last_inbound_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       .eq("status", "needs_attention"),
     supabase.from("sequences").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)
@@ -71,6 +79,8 @@ export default async function DashboardPage() {
     supabase.from("leads")
       .select("id, first_name, last_name, phone, status, source, created_at")
       .eq("company_id", profile.company_id)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       .order("created_at", { ascending: false })
       .limit(5),
     supabase.from("appointments")
@@ -83,6 +93,8 @@ export default async function DashboardPage() {
     supabase.from("leads")
       .select("deal_value, refund_amount")
       .eq("company_id", profile.company_id)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       .in("status", ["closed", "closed_won"])
       .not("deal_value", "is", null)
       .gte("closed_at", sinceIso),
@@ -175,9 +187,13 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase }: {
       .gte("created_at", since30d),
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       .gte("created_at", since30d),
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       .eq("status", "needs_attention"),
     supabase.from("appointments")
       .select("id, scheduled_at, status, origin, address, notes, technician_name, hcp_job_id, hcp_manually_edited, created_at, quoted_amount_cents, quoted_source, leads(id, first_name, last_name, phone, source, channel, job_type)")
@@ -189,12 +205,16 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase }: {
     supabase.from("leads")
       .select("id, first_name, last_name, phone, source, channel, status, created_at, last_message_at")
       .eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       .gte("created_at", since90d)
       .order("created_at", { ascending: false })
       .limit(2000),
     supabase.from("leads")
       .select("id, first_name, last_name, phone, source, channel, status, created_at, last_message_at")
       .eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       .eq("status", "needs_attention")
       .limit(50),
     supabase.from("hcp_revenue_events")

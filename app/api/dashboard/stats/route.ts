@@ -47,6 +47,8 @@ export async function GET(req: NextRequest) {
     // Leads that arrived in the period
     (() => {
       let q = supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       if (since) q = q.gte("created_at", since)
       if (until) q = q.lte("created_at", until)
       return q
@@ -68,24 +70,34 @@ export async function GET(req: NextRequest) {
     // Hot leads: replied within last 7 days, not yet booked
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       .in("status", ["active_conversation", "qualified", "nurturing"])
       .gte("last_inbound_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
     // Cold leads: no inbound reply in 7+ days, not closed/booked/unqualified
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       .not("status", "in", '("closed","closed_won","closed_lost","unqualified","appointment_booked","needs_attention")')
       .lt("last_inbound_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
     // Current needs-attention
-    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "needs_attention"),
+    supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null).eq("status", "needs_attention"),
     // Closed deals with revenue in the period
     (() => {
-      let q = supabase.from("leads").select("deal_value").eq("company_id", companyId).in("status", ["closed", "closed_won"]).not("deal_value", "is", null)
+      let q = supabase.from("leads").select("deal_value").eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null).in("status", ["closed", "closed_won"]).not("deal_value", "is", null)
       if (since) q = q.gte("closed_at", since)
       if (until) q = q.lte("closed_at", until)
       return q
     })(),
     // All-time closed deals — for computing real avg job value
-    supabase.from("leads").select("deal_value").eq("company_id", companyId).in("status", ["closed", "closed_won"]).not("deal_value", "is", null),
+    supabase.from("leads").select("deal_value").eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null).in("status", ["closed", "closed_won"]).not("deal_value", "is", null),
   ])
 
   const leads = newLeads ?? 0

@@ -44,12 +44,16 @@ export async function GET(req: NextRequest) {
     // Leads in the selected period
     (() => {
       let q = supabase.from("leads").select("id, status, source, created_at").eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null)
       if (since) q = q.gte("created_at", since)
       if (until) q = q.lte("created_at", until)
       return q
     })(),
     // All leads (for funnel, source breakdown)
-    supabase.from("leads").select("id, status, source, created_at").eq("company_id", companyId),
+    supabase.from("leads").select("id, status, source, created_at").eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null),
     // Appointments in period
     (() => {
       let q = supabase.from("appointments").select("id, scheduled_at, status").eq("company_id", companyId)
@@ -61,7 +65,9 @@ export async function GET(req: NextRequest) {
     supabase.from("appointments").select("id, scheduled_at, status").eq("company_id", companyId),
     // Daily leads for the period (for sparkline — up to 90 days shown)
     (() => {
-      let q = supabase.from("leads").select("created_at").eq("company_id", companyId).order("created_at", { ascending: true })
+      let q = supabase.from("leads").select("created_at").eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null).order("created_at", { ascending: true })
       if (since) q = q.gte("created_at", since)
       if (until) q = q.lte("created_at", until)
       return q
@@ -69,7 +75,9 @@ export async function GET(req: NextRequest) {
     // Closed deals in period — include refund_amount for net calculation
     (() => {
       let q = supabase.from("leads").select("deal_value, refund_amount, closed_job_type, closed_technician_id, closed_technician_name, closed_at")
-        .eq("company_id", companyId).in("status", ["closed", "closed_won"]).not("deal_value", "is", null)
+        .eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null).in("status", ["closed", "closed_won"]).not("deal_value", "is", null)
       if (since) q = q.gte("closed_at", since)
       if (until) q = q.lte("closed_at", until)
       return q
@@ -84,7 +92,9 @@ export async function GET(req: NextRequest) {
     // Closed jobs per tech (in period) — include refund_amount
     (() => {
       let q = supabase.from("leads").select("closed_technician_id, closed_technician_name, deal_value, refund_amount")
-        .eq("company_id", companyId).in("status", ["closed", "closed_won"]).not("closed_technician_id", "is", null)
+        .eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null).in("status", ["closed", "closed_won"]).not("closed_technician_id", "is", null)
       if (since) q = q.gte("closed_at", since)
       if (until) q = q.lte("closed_at", until)
       return q
@@ -92,7 +102,9 @@ export async function GET(req: NextRequest) {
     // Technicians
     supabase.from("technicians").select("id, name, status").eq("company_id", companyId).order("name"),
     // All-time closed deals — for computing real avg job value
-    supabase.from("leads").select("deal_value").eq("company_id", companyId).in("status", ["closed", "closed_won"]).not("deal_value", "is", null),
+    supabase.from("leads").select("deal_value").eq("company_id", companyId)
+      .eq("excluded_from_stats", false)
+      .is("deleted_at", null).in("status", ["closed", "closed_won"]).not("deal_value", "is", null),
   ])
 
   const leadsInPeriod = leadsInPeriodRes.data ?? []
