@@ -1,7 +1,7 @@
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { serviceTimeZone } from "@/lib/timezones"
 import { sendAppointmentEmail, type EmailTemplateType, type GmailCredentials } from "@/lib/email"
-import { sendSMS, getTwilioClient } from "@/lib/twilio"
+import { sendSMS, sendToLead, getTwilioClient } from "@/lib/twilio"
 
 /** Automation gate for the appointment pipeline. An opted-out / paused /
  *  closed / deleted lead must receive NOTHING automated — the pipeline had
@@ -163,7 +163,10 @@ export async function sendConfirmations(appointmentId: string) {
     const smsBody = `${companyName}: Your appointment is confirmed for ${formattedDate} at ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. Reply RESCHEDULE or CANCEL if needed.`
 
     try {
-      const twilioMsg = await sendSMS(lead.phone, smsBody, phoneNum.phone_number)
+      const { sid: twilioSid } = await sendToLead(
+        { id: apt.lead_id, phone: lead.phone, channel: "sms" },
+        smsBody, phoneNum.phone_number, apt.company_id
+      )
       // Save to conversations with Twilio SID so UI doesn't show "Not delivered"
       await supabase.from("conversations").insert({
         lead_id: apt.lead_id,
@@ -171,7 +174,7 @@ export async function sendConfirmations(appointmentId: string) {
         direction: "outbound",
         sent_by: "reminder",
         body: smsBody,
-        twilio_sid: twilioMsg.sid,
+        twilio_sid: twilioSid,
         channel: "sms",
       })
       await supabase.from("appointments").update({ confirmation_sms_sent: true }).eq("id", appointmentId)
@@ -247,7 +250,10 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
   }
 
   try {
-    const msg = await sendSMS(lead.phone, body, phoneNum.phone_number)
+    const { sid: msgSid } = await sendToLead(
+      { id: apt.lead_id, phone: lead.phone, channel: "sms" },
+      body, phoneNum.phone_number, apt.company_id
+    )
 
     await supabase.from("conversations").insert({
       lead_id:    apt.lead_id,
@@ -255,7 +261,7 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
       direction:  "outbound",
       sent_by:    "reminder",
       body,
-      twilio_sid: msg.sid,
+      twilio_sid: msgSid,
       channel:    "sms",
     })
 
@@ -569,14 +575,17 @@ export async function processAppointmentReminders() {
         return
       }
       try {
-        const twilioMsg = await sendSMS(lead!.phone, body, phoneNum.phone_number)
+        const { sid: reminderSid } = await sendToLead(
+          { id: apt.lead_id, phone: lead!.phone, channel: "sms" },
+          body, phoneNum.phone_number, apt.company_id
+        )
         await supabase.from("conversations").insert({
           lead_id: apt.lead_id,
           company_id: apt.company_id,
           direction: "outbound",
           sent_by: "reminder",
           body,
-          twilio_sid: twilioMsg.sid,
+          twilio_sid: reminderSid,
           channel: "sms",
         })
         await supabase.from("appointments").update({ [column]: true }).eq("id", apt.id)
