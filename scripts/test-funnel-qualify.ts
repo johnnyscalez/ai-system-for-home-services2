@@ -12,6 +12,12 @@ const cases: Array<[string, Record<string, string>, boolean]> = [
   ["bare number answer", { how_many_guys_on_the_crew: "12", annual_revenue: "5-10M" }, true],
   ["form never asked → work it anyway", { full_name: "Bob", phone_number: "+13125550123" }, true],
   ["only techs asked, too small", { how_many_techs: "1-2" }, false],
+  // The live GHL workflow sends headcount with no revenue field — a missing
+  // answer must never be read as a failing one.
+  ["techs only 10+ (no revenue field)", { numberoftechs: "10+" }, true],
+  ["techs only 5-9 (no revenue field)", { numberoftechs: "5-9" }, true],
+  ["techs only 3-4 (no revenue field)", { numberoftechs: "3-4" }, true],
+  ["revenue only, no techs", { annual_revenue: "5-10M" }, true],
 ]
 
 let pass = true

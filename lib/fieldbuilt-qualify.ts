@@ -95,13 +95,17 @@ export function qualifyFromFormFields(fields: Record<string, string>): FunnelQua
   const revenue = normalizeRevenue(revenueRaw)
   const undetermined = !techs && !revenue
 
-  return {
-    techs,
-    revenue,
-    // Never silently discard a paid lead the form didn't ask about — if we
-    // have no signal at all, the agent works it and qualifies in conversation.
-    qualified: undetermined ? true : isQualified(techs, revenue),
-    tier: leadTier(techs, revenue),
-    undetermined,
-  }
+  // Reject only on EVIDENCE, never on absence. A form that asks headcount but
+  // not revenue is normal, and treating the missing answer as a failing one
+  // silently binned every large shop that came through it.
+  //   • 1-2 techs            → too small, headcount alone disqualifies
+  //   • 3+ techs + revenue   → apply the revenue floor for that headcount
+  //   • 3+ techs, no revenue → work it; the agent qualifies in conversation
+  //   • nothing asked        → work it
+  let qualified: boolean
+  if (techs === "1-2") qualified = false
+  else if (techs && revenue) qualified = isQualified(techs, revenue)
+  else qualified = true
+
+  return { techs, revenue, qualified, tier: leadTier(techs, revenue), undetermined }
 }
