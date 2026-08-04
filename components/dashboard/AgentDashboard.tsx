@@ -471,7 +471,7 @@ export function AgentDashboard({
             <p className="text-sm text-white/50 mb-6">
               Here&apos;s what your AI agent handled for {companyName} — days, nights, and weekends.
             </p>
-            <div className="grid grid-cols-2 lg:grid-cols-6 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-7 gap-3">
               <NightMoney label="Potential revenue booked by AI"
                 subLabel="Value of the jobs your AI booked — priced from each conversation"
                 cents={heroPotentialCents} tone="amber" />
@@ -524,7 +524,7 @@ export function AgentDashboard({
         </motion.div>
 
         {/* ── Money row ── */}
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
           <MoneyCard label="Potential revenue booked by AI"
             subLabel={money.potentialUnpriced > 0
               ? `Value of AI-booked jobs in range · ${money.potentialPriced} priced, ${money.potentialUnpriced} without a price yet`
