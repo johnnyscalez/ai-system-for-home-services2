@@ -59,7 +59,7 @@ function tzAbbrev(d: Date, tz: string): string {
 export async function getGhlFreeSlots(
   conn: GhlCalendarConn,
   leadTimezone: string,
-  opts: { daysAhead?: number; max?: number } = {}
+  opts: { daysAhead?: number; max?: number; all?: boolean } = {}
 ): Promise<GhlSlot[]> {
   const daysAhead = opts.daysAhead ?? 10
   const max = opts.max ?? 8
@@ -83,8 +83,11 @@ export async function getGhlFreeSlots(
     if (key === "traceId") continue
     const daySlots = (json[key] as { slots?: string[] } | undefined)?.slots ?? []
     if (daySlots.length === 0) continue
-    // First / middle / last opening of the day
-    const picks = [...new Set([0, Math.floor(daySlots.length / 2), daySlots.length - 1])]
+    // First / middle / last opening of the day — or every one of them when a
+    // caller needs the true availability set rather than an offer-sized sample.
+    const picks = opts.all
+      ? daySlots.map((_, i) => i)
+      : [...new Set([0, Math.floor(daySlots.length / 2), daySlots.length - 1])]
     for (const i of picks) {
       const iso = daySlots[i]
       const d = new Date(iso)

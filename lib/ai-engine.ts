@@ -1097,32 +1097,15 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
             }
             await supabase.from("leads").update({ selected_slots: map }).eq("id", leadId)
 
-            const lines = slots.slice(0, 5).map((s) => `• ${s.label}`).join("\n")
-            try {
-              const rewrite = await anthropic.messages.create({
-                model: "claude-sonnet-4-6",
-                max_tokens: 300,
-                system: systemPrompt,
-                messages: [
-                  ...messages,
-                  {
-                    role: "user" as const,
-                    content:
-                      `SYSTEM: The reply you just wrote named times that are not on the calendar. ` +
-                      `These are the ONLY real openings, already in this lead's time zone:\n${lines}\n\n` +
-                      `Rewrite your SMS offering exactly two of these, worded exactly as written above ` +
-                      `including the time zone stamp. Never invent or recalculate an hour. ` +
-                      `Plain text only, no mention of these instructions.`,
-                  },
-                ],
-              })
-              for (const block of rewrite.content) {
-                if (block.type === "text" && block.text.trim()) responseText = block.text.trim()
-              }
-            } catch (err) {
-              console.error("[ai-engine] invented-times rewrite failed:", err)
-              responseText = `I've got ${slots[0].label} or ${slots[1]?.label ?? "another slot"} — which works better?`
-            }
+            // Written in code, not asked of the model. Handing the correction
+            // back as another prompt let the instruction itself leak into the
+            // SMS ("SYSTEM: The reply you just wrote named times that are not
+            // on the calendar..."), which is worse than the bug it fixes. The
+            // labels already read naturally, so compose the offer directly.
+            const say = (s: { label: string }) => s.label.replace(" — ", " at ")
+            responseText = slots[1]
+              ? `I've got ${say(slots[0])} or ${say(slots[1])} — which works better for you?`
+              : `I've got ${say(slots[0])} — does that work for you?`
           }
         }
       }

@@ -72,6 +72,12 @@ async function runCase(c: (typeof CASES)[number]) {
   if (error || !lead) throw error
   const leadId = lead.id
 
+  // Full availability BEFORE we book anything, so assertion 6 compares against
+  // every real opening rather than the 3-per-day sample the agent is shown.
+  const cal = await getGhlCalendar(CO)
+  const realSlots = cal ? await getGhlFreeSlots(cal, c.tz, { daysAhead: 14, max: 500, all: true }) : []
+  const realClocks = new Set(realSlots.map((s) => clockOf(s.isoStart, c.tz)))
+
   const transcript: string[] = []
   for (const t of [null, "we get maybe 40 calls a week and miss a bunch after 5", c.said]) {
     if (t) console.log(`LEAD: ${t}`)
@@ -79,17 +85,24 @@ async function runCase(c: (typeof CASES)[number]) {
     transcript.push(r)
     console.log(`AI:   ${r}\n`)
   }
-  console.log(`LEAD: the first one works for me`)
-  const picked = await say(leadId, "the first one works for me")
-  transcript.push(picked)
-  console.log(`AI:   ${picked}\n`)
+
+  // Answer what the agent actually said instead of firing a fixed script: only
+  // pick a time once one has been offered, otherwise nudge it forward.
+  for (let turn = 0; turn < 4; turn++) {
+    const last = transcript[transcript.length - 1] ?? ""
+    const reply = clockTimesIn(last).length > 0
+      ? "the first one works for me"
+      : "sounds good — what times do you have?"
+    console.log(`LEAD: ${reply}`)
+    const r = await say(leadId, reply)
+    transcript.push(r)
+    console.log(`AI:   ${r}\n`)
+    const { count } = await db.from("appointments")
+      .select("*", { count: "exact", head: true }).eq("lead_id", leadId)
+    if ((count ?? 0) > 0) break
+  }
 
   const fails: string[] = []
-
-  // 6. every offered clock time must be a real opening
-  const cal = await getGhlCalendar(CO)
-  const realSlots = cal ? await getGhlFreeSlots(cal, c.tz, { daysAhead: 12, max: 40 }) : []
-  const realClocks = new Set(realSlots.map((s) => clockOf(s.isoStart, c.tz)))
   const offered = transcript.flatMap(clockTimesIn)
   const invented = offered.filter((t) => !realClocks.has(t))
   if (invented.length) fails.push(`offered times not on the calendar: ${invented.join(", ")}`)
