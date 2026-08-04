@@ -41,14 +41,29 @@ export async function sendWhatsApp(to: string, body: string, from: string) {
  * we fall back to plain SMS — the WhatsApp number IS a phone number.
  */
 export async function sendToLead(
-  lead: { phone: string; channel?: string | null; last_inbound_at?: string | null },
+  lead: { id?: string; phone: string; channel?: string | null; last_inbound_at?: string | null },
   body: string,
   from: string,
   companyId?: string
 ): Promise<{ sid: string | null; channel: "whatsapp" | "sms" }> {
+  const leadId = lead.id
   const inWindow =
     lead.last_inbound_at &&
     Date.now() - new Date(lead.last_inbound_at).getTime() < 23 * 60 * 60 * 1000
+
+  // A company on GoHighLevel sends from their own A2P-verified number, and
+  // every message stays on the thread their team already watches in GHL.
+  if (companyId) {
+    try {
+      const { ensureLeadGhlContact, sendGhlSms } = await import("@/lib/ghl")
+      const link = await ensureLeadGhlContact(companyId, leadId ?? "")
+      if (link) {
+        const id = await sendGhlSms(link.conn, link.contactId, body)
+        if (id) return { sid: id, channel: "sms" }
+        // GHL failed — fall through to Twilio rather than drop the message
+      }
+    } catch { /* fall through */ }
+  }
 
   if (lead.channel === "whatsapp" && inWindow) {
     // Level 3 first: the company's own WABA via Meta Cloud API
