@@ -88,11 +88,14 @@ async function runCase(c: (typeof CASES)[number]) {
 
   // Answer what the agent actually said instead of firing a fixed script: only
   // pick a time once one has been offered, otherwise nudge it forward.
+  let offerMsg: string | null = null
   for (let turn = 0; turn < 4; turn++) {
     const last = transcript[transcript.length - 1] ?? ""
-    const reply = clockTimesIn(last).length > 0
+    const offered = clockTimesIn(last)
+    const reply = offered.length > 0
       ? "the first one works for me"
       : "sounds good — what times do you have?"
+    if (offered.length > 0 && !offerMsg) offerMsg = last
     console.log(`LEAD: ${reply}`)
     const r = await say(leadId, reply)
     transcript.push(r)
@@ -120,6 +123,17 @@ async function runCase(c: (typeof CASES)[number]) {
   }
   if (!apt.ghl_event_id) fails.push("no GHL event id")
   if (!apt.google_meet_link) fails.push("no Google Meet link")
+
+  // 7. The booked time must be one the lead was actually offered. Saying
+  // "9am or 10am" and booking 9:30 is the worst failure this agent can have:
+  // the prospect shows up half an hour late to their own walkthrough.
+  if (offerMsg) {
+    const offeredClocks = clockTimesIn(offerMsg)
+    const bookedClock = clockOf(apt.scheduled_at, c.tz)
+    if (!offeredClocks.includes(bookedClock)) {
+      fails.push(`booked ${bookedClock} but offered ${offeredClocks.join(" / ")}`)
+    }
+  }
 
   await sendConfirmations(apt.id)
 

@@ -1401,7 +1401,7 @@ export async function processAndSave(
       // Look up pre-selected tech from find_available_slots (saved to leads.selected_slots mid-conversation)
       const { data: freshLead } = await supabase
         .from("leads")
-        .select("job_type, address, selected_slots, first_name, last_name, timezone")
+        .select("job_type, address, selected_slots, first_name, last_name, timezone, service_type")
         .eq("id", leadId)
         .single()
 
@@ -1434,7 +1434,7 @@ export async function processAndSave(
       // lead in total silence right after agreeing to book (adversarial
       // finding 5). Invalid/past/absurd date → no appointment; replace the
       // reply with a corrective slot re-ask.
-      const bookMs = Date.parse(scheduled_at)
+      let bookMs = Date.parse(scheduled_at)
       const dateInvalid =
         Number.isNaN(bookMs) ||
         bookMs < Date.now() - 60 * 60 * 1000 ||
@@ -1457,6 +1457,62 @@ export async function processAndSave(
       let preSelected = selectedSlots
         ? Object.entries(selectedSlots).find(([k]) => k.substring(0, 16) === normalKey)?.[1] ?? null
         : null
+
+      // A sales booking must land on a time the lead was actually offered.
+      // Observed live: the agent offered "9am or 10am", the lead said "the
+      // first one", and it booked 9:30 — a genuinely free slot, so no
+      // availability check would ever catch it, and the prospect would arrive
+      // half an hour late to their own walkthrough. What was SAID is the only
+      // authority here. A different time means the model must pull fresh
+      // availability first (which rewrites selected_slots), so re-ask instead.
+      {
+        let svcType = freshLead?.service_type as string | null
+        if (!svcType) {
+          const { data: co } = await supabase
+            .from("companies").select("service_type").eq("id", companyId).maybeSingle()
+          svcType = (co?.service_type as string | null) ?? null
+        }
+        const salesBooking = svcType === "fieldbuilt_sales"
+        const offeredIsos = Object.values(
+          (freshLead?.selected_slots ?? {}) as Record<string, { iso?: string }>
+        ).map((v) => v?.iso).filter(Boolean) as string[]
+
+        if (salesBooking && offeredIsos.length > 0) {
+          const onOffer = offeredIsos.some((iso) => Math.abs(Date.parse(iso) - bookMs) < 60_000)
+          if (!onOffer) {
+            // The model is unreliable at composing UTC itself — live, it wrote
+            // "Locked in, Wednesday 9:30 AM EDT" and passed 16:30Z (12:30 EDT).
+            // Its own sentence is what the lead believes, so trust the words
+            // and snap to the offered slot that matches them.
+            const snapTz = freshLead?.timezone as string | null
+            const said = clockTimesIn(result.response ?? "")
+            const snapped =
+              snapTz && said.length > 0
+                ? offeredIsos.find((iso) => slotClockLabel(iso, snapTz) === said[0]) ?? null
+                : null
+
+            if (snapped) {
+              console.warn(
+                `[ai-engine] snapped booking for lead ${leadId}: model sent ${scheduled_at}, ` +
+                `agent said ${said[0]} → ${snapped}`
+              )
+              scheduled_at = snapped
+              bookMs = Date.parse(snapped)
+            } else {
+              console.warn(
+                `[ai-engine] refused unoffered time ${scheduled_at} for lead ${leadId} — ` +
+                `offered ${offeredIsos.join(", ")}`
+              )
+              const corrective =
+                "Almost there — which of the times I offered works best for you? I'll lock it in right away."
+              if (outboundConversationId) {
+                await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
+              }
+              return { response: corrective, action: undefined, outboundConversationId }
+            }
+          }
+        }
+      }
 
       // Re-validate the pre-selected tech against the FINAL job type and
       // address zip. Slots can be offered before the address is known —
