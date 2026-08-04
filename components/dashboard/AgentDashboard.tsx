@@ -274,8 +274,10 @@ export type RevenueEventRow = {
 type Props = {
   firstName: string
   companyName: string
-  nightLabel: string
-  night: { booked: number; conversations: number; newLeads: number; callbacks: number }
+  /** Leads sitting in needs_attention right now — a live queue, not a
+   *  period metric, so it deliberately does not move with the date range. */
+  callbacksNow: number
+  conversationRows: Array<{ lead_id: string; created_at: string }>
   avgJobValueCents: number
   bookings: AgentBooking[]        // last 90 days
   leadsAll: LeadRow[]             // last 90 days + all current needs_attention
@@ -338,7 +340,7 @@ function dayRange(fromKey: string, toKey: string): string[] {
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 export function AgentDashboard({
-  firstName, companyName, nightLabel, night,
+  firstName, companyName, callbacksNow, conversationRows,
   bookings, leadsAll, revenueEvents, hcpConnected, timezone, dataFromIso,
 }: Props) {
   const router = useRouter()
@@ -486,24 +488,31 @@ export function AgentDashboard({
     }
   }, [bookings, leadsAll, revenueEvents, sourceFilter, originFilter, fromMs, toMs, fromKey, toKey, timezone])
 
-  // Hero revenue — fixed 30-day window, independent of the filters below,
-  // matching the hero's fixed "last night" framing. Revenue the AI booked is
-  // the headline number the owner logs in to see.
-  const heroBookedCents = useMemo(() => {
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
-    return revenueEvents
-      .filter(e => e.attribution === "booked_by_ai" && e.amount_cents && new Date(e.created_at).getTime() >= cutoff)
-      .reduce((s, e) => s + Number(e.amount_cents), 0)
-  }, [revenueEvents])
+  // The hero used to be pinned to a fixed 30 days while the filters below
+  // moved — so two different date ranges rendered identical headline numbers
+  // and the page contradicted itself. Every number now comes off the one
+  // selected window.
+  const hero = useMemo(() => {
+    const within = (iso: string) => {
+      const t = new Date(iso).getTime()
+      return t >= fromMs && t < toMs
+    }
+    const aiBookings = bookings.filter(b => b.origin !== "hcp" && within(b.created_at))
+    return {
+      newLeads: leadsAll.filter(l => within(l.created_at)).length,
+      booked: bookings.filter(b => within(b.created_at)).length,
+      conversations: new Set(
+        conversationRows.filter(c => within(c.created_at)).map(c => c.lead_id)
+      ).size,
+      potentialCents: aiBookings.reduce((s, b) => s + Number(b.quoted_amount_cents ?? 0), 0),
+      bookedCents: revenueEvents
+        .filter(e => e.attribution === "booked_by_ai" && e.amount_cents && within(e.created_at))
+        .reduce((s, e) => s + Number(e.amount_cents), 0),
+    }
+  }, [bookings, leadsAll, revenueEvents, conversationRows, fromMs, toMs])
 
-  // Potential = value of the jobs the AI booked in the same fixed 30-day
-  // window, whether or not the team has closed them yet.
-  const heroPotentialCents = useMemo(() => {
-    const cutoff = Date.now() - 30 * 24 * 60 * 60 * 1000
-    return bookings
-      .filter(b => b.origin !== "hcp" && new Date(b.created_at).getTime() >= cutoff)
-      .reduce((s, b) => s + Number(b.quoted_amount_cents ?? 0), 0)
-  }, [bookings])
+  const heroBookedCents = hero.bookedCents
+  const heroPotentialCents = hero.potentialCents
 
   const fmtTime = (iso: string) =>
     new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
@@ -542,7 +551,9 @@ export function AgentDashboard({
           <div className="relative">
             <div className="flex items-center gap-2 mb-1.5">
               <Moon className="w-4 h-4 text-[#F97316]" />
-              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#F97316]">{nightLabel}</span>
+              <span className="text-[11px] font-bold uppercase tracking-[0.12em] text-[#F97316]">
+                Your AI agent · {rangeLabel}
+              </span>
             </div>
             <h1 className="text-2xl md:text-[28px] font-bold text-white mb-1"
               style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
@@ -558,9 +569,9 @@ export function AgentDashboard({
               <NightMoney label="Revenue closed by the team from AI agent jobs"
                 subLabel="Collected in Housecall Pro on those jobs"
                 cents={heroBookedCents} delay={80} />
-              <NightStat label="New leads" value={night.newLeads} icon={UserPlus} accent="#FB923C" delay={80} />
-              <NightStat label="Jobs booked" value={night.booked} icon={CalendarCheck} accent="#FB923C" delay={160} />
-              <NightStat label="Conversations" value={night.conversations} icon={MessagesSquare} accent="#FB923C" delay={240} />
+              <NightStat label="New leads" value={hero.newLeads} icon={UserPlus} accent="#FB923C" delay={80} />
+              <NightStat label="Jobs booked" value={hero.booked} icon={CalendarCheck} accent="#FB923C" delay={160} />
+              <NightStat label="Conversations" value={hero.conversations} icon={MessagesSquare} accent="#FB923C" delay={240} />
             </div>
           </div>
         </motion.div>

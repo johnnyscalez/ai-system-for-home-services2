@@ -173,12 +173,6 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase, requ
 }) {
   const now = new Date()
 
-  // Hero stats window — last 30 days, matching the hero's revenue tile. The
-  // owner logs in to see totals (revenue, leads, jobs, conversations), not
-  // just last night's slice.
-  const since30d = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString()
-  const nightLabel = "Your AI agent — last 30 days, around the clock"
-
   const { data: agentCfg } = await supabase
     .from("ai_agent_config")
     .select("timezone")
@@ -199,9 +193,7 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase, requ
   const since90d = windowFrom.toISOString()
 
   const [
-    { count: nightBooked },
-    { data: nightConvoLeads },
-    { count: nightNewLeads },
+    { data: convoRows },
     { count: callbackCount },
     { data: bookingsData },
     { data: leads90d },
@@ -209,19 +201,13 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase, requ
     { data: revenueEvents },
     { data: hcpConn },
   ] = await Promise.all([
-    supabase.from("appointments").select("*", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .neq("status", "cancelled")
-      .gte("created_at", since30d),
-    supabase.from("conversations").select("lead_id")
+    // Inbound messages across the whole window, timestamped: the client counts
+    // distinct leads that replied inside whatever range is selected.
+    supabase.from("conversations").select("lead_id, created_at")
       .eq("company_id", companyId)
       .eq("direction", "inbound")
-      .gte("created_at", since30d),
-    supabase.from("leads").select("*", { count: "exact", head: true })
-      .eq("company_id", companyId)
-      .eq("excluded_from_stats", false)
-      .is("deleted_at", null)
-      .gte("created_at", since30d),
+      .gte("created_at", since90d)
+      .limit(20000),
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", companyId)
       .eq("excluded_from_stats", false)
@@ -260,8 +246,6 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase, requ
       .maybeSingle(),
   ])
 
-  const nightConversations = new Set((nightConvoLeads ?? []).map((c) => c.lead_id)).size
-
   // Merge 90d leads with any needs_attention leads older than the window
   const leadMap = new Map<string, LeadRow>()
   for (const l of (leads90d ?? []) as LeadRow[]) leadMap.set(l.id, l)
@@ -271,13 +255,8 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase, requ
     <AgentDashboard
       firstName={firstName}
       companyName={company.name}
-      nightLabel={nightLabel}
-      night={{
-        booked: nightBooked ?? 0,
-        conversations: nightConversations,
-        newLeads: nightNewLeads ?? 0,
-        callbacks: callbackCount ?? 0,
-      }}
+      callbacksNow={callbackCount ?? 0}
+      conversationRows={(convoRows ?? []) as Array<{ lead_id: string; created_at: string }>}
       avgJobValueCents={(company.avg_job_value ?? 0) * 100}
       timezone={tz}
       dataFromIso={since90d}
