@@ -11,6 +11,7 @@ import {
   Building2, Bot,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { DateRangePopover } from "@/components/dashboard/DateRangePopover"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Agent Performance Dashboard — HCP integration mode.
@@ -569,14 +570,31 @@ export function AgentDashboard({
           variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
           className="flex flex-wrap items-center gap-2 mb-5"
         >
-          <div className="flex items-center rounded-xl bg-white border border-[#E7E5E4]/80 p-1 shadow-sm">
-            {RANGES.map(r => (
-              <button key={r.key} onClick={() => setRange(r.key)}
-                className={cn("px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-colors",
-                  range === r.key ? "bg-[#1C1917] text-white" : "text-[#78716C] hover:text-[#1C1917]")}>
-                {r.label}
-              </button>
-            ))}
+          {/* The active segment is a single travelling block — it slides
+              between options rather than blinking off one and on at another. */}
+          <div className="flex items-center rounded-xl bg-white p-1"
+            style={{ border: "1px solid #E7E5E4", boxShadow: "0 1px 2px rgba(28,25,23,0.04)" }}>
+            {RANGES.map(r => {
+              const active = range === r.key
+              return (
+                <button key={r.key} onClick={() => setRange(r.key)}
+                  className="relative px-3 py-1.5 rounded-lg text-[13px] font-semibold transition-colors"
+                  style={{ color: active ? "#FFFFFF" : "#78716C" }}
+                  onMouseEnter={(e) => { if (!active) e.currentTarget.style.color = "#1C1917" }}
+                  onMouseLeave={(e) => { if (!active) e.currentTarget.style.color = "#78716C" }}
+                >
+                  {active && (
+                    <motion.span
+                      layoutId="range-pill"
+                      transition={{ type: "spring", stiffness: 420, damping: 34 }}
+                      className="absolute inset-0 rounded-lg"
+                      style={{ background: "#1C1917" }}
+                    />
+                  )}
+                  <span className="relative">{r.label}</span>
+                </button>
+              )
+            })}
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
             <button onClick={() => setSourceFilter(null)}
@@ -601,36 +619,27 @@ export function AgentDashboard({
             {totalLeadsInRange} {totalLeadsInRange === 1 ? "lead" : "leads"} in this view
           </span>
 
-          {/* Custom range — native date inputs: no dependency, and they bring
-              each platform's own calendar UI and keyboard entry for free. */}
           {range === "custom" && (
             <div className="w-full flex flex-wrap items-center gap-2 mt-1">
-              <div className="inline-flex items-center gap-2 rounded-xl bg-white border border-[#E7E5E4]/80 px-3 py-2 shadow-sm">
-                <label className="text-[11px] font-bold uppercase tracking-wider text-[#A8A29E]">From</label>
-                <input
-                  type="date" value={customFrom} max={todayKey}
-                  onChange={(e) => setCustomFrom(e.target.value || customFrom)}
-                  className="text-[13px] font-semibold text-[#1C1917] bg-transparent outline-none tabular-nums"
-                />
-                <span className="text-[#D6D3D1]">→</span>
-                <label className="text-[11px] font-bold uppercase tracking-wider text-[#A8A29E]">To</label>
-                <input
-                  type="date" value={customTo} max={todayKey}
-                  onChange={(e) => setCustomTo(e.target.value || customTo)}
-                  className="text-[13px] font-semibold text-[#1C1917] bg-transparent outline-none tabular-nums"
-                />
-              </div>
+              <DateRangePopover
+                fromKey={fromKey}
+                toKey={toKey}
+                todayKey={todayKey}
+                onChange={(from, to) => { setCustomFrom(from); setCustomTo(to) }}
+              />
 
-              {/* Honesty guard: the selection predates the rows we were sent,
-                  so the numbers below would understate reality. Say so, and
-                  offer the refetch — never render a misleadingly empty chart. */}
+              {/* The selection predates the rows we were sent, so the figures
+                  below would understate reality. Say so and offer the refetch —
+                  never render an empty chart that reads as "no leads". */}
               {needsWiderData && (
                 <button
                   onClick={() => router.push(`/dashboard?from=${fromKey}&to=${toKey}`)}
-                  className="inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-[12px] font-bold text-white transition-transform hover:-translate-y-0.5"
-                  style={{ background: "#F97316", boxShadow: "0 4px 14px rgba(249,115,22,0.32)" }}
+                  className="inline-flex items-center gap-2 rounded-xl px-3.5 py-2 text-[12.5px] font-bold text-white transition-colors"
+                  style={{ background: "#F97316", boxShadow: "0 4px 12px -3px rgba(234,88,12,0.5)" }}
+                  onMouseEnter={(e) => (e.currentTarget.style.background = "#EA580C")}
+                  onMouseLeave={(e) => (e.currentTarget.style.background = "#F97316")}
                 >
-                  Load data before {new Date(dataFromIso).toLocaleDateString("en-US", { month: "short", day: "numeric" })}
+                  Load earlier data
                 </button>
               )}
             </div>
