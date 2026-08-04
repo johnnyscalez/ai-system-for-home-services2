@@ -49,6 +49,8 @@ export async function createCalendarEvent(
     endTime: string
     attendeeEmail?: string
     timezone?: string
+    /** Video appointments get a real Google Meet room; site visits never do. */
+    withMeet?: boolean
   },
   onTokenRefresh?: (newAccessToken: string) => void
 ) {
@@ -64,6 +66,12 @@ export async function createCalendarEvent(
 
   const res = await calendar.events.insert({
     calendarId,
+    // conferenceDataVersion:1 is REQUIRED for Google to honour a Meet request;
+    // without it the createRequest is silently dropped and no link comes back.
+    conferenceDataVersion: event.withMeet ? 1 : 0,
+    // Google emails the invite (with the Meet link) to attendees itself, which
+    // is how the lead gets their email confirmation.
+    sendUpdates: event.attendeeEmail ? "all" : "none",
     requestBody: {
       summary: event.summary,
       description: event.description,
@@ -73,6 +81,16 @@ export async function createCalendarEvent(
       reminders: { useDefault: false, overrides: [{ method: "popup", minutes: 60 }] },
       ...(event.attendeeEmail
         ? { attendees: [{ email: event.attendeeEmail }] }
+        : {}),
+      ...(event.withMeet
+        ? {
+            conferenceData: {
+              createRequest: {
+                requestId: `fb-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`,
+                conferenceSolutionKey: { type: "hangoutsMeet" },
+              },
+            },
+          }
         : {}),
     },
   })

@@ -49,6 +49,12 @@ export function localSlotToUtcIso(dateStr: string, timeStr: string, tz: string):
   return new Date(naiveUtc.getTime() + offsetMs).toISOString()
 }
 
+/** "MDT" / "CST" — the abbreviation a lead actually recognises. */
+function shortTzName(d: Date, tz: string): string {
+  const parts = new Intl.DateTimeFormat("en-US", { timeZone: tz, timeZoneName: "short" }).formatToParts(d)
+  return parts.find((p) => p.type === "timeZoneName")?.value ?? ""
+}
+
 function fmt12(t: string): string {
   const [hStr, mStr] = t.split(":")
   const h = parseInt(hStr, 10)
@@ -76,14 +82,15 @@ export type FindSlotsResult =
 export async function findSlotsForLead(
   companyId: string,
   jobType:   string | null,
-  zip:       string | null
+  zip:       string | null,
+  leadTimezone?: string | null
 ): Promise<FindSlotsResult> {
   const db = createServiceRoleClient()
 
   const [techRes, configRes, companyAreaRes] = await Promise.all([
     db.from("technicians").select("*").eq("company_id", companyId).eq("status", "active").order("name"),
     db.from("ai_agent_config")
-      .select("available_days, appointment_windows, booking_horizon_days, timezone, min_booking_lead_days")
+      .select("available_days, appointment_windows, booking_horizon_days, timezone, min_booking_lead_days, job_duration_min, requires_travel")
       .eq("company_id", companyId)
       .single(),
     db.from("companies").select("service_area_zips, integration_mode").eq("id", companyId).single(),
@@ -93,7 +100,8 @@ export async function findSlotsForLead(
   // every zip inside it). Techs with serves_all_areas=true mean "all areas WE
   // serve", not "all of the US" — this is the boundary that makes that true.
   const areaZips = (companyAreaRes.data?.service_area_zips as string[] | null) ?? null
-  if (zip && areaZips && areaZips.length > 0 && !areaZips.includes(zip.slice(0, 5))) {
+  const requiresTravel = (configRes.data?.requires_travel as boolean | null) ?? true
+  if (requiresTravel && zip && areaZips && areaZips.length > 0 && !areaZips.includes(zip.slice(0, 5))) {
     return { found: false, reason: "no_zip_match" }
   }
 
@@ -107,11 +115,13 @@ export async function findSlotsForLead(
   // reveals one — a Michigan lead gets 8–11am EASTERN windows, not Chicago
   // numbers that are off by an hour at their front door. Unknown zip →
   // company timezone (identical to the old behavior).
-  const tz           = zipToTimeZone(zip) ?? companyTz
+  // For a call, the lead states their timezone; for a visit, the zip reveals it.
+  const tz           = leadTimezone || zipToTimeZone(zip) || companyTz
   const horizonDays  = (config?.booking_horizon_days as number | null) ?? 7
   // Minimum lead time, in COMPANY-LOCAL days. 2 = today and tomorrow are
   // never offered (Top Air: "if it's Monday, never give Tuesday").
-  const minLeadDays  = (config?.min_booking_lead_days as number | null) ?? 0
+  const minLeadDays  = requiresTravel ? ((config?.min_booking_lead_days as number | null) ?? 0) : 0
+  const jobDurationMin = (config?.job_duration_min as number | null) ?? 120
 
   // ── Anchor-day policy (product decision Aug 2026) ──────────────────────────
   // A tech may only be offered on a day where they ALREADY have at least one
@@ -122,7 +132,9 @@ export async function findSlotsForLead(
   // least a week out (never "in 2-3 days"), so the office has time to build a
   // route around the first job of a fresh day.
   const ANCHOR_HORIZON_DAYS = 21
-  const FALLBACK_MIN_LEAD_DAYS = 7
+  // A call joins no route, so it never waits for an "anchor day" and is
+  // bookable as soon as tomorrow.
+  const FALLBACK_MIN_LEAD_DAYS = requiresTravel ? 7 : 0
   const MAX_ANCHOR_INSERT_MIN = 45 // route-fit ceiling for joining an existing day
   const scanHorizon = Math.max(horizonDays, ANCHOR_HORIZON_DAYS)
   const availDays    = (config?.available_days as string[] | null) ?? DEFAULT_DAYS
@@ -190,7 +202,7 @@ export async function findSlotsForLead(
   //   - OFFICE jobs booked directly in HCP (arbitrary times, unknown
   //     semantics) → conservatively block every window they overlap.
   //   - Route scoring still sees ALL jobs as real time intervals.
-  const JOB_MS = 2 * 60 * 60 * 1000
+  const JOB_MS = jobDurationMin * 60 * 1000
   const busyIntervals = new Map<string, Array<LocatedJob>>()          // routing only
   const foreignIntervals = new Map<string, Array<{ startMs: number; endMs: number }>>()
   const ourWindowBookings = new Map<string, Set<string>>()            // techId → "date|windowId"
@@ -306,7 +318,10 @@ export async function findSlotsForLead(
   //            but never sooner than a week out.
   const runPass = (requireAnchor: boolean, earliestDateStr: string): Array<{ slot: SlotWithTech; cost: number }> => {
     const scored: Array<{ slot: SlotWithTech; cost: number }> = []
-    for (let offset = 0; offset <= scanHorizon && scored.length < 16; offset++) {
+    // A fine grid (30-min calls) needs spreading: keep the first, middle and
+    // last opening of each day rather than three back-to-back morning slots.
+    const fineGrained = windows.length > 6
+    for (let offset = 0; offset <= scanHorizon && scored.length < (fineGrained ? 24 : 16); offset++) {
       const day     = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000)
       // Weekday MUST come from the company timezone, same as dateStr. Using the
       // server's weekday (UTC on Railway) shifted every evening (7 PM–midnight
@@ -317,6 +332,7 @@ export async function findSlotsForLead(
       const dateStr = day.toLocaleDateString("en-CA", { timeZone: tz }) // YYYY-MM-DD
       if (dateStr < earliestDateStr) continue
 
+      const dayCandidates: Array<{ slot: SlotWithTech; cost: number }> = []
       for (const win of windows) {
         // Convert local slot times to UTC so stored scheduled_at values are always UTC
         const isoStart = localSlotToUtcIso(dateStr, win.start, tz)
@@ -354,18 +370,26 @@ export async function findSlotsForLead(
 
         if (avail.length === 0) continue
 
-        const best     = avail[0].t
-        const dayLabel = day.toLocaleDateString("en-US", { timeZone: tz, weekday: "long", month: "short", day: "numeric" })
-        scored.push({
+        const best = avail[0].t
+        // The label is what the LEAD reads. A 30-minute call gets an exact
+        // start time stamped with their own timezone abbreviation, so
+        // "Tuesday 10:00 AM MDT" can't be mistaken for our clock.
+        const startDate = new Date(isoStart)
+        const dayLabel = startDate.toLocaleDateString("en-US", { timeZone: tz, weekday: "long", month: "short", day: "numeric" })
+        const label = fineGrained
+          ? `${dayLabel} — ${startDate.toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })} ${shortTzName(startDate, tz)}`
+          : `${dayLabel} — ${win.label} (${fmt12(win.start)}–${fmt12(win.end)})`
+        dayCandidates.push({
           cost: avail[0].cost,
-          slot: {
-            label:    `${dayLabel} — ${win.label} (${fmt12(win.start)}–${fmt12(win.end)})`,
-            isoStart,
-            isoEnd,
-            techId:   best.id,
-            techName: best.name,
-          },
+          slot: { label, isoStart, isoEnd, techId: best.id, techName: best.name },
         })
+      }
+
+      if (fineGrained && dayCandidates.length > 3) {
+        const picks = [...new Set([0, Math.floor(dayCandidates.length / 2), dayCandidates.length - 1])]
+        scored.push(...picks.map((i) => dayCandidates[i]))
+      } else {
+        scored.push(...dayCandidates)
       }
     }
     return scored
@@ -378,7 +402,7 @@ export async function findSlotsForLead(
   const fallbackEarliest = new Date(now.getTime() + Math.max(FALLBACK_MIN_LEAD_DAYS, minLeadDays) * 24 * 60 * 60 * 1000)
     .toLocaleDateString("en-CA", { timeZone: tz })
 
-  let scored = runPass(true, anchoredEarliest)
+  let scored = requiresTravel ? runPass(true, anchoredEarliest) : []
   if (scored.length === 0) {
     console.log(`[slots] no anchored slots in ${scanHorizon}d for company ${companyId} — open-day fallback (≥${Math.max(FALLBACK_MIN_LEAD_DAYS, minLeadDays)}d out)`)
     scored = runPass(false, fallbackEarliest)

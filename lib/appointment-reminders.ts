@@ -160,7 +160,13 @@ export async function sendConfirmations(appointmentId: string) {
     const formattedTime = new Date(apt.scheduled_at).toLocaleTimeString("en-US", {
       hour: "numeric", minute: "2-digit", timeZone: timezone,
     })
-    const smsBody = `${companyName}: Your appointment is confirmed for ${formattedDate} at ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. Reply RESCHEDULE or CANCEL if needed.`
+    // A video appointment confirms with the join link and no address; a site
+    // visit confirms with the address and no link. Sending a lead an address
+    // for a Google Meet (or a Meet link for a truck visit) is pure confusion.
+    const meetLink = (apt as { google_meet_link?: string | null }).google_meet_link ?? null
+    const smsBody = meetLink
+      ? `${companyName}: You're confirmed for ${formattedDate} at ${formattedTime}. Join here: ${meetLink} — the link is also in your email. Reply RESCHEDULE or CANCEL if needed.`
+      : `${companyName}: Your appointment is confirmed for ${formattedDate} at ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. Reply RESCHEDULE or CANCEL if needed.`
 
     try {
       const { sid: twilioSid } = await sendToLead(

@@ -48,18 +48,18 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "book_appointment",
     description:
-      "Call this ONLY when: (1) the lead has confirmed a specific date and time, AND (2) you have their service address. Never call this tool without address — go back and collect it first if missing. Convert relative times like 'tomorrow at 2pm' to an ISO 8601 datetime using the current date from the lead file.",
+      "Call this ONLY when the lead has confirmed a specific date and time, AND you have every field the lead file's CHANNEL & CONTACT FILE block lists as REQUIRED BEFORE BOOKING. For service visits that always includes the service address — never book a visit without one. For phone/video appointments no address exists or is needed. Convert relative times like 'tomorrow at 2pm' to an ISO 8601 datetime using the current date from the lead file.",
     input_schema: {
       type: "object" as const,
       properties: {
         scheduled_at: { type: "string", description: "ISO 8601 datetime e.g. 2024-06-15T14:00:00" },
-        address: { type: "string", description: "Full service address (street, city, state). REQUIRED — do not call this tool without it." },
+        address: { type: "string", description: "Full service address (street, city, state). Required for any appointment where a technician travels to the property — omit only for phone/video appointments, which have no address." },
         notes: { type: "string", description: "Summary of the job: system type, age, issue description, urgency level, ownership status" },
         quoted_total: { type: "number", description: "The TOTAL price in dollars the customer just agreed to for this job — all units combined (e.g. two furnaces at $189 each = 378). Pass it whenever a fixed price was agreed in the conversation; the office and the technician see this amount on the job. Omit ONLY for free-estimate/diagnostic visits where no price was agreed. Never invent or estimate a number the customer did not accept." },
         unit_count: { type: "number", description: "How many units the price covers (furnaces / systems / AC units). 1 if a single unit." },
         property_type: { type: "string", description: "one of: house, townhome, condo, apartment" },
       },
-      required: ["scheduled_at", "address"],
+      required: ["scheduled_at"],
     },
   },
   {
@@ -120,6 +120,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
         first_name: { type: "string", description: "The lead's first name exactly as they gave it. Save it the moment you learn it." },
         last_name: { type: "string", description: "The lead's last name / surname, if they gave one. Never invent one." },
         email: { type: "string", description: "The lead's email address, if they give one." },
+        timezone: { type: "string", description: "The lead's IANA timezone, the moment you learn where they are — 'America/Phoenix', 'America/Chicago', 'America/Los_Angeles', 'America/New_York', 'America/Denver'. Derive it from whatever they say: a state, a city, or a plain 'we're mountain time'. Save it BEFORE calling find_available_slots so every time you offer is already in their clock." },
         job_type: {
           type: "string",
           description: "One of: ac_repair, ac_installation, ac_not_cooling, furnace_repair, furnace_not_working, heat_pump_repair, heat_pump_installation, mini_split_repair, mini_split_installation, duct_cleaning, duct_repair, boiler_repair, commercial_hvac, hvac_tune_up, hvac_replacement, air_quality, electrical, plumbing, general",
@@ -185,7 +186,7 @@ export async function runConversation(
     // hasn't been produced yet) has no other source for this and the model will
     // invent a plausible-sounding one otherwise (observed: "Family HVAC", pulled
     // from the word "Family" in an unrelated business_description sentence).
-    supabase.from("companies").select("name").eq("id", companyId).single(),
+    supabase.from("companies").select("name, service_type").eq("id", companyId).single(),
   ])
 
   const lead = leadRes.data
@@ -253,10 +254,23 @@ export async function runConversation(
   )
 
   // Build rich lead context block — injected into every system prompt call
-  const leadContext = buildLeadContext(lead, appointments, tz)
+  // Fall back to the COMPANY's type: leads arriving by webhook rarely carry
+  // one, and picking the wrong playbook is invisible until the agent says
+  // something absurd for the business it represents.
+  const effectiveServiceType =
+    (lead.service_type as string | null) ?? (company?.service_type as string | null) ?? null
+  const leadContext = buildLeadContext(lead, appointments, tz, effectiveServiceType)
 
   // Build service-specific conversation flow playbook
-  const conversationFlow = getConversationFlow(lead.service_type as string | null, lead.job_type as string | null)
+  const conversationFlow = getConversationFlow(effectiveServiceType, lead.job_type as string | null)
+
+  // Tools available for THIS conversation. For a sales call, "let's do a call"
+  // is the booking intent, not a request to be dialled right now — leaving
+  // request_callback in scope made the agent hang up on its own pitch.
+  const isSalesConversation = effectiveServiceType === "fieldbuilt_sales"
+  const activeTools = isSalesConversation
+    ? (TOOLS ?? []).filter((t) => (t as { name: string }).name !== "request_callback")
+    : TOOLS
 
   // Format available slots block — AI offers ONLY these real times, never invents them
   const slotsBlock = formatSlotsForPrompt(availableSlots)
@@ -478,7 +492,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     model: "claude-sonnet-4-6",
     max_tokens: 500,
     system: systemPrompt,
-    tools: TOOLS,
+    tools: activeTools,
     messages,
   })
 
@@ -495,7 +509,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   // deliberately NOT routed through the single `action` slot, so it can
   // never clobber (or be clobbered by) a booking/status action called in
   // the same turn.
-  const saveLeadDetails = async (input: { first_name?: string; last_name?: string; email?: string; job_type?: string; system_type?: string; system_age?: string; situation_notes?: string }) => {
+  const saveLeadDetails = async (input: { first_name?: string; last_name?: string; email?: string; timezone?: string; job_type?: string; system_type?: string; system_age?: string; situation_notes?: string }) => {
     const patch: Record<string, string> = {}
     // Identity first (finding: the agent had no way to save a name, so names
     // lived only in notes and every HCP customer was created as "Unknown").
@@ -512,6 +526,14 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     if (last) patch.last_name = last
     if (input.email && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(input.email.trim())) {
       patch.email = input.email.trim().toLowerCase()
+    }
+    // Only a real IANA zone — a bad string would silently render every
+    // offered time in the wrong clock.
+    if (input.timezone) {
+      try {
+        new Intl.DateTimeFormat("en-US", { timeZone: input.timezone })
+        patch.timezone = input.timezone
+      } catch { /* not a valid zone — ignore rather than corrupt the record */ }
     }
     if (input.job_type) patch.job_type = input.job_type
     if (input.system_type) patch.system_type = input.system_type
@@ -619,7 +641,12 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     // Chicago and Detroit techs in one list, and whatever the lead picked
     // locked in a tech 280 miles from them (audit C7).
     const zip5 = findSlotsZip?.match(/\d{5}/)?.[0] ?? null
-    if (!zip5) {
+    // Phone/video appointments have no service address — asking for one is
+    // both nonsensical and a conversation-killer on a B2B sales call.
+    const { data: travelCfg } = await supabase
+      .from("ai_agent_config").select("requires_travel").eq("company_id", companyId).maybeSingle()
+    const needsAddress = (travelCfg?.requires_travel as boolean | null) ?? true
+    if (!zip5 && needsAddress) {
       const askZipReply = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 120,
@@ -638,7 +665,10 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       if (!responseText) responseText = "What's the address we'd be coming to?"
       return { response: responseText, action }
     }
-    const slotsResult = await findSlotsForLead(companyId, findSlotsJobType, zip5)
+    const slotsResult = await findSlotsForLead(
+      companyId, findSlotsJobType, zip5,
+      (lead as Record<string, unknown>).timezone as string | null
+    )
 
     let toolResultText: string
 
@@ -654,11 +684,18 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         `• ${s.label} | scheduled_at for book_appointment: "${s.isoStart}"`
       ).join("\n")
 
-      toolResultText = `Available slots for this job and location:\n${slotLines}\n\n` +
-        `Before offering the slots, briefly set context in one sentence — e.g.: "I'll have one of our technicians come out — they'll walk you through everything and go over all your options on-site." Then offer exactly 2 of these slots.\n\n` +
-        `NEVER mention the technician by name. Always say "our technician" or "one of our techs".\n` +
-        `Use the exact scheduled_at string when calling book_appointment.\n\n` +
-        `IMPORTANT: You MUST include a plain-text SMS message in your response — do not call any tool without also outputting the text you are sending to the lead.`
+      // The framing differs completely by appointment type: a visit sends a
+      // technician to a house, a sales call sends nobody anywhere.
+      toolResultText = isSalesConversation
+        ? `Available times — ALREADY converted to this lead's own time zone:\n${slotLines}\n\n` +
+          `Offer exactly 2 of these, worded exactly as written (the time zone stamp included). Never recalculate or re-label the hours.\n` +
+          `THE MOMENT the lead picks one — "the first one", "2pm works", "yes to Wednesday" — call book_appointment in that SAME turn using the exact scheduled_at string. Do NOT ask for their email, a confirmation, or anything else before booking: a chosen time that isn't booked is a lost call. Ask for the email AFTER the booking is made, if at all.\n\n` +
+          `IMPORTANT: You MUST include a plain-text SMS message in your response — never call a tool without also writing what you're sending.`
+        : `Available slots for this job and location:\n${slotLines}\n\n` +
+          `Before offering the slots, briefly set context in one sentence — e.g.: "I'll have one of our technicians come out — they'll walk you through everything and go over all your options on-site." Then offer exactly 2 of these slots.\n\n` +
+          `NEVER mention the technician by name. Always say "our technician" or "one of our techs".\n` +
+          `Use the exact scheduled_at string when calling book_appointment.\n\n` +
+          `IMPORTANT: You MUST include a plain-text SMS message in your response — do not call any tool without also outputting the text you are sending to the lead.`
     } else {
       // No slots available — take over immediately with a direct, honest reply.
       // Do NOT go through the tool-result chain: an unresolved tool call in the
@@ -771,7 +808,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       model: "claude-sonnet-4-6",
       max_tokens: 300,
       system: systemPrompt,
-      tools: TOOLS,
+      tools: activeTools,
       messages: slotMessages,
     })
 
@@ -916,7 +953,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       model: "claude-sonnet-4-6",
       max_tokens: 300,
       system: systemPrompt,
-      tools: TOOLS,
+      tools: activeTools,
       messages: toolResultMessages,
     })
 
@@ -1355,24 +1392,43 @@ export async function processAndSave(
                 .eq("company_id", companyId)
             }
 
+            // A video appointment (no travel) becomes a real Google Meet room,
+            // and the lead is invited so Google emails them the link directly.
+            const isVideoAppointment = !((await supabase
+              .from("ai_agent_config").select("requires_travel").eq("company_id", companyId).maybeSingle()
+            ).data?.requires_travel ?? true)
+            const durationMin = isVideoAppointment ? 30 : 60
+            const leadName = `${lead?.first_name ?? ""} ${lead?.last_name ?? ""}`.trim()
+
             const gcalEvent = await createCalendarEvent(
               gcal.access_token,
               gcal.refresh_token,
               gcal.calendar_id ?? "primary",
               {
-                summary: `Estimate: ${lead?.first_name ?? ""} ${lead?.last_name ?? ""}`.trim(),
+                summary: isVideoAppointment
+                  ? `FieldBuilt walkthrough — ${leadName || "lead"}`
+                  : `Estimate: ${leadName}`,
                 description: notes ?? "",
-                location: address ?? "",
+                location: isVideoAppointment ? undefined : (address ?? ""),
                 startTime: scheduled_at,
-                endTime: new Date(new Date(scheduled_at).getTime() + 60 * 60000).toISOString(),
+                endTime: new Date(new Date(scheduled_at).getTime() + durationMin * 60000).toISOString(),
+                attendeeEmail: (lead as { email?: string | null })?.email ?? undefined,
+                timezone: (lead as { timezone?: string | null })?.timezone ?? undefined,
+                withMeet: isVideoAppointment,
               },
               saveRefreshedToken
             )
 
-            // Store google_event_id on the appointment
+            // Pull the Meet link out of whichever field Google populates.
+            const meetLink =
+              (gcalEvent as { hangoutLink?: string }).hangoutLink ??
+              (gcalEvent as { conferenceData?: { entryPoints?: Array<{ entryPointType?: string; uri?: string }> } })
+                .conferenceData?.entryPoints?.find((e) => e.entryPointType === "video")?.uri ??
+              null
+
             await supabase
               .from("appointments")
-              .update({ google_event_id: gcalEvent.id ?? null })
+              .update({ google_event_id: gcalEvent.id ?? null, google_meet_link: meetLink })
               .eq("id", apt.id)
           }
         } catch (err) {
@@ -1702,7 +1758,8 @@ function buildLeadContext(
     confirmation_sms_sent?: boolean; reminder_1d_sms_sent?: boolean; reminder_2h_sms_sent?: boolean;
     rescheduled_from?: string | null; cancelled_at?: string | null;
   }>,
-  timezone: string
+  timezone: string,
+  effectiveServiceType: string | null
 ): string {
   const now = new Date()
   const past = appointments.filter((a) => new Date(a.scheduled_at) < now && a.status !== "cancelled")
@@ -1733,7 +1790,7 @@ function buildLeadContext(
   let ctx = `=== LEAD FILE (READ THIS BEFORE EVERY RESPONSE) ===
 Name: ${`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Unknown"}
 Phone: ${isMessengerOnly ? "NOT ON FILE — this lead is messaging on Facebook Messenger. You MUST collect their phone number naturally before booking (\"What's the best number for our tech to reach you on?\"). Do not book without it." : lead.phone}
-Service requested: ${lead.service_type ?? "home services"}
+Service requested: ${effectiveServiceType ?? "home services"}
 Lead source: ${lead.source ?? "unknown"}
 Current status: ${lead.status}
 Customer type: ${isReturning ? "⭐ RETURNING CUSTOMER — has history with this company" : "NEW LEAD — first contact, no prior jobs"}
@@ -1774,11 +1831,14 @@ This person is an existing customer. They already trust the company. Your job is
     const mark = (ok: boolean, label: string, note?: string) =>
       `  ${label}: ${ok ? `✓ on file${note ? ` (${note})` : ""}` : "✗ MISSING — collect it"}`
 
-    // FieldBuilt's own sales conversations book a CALL, not a home visit —
-    // no property address is required (or wanted).
-    const isSalesConvo = String(L.service_type ?? "") === "fieldbuilt_sales"
+    // A sales conversation books a CALL, not a home visit: no property address
+    // exists, but the lead's timezone does — and without it every time we
+    // offer is in the wrong clock.
+    const isSalesConvo = effectiveServiceType === "fieldbuilt_sales"
+    const hasTimezone = !!String(L.timezone ?? "").trim()
     const requiredMissing: string[] = []
     if (!hasAddress && !isSalesConvo) requiredMissing.push("property address")
+    if (!hasTimezone && isSalesConvo) requiredMissing.push("their time zone (ask before offering times)")
     if (!hasRealPhone) requiredMissing.push("mobile phone number")
     if (!hasName) requiredMissing.push("name")
 
@@ -1795,6 +1855,7 @@ ${mark(hasRealPhone, "Mobile phone", channel === "whatsapp" || channel === "sms"
 ${mark(hasEmail, "Email")}
 ${mark(hasAddress, "Property address")}
 ${mark(hasJobType, "Job type", jobTypeStr || undefined)}
+${isSalesConvo ? mark(hasTimezone, "Time zone", String(L.timezone ?? "") || undefined) : ""}
 
 REQUIRED BEFORE BOOKING: ${requiredMissing.length > 0 ? requiredMissing.join(", ") : "nothing — all booking fields are on file"}
 ${!hasEmail ? "EMAIL — REQUIRED ASK: you must ask for their email while collecting the booking details, phrased as the reason it exists: \"And what's your email for the confirmation?\" This is a normal booking step, not an optional extra — the confirmation email and the office records need it. Save it with update_lead_details the moment they give it. HOWEVER: if they decline or ignore ONE direct ask, book anyway and move on — a booking is never lost over email, and you never ask twice." : ""}
@@ -1804,7 +1865,10 @@ CONTACT COLLECTION RULES:
 • Collect missing fields INSIDE the natural flow — one question per message, never an intake form.
 ${channel === "messenger" ? `• MESSENGER SPECIFIC: you have NO phone number for this person. You MUST get a mobile number before booking — the technician calls it and confirmations are texted to it. Ask it right before the address: "Best mobile number for the tech to reach you?"` : ""}
 ${channel === "whatsapp" ? `• WHATSAPP SPECIFIC: their phone number is this chat itself. Focus on address${hasEmail ? "" : " and a one-time casual email ask"}.` : ""}
-• If a required field is still missing, you may NOT call book_appointment yet — collect it first, then book in the same conversation.
+${isSalesConvo && !hasTimezone ? `• TIME ZONE — you need it before offering any time, but WORK IT OUT rather than asking when you can. If they have named ANY location anywhere in this conversation (a city, a state, "we're in Phoenix", "all over Texas"), derive the IANA zone yourself and save it with update_lead_details immediately — asking "what time zone are you in?" right after someone told you their city reads as not listening. Only ASK when you genuinely have no location at all: "What time zone are you in? I'll line the times up to your clock." Either way it must be saved BEFORE find_available_slots.` : ""}
+${isSalesConvo && hasTimezone ? `• Times you are given by find_available_slots are ALREADY in this lead's own time zone, stamped with their abbreviation. Offer them exactly as written — never add, subtract, or re-label hours.` : ""}
+• THE MOMENT they pick one of the times you offered, call book_appointment in that SAME turn. Do not ask for their email, a confirmation, or anything else first — a chosen slot that isn't booked is a lost appointment. Anything optional can be asked after the booking exists.
+• If a REQUIRED field (listed above) is still missing, you may not book yet — collect it, then book in the same conversation. Optional fields never block a booking.
 === END CHANNEL & CONTACT FILE ===
 `
   }
