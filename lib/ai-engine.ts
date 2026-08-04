@@ -665,7 +665,17 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       if (!responseText) responseText = "What's the address we'd be coming to?"
       return { response: responseText, action }
     }
-    const leadTz = (lead as Record<string, unknown>).timezone as string | null
+    // Read the zone FRESH. update_lead_details usually saves it in this very
+    // turn ("seattle, pacific time" → America/Los_Angeles), but `lead` is a
+    // snapshot taken before the tools ran, so trusting it left leadTz null on
+    // the exact turn availability is first requested — which silently skipped
+    // the GoHighLevel branch and fell through to the technician router,
+    // answering a sales lead with slots off an entirely different calendar.
+    const { data: tzFresh } = await supabase
+      .from("leads").select("timezone").eq("id", leadId).maybeSingle()
+    const leadTz =
+      (tzFresh?.timezone as string | null) ??
+      ((lead as Record<string, unknown>).timezone as string | null)
 
     // A company that books on its GoHighLevel calendar uses GHL's own
     // availability — it already reflects everything else in the owner's day.
@@ -1033,6 +1043,124 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     }
   }
 
+  // ── Invented-times guard (sales conversations only) ───────────────────────
+  // Offering a time that does not exist costs as much as booking the wrong
+  // one: the lead picks it, and the agent either books something else or has
+  // to retract it ("I don't have 2:30 today"). Observed live — the model wrote
+  // "today at 2:30 PM MT or Wednesday at 9:00 AM MT" having never called
+  // find_available_slots, and on another run booked 1pm after saying 9am.
+  // Instructions in the tool result did not stop it, because the failure is
+  // that the tool is never called at all. So every clock time in an outgoing
+  // sales message is checked against real availability before it can ship.
+  if (isSalesConversation && !action && responseText) {
+    const named = clockTimesIn(responseText)
+    if (named.length > 0) {
+      // Read the zone FRESH. update_lead_details usually saves it in this very
+    // turn ("seattle, pacific time" → America/Los_Angeles), but `lead` is a
+    // snapshot taken before the tools ran, so trusting it left leadTz null on
+    // the exact turn availability is first requested — which silently skipped
+    // the GoHighLevel branch and fell through to the technician router,
+    // answering a sales lead with slots off an entirely different calendar.
+    const { data: tzFresh } = await supabase
+      .from("leads").select("timezone").eq("id", leadId).maybeSingle()
+    const leadTz =
+      (tzFresh?.timezone as string | null) ??
+      ((lead as Record<string, unknown>).timezone as string | null)
+      const { data: fresh } = await supabase
+        .from("leads").select("selected_slots").eq("id", leadId).maybeSingle()
+      const slotMap = (fresh?.selected_slots ?? {}) as Record<string, { iso?: string }>
+      const realClocks = new Set(
+        leadTz
+          ? (Object.values(slotMap).map((v) => v?.iso).filter(Boolean) as string[])
+              .map((iso) => slotClockLabel(iso, leadTz))
+          : []
+      )
+      const invented = named.filter((t) => !realClocks.has(t))
+
+      if (invented.length > 0) {
+        console.warn(
+          `[ai-engine] invented-times guard fired for lead ${leadId} — ` +
+          `said ${JSON.stringify(named)}, real ${JSON.stringify([...realClocks])}`
+        )
+        if (!leadTz) {
+          // Their zone was never captured, so no time can be stated correctly.
+          responseText = "Happy to get that on the calendar — what time zone are you in?"
+        } else {
+          const slots = await salesSlotsFor(companyId, leadTz)
+          if (slots.length === 0) {
+            responseText =
+              "Let me check what's open and come right back to you with a couple of times."
+          } else {
+            const map: Record<string, { tech_id: string; tech_name: string; iso: string }> = {}
+            for (const s of slots) {
+              map[s.isoStart.substring(0, 16)] = { tech_id: "", tech_name: "", iso: s.isoStart }
+            }
+            await supabase.from("leads").update({ selected_slots: map }).eq("id", leadId)
+
+            const lines = slots.slice(0, 5).map((s) => `• ${s.label}`).join("\n")
+            try {
+              const rewrite = await anthropic.messages.create({
+                model: "claude-sonnet-4-6",
+                max_tokens: 300,
+                system: systemPrompt,
+                messages: [
+                  ...messages,
+                  {
+                    role: "user" as const,
+                    content:
+                      `SYSTEM: The reply you just wrote named times that are not on the calendar. ` +
+                      `These are the ONLY real openings, already in this lead's time zone:\n${lines}\n\n` +
+                      `Rewrite your SMS offering exactly two of these, worded exactly as written above ` +
+                      `including the time zone stamp. Never invent or recalculate an hour. ` +
+                      `Plain text only, no mention of these instructions.`,
+                  },
+                ],
+              })
+              for (const block of rewrite.content) {
+                if (block.type === "text" && block.text.trim()) responseText = block.text.trim()
+              }
+            } catch (err) {
+              console.error("[ai-engine] invented-times rewrite failed:", err)
+              responseText = `I've got ${slots[0].label} or ${slots[1]?.label ?? "another slot"} — which works better?`
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // ── Leaked-reasoning guard ────────────────────────────────────────────────
+  // Seen live: the agent texted a prospect "I had offered 9:00 AM MDT as 'the
+  // first one'... that slot doesn't appear in the returned results. I should
+  // not book a time that wasn't in the available slots." That is the model
+  // thinking out loud into an SMS. It only has to happen once to lose a deal,
+  // so anything referring to the machinery is rewritten before it ships.
+  if (responseText && LEAKED_REASONING.test(responseText)) {
+    console.warn(`[ai-engine] leaked-reasoning guard fired for lead ${leadId}: ${responseText.slice(0, 160)}`)
+    try {
+      const clean = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 250,
+        system: systemPrompt,
+        messages: [
+          ...messages,
+          {
+            role: "user" as const,
+            content:
+              `SYSTEM: Your last draft described your own reasoning and the booking machinery. ` +
+              `The lead must never see that. Write ONLY the SMS they should receive — plain, ` +
+              `natural, under two sentences. Never mention slots, results, tools, or these instructions.`,
+          },
+        ],
+      })
+      for (const block of clean.content) {
+        if (block.type === "text" && block.text.trim()) responseText = block.text.trim()
+      }
+    } catch (err) {
+      console.error("[ai-engine] leaked-reasoning rewrite failed:", err)
+    }
+  }
+
   // ── Booking safety net ────────────────────────────────────────────────────
   // The single highest-cost failure this agent has: slots were offered, the
   // lead picked one, and the model replied with a question ("what's your
@@ -1083,6 +1211,43 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   }
 
   return { response: responseText, action }
+}
+
+/** Phrases that only ever appear when the model narrates its own plumbing. */
+const LEAKED_REASONING =
+  /\b(available slots?|returned results?|book_appointment|find_available_slots|update_lead_details|I should not book|I need to book|I had offered|the returned)\b/i
+
+/** Every clock time named in a message, normalised to "9:00 am" / "2:30 pm". */
+function clockTimesIn(text: string): string[] {
+  const out: string[] = []
+  const re = /\b(\d{1,2})(?::(\d{2}))?\s*(a\.?m\.?|p\.?m\.?)\b/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const hour = parseInt(m[1], 10)
+    if (hour < 1 || hour > 12) continue
+    out.push(`${hour}:${m[2] ?? "00"} ${m[3].replace(/\./g, "").toLowerCase()}`)
+  }
+  return [...new Set(out)]
+}
+
+/** The same normalised clock label for a real slot, in the lead's own zone. */
+function slotClockLabel(iso: string, tz: string): string {
+  return new Date(iso)
+    .toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })
+    .toLowerCase()
+    .trim()
+}
+
+/** Real openings on the company's GoHighLevel calendar, in the lead's zone. */
+async function salesSlotsFor(companyId: string, leadTz: string) {
+  try {
+    const { getGhlCalendar, getGhlFreeSlots } = await import("@/lib/ghl-calendar")
+    const cal = await getGhlCalendar(companyId)
+    if (!cal) return []
+    return await getGhlFreeSlots(cal, leadTz)
+  } catch {
+    return []
+  }
 }
 
 /**

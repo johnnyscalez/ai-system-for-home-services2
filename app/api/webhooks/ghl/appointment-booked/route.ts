@@ -82,15 +82,50 @@ export async function POST(req: NextRequest) {
     return NextResponse.json({ ok: true, cancelled: true })
   }
 
-  if (!appointmentAt) {
+  // GHL renders {{appointment.start_time}} as a NAIVE local string in the
+  // location's timezone. new Date() reads that as UTC and shifts the booking
+  // by the entire offset — live-reproduced: an appointment we had just written
+  // correctly at 6:00 AM PDT was rewritten to 9:00 AM PDT five seconds later,
+  // because this location runs at +03:00. So the payload time is only a hint;
+  // GHL's API is the authority whenever we can reach it.
+  let authoritative: string | null = null
+  if (ghlAppointmentId) {
+    const { getGhlCalendar, getGhlAppointmentStart } = await import("@/lib/ghl-calendar")
+    const cal = await getGhlCalendar(companyId)
+    if (cal) authoritative = await getGhlAppointmentStart(cal, ghlAppointmentId)
+  }
+
+  if (!authoritative && !appointmentAt) {
     return NextResponse.json({ error: "appointmentAt is required" }, { status: 400 })
   }
-  const when = new Date(appointmentAt)
-  if (isNaN(when.getTime())) {
-    return NextResponse.json({ error: `Unparseable appointmentAt: "${appointmentAt}"` }, { status: 400 })
+  // An offsetless payload cannot be trusted; without the API we would rather
+  // keep the time we already hold than overwrite it with a shifted one.
+  const payloadHasOffset = !!appointmentAt && /([zZ]|[+-]\d{2}:?\d{2})$/.test(appointmentAt.trim())
+  const when = authoritative
+    ? new Date(authoritative)
+    : payloadHasOffset
+      ? new Date(appointmentAt as string)
+      : null
+
+  if (!when || isNaN(when.getTime())) {
+    if (existing) {
+      console.warn(
+        `[ghl/appointment] untrusted time "${appointmentAt}" for tracked event ${ghlAppointmentId} — keeping ${existing.scheduled_at}`
+      )
+      return NextResponse.json({ ok: true, timeUnchanged: true, appointmentId: existing.id })
+    }
+    return NextResponse.json({ error: `Unusable appointment time: "${appointmentAt}"` }, { status: 400 })
   }
 
   if (existing) {
+    // GHL echoes a confirmation for appointments the agent itself created.
+    // That is not a reschedule, and treating it as one both reset the reminder
+    // clocks and (before the fix above) corrupted the time. Only a genuine
+    // move — someone dragging the event in GHL — should touch the row.
+    const moved = Math.abs(Date.parse(existing.scheduled_at) - when.getTime()) >= 60_000
+    if (!moved) {
+      return NextResponse.json({ ok: true, echo: true, appointmentId: existing.id })
+    }
     // Reschedule — reminder clocks restart for the new time.
     await db.from("appointments").update({
       scheduled_at: when.toISOString(),

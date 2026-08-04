@@ -101,6 +101,36 @@ export async function getGhlFreeSlots(
 }
 
 /**
+ * The authoritative start of a GHL appointment, as an absolute ISO instant.
+ *
+ * Workflow webhooks send {{appointment.start_time}} as a NAIVE local string in
+ * the location's timezone. Parsing that as UTC shifts the booking by the whole
+ * offset — live-reproduced: a 6:00 AM PDT walkthrough silently became 9:00 AM
+ * PDT within five seconds of being created, because this location runs at
+ * +03:00. GHL's API returns a properly stamped time, so ask it rather than
+ * trusting the payload. Returns null if it can't be read.
+ */
+export async function getGhlAppointmentStart(
+  conn: GhlCalendarConn,
+  eventId: string
+): Promise<string | null> {
+  try {
+    const res = await fetch(`${GHL_BASE}/calendars/events/appointments/${eventId}`, {
+      headers: headers(conn),
+    })
+    if (!res.ok) return null
+    const json = (await res.json().catch(() => ({}))) as Record<string, unknown>
+    const ap = (json.appointment ?? json.event ?? json) as Record<string, unknown>
+    const start = ap?.startTime
+    if (typeof start !== "string" || !start.trim()) return null
+    const ms = Date.parse(start)
+    return Number.isNaN(ms) ? null : new Date(ms).toISOString()
+  } catch {
+    return null
+  }
+}
+
+/**
  * Create the appointment on the GHL calendar. GHL sends the confirmation
  * email and attaches the meeting link configured on the calendar.
  * Returns the GHL event id, or null on failure.

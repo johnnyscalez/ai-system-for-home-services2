@@ -47,7 +47,7 @@ async function getContext(appointmentId: string) {
 
   const { data: apt } = await supabase
     .from("appointments")
-    .select("*, leads(first_name, last_name, phone, email), companies(name, service_type)")
+    .select("*, leads(first_name, last_name, phone, email, address, timezone), companies(name, service_type)")
     .eq("id", appointmentId)
     .single()
 
@@ -99,13 +99,20 @@ export async function sendConfirmations(appointmentId: string) {
   }
 
   const { apt, agentCfg, emailTpl, phoneNum, gmailConn } = ctx
-  const lead = apt.leads as { first_name: string | null; last_name: string | null; phone: string; email: string | null } | null
+  const lead = apt.leads as { first_name: string | null; last_name: string | null; phone: string; email: string | null; timezone?: string | null } | null
   const company = apt.companies as { name: string; service_type: string | null } | null
   if (!lead || !company) return
 
   // Customer-facing clock = SERVICE ADDRESS timezone (Tasha incident: a
-  // Michigan customer was confirmed in Chicago time, one hour off her door)
-  const timezone = serviceTimeZone(apt.address ?? (lead as { address?: string | null }).address ?? null, agentCfg?.timezone ?? "America/New_York")
+  // Michigan customer was confirmed in Chicago time, one hour off her door).
+  // With no address — every video walkthrough — fall back to the zone the lead
+  // told us, NOT the company's. Confirming a Denver lead's 9am MT slot as
+  // "3:00 PM" because the office runs on Eastern is the same failure wearing
+  // different clothes.
+  const timezone = serviceTimeZone(
+    apt.address ?? (lead as { address?: string | null }).address ?? null,
+    lead.timezone ?? agentCfg?.timezone ?? "America/New_York"
+  )
   const leadName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "there"
   const companyName = emailTpl?.from_name || company.name
 
