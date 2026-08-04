@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave, inferJobType } from "@/lib/ai-engine"
-import { sendSMS, parseLeadPhone } from "@/lib/twilio"
+import { sendSMS, sendToLead, parseLeadPhone } from "@/lib/twilio"
 import { notifyNewLead } from "@/lib/notifications"
 import { normalizeLead, normalizeSource, channelForSource } from "@/lib/normalize-lead"
 import { buildNoReplySchedule } from "@/lib/sequences"
@@ -257,11 +257,18 @@ async function handleLead(req: NextRequest, body: Record<string, unknown>) {
     const result = await processAndSave(leadId, company.id, null)
 
     if (result.response) {
-      const msg = await sendSMS(phone, result.response, phoneNumber.phone_number)
+      // Route through the company's own transport (GHL when connected, then
+      // Twilio) so the opener and every later message come from ONE number.
+      const { sid } = await sendToLead(
+        { id: leadId, phone, channel: "sms" },
+        result.response,
+        phoneNumber.phone_number,
+        company.id
+      )
       if (result.outboundConversationId) {
         await supabase
           .from("conversations")
-          .update({ twilio_sid: msg.sid })
+          .update({ twilio_sid: sid })
           .eq("id", result.outboundConversationId)
       }
       await supabase
