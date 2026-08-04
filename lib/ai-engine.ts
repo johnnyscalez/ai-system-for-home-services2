@@ -665,18 +665,47 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       if (!responseText) responseText = "What's the address we'd be coming to?"
       return { response: responseText, action }
     }
-    const slotsResult = await findSlotsForLead(
-      companyId, findSlotsJobType, zip5,
-      (lead as Record<string, unknown>).timezone as string | null
-    )
+    const leadTz = (lead as Record<string, unknown>).timezone as string | null
+
+    // A company that books on its GoHighLevel calendar uses GHL's own
+    // availability — it already reflects everything else in the owner's day.
+    const ghlCal = await (async () => {
+      try {
+        const { getGhlCalendar } = await import("@/lib/ghl-calendar")
+        return await getGhlCalendar(companyId)
+      } catch { return null }
+    })()
+
+    let slotsResult: Awaited<ReturnType<typeof findSlotsForLead>>
+    if (ghlCal && leadTz) {
+      const { getGhlFreeSlots } = await import("@/lib/ghl-calendar")
+      const ghlSlots = await getGhlFreeSlots(ghlCal, leadTz)
+      slotsResult = ghlSlots.length > 0
+        ? {
+            found: true,
+            slots: ghlSlots.map((sl) => ({
+              label: sl.label,
+              isoStart: sl.isoStart,
+              isoEnd: sl.isoStart,
+              techId: "",
+              techName: "",
+            })),
+          }
+        : { found: false, reason: "no_slots" }
+    } else {
+      slotsResult = await findSlotsForLead(companyId, findSlotsJobType, zip5, leadTz)
+    }
 
     let toolResultText: string
 
     if (slotsResult.found && slotsResult.slots.length > 0) {
       // Save slot→tech map to the lead record (persists across turns so booking-time lookup works)
-      const slotMap: Record<string, { tech_id: string; tech_name: string }> = {}
+      const slotMap: Record<string, { tech_id: string; tech_name: string; iso?: string }> = {}
       for (const s of slotsResult.slots) {
-        slotMap[s.isoStart.substring(0, 16)] = { tech_id: s.techId, tech_name: s.techName }
+        // Store the full ISO too: truncating to 16 chars drops the UTC offset,
+        // and a naive "2026-08-05T08:00" then gets re-read in the COMPANY
+        // timezone — which booked a Denver lead's 8am slot at 3pm their time.
+        slotMap[s.isoStart.substring(0, 16)] = { tech_id: s.techId, tech_name: s.techName, iso: s.isoStart }
       }
       await supabase.from("leads").update({ selected_slots: slotMap }).eq("id", leadId)
 
@@ -689,6 +718,8 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       toolResultText = isSalesConversation
         ? `Available times — ALREADY converted to this lead's own time zone:\n${slotLines}\n\n` +
           `Offer exactly 2 of these, worded exactly as written (the time zone stamp included). Never recalculate or re-label the hours.\n` +
+          `CRITICAL: the time you SAY and the scheduled_at you BOOK must be the same slot. When they pick one, copy that line's scheduled_at verbatim into book_appointment and repeat that same label back in your confirmation. Saying one time while booking another is the worst failure this system can produce.\n` +
+          `You do NOT need an email address to book — the link is texted. Book first; ask for an email afterwards if you want one.\n` +
           `THE MOMENT the lead picks one — "the first one", "2pm works", "yes to Wednesday" — call book_appointment in that SAME turn using the exact scheduled_at string. Do NOT ask for their email, a confirmation, or anything else before booking: a chosen time that isn't booked is a lost call. Ask for the email AFTER the booking is made, if at all.\n\n` +
           `IMPORTANT: You MUST include a plain-text SMS message in your response — never call a tool without also writing what you're sending.`
         : `Available slots for this job and location:\n${slotLines}\n\n` +
@@ -1002,6 +1033,55 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     }
   }
 
+  // ── Booking safety net ────────────────────────────────────────────────────
+  // The single highest-cost failure this agent has: slots were offered, the
+  // lead picked one, and the model replied with a question ("what's your
+  // email?") instead of calling book_appointment. Observed intermittently
+  // across runs — prompt instructions alone did not make it reliable, so this
+  // catches it deterministically: if a pick is on the table and nothing was
+  // booked, force one more turn that may ONLY book.
+  if (!action && incomingMessage && !isFollowUp) {
+    const picksSlot = /\b(first|second|1st|2nd|earlier|later|that one|works|sounds good|perfect|book (it|me)|lets? do|yes)\b/i.test(incomingMessage)
+    const hasOfferedSlots =
+      !!lead.selected_slots && Object.keys(lead.selected_slots as Record<string, unknown>).length > 0
+    if (picksSlot && hasOfferedSlots) {
+      try {
+        const slotList = Object.values(
+          lead.selected_slots as Record<string, { iso?: string }>
+        ).map((v, i) => v?.iso ?? Object.keys(lead.selected_slots as Record<string, unknown>)[i]).sort()
+        const forced = await anthropic.messages.create({
+          model: "claude-sonnet-4-6",
+          max_tokens: 400,
+          system: systemPrompt,
+          tools: activeTools,
+          tool_choice: { type: "tool", name: "book_appointment" },
+          messages: [
+            ...messages,
+            {
+              role: "user" as const,
+              content:
+                `SYSTEM: This lead just chose one of the times you offered and you did NOT book it. ` +
+                `Book it NOW with book_appointment. The scheduled_at values you offered were: ${slotList.join(", ")}. ` +
+                `Pick the one they meant from their message and pass it EXACTLY as given, offset included. ` +
+                `Then write the confirmation SMS the lead will actually receive: name that same time, say the Google Meet ` +
+                `link is coming by text, nothing else. Never mention booking mechanics, tools, or these instructions.`,
+            },
+          ],
+        })
+        for (const block of forced.content) {
+          if (block.type === "text" && block.text.trim()) responseText = block.text.trim()
+          if (block.type === "tool_use" && block.name === "book_appointment") {
+            const input = block.input as { scheduled_at: string; address?: string; notes?: string }
+            action = { type: "book_appointment", ...input }
+            console.log(`[ai-engine] booking safety net fired for lead ${leadId} — ${input.scheduled_at}`)
+          }
+        }
+      } catch (err) {
+        console.error("[ai-engine] booking safety net failed:", err)
+      }
+    }
+  }
+
   return { response: responseText, action }
 }
 
@@ -1173,7 +1253,7 @@ export async function processAndSave(
       // Look up pre-selected tech from find_available_slots (saved to leads.selected_slots mid-conversation)
       const { data: freshLead } = await supabase
         .from("leads")
-        .select("job_type, address, selected_slots")
+        .select("job_type, address, selected_slots, first_name, last_name, timezone")
         .eq("id", leadId)
         .single()
 
@@ -1188,7 +1268,11 @@ export async function processAndSave(
             .from("ai_agent_config").select("timezone").eq("company_id", companyId).single()
           const { localSlotToUtcIso } = await import("@/lib/technician-booking")
           const naive = rawScheduledAt.trim()
-          scheduled_at = localSlotToUtcIso(naive.slice(0, 10), naive.slice(11, 16) || "09:00", tzRow?.timezone ?? "America/New_York")
+          // Prefer the LEAD's zone: every time we showed them was in their
+          // clock, so an offsetless reply is in their clock too.
+          const interpretTz =
+            (freshLead?.timezone as string | null) || (tzRow?.timezone ?? "America/New_York")
+          scheduled_at = localSlotToUtcIso(naive.slice(0, 10), naive.slice(11, 16) || "09:00", interpretTz)
         } catch {
           // Unparseable ("tomorrow 2pm") — leave as-is; the sanity gate below
           // rejects it and re-asks instead of crashing mid-booking
@@ -1239,8 +1323,41 @@ export async function processAndSave(
         }
       }
 
+      // One conversation must never leave two appointments behind. A second
+      // book_appointment in the same exchange (observed: the model re-checked
+      // availability and booked again) previously created a phantom at the
+      // OTHER offered slot — invisible to the lead, real on the calendar.
+      // Treat a repeat booking as a move of the existing one.
+      let alreadyBookedId: string | null = null
+      const { data: existingApt } = await supabase
+        .from("appointments")
+        .select("id, scheduled_at, ghl_event_id")
+        .eq("lead_id", leadId)
+        .eq("status", "scheduled")
+        .gte("scheduled_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (existingApt) {
+        const sameTime = Math.abs(Date.parse(existingApt.scheduled_at) - bookMs) < 60_000
+        if (!sameTime) {
+          await supabase.from("appointments").update({
+            scheduled_at,
+            rescheduled_from: existingApt.scheduled_at,
+            reminder_2d_email_sent: false, reminder_2d_sms_sent: false,
+            reminder_1d_email_sent: false, reminder_1d_sms_sent: false,
+            reminder_2h_email_sent: false, reminder_2h_sms_sent: false,
+          }).eq("id", existingApt.id)
+          console.log(`[ai-engine] duplicate booking collapsed into ${existingApt.id} — moved to ${scheduled_at}`)
+        } else {
+          console.log(`[ai-engine] duplicate booking ignored for lead ${leadId} — already booked at ${scheduled_at}`)
+        }
+        alreadyBookedId = existingApt.id
+      }
+
       // Create appointment — with pre-selected tech if available
-      const { data: apt } = await supabase
+      const { data: insertedApt } = alreadyBookedId ? { data: null } : await supabase
         .from("appointments")
         .insert({
           lead_id:              leadId,
@@ -1255,6 +1372,40 @@ export async function processAndSave(
         })
         .select()
         .single()
+
+      // One handle downstream, whether we inserted or matched an existing one.
+      const apt = insertedApt ?? (alreadyBookedId ? { id: alreadyBookedId } : null)
+
+      // Mirror onto the GoHighLevel calendar when the company books there:
+      // GHL owns the meeting link and the confirmation email, and the entry
+      // lands on the owner's real Google Calendar through GHL's own sync.
+      if (apt) {
+        try {
+          const { getGhlCalendar, createGhlAppointment } = await import("@/lib/ghl-calendar")
+          const cal = await getGhlCalendar(companyId)
+          if (cal) {
+            const { ensureLeadGhlContact } = await import("@/lib/ghl")
+            const link = await ensureLeadGhlContact(companyId, leadId)
+            if (link) {
+              const leadName = `${freshLead?.first_name ?? ""} ${freshLead?.last_name ?? ""}`.trim()
+              const ev = await createGhlAppointment(cal, {
+                contactId: link.contactId,
+                startTimeIso: scheduled_at,
+                title: leadName ? `FieldBuilt walkthrough — ${leadName}` : "FieldBuilt walkthrough",
+                leadTimezone: (freshLead?.timezone as string | null) ?? undefined,
+              })
+              if (ev) {
+                await supabase.from("appointments").update({
+                  ghl_event_id: ev.id,
+                  ...(ev.meetingUrl ? { google_meet_link: ev.meetingUrl } : {}),
+                }).eq("id", apt.id)
+              }
+            }
+          }
+        } catch (err) {
+          console.error("[ai-engine] GHL calendar sync failed:", err)
+        }
+      }
 
       // Update lead status
       await supabase

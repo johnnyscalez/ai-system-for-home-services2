@@ -66,7 +66,7 @@ export async function POST(req: NextRequest) {
   const { data: existing } = ghlAppointmentId
     ? await db.from("appointments")
         .select("id, scheduled_at, status")
-        .eq("company_id", companyId).eq("ghl_appointment_id", ghlAppointmentId)
+        .eq("company_id", companyId).eq("ghl_event_id", ghlAppointmentId)
         .maybeSingle()
     : { data: null }
 
@@ -112,7 +112,7 @@ export async function POST(req: NextRequest) {
     scheduled_at: when.toISOString(),
     status: "scheduled",
     origin: "ghl",
-    ghl_appointment_id: ghlAppointmentId,
+    ghl_event_id: ghlAppointmentId,
     notes: "Booked on the GoHighLevel calendar",
     confirmation_status: "confirmed",
     confirmation_sms_sent: true,
