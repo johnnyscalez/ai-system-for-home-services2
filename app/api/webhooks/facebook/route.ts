@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
+import { qualifyFromFormFields } from "@/lib/fieldbuilt-qualify"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave, inferJobType } from "@/lib/ai-engine"
 import { sendSMS, formatPhone, parseLeadPhone } from "@/lib/twilio"
@@ -410,7 +411,7 @@ export async function POST(req: NextRequest) {
       // Look up company by Facebook page ID
       const { data: integration } = await supabase
         .from("integrations")
-        .select("company_id, fb_access_token")
+        .select("company_id, fb_access_token, companies(service_type)")
         .eq("fb_page_id", page_id)
         .eq("is_active", true)
         .single()
@@ -552,6 +553,8 @@ export async function POST(req: NextRequest) {
 
       let leadId: string
       let isNewLead = false
+      // FieldBuilt's own funnel: form said not a fit → record it, never chase it
+      let funnelRejected = false
 
       if (existing) {
         // Opted-out leads stay opted out — a redelivered payload or genuine
@@ -573,6 +576,17 @@ export async function POST(req: NextRequest) {
         leadId = existing.id
       } else {
         isNewLead = true
+        // FieldBuilt's own funnel qualifies on headcount + revenue exactly the
+        // way the landing page did. An unqualified shop is kept as a record but
+        // never chased — the form already told them they're not a fit.
+        const svc = (Array.isArray(integration.companies)
+          ? integration.companies[0]
+          : integration.companies) as { service_type?: string | null } | null
+        const isOwnFunnel = svc?.service_type === "fieldbuilt_sales"
+        const funnelQual = isOwnFunnel ? qualifyFromFormFields(fields) : null
+        const rejected = !!funnelQual && !funnelQual.qualified
+        funnelRejected = rejected
+
         const { data: newLead } = await supabase
           .from("leads")
           .insert({
@@ -585,9 +599,10 @@ export async function POST(req: NextRequest) {
             source: "facebook",
             channel: "sms",
             source_form_id: form_id,
-            status: phone ? "just_came_in" : "needs_attention",
+            status: rejected ? "unqualified" : phone ? "just_came_in" : "needs_attention",
+            ...(rejected ? { ai_paused: true } : {}),
             notes: formNotes,
-            metadata: { leadgen_id, page_id, form_id, job_type: jobType, ...(formZip ? { service_zip: formZip } : {}), ...(phone ? {} : { phone_missing: true, form_keys: Object.keys(fields) }) },
+            metadata: { leadgen_id, page_id, form_id, job_type: jobType, ...(formZip ? { service_zip: formZip } : {}), ...(phone ? {} : { phone_missing: true, form_keys: Object.keys(fields) }), ...(funnelQual ? { techs: funnelQual.techs, revenue: funnelQual.revenue, tier: funnelQual.tier, qualified: funnelQual.qualified, qualification: funnelQual.undetermined ? "not_asked_on_form" : "from_form" } : {}) },
             // Pre-classify the job_type COLUMN (the metadata job_type above is
             // the raw form field text) so the first AI turn runs the focused
             // job playbook instead of the identify module
@@ -610,6 +625,14 @@ export async function POST(req: NextRequest) {
         .update({ last_lead_at: new Date().toISOString() })
         .eq("company_id", integration.company_id)
         .eq("type", "facebook")
+
+      // Not a fit per the form's own answers → the record stands, the AI stays
+      // out of it. Texting someone the form just disqualified burns goodwill
+      // and our number's reputation for zero upside.
+      if (funnelRejected) {
+        console.log(`[webhook/facebook] lead ${leadId} unqualified by form answers — AI not engaged`)
+        continue
+      }
 
       // No real phone → no SMS opener and no SMS sequences. The lead exists,
       // the owner was notified with needs_attention; texting a placeholder
