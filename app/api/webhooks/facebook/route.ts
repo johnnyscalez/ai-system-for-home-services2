@@ -160,11 +160,45 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     // office instead of talking over them. (The Nicole incident: the AI
     // restarted intake minutes after a rep said "we don't service your area".)
     try {
-      const { importMessengerHistory } = await import("@/lib/messenger")
+      const { importMessengerHistory, fetchConversationHistory, mineHistoryFacts } = await import("@/lib/messenger")
       const { imported, humanOwned } = await importMessengerHistory(
         supabase, leadId, integration.company_id,
         integration.fb_access_token, pageId, psid, text
       )
+
+      // Mine the thread (history + THIS first message) for contact details the
+      // customer already gave. Two live losses this repairs: the creating
+      // message was never scanned for a phone/email (capture only ran for
+      // EXISTING leads — a lead whose first words were her phone number had it
+      // dropped), and answers given to a page automation were invisible, so
+      // the AI re-asked them.
+      try {
+        const hist = await fetchConversationHistory(integration.fb_access_token, pageId, psid)
+        const facts = mineHistoryFacts([
+          ...hist,
+          { fromPage: false, text, createdTime: new Date().toISOString() },
+        ])
+        const patch: Record<string, string> = {}
+        if (facts.phone) {
+          const real = parseLeadPhone(facts.phone)
+          if (real) patch.phone = real
+        }
+        if (facts.email) patch.email = facts.email
+        if (facts.zip) patch.address = facts.zip
+        if (Object.keys(patch).length > 0) {
+          await supabase.from("leads").update(patch).eq("id", leadId)
+          console.log(`[webhook/facebook] mined contact facts for lead ${leadId}: ${Object.keys(patch).join(", ")}`)
+        }
+        if (facts.transcriptFacts.length > 0) {
+          const { data: cur } = await supabase.from("leads").select("notes").eq("id", leadId).maybeSingle()
+          const block = `Already answered before this conversation: ${facts.transcriptFacts.join(" | ")}`
+          await supabase.from("leads")
+            .update({ notes: cur?.notes ? `${cur.notes}\n${block}` : block })
+            .eq("id", leadId)
+        }
+      } catch (err) {
+        console.error("[webhook/facebook] fact mining failed:", err)
+      }
       if (humanOwned) {
         await supabase.from("conversations").insert({
           lead_id: leadId, company_id: integration.company_id,
