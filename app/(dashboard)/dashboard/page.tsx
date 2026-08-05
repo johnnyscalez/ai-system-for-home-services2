@@ -160,6 +160,82 @@ export default async function DashboardPage({
 }
 
 // ─────────────────────────────────────────────────────────────────────────────
+// Conversation traffic + attribution
+// ─────────────────────────────────────────────────────────────────────────────
+
+/**
+ * Who replied, and who was doing the talking.
+ *
+ * Inbound rows decide WHICH leads count as a conversation. Outbound rows decide
+ * WHO drove it — the AI agent, or a person in the office typing by hand. Only
+ * outbound rows can answer that: an inbound row's sent_by is unreliable
+ * (production stores both 'human' and 'lead' for a lead's own message), and
+ * direction alone says nothing about who was on our side of the thread. This is
+ * the same rule the chat thread paints with — outbound + sent_by 'ai' is the
+ * orange bubble, outbound + anything else is the blue one.
+ *
+ * PostgREST caps every response at 1000 rows no matter what .limit() asks for.
+ * The old inbound-only query slipped under that; reading outbound traffic too
+ * does not — one live account has 6,482 rows, so a single query silently
+ * returned a truncated slice and undercounted conversations 116 vs 168. Hence
+ * the paging, and hence the reduction to lead ids here on the server rather
+ * than shipping thousands of message rows to the browser.
+ */
+async function loadConversationTraffic(
+  supabase: Awaited<ReturnType<typeof createServerSupabaseClient>>,
+  companyId: string,
+  since: string
+): Promise<{
+  inbound: Array<{ lead_id: string; created_at: string }>
+  aiLeadIds: string[]
+  teamLeadIds: string[]
+}> {
+  const PAGE = 1000
+  const MAX_PAGES = 40 // 40k messages — a backstop, not an expected ceiling
+  const inbound: Array<{ lead_id: string; created_at: string }> = []
+  const aiLeadIds = new Set<string>()
+  const teamLeadIds = new Set<string>()
+
+  for (let page = 0; page < MAX_PAGES; page++) {
+    const { data, error } = await supabase
+      .from("conversations")
+      // The lead join is not decoration: without it, deleted and stats-excluded
+      // leads still counted toward Conversations while every other number on
+      // this page filtered them out (live: 4 on one account, 1 on another).
+      .select("lead_id, created_at, direction, sent_by, leads!inner(id)")
+      .eq("company_id", companyId)
+      // An automated "see you tomorrow" is not the agent holding a conversation.
+      .neq("sent_by", "reminder")
+      .gte("created_at", since)
+      .eq("leads.excluded_from_stats", false)
+      .is("leads.deleted_at", null)
+      .order("created_at", { ascending: true })
+      .range(page * PAGE, page * PAGE + PAGE - 1)
+
+    if (error) {
+      console.error("[dashboard] conversation traffic page failed:", error.message)
+      break
+    }
+    for (const r of data ?? []) {
+      const leadId = r.lead_id as string
+      if (r.direction === "inbound") {
+        inbound.push({ lead_id: leadId, created_at: r.created_at as string })
+      } else if (r.sent_by === "ai") {
+        aiLeadIds.add(leadId)
+      } else if (r.sent_by === "human") {
+        teamLeadIds.add(leadId)
+      }
+    }
+    if (!data || data.length < PAGE) break
+    if (page === MAX_PAGES - 1) {
+      console.warn(`[dashboard] conversation traffic hit the ${MAX_PAGES * PAGE}-row backstop for ${companyId}`)
+    }
+  }
+
+  return { inbound, aiLeadIds: [...aiLeadIds], teamLeadIds: [...teamLeadIds] }
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
 // HCP-mode data assembly
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -193,7 +269,7 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase, requ
   const since90d = windowFrom.toISOString()
 
   const [
-    { data: convoRows },
+    convoTraffic,
     { count: callbackCount },
     { data: bookingsData },
     { data: leads90d },
@@ -201,13 +277,7 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase, requ
     { data: revenueEvents },
     { data: hcpConn },
   ] = await Promise.all([
-    // Inbound messages across the whole window, timestamped: the client counts
-    // distinct leads that replied inside whatever range is selected.
-    supabase.from("conversations").select("lead_id, created_at")
-      .eq("company_id", companyId)
-      .eq("direction", "inbound")
-      .gte("created_at", since90d)
-      .limit(20000),
+    loadConversationTraffic(supabase, companyId, since90d),
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", companyId)
       .eq("excluded_from_stats", false)
@@ -256,7 +326,9 @@ async function HcpAgentDashboard({ companyId, firstName, company, supabase, requ
       firstName={firstName}
       companyName={company.name}
       callbacksNow={callbackCount ?? 0}
-      conversationRows={(convoRows ?? []) as Array<{ lead_id: string; created_at: string }>}
+      conversationRows={convoTraffic.inbound}
+      aiLeadIds={convoTraffic.aiLeadIds}
+      teamLeadIds={convoTraffic.teamLeadIds}
       avgJobValueCents={(company.avg_job_value ?? 0) * 100}
       timezone={tz}
       dataFromIso={since90d}

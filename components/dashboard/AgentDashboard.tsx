@@ -109,10 +109,55 @@ function HcpChip({ jobId, edited }: { jobId: string | null; edited: boolean }) {
   )
 }
 
+// ── Conversation attribution ──────────────────────────────────────────────────
+//
+// A "conversation" is a lead who actually wrote back inside the selected range —
+// the same population the single Conversations number always counted, so the
+// split below still reconciles against it. What changes is that we no longer
+// credit all of it to the AI: on a live account 34 conversations were really 17
+// the agent worked and 19 the office typed by hand in Messenger.
+//
+// Attribution can only come from OUTBOUND rows. An inbound row's sent_by is not
+// trustworthy (production stores both 'human' and 'lead' for a lead's own
+// message), and direction alone says nothing about who was driving. This is the
+// same rule the chat thread paints with: outbound + sent_by 'ai' is the orange
+// bubble, outbound + anything else is the blue one.
+//
+//   AI      — the agent sent at least one message to this lead
+//   Team    — a person in the office sent at least one (manual send, or a reply
+//             typed straight into Meta's Messenger inbox, which also pauses AI)
+//   both    — a handoff; counted in BOTH totals, never silently dropped
+//   waiting — the lead wrote and nobody answered at all. Zero today, but it is
+//             reported rather than hidden, so the two numbers always add up.
+//
+// Attribution prefers who was driving INSIDE the range, and falls back to the
+// lead's history across the loaded window — otherwise a lead who replied today
+// to a message sent last week would land in no bucket at all.
+function splitConversations(
+  inbound: Array<{ lead_id: string; created_at: string }>,
+  aiLeads: Set<string>,
+  teamLeads: Set<string>,
+  within: (iso: string) => boolean
+) {
+  const replied = new Set<string>()
+  for (const c of inbound) if (within(c.created_at)) replied.add(c.lead_id)
+
+  let aiConversations = 0, teamConversations = 0, handoffs = 0, waiting = 0
+  for (const id of replied) {
+    const isAi = aiLeads.has(id)
+    const isTeam = teamLeads.has(id)
+    if (isAi) aiConversations++
+    if (isTeam) teamConversations++
+    if (isAi && isTeam) handoffs++
+    if (!isAi && !isTeam) waiting++
+  }
+  return { aiConversations, teamConversations, handoffs, waiting, conversations: replied.size }
+}
+
 // ── Night stat tile (fixed hero) ───────────────────────────────────────────────
 
-function NightStat({ label, value, icon: Icon, accent, delay = 0 }: {
-  label: string; value: number; icon: React.ElementType; accent: string; delay?: number
+function NightStat({ label, value, icon: Icon, accent, delay = 0, sub }: {
+  label: string; value: number; icon: React.ElementType; accent: string; delay?: number; sub?: string
 }) {
   const { value: displayed, ref } = useCountUp(value, 1200, delay)
   return (
@@ -125,6 +170,7 @@ function NightStat({ label, value, icon: Icon, accent, delay = 0 }: {
         style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
         {displayed.toLocaleString()}
       </span>
+      {sub && <p className="text-[10px] text-white/35 mt-1 leading-tight">{sub}</p>}
     </div>
   )
 }
@@ -278,6 +324,10 @@ type Props = {
    *  period metric, so it deliberately does not move with the date range. */
   callbacksNow: number
   conversationRows: Array<{ lead_id: string; created_at: string }>
+  /** Leads the AI agent sent at least one message to (orange bubbles). */
+  aiLeadIds: string[]
+  /** Leads a person in the office sent at least one message to (blue bubbles). */
+  teamLeadIds: string[]
   avgJobValueCents: number
   bookings: AgentBooking[]        // last 90 days
   leadsAll: LeadRow[]             // last 90 days + all current needs_attention
@@ -340,7 +390,7 @@ function dayRange(fromKey: string, toKey: string): string[] {
 // ── Main ───────────────────────────────────────────────────────────────────────
 
 export function AgentDashboard({
-  firstName, companyName, callbacksNow, conversationRows,
+  firstName, companyName, callbacksNow, conversationRows, aiLeadIds, teamLeadIds,
   bookings, leadsAll, revenueEvents, hcpConnected, timezone, dataFromIso,
 }: Props) {
   const router = useRouter()
@@ -492,6 +542,9 @@ export function AgentDashboard({
   // moved — so two different date ranges rendered identical headline numbers
   // and the page contradicted itself. Every number now comes off the one
   // selected window.
+  const aiLeadSet = useMemo(() => new Set(aiLeadIds), [aiLeadIds])
+  const teamLeadSet = useMemo(() => new Set(teamLeadIds), [teamLeadIds])
+
   const hero = useMemo(() => {
     const within = (iso: string) => {
       const t = new Date(iso).getTime()
@@ -501,15 +554,13 @@ export function AgentDashboard({
     return {
       newLeads: leadsAll.filter(l => within(l.created_at)).length,
       booked: bookings.filter(b => within(b.created_at)).length,
-      conversations: new Set(
-        conversationRows.filter(c => within(c.created_at)).map(c => c.lead_id)
-      ).size,
+      ...splitConversations(conversationRows, aiLeadSet, teamLeadSet, within),
       potentialCents: aiBookings.reduce((s, b) => s + Number(b.quoted_amount_cents ?? 0), 0),
       bookedCents: revenueEvents
         .filter(e => e.attribution === "booked_by_ai" && e.amount_cents && within(e.created_at))
         .reduce((s, e) => s + Number(e.amount_cents), 0),
     }
-  }, [bookings, leadsAll, revenueEvents, conversationRows, fromMs, toMs])
+  }, [bookings, leadsAll, revenueEvents, conversationRows, aiLeadSet, teamLeadSet, fromMs, toMs])
 
   const heroBookedCents = hero.bookedCents
   const heroPotentialCents = hero.potentialCents
@@ -562,17 +613,28 @@ export function AgentDashboard({
             <p className="text-sm text-white/50 mb-6">
               Here&apos;s what your AI agent handled for {companyName} — days, nights, and weekends.
             </p>
-            <div className="grid grid-cols-2 lg:grid-cols-7 gap-3">
+            <div className="grid grid-cols-2 lg:grid-cols-8 gap-3">
               <NightMoney label="Potential revenue booked by AI"
                 subLabel="Value of the jobs your AI booked — priced from each conversation"
                 cents={heroPotentialCents} tone="amber" />
               <NightMoney label="Revenue closed by the team from AI agent jobs"
                 subLabel="Collected in Housecall Pro on those jobs"
                 cents={heroBookedCents} delay={80} />
-              <NightStat label="New leads" value={hero.newLeads} icon={UserPlus} accent="#FB923C" delay={80} />
-              <NightStat label="Jobs booked" value={hero.booked} icon={CalendarCheck} accent="#FB923C" delay={160} />
-              <NightStat label="Conversations" value={hero.conversations} icon={MessagesSquare} accent="#FB923C" delay={240} />
+              <NightStat label="New leads" value={hero.newLeads} icon={UserPlus} accent="#FB923C" delay={80}
+                sub="all sources" />
+              <NightStat label="Jobs booked" value={hero.booked} icon={CalendarCheck} accent="#FB923C" delay={160}
+                sub="agent + team" />
+              <NightStat label="AI conversations" value={hero.aiConversations} icon={Bot} accent="#FB923C" delay={240}
+                sub={hero.handoffs > 0 ? `${hero.handoffs} handed to team` : "agent replied"} />
+              <NightStat label="Team conversations" value={hero.teamConversations} icon={MessagesSquare} accent="#94A3B8" delay={320}
+                sub="replied by hand" />
             </div>
+            {hero.waiting > 0 && (
+              <p className="text-[11px] text-white/40 mt-3">
+                {hero.waiting} {hero.waiting === 1 ? "lead wrote in and never got" : "leads wrote in and never got"} a
+                reply — from the agent or from anyone on your team.
+              </p>
+            )}
           </div>
         </motion.div>
 
