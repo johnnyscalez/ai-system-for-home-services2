@@ -219,6 +219,21 @@ The agent can say something back to the customer and still not have *saved* it. 
 | J-4 | Messenger leads were nameless even before the conversation started | The Meta profile lookup 400s without Advanced Access and the failure was swallowed by a bare `catch` (class H39) | Now logs loudly; in-conversation capture is the primary path, profile lookup only a bonus |
 | J-5 | Owner had no way to fix a wrong/missing name | No edit UI existed on the lead page, and in HCP mode most CRM surfaces are gated off | **Edit details** dialog on the lead page in both modes → validates phone, blocks duplicates, and pushes the corrected name to the linked HCP customer |
 
+### L. Stale context when the AI intervenes in someone else's conversation (added Aug 2026)
+
+The history import runs **once, at lead creation**. It is a snapshot, not a sync. Anything that happens in the thread while we are not receiving — Meta's automation owning it, or a rep working it for two days while the AI is paused — never reaches the agent. Measured live: one lead was missing **20 of 45 messages**, and four of nine leads had **no name, phone or email at all**.
+
+Why it matters: the agent doesn't know it's missing anything. It answers confidently from a partial thread and contradicts what the rep already told the customer — the Marilyn failure mode, arriving through a different door.
+
+| ID | Symptom | Guard now in place | New-account check |
+|---|---|---|---|
+| L-1 | AI resumes after a human takeover with a stale picture and re-asks / contradicts | `syncMessengerHistory` runs when the AI is un-paused, and again before the AI's FIRST message in any thread | Pause a lead, reply as a rep from the Meta inbox, resume the AI — it must respect what the rep established |
+| L-2 | Leads created before the import existed keep permanent holes | The same sync heals gaps on contact — additive only, never edits or deletes | Spot-check one old lead: our message count should match Meta's |
+| L-3 | Identity fields blank even though the thread contains them | `backfillLeadFromThread` fills ONLY blanks (phone/email/zip) — never overwrites office-entered data | After a sync, the lead should have a real phone instead of `msgr:` |
+| L-4 | A repeated short message ("Yes", "Ok") made one stored row satisfy every copy, leaving holes no future sync could heal | Matching **consumes** the local row it matched | Covered by the sync battery — re-run if the matcher is ever touched |
+
+**Rule: any code that lets the AI speak into a thread it did not start must re-sync that thread first.** Cheap (one API call, once per thread), and it is the difference between the agent sounding informed and sounding like it wasn't listening.
+
 ### K. Channel drift — a capability wired on one channel only (added Aug 2026)
 
 | ID | Symptom | Root cause | New-account check |

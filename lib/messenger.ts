@@ -286,3 +286,99 @@ export function mineHistoryFacts(history: HistoryMessage[]): MinedFacts {
   }
   return out
 }
+
+// ── Gap-aware re-sync (the "AI intervenes in an existing conversation" case) ──
+//
+// importMessengerHistory() is a ONE-TIME snapshot taken when a lead is
+// created. It never refreshes — so anything that happened in the thread while
+// we weren't receiving (Meta's automation owning it, or a rep working the
+// thread while the AI was paused) stayed invisible to the agent forever.
+// Measured live: one lead was missing 20 of 45 messages.
+//
+// This closes that gap safely. It ADDS only what we don't already have — it
+// never edits, never deletes, and never duplicates — so it is safe to call on
+// any thread at any time.
+export type SyncResult = { added: number; metaTotal: number; oursBefore: number; facts: MinedFacts | null }
+
+export async function syncMessengerHistory(
+  db: { from: (t: string) => any },
+  leadId: string,
+  companyId: string,
+  pageAccessToken: string,
+  pageId: string,
+  psid: string
+): Promise<SyncResult> {
+  const history = await fetchConversationHistory(pageAccessToken, pageId, psid, 50)
+  if (history.length === 0) return { added: 0, metaTotal: 0, oursBefore: 0, facts: null }
+
+  const { data: existing } = await db
+    .from("conversations")
+    .select("body, created_at")
+    .eq("lead_id", leadId)
+    .order("created_at", { ascending: true })
+  const ours = ((existing ?? []) as Array<{ body: string | null; created_at: string }>).map((r) => ({
+    body: (r.body ?? "").trim(),
+    ms: new Date(r.created_at).getTime(),
+  }))
+
+  // A Meta message is "already ours" when we hold the same text at roughly the
+  // same time. Timestamps differ slightly between Meta's clock and our insert
+  // time for live-received messages, hence a window rather than equality.
+  //
+  // Matching CONSUMES the local row: a thread legitimately repeats short
+  // messages ("Yes", "Ok"), and without consumption one stored "Yes" would
+  // satisfy every other "Yes" in the thread — leaving permanent holes that no
+  // future sync could ever heal. Caught in testing: 13 removed, only 12 came
+  // back.
+  const WINDOW_MS = 5 * 60 * 1000
+  const consumed = new Array(ours.length).fill(false)
+  const missing = history.filter((m) => {
+    const text = m.text.trim()
+    const ms = new Date(m.createdTime).getTime()
+    const idx = ours.findIndex((o, k) => !consumed[k] && o.body === text && Math.abs(o.ms - ms) <= WINDOW_MS)
+    if (idx === -1) return true
+    consumed[idx] = true
+    return false
+  })
+  if (missing.length > 0) {
+    const rows = missing.map((m) => ({
+      lead_id: leadId,
+      company_id: companyId,
+      direction: m.fromPage ? "outbound" : "inbound",
+      sent_by: "human", // page side = rep/automation; lead side = the lead
+      body: m.text,
+      channel: "messenger",
+      created_at: m.createdTime,
+    }))
+    const { error } = await db.from("conversations").insert(rows)
+    if (error) {
+      console.error("[messenger] history re-sync insert failed:", error.message)
+      return { added: 0, metaTotal: history.length, oursBefore: ours.length, facts: null }
+    }
+    console.log(`[messenger] re-synced ${missing.length} missing messages into lead ${leadId}`)
+  }
+  return { added: missing.length, metaTotal: history.length, oursBefore: ours.length, facts: mineHistoryFacts(history) }
+}
+
+/** Fill ONLY blank identity fields from the thread — never overwrite real data. */
+export async function backfillLeadFromThread(
+  db: { from: (t: string) => any },
+  leadId: string,
+  facts: MinedFacts | null
+): Promise<string[]> {
+  if (!facts) return []
+  const { data: cur } = await db
+    .from("leads").select("phone, email, address").eq("id", leadId).maybeSingle()
+  if (!cur) return []
+  const patch: Record<string, string> = {}
+  if (facts.phone && (!cur.phone || String(cur.phone).startsWith("msgr:") || String(cur.phone).startsWith("fbform:"))) {
+    const { parseLeadPhone } = await import("@/lib/twilio")
+    const p = parseLeadPhone(facts.phone)
+    if (p) patch.phone = p
+  }
+  if (facts.email && !cur.email) patch.email = facts.email
+  if (facts.zip && !cur.address) patch.address = facts.zip
+  if (Object.keys(patch).length === 0) return []
+  await db.from("leads").update(patch).eq("id", leadId)
+  return Object.keys(patch)
+}

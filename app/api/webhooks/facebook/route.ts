@@ -258,6 +258,27 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     return
   }
 
+  // If the AI has never spoken in this thread, it is about to INTERVENE in a
+  // conversation someone else has been having. Re-sync from Meta first so it
+  // sees the whole story — the creation-time import is a snapshot and may
+  // predate everything the rep or the automation did since.
+  try {
+    const { count: aiSpoke } = await supabase
+      .from("conversations").select("*", { count: "exact", head: true })
+      .eq("lead_id", leadId).eq("direction", "outbound").eq("sent_by", "ai")
+    if ((aiSpoke ?? 0) === 0) {
+      const { syncMessengerHistory, backfillLeadFromThread } = await import("@/lib/messenger")
+      const r = await syncMessengerHistory(
+        supabase, leadId, integration.company_id,
+        integration.fb_access_token, pageId, psid
+      )
+      if (r.added > 0) console.log(`[webhook/facebook] pre-intervention re-sync: +${r.added} msgs for lead ${leadId}`)
+      await backfillLeadFromThread(supabase, leadId, r.facts)
+    }
+  } catch (err) {
+    console.error("[webhook/facebook] pre-intervention re-sync failed (continuing):", err)
+  }
+
   // Run the same AI engine as SMS; saves inbound + outbound with channel=messenger
   try {
     const result = await processAndSave(leadId, integration.company_id, text, undefined, undefined, "messenger")
