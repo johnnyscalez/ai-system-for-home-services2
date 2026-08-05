@@ -114,7 +114,13 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     // Messenger-only leads have a placeholder phone. The moment they type a
     // real number ("561-555-0123"), capture it — reminders, confirmations,
     // and the tech's call-ahead all need it.
-    if (existing.phone.startsWith("msgr:")) {
+    // BOTH placeholder kinds must be replaceable. It used to check only
+    // "msgr:", so a lead created from a lead form WITHOUT a phone (placeholder
+    // "fbform:<id>") who then typed their number in Messenger kept the
+    // placeholder forever — and the HCP push refuses placeholders, so the
+    // booking never reached the CRM. Live: Jeremy Sekulovski typed
+    // 2488280823, booked, and the job never synced.
+    if (existing.phone.startsWith("msgr:") || existing.phone.startsWith("fbform:")) {
       // \s* not \s?: "(312) 555-0187" normalizes to " 312  555 0187" with
       // DOUBLE spaces — \s? missed the most common US phone format, so the
       // lead's real number never replaced the msgr: placeholder and the job
