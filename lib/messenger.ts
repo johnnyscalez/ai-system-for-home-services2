@@ -228,6 +228,10 @@ const AUTOMATION_PATTERNS: RegExp[] = [
   /auto-?label added/i,
   /lead stage set to/i,
   /please tap on one of the options/i,
+  /almost there.{0,3}\s*please finish answering/i,
+  /please finish answering our questions/i,
+  /veuillez appuyer sur/i,           // FR variant of "please tap an option"
+  /нажмите на один из предложенных/i, // RU variant
   /you are responding to a user comment/i,
   /thanks for contacting us/i,
   /we'?ve received your message/i,
