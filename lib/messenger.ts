@@ -386,3 +386,41 @@ export async function backfillLeadFromThread(
   await db.from("leads").update(patch).eq("id", leadId)
   return Object.keys(patch)
 }
+
+/**
+ * Sync EVERY Messenger thread for a company, whoever is talking.
+ *
+ * The per-thread sync only fires at lead creation, on resume, and before the
+ * AI's first message — so a thread a human owns never refreshed, and the CRM
+ * showed the customer's side while the rep's replies were invisible. Live:
+ * one thread held 32 of 42 messages, missing six of Michael's answers.
+ *
+ * Additive only (see syncMessengerHistory): existing rows are never edited or
+ * deleted, so AI messages keep sent_by="ai" and stay orange in the UI, while
+ * newly-recovered page messages come in as "human" and render blue.
+ */
+export async function syncAllMessengerThreads(
+  db: { from: (t: string) => any },
+  companyId: string,
+  pageAccessToken: string,
+  pageId: string,
+  limit = 150
+): Promise<{ threads: number; added: number }> {
+  const { data: leads } = await db
+    .from("leads")
+    .select("id, messenger_psid")
+    .eq("company_id", companyId)
+    .not("messenger_psid", "is", null)
+    .is("deleted_at", null)
+    .order("last_message_at", { ascending: false, nullsFirst: false })
+    .limit(limit)
+  let threads = 0, added = 0
+  for (const l of (leads ?? []) as Array<{ id: string; messenger_psid: string }>) {
+    try {
+      const r = await syncMessengerHistory(db, l.id, companyId, pageAccessToken, pageId, l.messenger_psid)
+      if (r.added > 0) { threads++; added += r.added }
+    } catch { /* one bad thread must never stop the sweep */ }
+  }
+  if (added > 0) console.log(`[messenger] thread sweep: +${added} messages across ${threads} threads`)
+  return { threads, added }
+}

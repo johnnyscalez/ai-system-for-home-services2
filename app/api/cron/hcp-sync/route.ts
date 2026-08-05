@@ -27,6 +27,24 @@ export async function GET(req: NextRequest) {
   for (const conn of connections ?? []) {
     try {
       results[conn.company_id] = await reconcileCompany(conn.company_id)
+
+      // Keep every Messenger thread mirrored, including ones a human owns.
+      // Without this the CRM shows only the customer's half of a conversation
+      // a rep is handling. Additive only, so AI/human attribution (and the
+      // orange/blue colours that follow from it) is never disturbed.
+      try {
+        const { data: fb } = await db
+          .from("integrations")
+          .select("fb_page_id, fb_access_token")
+          .eq("company_id", conn.company_id).eq("is_active", true).maybeSingle()
+        if (fb?.fb_access_token && fb.fb_page_id) {
+          const { syncAllMessengerThreads } = await import("@/lib/messenger")
+          const sweep = await syncAllMessengerThreads(db, conn.company_id, fb.fb_access_token, fb.fb_page_id)
+          ;(results[conn.company_id] as Record<string, unknown>).messengerSweep = sweep
+        }
+      } catch (err) {
+        console.error("[cron/hcp-sync] messenger sweep failed:", err)
+      }
     } catch (err) {
       console.error(`[hcp-sync] reconcile failed for ${conn.company_id}:`, err)
       results[conn.company_id] = { error: String(err).slice(0, 200) }
