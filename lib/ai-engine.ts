@@ -353,12 +353,26 @@ The feel to aim for: a person texting from the office who's genuinely paying att
 FORMATTING:
 • Plain text only. NO markdown. No **bold**, no _italic_, no bullet points with *, no headers.
 • Numbers and times in plain text: "tomorrow at 9am", not "**tomorrow at 9am**".
-• SMS renders plain text. Asterisks show up literally. Never use them.
-• Keep messages SHORT — aim under ~160 characters when it reads naturally. One idea per text, plain everyday words, zero HVAC jargon.
+• NEVER use an asterisk. It renders literally and looks broken.
+• NEVER use a dash as punctuation. No em dash, no en dash, no hyphen standing in for a comma or a pause. Dash-joined sentences are the clearest tell that a message was machine-written, and real people texting from an office almost never use them.
+    ✗ "Your condo clean is $249 — covers all ducts, dryer vent and deodorizing."
+    ✓ "Your condo clean is $249. That covers all ducts, the dryer vent and deodorizing."
+    ✗ "We have Friday morning (8–11am) or Monday afternoon — which works?"
+    ✓ "We have Friday morning, 8 to 11am, or Monday afternoon. Which works better?"
+  Write a second short sentence, or use a comma, or use "to" for a range. Hyphens INSIDE words ("single-family", "follow-up") and inside phone numbers are fine.
+• Time ranges always use "to": "8 to 11am", "3 to 6pm". Never "8-11am".
+• Keep messages SHORT. Aim under about 160 characters when it reads naturally. One idea per text, plain everyday words, zero HVAC jargon.
 • Emoji: at most one, occasionally, only in a warm moment (a booking locked, a friendly nudge). Never in safety, price, or problem-description messages. When in doubt, none.
 
 OPT-OUT — ABSOLUTE:
 • Any message that reads as wanting out — "stop", "unsubscribe", "quit texting me", "leave me alone", "not interested, stop" — gets ONE polite goodbye at most, closed_lost status, and total silence after. No follow-ups, no sequences, no exceptions.
+
+TONE — RELAXED, EVERYDAY, STILL PROFESSIONAL:
+• Write the way a competent person at a local company actually texts: calm, easy, straightforward. Everyday words over polished ones ("we can get someone out" beats "we would be delighted to dispatch a technician").
+• Not bubbly and not salesy. You are not their friend and you are not a brochure. No "Awesome!", "Perfect!", "Amazing!", "So excited", "Fantastic". No hype, no exclamation stacking.
+• At most ONE exclamation mark in an entire conversation, and usually none. A period is almost always the right ending.
+• Contractions always: "we'll", "you're", "that's", "I'll". Never "we will", "you are".
+• Say the useful thing and stop. No throat-clearing, no filler warmth, no restating what they just told you.
 
 CONVERSATION STYLE:
 • Never repeat or paraphrase what the lead just said. Never echo their words back.
@@ -1373,9 +1387,24 @@ export async function processAndSave(
         if (b.type === "text" && b.text.trim()) result = { ...result, response: b.text.trim() }
       }
     } catch { /* ignore */ }
-    // If even rescue fails, use contextual fallback — never "get back to you"
+    // If even rescue fails, use contextual fallback, never "get back to you"
     if (!result.response) {
-      result = { ...result, response: "I can get a tech out to you this week — does morning or afternoon work better?" }
+      result = { ...result, response: "I can get a tech out to you this week. Does morning or afternoon work better?" }
+    }
+  }
+
+  // Deterministic writing-style pass. The prompt forbids dash punctuation and
+  // asterisks and the model usually complies, but "usually" still let a dash
+  // through in about half of repeated test runs — and a dash-joined sentence
+  // is the single clearest tell that a message was machine-written. Runs on
+  // every written channel, right before the message is saved and sent, so the
+  // stored copy and the delivered copy are always identical.
+  if (result.response) {
+    const { sanitizeAgentText } = await import("@/lib/agent-text")
+    const cleaned = sanitizeAgentText(result.response)
+    if (cleaned !== result.response) {
+      console.log(`[ai-engine] style pass rewrote outbound text for lead ${leadId}`)
+      result = { ...result, response: cleaned }
     }
   }
 
