@@ -142,14 +142,17 @@ export async function resolveOrCreateCustomer(
 }
 
 // Best-effort parse of a freeform US address string
-function parseAddress(address: string | null): { street: string; city?: string; state?: string; zip?: string } | null {
+function parseAddress(address: string | null): { street: string; city?: string; state?: string; zip?: string; country: string } | null {
   if (!address?.trim()) return null
   const zip = address.match(/\b(\d{5})(?:-\d{4})?\b/)?.[1]
   const parts = address.split(",").map((p) => p.trim()).filter(Boolean)
   const street = parts[0] ?? address.trim()
   const city = parts.length > 1 ? parts[1].replace(/\b\d{5}(-\d{4})?\b/, "").trim() || undefined : undefined
   const state = address.match(/\b([A-Z]{2})\b(?=[^a-z]*(\d{5})?\s*$)/)?.[1]
-  return { street, city, state, zip }
+  // HCP rejects address creation with 422 "Country is required" — it is
+  // mandatory on their API even for a domestic account. Missing it silently
+  // blocked every NEW customer's job from syncing (live: Angela Moten-Seldon).
+  return { street, city, state, zip, country: "US" }
 }
 
 export async function ensureServiceAddress(
