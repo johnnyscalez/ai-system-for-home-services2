@@ -5,7 +5,7 @@ import { useEffect, useMemo, useRef, useState } from "react"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
-  Moon, CalendarCheck, MessagesSquare, UserPlus, PhoneCall,
+  Moon, CalendarCheck, MessagesSquare, UserPlus,
   DollarSign, TrendingUp, Sparkles, ArrowRight, Phone, MessageSquare,
   Megaphone, MessageCircle, Globe, Webhook as WebhookIcon, CheckCircle2, PencilLine, CircleDashed,
   Building2, Bot,
@@ -435,7 +435,7 @@ export function AgentDashboard({
     ? `${fromKey} → ${toKey}`
     : RANGES.find(r => r.key === range)?.label ?? ""
 
-  const { filteredBookings, money, bars, barUnit, sources, callbacks, totalLeadsInRange, aiBookedCount, officeBookedCount, bookingsTotal } = useMemo(() => {
+  const { filteredBookings, money, bars, barUnit, sources, totalLeadsInRange, aiBookedCount, officeBookedCount, bookingsTotal } = useMemo(() => {
     const inWindow = (iso: string) => {
       const t = new Date(iso).getTime()
       return t >= fromMs && t < toMs
@@ -525,10 +525,6 @@ export function AgentDashboard({
       .sort((a, b) => b.count - a.count)
 
     // Callback queue — current state, source-filtered but not time-filtered
-    const callbacks = leadsAll
-      .filter(l => l.status === "needs_attention" && matchesSource(l.source))
-      .sort((a, b) => (b.last_message_at ?? "").localeCompare(a.last_message_at ?? ""))
-      .slice(0, 6)
 
     return {
       bookingsTotal: filteredBookings.length,
@@ -537,7 +533,6 @@ export function AgentDashboard({
       bars: buckets,
       barUnit: weekly ? "week" : "day",
       sources,
-      callbacks,
       totalLeadsInRange,
       aiBookedCount,
       officeBookedCount,
@@ -559,7 +554,9 @@ export function AgentDashboard({
     const aiBookings = bookings.filter(b => b.origin !== "hcp" && within(b.created_at))
     return {
       newLeads: leadsAll.filter(l => within(l.created_at)).length,
-      booked: bookings.filter(b => within(b.created_at)).length,
+      // AI-created only. The label says "by AI", so office bookings mirrored
+      // in from Housecall Pro (origin="hcp") must not be counted.
+      booked: aiBookings.length,
       ...splitConversations(conversationRows, aiLeadSet, teamLeadSet, within),
       potentialCents: aiBookings.reduce((s, b) => s + Number(b.quoted_amount_cents ?? 0), 0),
       bookedCents: revenueEvents
@@ -635,8 +632,7 @@ export function AgentDashboard({
             <div className="mt-5 pt-5 border-t border-white/[0.07] grid grid-cols-2 lg:grid-cols-4 gap-3">
               <NightStat label="New leads" value={hero.newLeads} icon={UserPlus} accent="#FB923C" delay={80}
                 sub="all sources" />
-              <NightStat label="Jobs booked" value={hero.booked} icon={CalendarCheck} accent="#FB923C" delay={160}
-                sub="agent + team" />
+              <NightStat label="Jobs booked by AI" value={hero.booked} icon={CalendarCheck} accent="#FB923C" delay={160} />
               <NightStat label="AI conversations" value={hero.aiConversations} icon={Bot} accent="#FB923C" delay={240}
                 sub={hero.handoffs > 0 ? `${hero.handoffs} handed to team` : "agent replied"} />
               <NightStat label="Team conversations" value={hero.teamConversations} icon={MessagesSquare} accent="#94A3B8" delay={320}
@@ -842,45 +838,6 @@ export function AgentDashboard({
 
           {/* ── Right column ── */}
           <div className="space-y-4">
-            {/* Callback queue */}
-            <motion.div
-              variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
-              className="bg-white rounded-2xl border border-[#E7E5E4]/60 p-5"
-              style={{ boxShadow: "0 4px 24px rgba(217,119,6,0.08), 0 1px 3px rgba(0,0,0,0.03)" }}
-            >
-              <div className="flex items-center gap-2 mb-3">
-                <div className="w-8 h-8 rounded-lg bg-amber-50 flex items-center justify-center">
-                  <PhoneCall className="w-4 h-4 text-[#D97706]" />
-                </div>
-                <div>
-                  <h2 className="text-[15px] font-bold text-[#1C1917]"
-                    style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
-                    Call these people back
-                  </h2>
-                  <p className="text-[11px] text-[#78716C]">The AI couldn&apos;t finish these — a human should</p>
-                </div>
-              </div>
-              {callbacks.length === 0 ? (
-                <p className="text-sm text-[#78716C] py-2">Nothing waiting. The AI handled everything. 👌</p>
-              ) : (
-                <div className="space-y-2">
-                  {callbacks.map((c) => {
-                    const name = [c.first_name, c.last_name].filter(Boolean).join(" ") || "Unknown"
-                    return (
-                      <Link key={c.id} href={`/leads/${c.id}`}
-                        className="flex items-center justify-between gap-2 rounded-lg border border-amber-100 bg-amber-50/50 px-3 py-2 hover:bg-amber-50 transition-colors">
-                        <div className="min-w-0">
-                          <p className="text-[13px] font-semibold text-[#1C1917] truncate">{name}</p>
-                          <p className="text-[11px] text-[#78716C] tabular-nums">{c.phone}</p>
-                        </div>
-                        <SourceBadge source={c.source} />
-                      </Link>
-                    )
-                  })}
-                </div>
-              )}
-            </motion.div>
-
             {/* Bookings over time */}
             <motion.div
               variants={{ hidden: { opacity: 0, y: 20 }, show: { opacity: 1, y: 0 } }}
