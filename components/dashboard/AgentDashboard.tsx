@@ -161,16 +161,16 @@ function NightStat({ label, value, icon: Icon, accent, delay = 0, sub }: {
 }) {
   const { value: displayed, ref } = useCountUp(value, 1200, delay)
   return (
-    <div className="relative rounded-xl px-4 py-3.5 bg-white/[0.06] border border-white/10 backdrop-blur-sm">
-      <div className="flex items-center gap-2 mb-1">
-        <Icon className="w-3.5 h-3.5" style={{ color: accent }} />
-        <span className="text-[11px] font-semibold uppercase tracking-wider text-white/50">{label}</span>
+    <div className="relative px-1 lg:px-4 lg:first:pl-0 lg:border-l lg:border-white/[0.07] lg:first:border-l-0">
+      <div className="flex items-center gap-1.5 mb-1.5">
+        <Icon className="w-3.5 h-3.5 shrink-0" style={{ color: accent }} />
+        <span className="text-[10px] font-semibold uppercase tracking-[0.09em] text-white/45 leading-tight">{label}</span>
       </div>
-      <span ref={ref} className="text-3xl font-bold text-white tabular-nums"
+      <span ref={ref} className="block text-[32px] leading-none font-bold text-white tabular-nums"
         style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
         {displayed.toLocaleString()}
       </span>
-      {sub && <p className="text-[10px] text-white/35 mt-1 leading-tight">{sub}</p>}
+      {sub && <p className="text-[10px] text-white/35 mt-1.5 leading-tight">{sub}</p>}
     </div>
   )
 }
@@ -184,20 +184,26 @@ function NightMoney({ label, subLabel, cents, delay = 0, tone = "lime" }: {
   // Amber = booked/pipeline (promised), lime = closed (collected). Two money
   // numbers side by side must never be mistaken for each other.
   const t = tone === "amber"
-    ? { fg: "#FDBA74", num: "#FED7AA", bg: "linear-gradient(135deg, rgba(249,115,22,0.12) 0%, rgba(249,115,22,0.04) 100%)", border: "rgba(249,115,22,0.32)", glow: "rgba(249,115,22,0.30)" }
-    : { fg: "#A3E635", num: "#D9F99D", bg: "linear-gradient(135deg, rgba(163,230,53,0.10) 0%, rgba(163,230,53,0.04) 100%)", border: "rgba(163,230,53,0.30)", glow: "rgba(163,230,53,0.35)" }
+    ? { fg: "#FDBA74", num: "#FFEDD5", bg: "rgba(249,115,22,0.07)", border: "rgba(249,115,22,0.28)", glow: "rgba(249,115,22,0.22)" }
+    : { fg: "#A3E635", num: "#ECFCCB", bg: "rgba(163,230,53,0.06)", border: "rgba(163,230,53,0.26)", glow: "rgba(163,230,53,0.20)" }
   return (
-    <div className="relative col-span-2 rounded-xl px-5 py-4 border backdrop-blur-sm"
+    <div className="relative rounded-2xl px-6 py-6 border overflow-hidden"
       style={{ background: t.bg, borderColor: t.border }}>
-      <div className="flex items-center gap-2 mb-1">
-        <DollarSign className="w-4 h-4" style={{ color: t.fg }} />
-        <span className="text-[11px] font-bold uppercase tracking-wider leading-tight" style={{ color: t.fg, opacity: 0.85 }}>{label}</span>
+      {/* A single soft bloom behind the figure gives the card depth without
+          the glassy floating-card look. Sits under the text, never over it. */}
+      <div className="absolute -top-16 -left-10 w-56 h-56 rounded-full blur-3xl pointer-events-none"
+        style={{ background: t.glow, opacity: 0.5 }} />
+      <div className="relative">
+        <div className="flex items-center gap-2 mb-3">
+          <DollarSign className="w-[15px] h-[15px] shrink-0" style={{ color: t.fg }} />
+          <span className="text-[11px] font-bold uppercase tracking-[0.1em] leading-tight" style={{ color: t.fg, opacity: 0.9 }}>{label}</span>
+        </div>
+        <span ref={ref} className="block text-[52px] md:text-[64px] leading-[0.95] font-bold tabular-nums"
+          style={{ color: t.num, fontFamily: "var(--font-mono), 'JetBrains Mono', monospace" }}>
+          ${displayed.toLocaleString()}
+        </span>
+        <p className="text-[12px] text-white/45 mt-3 leading-snug">{subLabel}</p>
       </div>
-      <span ref={ref} className="text-4xl md:text-[44px] leading-none font-bold tabular-nums"
-        style={{ color: t.num, fontFamily: "var(--font-mono), 'JetBrains Mono', monospace", textShadow: `0 0 32px ${t.glow}` }}>
-        ${displayed.toLocaleString()}
-      </span>
-      <p className="text-[11px] text-white/40 mt-1.5">{subLabel}</p>
     </div>
   )
 }
@@ -613,13 +619,20 @@ export function AgentDashboard({
             <p className="text-sm text-white/50 mb-6">
               Here&apos;s what your AI agent handled for {companyName} — days, nights, and weekends.
             </p>
-            <div className="grid grid-cols-2 lg:grid-cols-8 gap-3">
+            {/* Money first, on its own line and given real room. Two numbers
+                that answer "what did this make me" before anything else. */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
               <NightMoney label="Potential revenue booked by AI"
-                subLabel="Value of the jobs your AI booked — priced from each conversation"
+                subLabel="Value of the jobs your AI booked, priced from each conversation"
                 cents={heroPotentialCents} tone="amber" />
-              <NightMoney label="Revenue closed by the team from AI agent jobs"
-                subLabel="Collected in Housecall Pro on those jobs"
+              <NightMoney label="Revenue closed by the team"
+                subLabel="Collected in Housecall Pro on those AI-booked jobs"
                 cents={heroBookedCents} delay={80} />
+            </div>
+
+            {/* Activity underneath, quieter and evenly spaced. A hairline
+                separates "money" from "how it happened" without a boxed panel. */}
+            <div className="mt-5 pt-5 border-t border-white/[0.07] grid grid-cols-2 lg:grid-cols-4 gap-3">
               <NightStat label="New leads" value={hero.newLeads} icon={UserPlus} accent="#FB923C" delay={80}
                 sub="all sources" />
               <NightStat label="Jobs booked" value={hero.booked} icon={CalendarCheck} accent="#FB923C" delay={160}
