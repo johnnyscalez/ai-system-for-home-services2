@@ -102,7 +102,7 @@ export async function POST(req: NextRequest) {
         .eq("lead_id", lead.id).eq("status", "pending")
     }
 
-    if (result.action?.type === "book_appointment" || result.action?.type === "reschedule_appointment") {
+    if ((result.action?.type === "book_appointment" && result.action.outcome !== "noop") || result.action?.type === "reschedule_appointment") {
       const { sendConfirmations } = await import("@/lib/appointment-reminders")
       const { data: apt } = await db
         .from("appointments").select("id, scheduled_at, address")

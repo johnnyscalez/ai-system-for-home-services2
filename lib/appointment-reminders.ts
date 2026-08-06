@@ -98,6 +98,21 @@ export async function sendConfirmations(appointmentId: string) {
     if (blocked) { await blockAndFlag(appointmentId, blocked); return }
   }
 
+  // Idempotency: each channel confirms ONCE per (re)schedule. Every path that
+  // MOVES an appointment resets these flags, so a new time gets a fresh
+  // confirmation — but a repeat trigger for the same booking sends nothing.
+  // (Live: one lead received three identical confirmation texts because each
+  // collapsed duplicate booking re-fired this function.)
+  const { data: sentFlags } = await supabase
+    .from("appointments")
+    .select("confirmation_sms_sent, confirmation_email_sent")
+    .eq("id", appointmentId)
+    .maybeSingle()
+  if (sentFlags?.confirmation_sms_sent && sentFlags?.confirmation_email_sent) {
+    console.log(`[reminders] confirmations already sent for ${appointmentId} — skipping`)
+    return
+  }
+
   const { apt, agentCfg, emailTpl, phoneNum, gmailConn } = ctx
   const lead = apt.leads as { first_name: string | null; last_name: string | null; phone: string; email: string | null; timezone?: string | null } | null
   const company = apt.companies as { name: string; service_type: string | null } | null
@@ -140,7 +155,7 @@ export async function sendConfirmations(appointmentId: string) {
   }
 
   // Send confirmation email if lead has email and email is enabled
-  if (lead.email && emailTpl?.confirmation_enabled !== false) {
+  if (lead.email && emailTpl?.confirmation_enabled !== false && !sentFlags?.confirmation_email_sent) {
     try {
       await sendAppointmentEmail(
         lead.email,
@@ -160,7 +175,7 @@ export async function sendConfirmations(appointmentId: string) {
   }
 
   // Send confirmation SMS
-  if (emailTpl?.sms_confirmation_enabled !== false && phoneNum?.phone_number) {
+  if (emailTpl?.sms_confirmation_enabled !== false && phoneNum?.phone_number && !sentFlags?.confirmation_sms_sent) {
     const formattedDate = new Date(apt.scheduled_at).toLocaleDateString("en-US", {
       weekday: "long", month: "long", day: "numeric", timeZone: timezone,
     })

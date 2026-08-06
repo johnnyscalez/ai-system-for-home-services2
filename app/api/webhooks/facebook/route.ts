@@ -311,7 +311,7 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     // notified the owner — two live bookings landed completely silently.
     // Keyed off THIS turn's action (not lead status), so a later "thanks!"
     // can't re-fire it.
-    if (result.action?.type === "book_appointment" || result.action?.type === "reschedule_appointment") {
+    if ((result.action?.type === "book_appointment" && result.action.outcome !== "noop") || result.action?.type === "reschedule_appointment") {
       const { data: bookedApt } = await supabase
         .from("appointments")
         .select("id, scheduled_at, address")

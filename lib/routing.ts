@@ -96,6 +96,24 @@ export function addressToPoint(address: string | null | undefined): GeoPoint | n
   return zipToPoint(zipFromAddress(address))
 }
 
+/** A dispatchable service address: it has a STREET (house number + name, or a
+ *  PO Box line) — a bare zip is NOT an address. Live: a Messenger lead's whole
+ *  address was "60706"; the booking, the HCP job, and the confirmation SMS all
+ *  carried just the zip while the real street sat unstored in the thread. */
+export function isCompleteServiceAddress(address: string | null | undefined): boolean {
+  if (!address?.trim()) return false
+  if (/\bp\.?\s*o\.?\s*box\s*\d+/i.test(address)) return true
+  // Remove the zip (zipFromAddress already refuses to treat a leading house
+  // number as a zip), then look for a house-number + street-name pattern.
+  let t = address
+  const zip = zipFromAddress(address)
+  if (zip) {
+    const idx = t.lastIndexOf(zip)
+    if (idx >= 0) t = t.slice(0, idx) + t.slice(idx + zip.length)
+  }
+  return /\b\d{1,6}\s+[A-Za-z]/.test(t)
+}
+
 /**
  * All US zips whose centroid lies within `radiusMiles` of the given center
  * zip. Straight-line distance on ZCTA centroids — the same resolution the

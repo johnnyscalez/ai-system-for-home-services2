@@ -115,12 +115,22 @@ export async function resolveQuotedAmount(opts: {
 
   const [{ data: cfg }, { data: lead }] = await Promise.all([
     db.from("ai_agent_config").select("pricing_rules").eq("company_id", opts.companyId).maybeSingle(),
-    db.from("leads").select("system_type, notes").eq("id", opts.leadId).maybeSingle(),
+    db.from("leads").select("system_type, notes, metadata").eq("id", opts.leadId).maybeSingle(),
   ])
   const rules = (cfg?.pricing_rules ?? null) as PricingRules | null
 
-  // Structured hints already captured on the lead (e.g. system_type
-  // "House, 1 furnace") — used to fill gaps, never to override the agent.
+  // Structured facts saved by update_lead_details / the voice booking — the
+  // LAST CONFIRMED values ("two furnaces… actually one" → 1). These outrank
+  // free-text mining, which reads stale form answers as gospel (live: a $189
+  // one-furnace agreement was recorded as $378 off a corrected "two").
+  const meta = (lead?.metadata as Record<string, unknown> | null) ?? {}
+  const metaUnits = (() => {
+    const n = Number(meta.unit_count)
+    return Number.isFinite(n) && n >= 1 && n <= 20 ? Math.round(n) : null
+  })()
+  const metaProperty = normalizePropertyType(typeof meta.property_type === "string" ? meta.property_type : null)
+
+  // Free-text hints (e.g. system_type "House, 1 furnace") — fill gaps only.
   const hintText = `${lead?.system_type ?? ""} ${lead?.notes ?? ""}`
   const hintUnits = (() => {
     const m = hintText.match(/(\d+)\s*(furnace|system|unit|ac|air handler)/i)
@@ -128,8 +138,8 @@ export async function resolveQuotedAmount(opts: {
   })()
   const hintProperty = normalizePropertyType(hintText.match(/\b(house|home|townhome|townhouse|condo|apartment)\b/i)?.[1] ?? null)
 
-  const unitCount = opts.agentUnitCount ?? hintUnits ?? null
-  const propertyType = normalizePropertyType(opts.agentPropertyType ?? null) ?? hintProperty
+  const unitCount = opts.agentUnitCount ?? metaUnits ?? hintUnits ?? null
+  const propertyType = normalizePropertyType(opts.agentPropertyType ?? null) ?? metaProperty ?? hintProperty
 
   // 1. AGENT
   const agentCents = sane(opts.agentTotalCents ?? null)

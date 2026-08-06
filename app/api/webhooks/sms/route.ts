@@ -379,7 +379,7 @@ export async function POST(req: NextRequest) {
     // later message from a booked lead ("thanks!") re-send the confirmation
     // SMS + email and re-notify the contractor, because status stays
     // "appointment_booked" forever.
-    if (result.action?.type === "book_appointment" || result.action?.type === "reschedule_appointment") {
+    if ((result.action?.type === "book_appointment" && result.action.outcome !== "noop") || result.action?.type === "reschedule_appointment") {
       const { sendConfirmations } = await import("@/lib/appointment-reminders")
       const { data: bookedApt } = await supabase
         .from("appointments")

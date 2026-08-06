@@ -9,7 +9,7 @@ import { selectTechnician, flagNoTechAvailable, findSlotsForLead, getTechnicianC
 import type { AppointmentWindow, PerDaySlots } from "@/lib/availability"
 
 export type ConversationAction =
-  | { type: "book_appointment"; scheduled_at: string; address?: string; notes?: string; quoted_total?: number; unit_count?: number; property_type?: string }
+  | { type: "book_appointment"; scheduled_at: string; address?: string; notes?: string; quoted_total?: number; unit_count?: number; property_type?: string; outcome?: "created" | "moved" | "noop" }
   | { type: "update_status"; status: "qualified" | "closed_lost" | "needs_attention" }
   | { type: "cancel_appointment"; appointment_id: string; reason?: string }
   | { type: "reschedule_appointment"; appointment_id: string; new_scheduled_at: string }
@@ -48,15 +48,15 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "book_appointment",
     description:
-      "Call this ONLY when the lead has confirmed a specific date and time, AND you have every field the lead file's CHANNEL & CONTACT FILE block lists as REQUIRED BEFORE BOOKING. For service visits that always includes the service address — never book a visit without one. For phone/video appointments no address exists or is needed. Convert relative times like 'tomorrow at 2pm' to an ISO 8601 datetime using the current date from the lead file.",
+      "Call this ONLY when the lead has confirmed a specific date and time, AND you have every field the lead file's CHANNEL & CONTACT FILE block lists as REQUIRED BEFORE BOOKING. For service visits that always includes the FULL street service address (house number + street — a zip code alone is NOT an address) — never book a visit without one. For phone/video appointments no address exists or is needed. Convert relative times like 'tomorrow at 2pm' to an ISO 8601 datetime using the current date from the lead file. Call it ONCE: if the lead file already shows this appointment booked, acknowledge it instead of calling again — only call again when the lead explicitly asks for a DIFFERENT time.",
     input_schema: {
       type: "object" as const,
       properties: {
         scheduled_at: { type: "string", description: "ISO 8601 datetime e.g. 2024-06-15T14:00:00" },
-        address: { type: "string", description: "Full service address (street, city, state). Required for any appointment where a technician travels to the property — omit only for phone/video appointments, which have no address." },
+        address: { type: "string", description: "Full service address (street, city, state). Required for any appointment where a technician travels to the property — omit only for phone/video appointments, which have no address. NEVER a bare zip code." },
         notes: { type: "string", description: "Summary of the job: system type, age, issue description, urgency level, ownership status" },
-        quoted_total: { type: "number", description: "The TOTAL price in dollars the customer just agreed to for this job — all units combined (e.g. two furnaces at $189 each = 378). Pass it whenever a fixed price was agreed in the conversation; the office and the technician see this amount on the job. Omit ONLY for free-estimate/diagnostic visits where no price was agreed. Never invent or estimate a number the customer did not accept." },
-        unit_count: { type: "number", description: "How many units the price covers (furnaces / systems / AC units). 1 if a single unit." },
+        quoted_total: { type: "number", description: "The TOTAL price in dollars the customer just agreed to for this job — all units combined, using the FINAL corrected unit count if they changed it mid-conversation ('two furnaces… actually one' at $189 = 189). Pass it whenever a fixed price was agreed in the conversation; the office and the technician see this amount on the job. Omit ONLY for free-estimate/diagnostic visits where no price was agreed. Never invent or estimate a number the customer did not accept." },
+        unit_count: { type: "number", description: "How many units the price covers (furnaces / systems / AC units) — the final corrected count. 1 if a single unit." },
         property_type: { type: "string", description: "one of: house, townhome, condo, apartment" },
       },
       required: ["scheduled_at"],
@@ -127,12 +127,178 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
         },
         system_type: { type: "string", description: "What they have, in plain words — e.g. 'Central AC', 'Gas furnace', 'Heat pump', 'None (new construction)'" },
         system_age: { type: "string", description: "Rough age as stated — e.g. '~2006, about 20 years', '5-7 years'" },
+        address: { type: "string", description: "The FULL service street address the moment the lead gives or corrects it — house number + street (+ city/state/zip when given). NEVER a bare zip code. If the lead corrects an address already on file, save the NEW one here — the last confirmed address is the truth everywhere (CRM, technician, confirmations)." },
+        unit_count: { type: "number", description: "How many furnaces/systems the lead's home has, the moment they state or CORRECT it ('two furnaces… actually just one' → 1). The last confirmed number wins." },
+        property_type: { type: "string", description: "house | townhome | condo | apartment | commercial — the moment they state or correct it." },
         situation_notes: { type: "string", description: "One short factual line of NEW information learned this turn that doesn't fit the fields above — symptoms in their words, urgency signals, vulnerable occupants, what they've tried, access notes, decision-maker situation. Appended to the lead's notes for the office and tech. Facts only, no interpretation. Check the lead file's existing notes first — never re-save a fact that's already noted, even reworded." },
       },
       required: [],
     },
   },
 ]
+
+/** Details the conversation can save onto the lead file. */
+export type LeadDetailsInput = {
+  first_name?: string; last_name?: string; email?: string; timezone?: string
+  job_type?: string; system_type?: string; system_age?: string; situation_notes?: string
+  address?: string; unit_count?: number; property_type?: string
+}
+
+/**
+ * Write conversation-learned details onto the lead — shared by the live SMS/
+ * Messenger tool loop and the post-call voice extractor. Returns true when
+ * anything was written.
+ *
+ * LAST CONFIRMED VALUE WINS, AND IT PROPAGATES: a corrected address updates
+ * the scheduled appointment too; a job already mirrored into Housecall Pro
+ * gets a manual-fix note + owner ping, because their API cannot edit a job
+ * (live: Gina — the street arrived a minute after booking, the agent said
+ * "got it", and nothing anywhere was updated).
+ */
+export async function saveLeadDetailsForLead(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  leadId: string,
+  companyId: string,
+  input: LeadDetailsInput
+): Promise<boolean> {
+  const patch: Record<string, unknown> = {}
+  // Identity first (finding: the agent had no way to save a name, so names
+  // lived only in notes and every HCP customer was created as "Unknown").
+  // Never let the model overwrite a real name with junk or a placeholder.
+  const cleanName = (v: string | undefined) => {
+    const s = (v ?? "").trim().replace(/^[\s,.]+|[\s,.]+$/g, "")
+    if (!s || s.length > 60) return null
+    if (/^(unknown|n\/?a|none|null|customer|lead|there|sir|ma.?am)$/i.test(s)) return null
+    return s
+  }
+  const first = cleanName(input.first_name)
+  const last = cleanName(input.last_name)
+  if (first) patch.first_name = first
+  if (last) patch.last_name = last
+  if (input.email && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(input.email.trim())) {
+    patch.email = input.email.trim().toLowerCase()
+  }
+  // Only a real IANA zone — a bad string would silently render every
+  // offered time in the wrong clock.
+  if (input.timezone) {
+    try {
+      new Intl.DateTimeFormat("en-US", { timeZone: input.timezone })
+      patch.timezone = input.timezone
+    } catch { /* not a valid zone — ignore rather than corrupt the record */ }
+  }
+  if (input.job_type) patch.job_type = input.job_type
+  if (input.system_type) patch.system_type = input.system_type
+  if (input.system_age) patch.system_age = input.system_age
+
+  // Address: only a REAL street address may be stored — a bare zip would
+  // recreate the exact failure this field exists to fix ("60706" as the
+  // entire address on the booking, the HCP job, and the confirmation SMS).
+  const { isCompleteServiceAddress, zipFromAddress } = await import("@/lib/routing")
+  let addressChanged: string | null = null
+  if (input.address) {
+    let a = input.address.trim().replace(/\s{2,}/g, " ")
+    if (isCompleteServiceAddress(a)) {
+      if (!zipFromAddress(a)) {
+        // Street without a zip: carry the zip we already know forward
+        const { data: cur } = await supabase.from("leads").select("address").eq("id", leadId).maybeSingle()
+        const oldZip = zipFromAddress(cur?.address as string | null)
+        if (oldZip) a = `${a}, ${oldZip}`
+      }
+      patch.address = a
+      addressChanged = a
+    }
+  }
+
+  // Structured job-scope facts live in metadata — pricing reads them, so a
+  // mid-conversation correction ("two furnaces… actually one") changes what
+  // the booking is worth without any transcript archaeology.
+  const metaPatch: Record<string, unknown> = {}
+  if (typeof input.unit_count === "number" && Number.isFinite(input.unit_count)) {
+    const n = Math.round(input.unit_count)
+    if (n >= 1 && n <= 20) metaPatch.unit_count = n
+  }
+  if (input.property_type?.trim()) metaPatch.property_type = input.property_type.trim().toLowerCase()
+  if (Object.keys(metaPatch).length > 0) {
+    const { data: cur } = await supabase.from("leads").select("metadata").eq("id", leadId).maybeSingle()
+    patch.metadata = { ...((cur?.metadata as Record<string, unknown> | null) ?? {}), ...metaPatch }
+  }
+
+  if (input.situation_notes?.trim()) {
+    // Append, never overwrite — notes accumulate across the conversation
+    // so the office sees the full picture even if the lead never books.
+    const { data: current } = await supabase.from("leads").select("notes").eq("id", leadId).single()
+    patch.notes = current?.notes
+      ? `${current.notes} | ${input.situation_notes.trim()}`
+      : input.situation_notes.trim()
+  }
+
+  if (Object.keys(patch).length === 0) return false
+  await supabase.from("leads").update(patch).eq("id", leadId)
+
+  // Propagate a corrected address onto the active appointment — the lead
+  // file and the job the tech drives to must never disagree.
+  if (addressChanged) {
+    const { data: apts } = await supabase
+      .from("appointments")
+      .select("id, address, hcp_job_id, notes")
+      .eq("lead_id", leadId)
+      .eq("status", "scheduled")
+    for (const apt of apts ?? []) {
+      if ((apt.address ?? "").trim() === addressChanged) continue
+      const upd: Record<string, unknown> = { address: addressChanged }
+      const pushed = !!apt.hcp_job_id && !String(apt.hcp_job_id).startsWith("pending:")
+      if (pushed) {
+        upd.notes = [apt.notes, `Service address corrected to "${addressChanged}" after the job reached Housecall Pro — update the job address there manually.`]
+          .filter(Boolean).join(" | ")
+      }
+      await supabase.from("appointments").update(upd).eq("id", apt.id)
+      if (pushed) {
+        const { notifyNeedsAttention } = await import("@/lib/notifications")
+        notifyNeedsAttention(companyId, "Address corrected after HCP push — fix the job address manually", "").catch(() => {})
+      }
+    }
+  }
+  return true
+}
+
+/**
+ * Deterministic backstop for the Gina failure: an inbound message that IS a
+ * street address, arriving while the lead's active appointment has no real
+ * street on it, attaches itself — whether or not the model remembers to call
+ * update_lead_details. Runs before the model turn so the lead file the model
+ * reads is already correct.
+ */
+export async function attachStreetAddressIfMissing(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  leadId: string,
+  companyId: string,
+  inbound: string | null
+): Promise<boolean> {
+  if (!inbound) return false
+  const t = inbound.trim().replace(/\s{2,}/g, " ")
+  if (t.length < 6 || t.length > 120) return false
+  const { isCompleteServiceAddress } = await import("@/lib/routing")
+  if (!isCompleteServiceAddress(t)) return false
+  // Ordinary sentences with numbers ("2 furnaces at 189") must not read as
+  // addresses — require a street suffix or a PO Box.
+  const streetish =
+    /\b(ave|avenue|st|street|rd|road|dr|drive|ln|lane|blvd|boulevard|ct|court|cir|circle|way|pl|place|ter|terrace|hwy|highway|pkwy|parkway|trl|trail)\b\.?/i.test(t) ||
+    /\bp\.?\s*o\.?\s*box\s*\d+/i.test(t)
+  if (!streetish) return false
+
+  const [{ data: lead }, { data: apts }] = await Promise.all([
+    supabase.from("leads").select("address").eq("id", leadId).maybeSingle(),
+    supabase.from("appointments").select("id, address").eq("lead_id", leadId).eq("status", "scheduled"),
+  ])
+  const somethingNeedsIt =
+    !isCompleteServiceAddress(lead?.address as string | null) ||
+    (apts ?? []).some((a) => !isCompleteServiceAddress(a.address as string | null))
+  if (!somethingNeedsIt) return false
+
+  await saveLeadDetailsForLead(supabase, leadId, companyId, { address: t })
+  console.log(`[ai-engine] street address auto-attached for lead ${leadId}: "${t.slice(0, 60)}"`)
+  return true
+}
 
 export async function runConversation(
   leadId: string,
@@ -141,6 +307,14 @@ export async function runConversation(
   followUpAngle?: string
 ): Promise<EngineResult> {
   const supabase = createServiceRoleClient()
+
+  // Gina backstop first — if this inbound IS the missing street address, the
+  // lead file must already show it by the time the model reads it.
+  try {
+    await attachStreetAddressIfMissing(supabase, leadId, companyId, incomingMessage)
+  } catch (err) {
+    console.error("[ai-engine] street auto-attach failed:", err)
+  }
 
   const horizonMs = 14 * 24 * 60 * 60 * 1000
 
@@ -340,6 +514,8 @@ You are not a script-follower. You are a sharp human rep who thinks before every
 1. JOB — What exactly does this lead need? If you can't name the job type yet, your next message asks it — nothing else matters until you know. The moment you learn it (or any system details), call update_lead_details so it's saved to their file.
 2. KNOWN — What has this lead already told me, anywhere? Re-read the lead file and the whole conversation, including things they volunteered without being asked. Never re-ask any of it. Volunteered info counts as captured.
 2b. NAME — Do I have this lead's name on file? If the lead file shows no name, getting it is part of the job: ask for it naturally early on ("Who am I speaking with?"), and when they give only a first name, ask for the last name once at booking time ("And your last name for the appointment?"). The moment they tell you ANY part of their name, call update_lead_details with first_name (and last_name) — writing it into situation_notes does NOT save it, and the customer then reaches the technician's schedule as "Unknown". Never invent, guess, or infer a name, and never nag: ask for the surname once, and if they don't give it, book with the first name and move on.
+2c. CHANGED DETAILS — Did the lead just give a value that CONTRADICTS what's on file (a different address, furnace/system count, property type, email, phone, name)? Acknowledge both and confirm once: "I have [old] on file — should I go with [new]?" The moment they confirm (or plainly assert the new value), call update_lead_details with it: the LAST CONFIRMED value is the truth everywhere — the CRM, the technician's job, the confirmation texts. A correction acknowledged in words but never saved means the tech drives to the OLD address. This includes counts: "two furnaces… actually one" → update_lead_details with unit_count 1.
+2d. ADDRESS — A site visit needs a FULL street address (house number + street). A zip code alone is NOT an address — it tells us the area, not the door. If only a zip is on file when the lead picks a time, ask for the street address in the same breath ("Perfect — what's the full street address?") and book the moment they give it. The moment any full address appears, call update_lead_details with address so it reaches the booking and the technician.
 3. GATE — For this job type, which required discovery/qualification items are still missing? (Your playbook defines them; your QUALIFICATION RULES define who qualifies.) Count them one by one — one covered item does not check off the others.
 4. QUALIFIED? — Based on what I know: qualified (say so via update_lead_status and move toward booking), disqualified (handle it with respect, per the rules), or not enough information yet (keep discovering).
 5. NEXT — What is the single most useful question or action right now, and why am I asking it? Every question should have a purpose you could explain: it qualifies them, sizes the job for the tech, or sets urgency. If you can't say why you're asking, don't ask it.
@@ -523,47 +699,10 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   // deliberately NOT routed through the single `action` slot, so it can
   // never clobber (or be clobbered by) a booking/status action called in
   // the same turn.
-  const saveLeadDetails = async (input: { first_name?: string; last_name?: string; email?: string; timezone?: string; job_type?: string; system_type?: string; system_age?: string; situation_notes?: string }) => {
-    const patch: Record<string, string> = {}
-    // Identity first (finding: the agent had no way to save a name, so names
-    // lived only in notes and every HCP customer was created as "Unknown").
-    // Never let the model overwrite a real name with junk or a placeholder.
-    const cleanName = (v: string | undefined) => {
-      const s = (v ?? "").trim().replace(/^[\s,.]+|[\s,.]+$/g, "")
-      if (!s || s.length > 60) return null
-      if (/^(unknown|n\/?a|none|null|customer|lead|there|sir|ma.?am)$/i.test(s)) return null
-      return s
-    }
-    const first = cleanName(input.first_name)
-    const last = cleanName(input.last_name)
-    if (first) patch.first_name = first
-    if (last) patch.last_name = last
-    if (input.email && /^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(input.email.trim())) {
-      patch.email = input.email.trim().toLowerCase()
-    }
-    // Only a real IANA zone — a bad string would silently render every
-    // offered time in the wrong clock.
-    if (input.timezone) {
-      try {
-        new Intl.DateTimeFormat("en-US", { timeZone: input.timezone })
-        patch.timezone = input.timezone
-      } catch { /* not a valid zone — ignore rather than corrupt the record */ }
-    }
-    if (input.job_type) patch.job_type = input.job_type
-    if (input.system_type) patch.system_type = input.system_type
-    if (input.system_age) patch.system_age = input.system_age
-    if (input.situation_notes?.trim()) {
-      // Append, never overwrite — notes accumulate across the conversation
-      // so the office sees the full picture even if the lead never books.
-      const { data: current } = await supabase.from("leads").select("notes").eq("id", leadId).single()
-      patch.notes = current?.notes
-        ? `${current.notes} | ${input.situation_notes.trim()}`
-        : input.situation_notes.trim()
-    }
-    if (Object.keys(patch).length === 0) return
-    detailsSaved = true
+  const saveLeadDetails = async (input: LeadDetailsInput) => {
     try {
-      await supabase.from("leads").update(patch).eq("id", leadId)
+      const wrote = await saveLeadDetailsForLead(supabase, leadId, companyId, input)
+      if (wrote) detailsSaved = true
     } catch (err) {
       console.error("[ai-engine] update_lead_details write failed:", err)
     }
@@ -1512,14 +1651,14 @@ export async function processAndSave(
       // half an hour late to their own walkthrough. What was SAID is the only
       // authority here. A different time means the model must pull fresh
       // availability first (which rewrites selected_slots), so re-ask instead.
+      let svcTypeForBooking = freshLead?.service_type as string | null
+      if (!svcTypeForBooking) {
+        const { data: co } = await supabase
+          .from("companies").select("service_type").eq("id", companyId).maybeSingle()
+        svcTypeForBooking = (co?.service_type as string | null) ?? null
+      }
+      const salesBooking = svcTypeForBooking === "fieldbuilt_sales"
       {
-        let svcType = freshLead?.service_type as string | null
-        if (!svcType) {
-          const { data: co } = await supabase
-            .from("companies").select("service_type").eq("id", companyId).maybeSingle()
-          svcType = (co?.service_type as string | null) ?? null
-        }
-        const salesBooking = svcType === "fieldbuilt_sales"
         const offeredIsos = Object.values(
           (freshLead?.selected_slots ?? {}) as Record<string, { iso?: string }>
         ).map((v) => v?.iso).filter(Boolean) as string[]
@@ -1561,6 +1700,34 @@ export async function processAndSave(
         }
       }
 
+      // A site visit cannot be dispatched to a zip alone (live: Gina — the
+      // whole address was "60706"; the booking, the HCP job, and the
+      // confirmation SMS all carried just the zip while the real street sat
+      // unstored in the thread). No real street address → the booking does
+      // NOT happen this turn: the reply becomes the address ask, and the
+      // model books next turn with the street. Sales/video bookings (no
+      // truck rolls) are exempt, as are requires_travel=false companies.
+      if (!salesBooking) {
+        const { data: travelCfg } = await supabase
+          .from("ai_agent_config").select("requires_travel").eq("company_id", companyId).maybeSingle()
+        const needsTravel = (travelCfg?.requires_travel as boolean | null) ?? true
+        const { isCompleteServiceAddress } = await import("@/lib/routing")
+        const bookAddress = address ?? (freshLead?.address as string | null) ?? null
+        if (needsTravel && !isCompleteServiceAddress(bookAddress)) {
+          const corrective = "Perfect — and what's the full street address for the visit? I'll lock it in right away."
+          if (outboundConversationId) {
+            await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
+          }
+          console.warn(`[ai-engine] booking held for lead ${leadId} — no full street address on file (have: ${JSON.stringify(bookAddress)})`)
+          return { response: corrective, action: undefined, outboundConversationId }
+        }
+        // The model passed a full address in the booking call — make sure the
+        // lead record carries it even when update_lead_details wasn't called.
+        if (address && isCompleteServiceAddress(address) && address !== freshLead?.address) {
+          await saveLeadDetailsForLead(supabase, leadId, companyId, { address }).catch(() => false)
+        }
+      }
+
       // Re-validate the pre-selected tech against the FINAL job type and
       // address zip. Slots can be offered before the address is known —
       // the tech locked in then may not cover where the lead actually lives
@@ -1590,18 +1757,47 @@ export async function processAndSave(
         .limit(1)
         .maybeSingle()
 
+      // Confirmation SMS/email fire once per real change: "created" and
+      // "moved" send, "noop" must not — three texts went to one lead when
+      // every collapsed duplicate re-triggered the webhook's confirmation
+      // block (live: Gina).
+      let bookingOutcome: "created" | "moved" | "noop" = "created"
       if (existingApt) {
-        const sameTime = Math.abs(Date.parse(existingApt.scheduled_at) - bookMs) < 60_000
-        if (!sameTime) {
+        // Same minute OR same local day + arrival window = the SAME visit
+        // being re-booked, not a reschedule (voice parity): re-booking "10:30"
+        // over a 10-1 booking must not silently move the appointment.
+        const { sameWindowBucket } = await import("@/lib/technician-booking")
+        const sameTime =
+          Math.abs(Date.parse(existingApt.scheduled_at) - bookMs) < 60_000 ||
+          await sameWindowBucket(companyId, existingApt.scheduled_at, scheduled_at, bookZip).catch(() => false)
+        // A booking may only MOVE when the customer's own message expresses a
+        // time or a change ("3pm instead", "Thursday works better", "the other
+        // option"). Observed live-class failure: on a bare "thanks!" the model
+        // re-booked the OTHER offered window and silently relocated the visit.
+        const moveIntent = !!incomingMessage && (
+          /\b(re-?schedul\w*|switch|change|move|instead|different|rather|actually|earlier|later|make it|can we do|how about|prefer)\b/i.test(incomingMessage) ||
+          /\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(incomingMessage) ||
+          /\b(mon|tues|wednes|thurs|fri|satur|sun)day\b/i.test(incomingMessage) ||
+          /\b(first|second|third|other|next|morning|afternoon|evening|noon|tomorrow)\b/i.test(incomingMessage)
+        )
+        if (!sameTime && !moveIntent) {
+          console.warn(`[ai-engine] booking move SUPPRESSED for lead ${leadId} — model re-booked ${scheduled_at} over ${existingApt.scheduled_at} but the inbound ("${(incomingMessage ?? "").slice(0, 60)}") expresses no reschedule intent`)
+        }
+        if (!sameTime && moveIntent) {
           await supabase.from("appointments").update({
             scheduled_at,
+            address: address ?? undefined,
             rescheduled_from: existingApt.scheduled_at,
+            // Fresh confirmation + reminder cycle for the new time
+            confirmation_sms_sent: false, confirmation_email_sent: false,
             reminder_2d_email_sent: false, reminder_2d_sms_sent: false,
             reminder_1d_email_sent: false, reminder_1d_sms_sent: false,
             reminder_2h_email_sent: false, reminder_2h_sms_sent: false,
           }).eq("id", existingApt.id)
+          bookingOutcome = "moved"
           console.log(`[ai-engine] duplicate booking collapsed into ${existingApt.id} — moved to ${scheduled_at}`)
         } else {
+          bookingOutcome = "noop"
           console.log(`[ai-engine] duplicate booking ignored for lead ${leadId} — already booked at ${scheduled_at}`)
         }
         alreadyBookedId = existingApt.id
@@ -1641,8 +1837,10 @@ export async function processAndSave(
         if (raced) {
           console.log(`[ai-engine] duplicate insert blocked by unique index — adopting ${raced.id}`)
           apt = { id: raced.id }
+          bookingOutcome = "noop"
         }
       }
+      if (result.action.type === "book_appointment") result.action.outcome = bookingOutcome
 
       // Mirror onto the GoHighLevel calendar when the company books there:
       // GHL owns the meeting link and the confirmation email, and the entry
@@ -1930,7 +2128,10 @@ export async function processAndSave(
         .update({
           scheduled_at: new_scheduled_at,
           rescheduled_from: oldApt?.scheduled_at ?? null,
-          // Reset reminder flags so new reminders fire for the new time
+          // Reset confirmation + reminder flags so the new time gets a fresh
+          // confirmation and its own reminder cycle
+          confirmation_sms_sent: false,
+          confirmation_email_sent: false,
           reminder_2d_email_sent: false,
           reminder_2d_sms_sent: false,
           reminder_1d_email_sent: false,

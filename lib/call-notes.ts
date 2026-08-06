@@ -21,6 +21,8 @@ type ExtractedIntel = {
   job_type?: string
   system_type?: string
   system_age?: string
+  address?: string
+  unit_count?: number
   notes?: string[]
 }
 
@@ -54,6 +56,14 @@ const EXTRACT_TOOL = {
       system_age: {
         type: "string",
         description: "Age of the system, verbatim as the lead said it: '15 years', 'about 10 years', 'no idea'. Omit if never mentioned.",
+      },
+      address: {
+        type: "string",
+        description: "The FULL service street address (house number + street, plus city/zip if said), ONLY if actually stated on the call. If the caller CORRECTED an address, record the FINAL corrected version. NEVER a bare zip code. Omit if no street address was spoken.",
+      },
+      unit_count: {
+        type: "number",
+        description: "How many furnaces/systems the home has — the FINAL corrected count if the caller changed it mid-call ('two… actually one' → 1). Omit if never discussed.",
       },
       notes: {
         type: "array",
@@ -151,6 +161,22 @@ export async function summarizeCompletedCall(session: VoiceSession): Promise<voi
 
   if (Object.keys(updates).length > 0) {
     await db.from("leads").update(updates).eq("id", session.lead_id)
+  }
+
+  // Address and unit-count corrections heard on the call: LAST CONFIRMED
+  // WINS, and the shared writer propagates the address onto the active
+  // appointment (and flags an HCP-pushed job for a manual fix) — the same
+  // path the SMS/Messenger tool uses.
+  if (intel.address?.trim() || typeof intel.unit_count === "number") {
+    try {
+      const { saveLeadDetailsForLead } = await import("@/lib/ai-engine")
+      await saveLeadDetailsForLead(db, session.lead_id, session.company_id, {
+        address: intel.address?.trim() || undefined,
+        unit_count: typeof intel.unit_count === "number" ? intel.unit_count : undefined,
+      })
+    } catch (err) {
+      console.error("[call-notes] address/unit-count save failed:", err)
+    }
   }
 
   const noteLines = (intel.notes ?? []).map((n) => n.trim()).filter(Boolean)

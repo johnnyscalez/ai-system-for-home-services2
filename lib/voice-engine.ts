@@ -1,5 +1,5 @@
 import { anthropic } from "@/lib/claude"
-import { buildQualificationBlock } from "@/lib/ai-engine"
+import { buildQualificationBlock, saveLeadDetailsForLead } from "@/lib/ai-engine"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { kbValue } from "@/lib/kb-utils"
 import { createCalendarEvent } from "@/lib/google-calendar"
@@ -7,7 +7,7 @@ import { determineAgentType, getAgentPrompt, getJobKnowledgeBlock } from "@/lib/
 import { updateSession, appendMessages } from "@/lib/voice-session"
 import { getJobTypeLabel, JOB_TYPES, JOB_TYPE_TOOL_DESCRIPTION } from "@/lib/job-types"
 import { selectTechnician, getTechnicianContextForCompany, findSlotsForLead, sameWindowBucket } from "@/lib/technician-booking"
-import { zipFromAddress } from "@/lib/routing"
+import { zipFromAddress, isCompleteServiceAddress } from "@/lib/routing"
 import { zipToTimeZone } from "@/lib/timezones"
 import type { VoiceSession, VoiceMessage } from "@/lib/voice-session"
 
@@ -48,6 +48,7 @@ MANDATORY RULES — never break these:
 16. BOOKING — NO DISAMBIGUATION LOOPS: When the lead accepts a day or day-part ("Monday morning works", "tomorrow's fine"), pick the EARLIEST matching slot from the find_available_slots results and book it immediately: confirm once with the specific window ("Perfect — Monday morning, eight to ten, at [Address]") and call book_appointment in that same turn. NEVER re-ask which window. NEVER say "I've got you down" without calling book_appointment.
 17. BOOK ONCE: book_appointment is called EXACTLY ONE TIME per call. If an "APPOINTMENT ALREADY BOOKED THIS CALL" block appears in this prompt, the booking is DONE — "okay", "yes", "thank you", "bye" are NOT requests to book again. Never call book_appointment after that block appears; for a time change call reschedule_appointment instead.
 18. PRICE CAPTURE: When a total price was agreed on this call, ALWAYS pass quoted_total (total dollars, all units combined) and unit_count when calling book_appointment. Use the FINAL corrected numbers — if the caller first said two furnaces and then corrected to one, one is the truth.
+19. CHANGED DETAILS: When the caller states something that CONTRADICTS the lead file (a different address, furnace count, property type, name), acknowledge both and confirm once: "I have [old] on file — should I go with [new]?" The LAST CONFIRMED value is the truth: book with it, quote with it. A full street address (house number + street) is required for a visit — a zip code alone is never an address.
 === END VOICE RULES ===`
 
 // ─── Tool definitions ──────────────────────────────────────────────────────────
@@ -850,6 +851,7 @@ export async function executeTool(
         const updates: Record<string, unknown> = {
           scheduled_at,
           rescheduled_from: existing.scheduled_at,
+          confirmation_sms_sent: false, confirmation_email_sent: false,
           reminder_2d_email_sent: false, reminder_2d_sms_sent: false,
           reminder_1d_email_sent: false, reminder_1d_sms_sent: false,
           reminder_2h_email_sent: false, reminder_2h_sms_sent: false,
@@ -923,6 +925,15 @@ export async function executeTool(
       if (apt) {
         await rememberBooking(apt.id, bookMs)
 
+        // Structured scope facts → lead file (last confirmed wins; pricing
+        // and future conversations read them)
+        if (typeof unit_count === "number" || typeof property_type === "string") {
+          saveLeadDetailsForLead(db, session.lead_id, session.company_id, {
+            unit_count: typeof unit_count === "number" ? unit_count : undefined,
+            property_type: typeof property_type === "string" ? property_type : undefined,
+          }).catch((e) => console.error("[voice] scope-fact save failed:", e))
+        }
+
         // Record what was SOLD (same ladder as SMS/Messenger). Non-blocking:
         // never delay a live call on pricing bookkeeping.
         import("@/lib/pricing").then(async ({ resolveQuotedAmount, saveQuotedAmount }) => {
@@ -958,6 +969,20 @@ export async function executeTool(
             } catch (e) {
               console.error("[voice] selectTechnician failed:", e)
             }
+          }
+          // No real street address (zip-only, or none) → the tech has an
+          // area, not a door. Flag it loudly; the office collects the street
+          // before dispatch. Never blocks — the confirmation is already
+          // spoken by the time tools run on a voice turn.
+          if (!isCompleteServiceAddress(address ?? (leadRow?.address as string | null))) {
+            console.error(`[voice] booking ${apt.id} has no full street address (have: ${JSON.stringify(address ?? leadRow?.address ?? null)})`)
+            await db.from("leads").update({ status: "needs_attention" }).eq("id", session.lead_id)
+            const { data: aptRow } = await db.from("appointments").select("notes").eq("id", apt.id).maybeSingle()
+            await db.from("appointments").update({
+              notes: [aptRow?.notes, "⚠️ No full street address on file — collect it before dispatch."].filter(Boolean).join(" | "),
+            }).eq("id", apt.id)
+            const { notifyNeedsAttention } = await import("@/lib/notifications")
+            notifyNeedsAttention(session.company_id, "Voice booking has no street address — collect before dispatch", "").catch(() => {})
           }
           auditBooking(apt.id, techId)
           // HCP-mode companies: mirror the booking into Housecall Pro — same
@@ -1019,6 +1044,8 @@ export async function executeTool(
         notes: [reason, hcpPushed ? "Customer rescheduled by phone — move the Housecall Pro job to the new time manually." : null]
           .filter(Boolean).join(" | "),
         rescheduled_from: oldApt?.scheduled_at ?? null,
+        confirmation_sms_sent: false,
+        confirmation_email_sent: false,
         reminder_2d_email_sent: false,
         reminder_2d_sms_sent: false,
         reminder_1d_email_sent: false,
