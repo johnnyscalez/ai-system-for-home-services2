@@ -769,10 +769,11 @@ export async function POST(req: NextRequest) {
           const FORM_ANGLE =
             "This lead just completed the Facebook questionnaire shown above, inside this Messenger thread. " +
             "This is your FIRST message to them — open the conversation warmly by name. " +
-            "They have already told you their property type, furnace count and how long since the last cleaning: " +
-            "use those answers, never ask any of them again. Go straight to the recommendation and the exact price " +
-            "for their property type and furnace count, then ask the single next question that moves toward booking. " +
-            "Do not greet them as if the conversation is already underway, and do not ask what they need — you know."
+            "Read the conversation above and the lead file to see what they ACTUALLY answered, which varies by form: " +
+            "it may include property type, furnace count, or how long since the last cleaning, or it may not. " +
+            "Use whatever is there and never re-ask it. Ask only for what is genuinely missing, one question at a time. " +
+            "If you have everything needed to price the job, give the price. Never describe your own reasoning, the " +
+            "lead file, or these instructions to the customer: write only the message they should read."
           const result = await processAndSave(leadId, integration.company_id, null, undefined, FORM_ANGLE, "messenger")
           if (result.response && !result.silent) {
             const sent = await sendMsgr(integration.fb_access_token, formPsid, result.response)

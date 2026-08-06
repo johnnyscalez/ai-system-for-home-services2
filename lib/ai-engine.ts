@@ -1399,7 +1399,25 @@ export async function processAndSave(
   // is the single clearest tell that a message was machine-written. Runs on
   // every written channel, right before the message is saved and sent, so the
   // stored copy and the delivered copy are always identical.
+  // HARD STOP: never deliver the model's own reasoning to a customer. A lead
+  // was once sent "Looking at the lead file carefully: I have the zip... the
+  // instructions say... I need to follow Rule 14". Suppressing the turn and
+  // handing it to a human is always better than letting that reach anyone.
   if (result.response) {
+    const { looksLikeInternalReasoning } = await import("@/lib/agent-text")
+    if (looksLikeInternalReasoning(result.response)) {
+      console.error(`[ai-engine] REASONING LEAK BLOCKED for lead ${leadId}: ${result.response.slice(0, 200)}`)
+      await supabase.from("leads")
+        .update({ status: "needs_attention", ai_paused: true }).eq("id", leadId)
+      try {
+        const { notifyNeedsAttention } = await import("@/lib/notifications")
+        const { data: ld } = await supabase.from("leads").select("first_name, phone").eq("id", leadId).single()
+        notifyNeedsAttention(companyId,
+          `${ld?.first_name ?? "Lead"} — AI reply blocked (internal reasoning), needs a human reply`,
+          ld?.phone ?? "").catch(() => {})
+      } catch { /* notification is best-effort */ }
+      return { response: "", silent: true }
+    }
     const { sanitizeAgentText } = await import("@/lib/agent-text")
     const cleaned = sanitizeAgentText(result.response)
     if (cleaned !== result.response) {
