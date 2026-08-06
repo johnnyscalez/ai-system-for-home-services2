@@ -1608,7 +1608,7 @@ export async function processAndSave(
       }
 
       // Create appointment — with pre-selected tech if available
-      const { data: insertedApt } = alreadyBookedId ? { data: null } : await supabase
+      const insertRes = alreadyBookedId ? null : await supabase
         .from("appointments")
         .insert({
           lead_id:              leadId,
@@ -1625,7 +1625,24 @@ export async function processAndSave(
         .single()
 
       // One handle downstream, whether we inserted or matched an existing one.
-      const apt = insertedApt ?? (alreadyBookedId ? { id: alreadyBookedId } : null)
+      let apt = insertRes?.data ?? (alreadyBookedId ? { id: alreadyBookedId } : null)
+
+      // The DB enforces ONE active AI appointment per lead (partial unique
+      // index — Wafaa incident). If a concurrent writer won the race between
+      // our guard's read and this insert, adopt their row instead of failing.
+      if (!apt && insertRes?.error && (insertRes.error as { code?: string }).code === "23505") {
+        const { data: raced } = await supabase
+          .from("appointments")
+          .select("id")
+          .eq("lead_id", leadId).eq("status", "scheduled")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (raced) {
+          console.log(`[ai-engine] duplicate insert blocked by unique index — adopting ${raced.id}`)
+          apt = { id: raced.id }
+        }
+      }
 
       // Mirror onto the GoHighLevel calendar when the company books there:
       // GHL owns the meeting link and the confirmation email, and the entry

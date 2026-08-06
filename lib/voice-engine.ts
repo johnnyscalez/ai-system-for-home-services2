@@ -6,7 +6,9 @@ import { createCalendarEvent } from "@/lib/google-calendar"
 import { determineAgentType, getAgentPrompt, getJobKnowledgeBlock } from "@/lib/voice-agents"
 import { updateSession, appendMessages } from "@/lib/voice-session"
 import { getJobTypeLabel, JOB_TYPES, JOB_TYPE_TOOL_DESCRIPTION } from "@/lib/job-types"
-import { selectTechnician, getTechnicianContextForCompany, findSlotsForLead } from "@/lib/technician-booking"
+import { selectTechnician, getTechnicianContextForCompany, findSlotsForLead, sameWindowBucket } from "@/lib/technician-booking"
+import { zipFromAddress } from "@/lib/routing"
+import { zipToTimeZone } from "@/lib/timezones"
 import type { VoiceSession, VoiceMessage } from "@/lib/voice-session"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
@@ -44,6 +46,8 @@ MANDATORY RULES — never break these:
 14. PIVOT AFTER ANSWERING: When you answer a question the lead asked (cost, timeline, what's included) without needing their input, end that same response with your next qualifying question. Do NOT stop and wait silently after answering.
 15. VISIT FEE / TRIP CHARGE: If a SERVICE CALL FEE POLICY block appears in this system prompt, follow it exactly when asked about cost to come out. Never say "free" unless that policy says so. If no SERVICE CALL FEE POLICY block is present, say "It's completely free — no trip charge."
 16. BOOKING — NO DISAMBIGUATION LOOPS: When the lead accepts a day or day-part ("Monday morning works", "tomorrow's fine"), pick the EARLIEST matching slot from the find_available_slots results and book it immediately: confirm once with the specific window ("Perfect — Monday morning, eight to ten, at [Address]") and call book_appointment in that same turn. NEVER re-ask which window. NEVER say "I've got you down" without calling book_appointment.
+17. BOOK ONCE: book_appointment is called EXACTLY ONE TIME per call. If an "APPOINTMENT ALREADY BOOKED THIS CALL" block appears in this prompt, the booking is DONE — "okay", "yes", "thank you", "bye" are NOT requests to book again. Never call book_appointment after that block appears; for a time change call reschedule_appointment instead.
+18. PRICE CAPTURE: When a total price was agreed on this call, ALWAYS pass quoted_total (total dollars, all units combined) and unit_count when calling book_appointment. Use the FINAL corrected numbers — if the caller first said two furnaces and then corrected to one, one is the truth.
 === END VOICE RULES ===`
 
 // ─── Tool definitions ──────────────────────────────────────────────────────────
@@ -72,15 +76,17 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "book_appointment",
     description:
-      "Book a new appointment. Call ONLY when: (1) caller confirmed a specific date and time, AND (2) you have their full service address. Convert relative times to ISO 8601 using today's date from the lead file. Never call without address.",
+      "Book a new appointment. Call ONLY when: (1) caller confirmed a specific date and time, AND (2) you have their full service address. Convert relative times to ISO 8601 using today's date from the lead file. Never call without address. Call this ONCE per call — if an APPOINTMENT ALREADY BOOKED block is in your prompt, the job is booked; use reschedule_appointment for changes, never this tool again.",
     input_schema: {
       type: "object" as const,
       properties: {
         scheduled_at: { type: "string", description: "ISO 8601 datetime" },
         address: { type: "string", description: "Full service address. REQUIRED." },
+        zip: { type: "string", description: "The 5-digit ZIP code of the service address (the zip at the END of the address, never the house number)." },
         notes: { type: "string", description: "System type, age, issue description, urgency" },
-        quoted_total: { type: "number", description: "TOTAL dollars the caller agreed to for this job, all units combined. Pass whenever a fixed price was agreed. Omit for free-estimate visits. Never invent a number." },
-        unit_count: { type: "number", description: "How many units the price covers (furnaces / systems)." },
+        quoted_total: { type: "number", description: "TOTAL dollars the caller agreed to for this job, all units combined. Pass whenever a fixed price was agreed — use the FINAL corrected agreement. Omit for free-estimate visits. Never invent a number." },
+        unit_count: { type: "number", description: "How many units the price covers (furnaces / systems) — the final corrected count." },
+        property_type: { type: "string", description: "house | townhome | condo | apartment | commercial" },
       },
       required: ["scheduled_at", "address"],
     },
@@ -369,9 +375,25 @@ from the description above.`
     )
   }
 
+  // Once a booking exists, the slots block and its "book IMMEDIATELY" pressure
+  // must DISAPPEAR from the prompt — leaving it in produced one booking per
+  // conversational turn for the rest of a live call ("Okay" → book, "Thanks"
+  // → book, "Bye" → book: 10 duplicate HCP jobs, live incident: Wafaa). The
+  // booked block replaces it and points every change at reschedule/cancel.
+  const bookedBlock = session.collected?.appointment_booked === "true"
+    ? `=== APPOINTMENT ALREADY BOOKED THIS CALL — BOOKING IS DONE ===
+${session.collected.appointment_label ? `Booked: ${session.collected.appointment_label}${session.collected.address ? ` at ${session.collected.address}` : ""}.` : "The appointment is booked."}
+NEVER call book_appointment again on this call — every repeat call creates a duplicate job on the company's schedule.
+"Okay", "yes", "sounds good", "thank you", "bye" are the caller ACKNOWLEDGING the booking, not asking to book again.
+If the caller wants a DIFFERENT day or time: call reschedule_appointment${session.collected.appointment_id ? ` with appointment_id "${session.collected.appointment_id}"` : " (ID in UPCOMING APPOINTMENTS)"}.
+If they want to cancel: offer to reschedule first, then cancel_appointment.
+Otherwise just answer their questions and wrap up warmly.
+=== END APPOINTMENT ALREADY BOOKED ===`
+    : ""
+
   // Slots fetched earlier in THIS call — inject so the model books with the
   // exact ISO instead of re-calling find_available_slots every turn.
-  const offeredSlotsBlock = session.collected?.available_slots
+  const offeredSlotsBlock = !bookedBlock && session.collected?.available_slots
     ? `=== SLOTS ALREADY CHECKED THIS CALL — DO NOT CHECK AGAIN ===
 These real slots were already fetched for the caller's zip (do NOT call find_available_slots again unless the address changes):
 ${session.collected.available_slots}
@@ -380,7 +402,7 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
     : ""
 
   // Note: no pre-computed slots block on fresh calls — the agent calls find_available_slots after getting zip code.
-  const systemPrompt = [voiceRules, basePrompt, pricingPolicyBlock, financingBlock, jobKnowledgeBlock, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext, offeredSlotsBlock, hcpBlock, historyBlock]
+  const systemPrompt = [voiceRules, basePrompt, pricingPolicyBlock, financingBlock, jobKnowledgeBlock, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext, bookedBlock, offeredSlotsBlock, hcpBlock, historyBlock]
     .filter(Boolean)
     .join("\n\n")
 
@@ -542,6 +564,16 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
       // never reaches book_appointment.
       session.collected = { ...session.collected, available_slots: slotLines }
       await updateSession(session.call_sid, { collected: session.collected })
+      // Slot→tech map, same shape the SMS engine writes: the slot engine just
+      // decided WHICH tech each slot belongs to — throwing that away forced a
+      // post-insert re-selection that raced the HCP push, and every voice job
+      // landed in HCP unassigned (live: Wafaa → stamped onto the wrong tech).
+      // book_appointment reads this map to insert WITH the technician.
+      const voiceSlotMap: Record<string, { tech_id: string; tech_name: string; iso?: string }> = {}
+      for (const s of slotsResult.slots) {
+        voiceSlotMap[s.isoStart.substring(0, 16)] = { tech_id: s.techId, tech_name: s.techName, iso: s.isoStart }
+      }
+      await db.from("leads").update({ selected_slots: voiceSlotMap }).eq("id", session.lead_id)
     }
 
     // Real tool call → proper tool_result exchange (answering EVERY tool_use id).
@@ -701,8 +733,9 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
 }
 
 // ─── Tool execution ────────────────────────────────────────────────────────────
+// Exported for the booking test battery — production callers stay in-module.
 
-async function executeTool(
+export async function executeTool(
   tool: { name: string; id: string; input: Record<string, unknown> },
   session: VoiceSession,
   db: ReturnType<typeof createServiceRoleClient>,
@@ -716,13 +749,140 @@ async function executeTool(
       return { type: "continue" }
 
     case "book_appointment": {
-      const { scheduled_at, address, notes, quoted_total, unit_count } = tool.input as { scheduled_at: string; address: string; notes?: string; quoted_total?: number; unit_count?: number }
+      const { scheduled_at, address, notes, quoted_total, unit_count, property_type, zip: zipInput } = tool.input as {
+        scheduled_at: string; address: string; notes?: string
+        quoted_total?: number; unit_count?: number; property_type?: string; zip?: string
+      }
 
       // Guard: the model must pass a parseable datetime. A bad value would
       // fail the insert silently while the lead is told they're booked.
       if (!scheduled_at || isNaN(new Date(scheduled_at).getTime())) {
         console.error("[voice] book_appointment got invalid scheduled_at:", JSON.stringify(scheduled_at))
         return { type: "continue" }
+      }
+      const bookMs = new Date(scheduled_at).getTime()
+
+      const { data: leadRow } = await db.from("leads")
+        .select("job_type, address, selected_slots")
+        .eq("id", session.lead_id)
+        .single()
+      const jobType = (leadRow?.job_type as string | null) ?? null
+      // Zip resolution: the model's structured zip → the address it passed →
+      // the address on file. Extraction is always last-5-digit-group so a
+      // 5-digit HOUSE number can never win (live: Wafaa, HCP zip "13496").
+      const zip =
+        (typeof zipInput === "string" && /^\d{5}$/.test(zipInput.trim()) ? zipInput.trim() : null) ??
+        zipFromAddress(address) ??
+        zipFromAddress(leadRow?.address as string | null)
+
+      // Tech decided at SLOT time — find_available_slots wrote the slot→tech
+      // map, and the booking inherits it so the HCP push carries the
+      // assignment from the first second instead of racing a re-selection
+      // (live: every voice job reached HCP unassigned → wrong tech stamped).
+      const slotMap = (leadRow?.selected_slots ?? {}) as Record<string, { tech_id?: string; tech_name?: string }>
+      const mapTech = slotMap[new Date(bookMs).toISOString().substring(0, 16)] ?? null
+
+      const rememberBooking = async (aptId: string, atMs: number) => {
+        const label = new Date(atMs).toLocaleString("en-US", {
+          timeZone: zipToTimeZone(zip) ?? tz,
+          weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
+        })
+        session.collected = {
+          ...session.collected,
+          appointment_booked: "true",
+          appointment_id: aptId,
+          appointment_label: label,
+          ...(address ? { address } : {}),
+        }
+        await updateSession(session.call_sid, { stage: "confirmation", collected: session.collected })
+      }
+
+      // Policy audit AFTER the caller is answered — flags loudly, never blocks
+      // a live call. Same validator the SMS engine runs before its inserts:
+      // company service area, tech territory, window capacity, daily cap,
+      // anchor day, minimum lead time.
+      const auditBooking = (aptId: string, techId: string | null) => {
+        if (!techId) return
+        import("@/lib/technician-booking")
+          .then(({ techCanTakeBooking }) => techCanTakeBooking(techId, jobType, zip, scheduled_at, session.lead_id, aptId))
+          .then(async (ok) => {
+            if (ok) return
+            console.error(`[voice] booking ${aptId} failed policy audit (tech=${techId} zip=${zip} at=${scheduled_at})`)
+            await db.from("leads").update({ status: "needs_attention" }).eq("id", session.lead_id)
+            const { data: aptRow } = await db.from("appointments").select("notes").eq("id", aptId).maybeSingle()
+            await db.from("appointments").update({
+              notes: [aptRow?.notes, "⚠️ Voice booking outside policy (zip coverage / capacity / lead time) — office review needed."]
+                .filter(Boolean).join(" | "),
+            }).eq("id", aptId)
+            const { notifyNeedsAttention } = await import("@/lib/notifications")
+            notifyNeedsAttention(session.company_id, "Voice booking needs review — outside coverage or capacity", "").catch(() => {})
+          })
+          .catch((e) => console.error("[voice] booking audit failed:", e))
+      }
+
+      // ── One active AI booking per lead ────────────────────────────────────
+      // Mirrors the SMS engine's guard (a DB unique index backstops both):
+      // the same slot again → no-op; a different time → MOVE the existing
+      // appointment. Without this, every acknowledgement after the first
+      // booking ("okay", "thanks", "bye") became another appointment — ten
+      // duplicate HCP jobs on one call (live: Wafaa).
+      const { data: existing } = await db.from("appointments")
+        .select("id, scheduled_at, hcp_job_id, technician_id, technician_name, address, notes")
+        .eq("lead_id", session.lead_id)
+        .eq("status", "scheduled")
+        .gte("scheduled_at", new Date(Date.now() - 60 * 60 * 1000).toISOString())
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle()
+
+      if (existing) {
+        const sameTime = Math.abs(Date.parse(existing.scheduled_at) - bookMs) < 60_000
+        const duplicate = sameTime ||
+          await sameWindowBucket(session.company_id, existing.scheduled_at, scheduled_at, zip).catch(() => false)
+        if (duplicate) {
+          console.log(`[voice] duplicate booking suppressed — lead ${session.lead_id} already booked at ${existing.scheduled_at}`)
+          await rememberBooking(existing.id, Date.parse(existing.scheduled_at))
+          return { type: "continue" }
+        }
+
+        // Different day/window while an appointment exists = a reschedule.
+        const pushed = !!existing.hcp_job_id && !String(existing.hcp_job_id).startsWith("pending:")
+        const updates: Record<string, unknown> = {
+          scheduled_at,
+          rescheduled_from: existing.scheduled_at,
+          reminder_2d_email_sent: false, reminder_2d_sms_sent: false,
+          reminder_1d_email_sent: false, reminder_1d_sms_sent: false,
+          reminder_2h_email_sent: false, reminder_2h_sms_sent: false,
+        }
+        if (mapTech?.tech_id) {
+          updates.technician_id = mapTech.tech_id
+          updates.technician_name = mapTech.tech_name ?? null
+        }
+        if (address) updates.address = address
+        if (pushed) {
+          // The HCP API cannot move a job — the office must, by hand. Say so
+          // on the row; the reconcile pass knows not to revert this change.
+          updates.notes = [existing.notes, "Customer rescheduled by phone — move the Housecall Pro job to the new time manually."]
+            .filter(Boolean).join(" | ")
+        }
+        await db.from("appointments").update(updates).eq("id", existing.id)
+        await db.from("leads").update({
+          status: "appointment_booked",
+          last_message_at: new Date().toISOString(),
+          ...(address ? { address } : {}),
+        }).eq("id", session.lead_id)
+        await rememberBooking(existing.id, bookMs)
+        if (pushed) {
+          const { notifyNeedsAttention } = await import("@/lib/notifications")
+          notifyNeedsAttention(session.company_id, "Phone reschedule — move the Housecall Pro job manually", "").catch(() => {})
+        } else {
+          import("@/lib/housecall-sync")
+            .then(({ pushBookingToHcp }) => pushBookingToHcp(existing.id))
+            .catch((err) => console.error("[hcp-sync] voice reschedule push failed:", err))
+        }
+        auditBooking(existing.id, (mapTech?.tech_id ?? existing.technician_id) as string | null)
+        console.log(`[voice] duplicate booking collapsed into ${existing.id} — moved to ${scheduled_at}`)
+        return { type: "book", scheduled_at, address: address ?? (existing.address as string | null) ?? "", notes }
       }
 
       const { data: apt, error: aptErr } = await db.from("appointments").insert({
@@ -732,9 +892,27 @@ async function executeTool(
         address:             address ?? null,
         notes:               notes ?? null,
         status:              "scheduled",
+        origin:              "ai",
         confirmation_status: "pending_confirmation",
+        technician_id:       mapTech?.tech_id ?? null,
+        technician_name:     mapTech?.tech_name ?? null,
       }).select().single()
-      if (aptErr) console.error("[voice] appointment insert FAILED:", aptErr.message, "| scheduled_at:", scheduled_at)
+      if (aptErr) {
+        // Unique-index race (two bookings landing simultaneously): the other
+        // writer already created the row — adopt it instead of failing.
+        if ((aptErr as { code?: string }).code === "23505") {
+          const { data: raced } = await db.from("appointments")
+            .select("id, scheduled_at")
+            .eq("lead_id", session.lead_id).eq("status", "scheduled")
+            .order("created_at", { ascending: false }).limit(1).maybeSingle()
+          if (raced) {
+            console.log(`[voice] duplicate insert blocked by unique index — adopting ${raced.id}`)
+            await rememberBooking(raced.id, Date.parse(raced.scheduled_at))
+            return { type: "continue" }
+          }
+        }
+        console.error("[voice] appointment insert FAILED:", aptErr.message, "| scheduled_at:", scheduled_at)
+      }
 
       await db.from("leads").update({
         status:          "appointment_booked",
@@ -742,52 +920,51 @@ async function executeTool(
         address:         address ?? undefined,
       }).eq("id", session.lead_id)
 
-      await updateSession(session.call_sid, {
-        stage:     "confirmation",
-        collected: { ...session.collected, appointment_booked: "true", address },
-      })
-
-      // Smart technician selection. Failures are FLAGGED, never swallowed —
-      // the silent .catch(() => {}) here let wrong-tech and no-tech outcomes
-      // vanish (audit C6). Still non-blocking for the caller experience.
       if (apt) {
-        const { data: lead } = await db.from("leads").select("job_type").eq("id", session.lead_id).single()
-        const zip = address?.match(/\b\d{5}\b/g)?.slice(-1)[0] ?? null
+        await rememberBooking(apt.id, bookMs)
 
         // Record what was SOLD (same ladder as SMS/Messenger). Non-blocking:
         // never delay a live call on pricing bookkeeping.
         import("@/lib/pricing").then(async ({ resolveQuotedAmount, saveQuotedAmount }) => {
           const q = await resolveQuotedAmount({
             companyId: session.company_id, leadId: session.lead_id,
-            jobType: (lead?.job_type as string | null) ?? null,
+            jobType,
             agentTotalCents: typeof quoted_total === "number" ? Math.round(quoted_total * 100) : null,
             agentUnitCount: typeof unit_count === "number" ? Math.round(unit_count) : null,
-            agentPropertyType: null,
+            agentPropertyType: typeof property_type === "string" ? property_type : null,
           })
           await saveQuotedAmount(apt.id, session.lead_id, q)
         }).catch((e) => console.error("[voice] quoted-amount resolution failed:", e))
 
-        selectTechnician(session.company_id, apt.id, scheduled_at, lead?.job_type as string | null, zip)
-          .then(async (res) => {
-            if (!res.found) {
-              const { flagNoTechAvailable } = await import("@/lib/technician-booking")
-              await flagNoTechAvailable(apt.id, res.reason, session.company_id)
-              const { notifyNeedsAttention } = await import("@/lib/notifications")
-              notifyNeedsAttention(session.company_id, "Voice booking needs manual dispatch", "").catch(() => {})
+        // Tech, then audit, then the HCP push — strictly ORDERED in one chain
+        // (still fire-and-forget for the caller). The old code launched
+        // selectTechnician and pushBookingToHcp in parallel; the push always
+        // won the race, read technician_id as NULL, and every voice job
+        // landed in HCP unassigned — where it got stamped onto the wrong
+        // tech and mirrored back over our own data (live: Wafaa / Jason B).
+        const finalize = async () => {
+          let techId: string | null = mapTech?.tech_id ?? null
+          if (!techId) {
+            try {
+              const res = await selectTechnician(session.company_id, apt.id, scheduled_at, jobType, zip)
+              if (res.found) {
+                techId = res.technician.id
+              } else {
+                const { flagNoTechAvailable } = await import("@/lib/technician-booking")
+                await flagNoTechAvailable(apt.id, res.reason, session.company_id)
+                const { notifyNeedsAttention } = await import("@/lib/notifications")
+                notifyNeedsAttention(session.company_id, "Voice booking needs manual dispatch", "").catch(() => {})
+              }
+            } catch (e) {
+              console.error("[voice] selectTechnician failed:", e)
             }
-          })
-          .catch((e) => console.error("[voice] selectTechnician failed:", e))
-      }
-
-      // HCP-mode companies: mirror the booking into Housecall Pro as a real
-      // job — same as the SMS/Messenger/WhatsApp engine. Fire-and-forget so
-      // the caller never waits on HCP; failed pushes retry via the
-      // reconciliation cron. (Voice is the after-hours flagship — bookings
-      // made at 11pm must be on the board when the office opens.)
-      if (apt) {
-        import("@/lib/housecall-sync")
-          .then(({ pushBookingToHcp }) => pushBookingToHcp(apt.id))
-          .catch((err) => console.error("[hcp-sync] voice booking push failed:", err))
+          }
+          auditBooking(apt.id, techId)
+          // HCP-mode companies: mirror the booking into Housecall Pro — same
+          // as the SMS/Messenger engine. Failed pushes retry via the cron.
+          await import("@/lib/housecall-sync").then(({ pushBookingToHcp }) => pushBookingToHcp(apt.id))
+        }
+        finalize().catch((err) => console.error("[hcp-sync] voice booking push failed:", err))
       }
 
       // Google Calendar sync
@@ -827,13 +1004,20 @@ async function executeTool(
       }
 
       const { data: oldApt } = await db.from("appointments")
-        .select("scheduled_at, google_event_id")
+        .select("scheduled_at, google_event_id, hcp_job_id, notes")
         .eq("id", appointment_id)
         .single()
 
+      // A job already mirrored into Housecall Pro can't be moved via their
+      // API — the office must move it by hand. Mark the row (the reconcile
+      // pass reads rescheduled_from and won't revert us to HCP's stale time)
+      // and ping the office.
+      const hcpPushed = !!oldApt?.hcp_job_id && !String(oldApt.hcp_job_id).startsWith("pending:")
+
       await db.from("appointments").update({
         scheduled_at: new_scheduled_at,
-        notes: reason,
+        notes: [reason, hcpPushed ? "Customer rescheduled by phone — move the Housecall Pro job to the new time manually." : null]
+          .filter(Boolean).join(" | "),
         rescheduled_from: oldApt?.scheduled_at ?? null,
         reminder_2d_email_sent: false,
         reminder_2d_sms_sent: false,
@@ -846,6 +1030,23 @@ async function executeTool(
       await db.from("leads")
         .update({ status: "appointment_booked", last_message_at: new Date().toISOString() })
         .eq("id", session.lead_id)
+
+      if (hcpPushed) {
+        const { notifyNeedsAttention } = await import("@/lib/notifications")
+        notifyNeedsAttention(session.company_id, "Phone reschedule — move the Housecall Pro job manually", "").catch(() => {})
+      }
+      // Fresh confirmation for the NEW time (reminder clocks restarted above)
+      import("@/lib/appointment-reminders")
+        .then(({ sendConfirmations }) => sendConfirmations(appointment_id))
+        .catch(() => {})
+      // Session state: the call's booked appointment moved
+      if (session.collected?.appointment_booked === "true") {
+        const newLabel = new Date(new_scheduled_at).toLocaleString("en-US", {
+          timeZone: tz, weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit",
+        })
+        session.collected = { ...session.collected, appointment_id, appointment_label: newLabel }
+        await updateSession(session.call_sid, { collected: session.collected })
+      }
 
       if (oldApt?.google_event_id) {
         try {

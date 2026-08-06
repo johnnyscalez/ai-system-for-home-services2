@@ -194,9 +194,14 @@ async function extractQuotedFromTranscript(leadId: string): Promise<number | nul
       role: "user",
       content:
         `Read this booking conversation and report the TOTAL price the customer agreed to pay.\n\n` +
-        `Rules: report the final agreed total, not a per-unit rate and not a price the customer ` +
-        `declined. If two furnaces at $189 each were agreed, the total is 378. If the visit is a ` +
-        `free estimate or no price was agreed, omit the field. Any language.\n\n${transcript}`,
+        `Rules: report the FINAL agreed total, not a per-unit rate and not a price the customer ` +
+        `declined. CORRECTIONS WIN: if an earlier detail was later corrected, only the final ` +
+        `corrected version counts — a customer who first said two furnaces and later settled on ` +
+        `one furnace at $189 agreed to 189, never 378. Never multiply units yourself unless the ` +
+        `agent explicitly stated that multiplied total and the customer accepted it. When the ` +
+        `agent's last stated total was accepted (with words like "ok", "yes", "sounds good"), ` +
+        `that number is the answer. If the visit is a free estimate or no price was agreed, ` +
+        `omit the field. Any language.\n\n${transcript}`,
     }],
   })
   const block = res.content.find((b) => b.type === "tool_use")

@@ -486,7 +486,11 @@ export async function techCanTakeBooking(
   jobType: string | null,
   zip: string | null,
   scheduledAt?: string | null,
-  leadId?: string | null
+  leadId?: string | null,
+  // POST-insert audit mode (voice): the appointment under review is already a
+  // row, and without excluding it the window-conflict check reports the
+  // booking as colliding with ITSELF. Pre-insert callers (SMS) leave it unset.
+  excludeAppointmentId?: string | null
 ): Promise<boolean> {
   const db = createServiceRoleClient()
   const { data: t } = await db
@@ -545,13 +549,15 @@ export async function techCanTakeBooking(
 
       // The tech's whole local day, ±1 calendar day of slack for UTC offsets
       const DAY = 24 * 60 * 60 * 1000
-      const { data: dayApts } = await db
+      let dayQuery = db
         .from("appointments")
         .select("id, scheduled_at")
         .eq("technician_id", technicianId)
         .eq("status", "scheduled")
         .gte("scheduled_at", new Date(startMs - DAY).toISOString())
         .lte("scheduled_at", new Date(startMs + DAY).toISOString())
+      if (excludeAppointmentId) dayQuery = dayQuery.neq("id", excludeAppointmentId)
+      const { data: dayApts } = await dayQuery
       const sameDay = (dayApts ?? []).filter((a) => localParts(Date.parse(a.scheduled_at)).dateStr === target.dateStr)
 
       if (targetWin) {
@@ -656,6 +662,50 @@ export async function techCanTakeBooking(
     if (!(t.serves_all_areas || !(t.zip_codes as string[])?.length || (t.zip_codes as string[]).includes(z))) return false
   }
   return true
+}
+
+/** Do two instants land in the SAME local day and SAME arrival window for
+ *  this company (judged in the lead's timezone when the zip reveals one)?
+ *  Used by the voice duplicate-booking guard: a model re-booking "3:30" after
+ *  booking "3:00" is the same 3–6 window — a duplicate, not a reschedule. */
+export async function sameWindowBucket(
+  companyId: string,
+  isoA: string,
+  isoB: string,
+  zip: string | null
+): Promise<boolean> {
+  const aMs = Date.parse(isoA)
+  const bMs = Date.parse(isoB)
+  if (Number.isNaN(aMs) || Number.isNaN(bMs)) return false
+  const db = createServiceRoleClient()
+  const { data: cfg } = await db
+    .from("ai_agent_config")
+    .select("appointment_windows, timezone")
+    .eq("company_id", companyId)
+    .maybeSingle()
+  const tz = zipToTimeZone(zip) ?? (cfg?.timezone as string | null) ?? "America/New_York"
+  const windows = ((cfg?.appointment_windows as AppointmentWindow[] | null) ?? DEFAULT_WINDOWS)
+    .filter((w) => w.enabled)
+  const toMin = (s: string) => parseInt(s.slice(0, 2), 10) * 60 + parseInt(s.slice(3, 5), 10)
+  const keyOf = (ms: number): string | null => {
+    const d = new Date(ms)
+    const dateStr = d.toLocaleDateString("en-CA", { timeZone: tz })
+    const hm = d.toLocaleTimeString("en-GB", { timeZone: tz, hour: "2-digit", minute: "2-digit" })
+    const mins = parseInt(hm.slice(0, 2), 10) * 60 + parseInt(hm.slice(3, 5), 10)
+    const win =
+      windows.find((w) => toMin(w.start) === mins) ??
+      windows.find((w) => mins >= toMin(w.start) && mins < toMin(w.end)) ??
+      null
+    return win ? `${dateStr}|${win.id}` : null
+  }
+  const a = keyOf(aMs)
+  const b = keyOf(bMs)
+  if (a !== null && b !== null) return a === b
+  // A time no enabled window can classify (legacy configs leave gaps, e.g. a
+  // disabled 3–5 slot): fall back to the old ±2h job envelope — the same
+  // local day within two hours is the same intended visit, not a reschedule.
+  const dayOf = (ms: number) => new Date(ms).toLocaleDateString("en-CA", { timeZone: tz })
+  return dayOf(aMs) === dayOf(bMs) && Math.abs(aMs - bMs) < 2 * 60 * 60 * 1000
 }
 
 /** Is this tech's day already a real work day (≥1 other job, ours or HCP)?

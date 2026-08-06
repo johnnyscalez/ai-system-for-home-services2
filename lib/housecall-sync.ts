@@ -1,5 +1,6 @@
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { getHcpClient, HcpClient, HcpCustomer, HcpJob } from "@/lib/housecall"
+import { zipFromAddress } from "@/lib/routing"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Housecall Pro synchronization engine — the single code path for all flows.
@@ -141,10 +142,15 @@ export async function resolveOrCreateCustomer(
   return found.id
 }
 
-// Best-effort parse of a freeform US address string
-function parseAddress(address: string | null): { street: string; city?: string; state?: string; zip?: string; country: string } | null {
+// Best-effort parse of a freeform US address string (exported for tests)
+export function parseAddress(address: string | null): { street: string; city?: string; state?: string; zip?: string; country: string } | null {
   if (!address?.trim()) return null
-  const zip = address.match(/\b(\d{5})(?:-\d{4})?\b/)?.[1]
+  // Shared last-group extractor (lib/routing) — the local first-match regex
+  // took the HOUSE NUMBER as the zip whenever it was 5 digits ("13496 Melanie
+  // Dr., ... 48313" created the HCP address with zip 13496, live: Wafaa).
+  // Routing, timezones and the SMS engine already extract this way; the HCP
+  // address writer was the last first-match holdout.
+  const zip = zipFromAddress(address) ?? undefined
   const parts = address.split(",").map((p) => p.trim()).filter(Boolean)
   const street = parts[0] ?? address.trim()
   const city = parts.length > 1 ? parts[1].replace(/\b\d{5}(-\d{4})?\b/, "").trim() || undefined : undefined
@@ -334,7 +340,7 @@ export async function upsertJobFromHcp(
   // 1. Our appointment for this job?
   const { data: ourApt } = await db
     .from("appointments")
-    .select("id, lead_id, scheduled_at, status, origin")
+    .select("id, lead_id, scheduled_at, status, origin, rescheduled_from")
     .eq("company_id", companyId)
     .eq("hcp_job_id", job.id)
     .maybeSingle()
@@ -350,15 +356,27 @@ export async function upsertJobFromHcp(
     const updates: Record<string, unknown> = { hcp_synced_at: new Date().toISOString() }
 
     if (scheduledStart && new Date(scheduledStart).getTime() !== new Date(ourApt.scheduled_at).getTime()) {
-      updates.scheduled_at = scheduledStart
-      updates.rescheduled_from = ourApt.scheduled_at
-      updates.hcp_manually_edited = true
-      // Rescheduled in HCP → reminder clocks restart
-      Object.assign(updates, {
-        reminder_2d_email_sent: false, reminder_2d_sms_sent: false,
-        reminder_1d_email_sent: false, reminder_1d_sms_sent: false,
-        reminder_2h_email_sent: false, reminder_2h_sms_sent: false,
-      })
+      // Pending local reschedule: the customer moved the time BY PHONE, the
+      // HCP job can't be edited through the API, and the office hasn't moved
+      // it yet — HCP still shows the PRE-reschedule time. Treating HCP as
+      // truth here would silently revert the customer's change (they'd be
+      // told one time while the board shows another). Skip until the office
+      // moves the job; any OTHER HCP-side time means the office acted, and
+      // HCP wins as always.
+      const pendingLocalReschedule =
+        ourApt.rescheduled_from &&
+        new Date(scheduledStart).getTime() === new Date(ourApt.rescheduled_from as string).getTime()
+      if (!pendingLocalReschedule) {
+        updates.scheduled_at = scheduledStart
+        updates.rescheduled_from = ourApt.scheduled_at
+        updates.hcp_manually_edited = true
+        // Rescheduled in HCP → reminder clocks restart
+        Object.assign(updates, {
+          reminder_2d_email_sent: false, reminder_2d_sms_sent: false,
+          reminder_1d_email_sent: false, reminder_1d_sms_sent: false,
+          reminder_2h_email_sent: false, reminder_2h_sms_sent: false,
+        })
+      }
     }
 
     if (jobStatus === "cancelled" && ourApt.status !== "cancelled") {

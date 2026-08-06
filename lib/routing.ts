@@ -74,9 +74,22 @@ export function zipFromAddress(address: string | null | undefined): string | nul
   // 5-digit STREET numbers are common ("29901 Common Rd ... 48066" — the
   // first-match version returned 29901, a South Carolina zip, which broke
   // tech assignment for a Michigan booking in live testing).
-  const matches = address?.match(/\b\d{5}(?:-\d{4})?\b/g)
-  if (!matches?.length) return null
-  return matches[matches.length - 1].slice(0, 5)
+  if (!address) return null
+  const matches = [...address.matchAll(/\b(\d{5})(?:-\d{4})?\b/g)]
+  if (!matches.length) return null
+  const last = matches[matches.length - 1]
+  // A LONE 5-digit group that opens the string and is followed by a street
+  // name is a house number, not a zip ("13496 Melanie Dr., Sterling Heights,
+  // MI" pushed zip 13496 — Utica NY — into Housecall Pro live). No zip beats
+  // a wrong zip: callers treat null as unknown, never as a location. A bare
+  // "48313" (zip-only address) has nothing after it and stays a zip.
+  if (matches.length === 1) {
+    const idx = last.index ?? 0
+    const before = address.slice(0, idx).trim()
+    const after = address.slice(idx + last[0].length).trim()
+    if (before === "" && /^[A-Za-z]/.test(after)) return null
+  }
+  return last[1]
 }
 
 export function addressToPoint(address: string | null | undefined): GeoPoint | null {
