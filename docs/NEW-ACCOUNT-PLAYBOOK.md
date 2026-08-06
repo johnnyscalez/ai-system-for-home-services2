@@ -112,6 +112,7 @@ Every other field (`unique_selling_points`, `team_info`, `testimonials`, `certif
 - ☐ Lead form field mapping tested with one real form submission: phone/email/zip extracted, `parseLeadPhone` accepts the format (it strips "ext. 12" suffixes and rejects garbage — a no-phone lead becomes a `needs_attention` placeholder, never a silent drop).
 - ☐ Messenger-specific: agent must collect a real mobile before booking (PSID leads carry `msgr:` placeholder phones — excluded from SMS sequences and HCP pushes until a real number is captured).
 - ☐ If the account uses a Messenger sales flow (`messenger_instructions`, e.g. Top Air's $189 duct upsell + `[[SILENT]]` close): test the flow AND that SMS/voice on the same account still use the normal flow.
+- ☐ **Know exactly which fields each form/questionnaire ACTUALLY captures — never assume "the form gets the address."** Messenger questionnaires commonly capture a ZIP only (live: Gina — "60706" became her entire address and the whole booking chain carried it). A zip stored as the address is expected intake; the STREET is the agent's job, and the booking gate enforces it. Leadgen forms with real street fields DO map automatically (`ADDRESS_KEYS` in the webhook) — verify with one test submission per form.
 
 ### Housecall Pro (V2)
 - ☐ API key valid (MAX/XL plan), `integration_mode` flipped to `housecall_pro`, employees imported.
@@ -123,6 +124,38 @@ Every other field (`unique_selling_points`, `team_info`, `testimonials`, `certif
 ### Voice
 - ☐ Inbound call answered by the agent with correct greeting/company name; forwarding from the office number self-verified (`/api/voice/verify-forwarding`).
 - ☐ Voice tool job-types are enum-constrained for this account's services (the model cannot invent unroutable strings).
+- ☐ **Booking chain proof** (per account, sandbox or approved test): one voice booking → exactly ONE appointment row, technician attached at INSERT (inherited from the slot map, never a post-hoc race), and in V2 the HCP job shows that tech at CREATION — not after a sync cycle (class M-2).
+- ☐ **Acknowledgement immunity**: after the booking turn, feed "okay" / "thanks" / "bye" — appointment count stays 1. The prompt's booked-state block replaces the "book IMMEDIATELY" slots block, the handler suppresses repeats, and the DB index is the floor (M-1). Ten duplicate HCP jobs came out of one call before this existed.
+- ☐ **Zip-only address on a call flags, never blocks**: the confirmation is already being spoken when tools run, so a missing street address becomes `needs_attention` + a note + an owner ping instead of a mid-call refusal (N-1). The office collects the street before dispatch.
+- ☐ **Post-call extraction writes verified**: names/emails fill blanks only; a corrected address or furnace count heard on the call goes through the shared writer — lead + appointment + HCP manual-fix flag (N-3).
+- ☐ **Price capture**: an agreed total reaches `quoted_total` (voice rule 18); a mid-call correction ("two furnaces… actually one") must produce the corrected amount, never the multiplied stale one (M-4).
+- **Know the architecture before "improving" it:** the voice session transcript stores SPOKEN WORDS ONLY — the model has no memory of its own past tool calls. Every repeat-action guard exists because of that amnesia (the class-M law). Reschedules of HCP-pushed jobs are two-step by design (their API cannot move a job): local move + note + owner ping, and the reconcile pass deliberately does not revert while the office catches up (M-5).
+
+---
+
+## The deterministic guarantee ledger — what the system promises on EVERY account (updated Aug 6, 2026)
+
+The compact list of hard guarantees now built into the shared engines. Prompts reduce how often these fire; only the code layer is the promise. If a future change would weaken a line here, that change is wrong until proven otherwise.
+
+**Booking integrity**
+- ONE active AI appointment per lead — prompt state + engine guards + DB partial unique index. A repeat booking at the same slot/window is a no-op; a different time only MOVES the appointment when the customer's own message expresses a time or a change — "thanks!" can never relocate a visit (M-1, M-6).
+- A site visit is never booked on a zip alone: SMS/Messenger hold the booking and ask for the street; voice books-and-flags (N-1). Sales/video and `requires_travel=false` accounts exempt.
+- Slots come only from anchored days (tech already has a real job), searched ≥21 days out, with the ≥7-day open-day fallback; 4 overlapping arrival windows, one job per window per tech, max 4/day; `min_booking_lead_days` enforced at slot time AND booking time.
+- The technician chosen at slot time rides into the booking row and the HCP push on every channel; voice bookings are policy-audited after insert (coverage / capacity / anchor / lead time) — violations flag loudly, never block a live call (M-2, M-3).
+
+**Data integrity**
+- LAST CONFIRMED VALUE WINS, everywhere: address / unit count / property type corrections save via `update_lead_details` (or the post-call extractor), update the scheduled appointment, and flag HCP-pushed jobs for the manual fix their API forces (N-2, N-3).
+- A street-address inbound auto-attaches to a street-less booking even if the model forgets the tool (the Gina backstop).
+- One shared zip extractor (last 5-digit group; a lone leading house number yields NO zip, never a wrong one) feeds routing, timezones, dispatch, and the HCP address writer (class B).
+- Quoted price ladder: agent-stated → stored corrections → price book → transcript extraction with corrections-win — the system never invents a price (N-4).
+
+**Message integrity**
+- Every written outbound passes `sanitizeAgentText`; the reasoning-leak guard has an instant-block tier ("lead file", tool names) that fires at any message length (N-6).
+- Confirmations send once per REAL change (created/moved, never noop), idempotent per channel; every move-path resets the flags so a new time still confirms fresh (N-5).
+- Customer-facing times always render in the service-address timezone.
+
+**Sync integrity**
+- One HCP push per appointment (atomic claim + retry cron); the reconcile pass mirrors office edits back but never reverts a pending phone reschedule (M-5); office-created HCP jobs import with comms owned by the office.
 
 ---
 
@@ -330,6 +363,7 @@ A Messenger questionnaire captured only a ZIP; the lead accepted a slot; the age
 - ☐ Week 1: check the `needs_attention` queue is being worked by the owner (F32 — it has no automated exit).
 - ☐ Week 1: spot-check HCP customer attachments if the client's book has shared landlines (E28).
 - ☐ Confirm revenue attribution appearing (`hcp_revenue_events`, "Booked by AI" vs "Sourced by AI").
+- **Rolling deploys serve TWO app versions for a few minutes.** Messages produced in that window can differ in format from one minute to the next (live: three confirmations to one lead — the first rendered 3:00 PM by the new instance, the next two rendered raw-UTC 8:00 PM by a draining pre-fix instance). Before diagnosing a "regression" in messages sent near a deploy, check the commit/deploy timestamps against the message timestamps — deploy overlap explains mixed behavior that no single code version could produce.
 
 ---
 
@@ -361,6 +395,8 @@ A Messenger questionnaire captured only a ZIP; the lead accepted a slot; the age
 - **One active AI booking per lead** (class M): a lead holds at most ONE `scheduled` AI-origin appointment, enforced by prompt state + handler guard + DB unique index. A repeat booking at the same slot is a no-op; at a different time it MOVES the existing appointment (reschedule semantics). Office-imported jobs (`origin='hcp'`) stack freely — repeat customers are normal. Don't "fix" a second AI booking into existence; fix whatever asked for it.
 - **Phone reschedules of HCP-pushed jobs are two-step by design:** their API cannot move a job, so we move OUR row, note "move the Housecall Pro job manually" on the appointment, ping the office, and the reconcile pass deliberately does NOT revert to HCP's stale time while it still equals the pre-reschedule time. The board catching up is the office's manual step, not a sync bug.
 - **Voice bookings are audited AFTER insert, never blocked inline:** by the time the tool runs, the confirmation is already being spoken — a hard reject would create a phantom promise. Policy violations (coverage/capacity/anchor/lead-time) flag `needs_attention` + note + owner ping instead. On SMS the same validator runs BEFORE insert and does hard-reject; that difference is deliberate.
+- **The behavior rules are GLOBAL — they ship with the engines, not with any company's prompt.** SMS/Messenger core rules 2c (changed-details confirmation) and 2d (full street address), voice rules 17–19 (book once / price capture / changed details), the booked-state prompt block, and the hardened tool descriptions apply to EVERY account automatically. A per-company generated prompt only needs account-specific policy (prices, territories, offers); never hand-copy the global rules into it — Top Air's RULE 16/17 exist there as reinforcement, not as the mechanism.
+- **Booking outcomes are typed:** every book action resolves to `created`, `moved`, or `noop`, and side effects (confirmation SMS/email, owner notification) fire only on real changes. `sendConfirmations` is additionally idempotent per channel via the confirmation flags. Don't wire a new channel's post-booking block without honoring the outcome — that's how one lead got three confirmation texts.
 
 ---
 
