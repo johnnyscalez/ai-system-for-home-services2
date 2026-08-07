@@ -47,7 +47,7 @@ async function getContext(appointmentId: string) {
 
   const { data: apt } = await supabase
     .from("appointments")
-    .select("*, leads(first_name, last_name, phone, email, address, timezone), companies(name, service_type)")
+    .select("*, leads(first_name, last_name, phone, email, address, zip, timezone), companies(name, service_type)")
     .eq("id", appointmentId)
     .single()
 
@@ -125,7 +125,7 @@ export async function sendConfirmations(appointmentId: string) {
   // "3:00 PM" because the office runs on Eastern is the same failure wearing
   // different clothes.
   const timezone = serviceTimeZone(
-    apt.address ?? (lead as { address?: string | null }).address ?? null,
+    apt.address ?? (lead as { address?: string | null }).address ?? (lead as { zip?: string | null }).zip ?? null,
     lead.timezone ?? agentCfg?.timezone ?? "America/New_York"
   )
   const leadName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "there"

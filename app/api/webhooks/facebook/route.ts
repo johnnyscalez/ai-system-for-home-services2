@@ -663,7 +663,11 @@ export async function POST(req: NextRequest) {
             first_name: firstName,
             last_name: lastName,
             email: leadEmail || null,
-            address: leadAddress ?? (formZip ? formZip : null),
+            // Street and ZIP are SEPARATE fields (Dan Don incident: a bare zip
+            // stored as the "address" rendered under the location icon and
+            // counted as a property address in the AI's contact checklist).
+            address: leadAddress,
+            zip: formZip ?? null,
             source: "facebook",
             channel: formPsid ? "messenger" : "sms",
             ...(formPsid ? { messenger_psid: formPsid } : {}),

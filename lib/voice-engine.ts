@@ -764,7 +764,7 @@ export async function executeTool(
       const bookMs = new Date(scheduled_at).getTime()
 
       const { data: leadRow } = await db.from("leads")
-        .select("job_type, address, selected_slots")
+        .select("job_type, address, zip, selected_slots")
         .eq("id", session.lead_id)
         .single()
       const jobType = (leadRow?.job_type as string | null) ?? null
@@ -774,7 +774,8 @@ export async function executeTool(
       const zip =
         (typeof zipInput === "string" && /^\d{5}$/.test(zipInput.trim()) ? zipInput.trim() : null) ??
         zipFromAddress(address) ??
-        zipFromAddress(leadRow?.address as string | null)
+        zipFromAddress(leadRow?.address as string | null) ??
+        ((leadRow?.zip as string | null) ?? null)
 
       // Tech decided at SLOT time — find_available_slots wrote the slot→tech
       // map, and the booking inherits it so the HCP push carries the
@@ -1251,7 +1252,8 @@ ${upcomingDays}`
   if (_jobLabel)        ctx += `\nJob type: ${_jobLabel} (${lead.job_type})`
   if (lead.system_type) ctx += `\nSystem type: ${lead.system_type}`
   if (lead.system_age)  ctx += `\nSystem age: ${lead.system_age}`
-  if (lead.address)     ctx += `\nAddress on file: ${lead.address}`
+  if (lead.address)     ctx += `\nStreet address on file: ${lead.address}`
+  if (lead.zip)         ctx += `\nZIP code on file: ${lead.zip}`
   if (lead.email)       ctx += `\nEmail: ${lead.email}`
   if (lead.notes)       ctx += `\nCRM notes: ${lead.notes}`
 

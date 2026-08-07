@@ -3,7 +3,7 @@ import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { Badge } from "@/components/ui/badge"
 import { ConversationThread } from "@/components/leads/ConversationThread"
 import {
-  Phone, Mail, MapPin, Calendar, Clock, User,
+  Phone, Mail, MapPin, Home, Calendar, Clock, User,
   ArrowLeft, Zap, Wrench, Thermometer, DollarSign
 } from "lucide-react"
 import Link from "next/link"
@@ -146,6 +146,7 @@ export default async function LeadDetailPage({
                   email={lead.email as string | null}
                   phone={lead.phone as string}
                   address={lead.address as string | null}
+                  zip={(lead.zip as string | null) ?? null}
                   syncedToHcp={!!lead.hcp_customer_id}
                 />
               </div>
@@ -189,9 +190,15 @@ export default async function LeadDetailPage({
                   <span className="text-xs truncate">{lead.email}</span>
                 </div>
               )}
-              {lead.address && (
+              {lead.zip && (
                 <div className="flex items-start gap-2 text-sm">
                   <MapPin className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
+                  <span className="text-xs">ZIP {lead.zip}</span>
+                </div>
+              )}
+              {lead.address && (
+                <div className="flex items-start gap-2 text-sm">
+                  <Home className="w-3.5 h-3.5 text-muted-foreground shrink-0 mt-0.5" />
                   <span className="text-xs">{lead.address}</span>
                 </div>
               )}
@@ -199,7 +206,7 @@ export default async function LeadDetailPage({
           </div>
 
           {/* Property image — auto-fetched when address is known */}
-          <LeadPropertyImage address={(lead.address as string) ?? null} />
+          <LeadPropertyImage address={(lead.address as string) ?? (lead.zip as string) ?? null} />
 
           {/* Job type — AI-classified, shown prominently when known */}
           {lead.job_type && (

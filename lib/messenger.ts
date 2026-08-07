@@ -282,6 +282,9 @@ export function mineHistoryFacts(history: HistoryMessage[]): MinedFacts {
       if (digits) out.phone = digits.replace(/\s/g, "")
     }
     if (!out.zip && /^\d{5}$/.test(t)) out.zip = t
+    // "Zip code is 48187" — a zip inside a sentence that mentions zip (live:
+    // Ajish, whose zip was never captured because it wasn't a bare number)
+    else if (!out.zip && /zip/i.test(t)) { const z = t.match(/\b\d{5}\b/)?.[0]; if (z) out.zip = z }
     // Pair the lead's answer with the page question immediately before it
     const prev = history[i - 1]
     if (prev?.fromPage && prev.text.trim().endsWith("?")) {
@@ -372,7 +375,7 @@ export async function backfillLeadFromThread(
 ): Promise<string[]> {
   if (!facts) return []
   const { data: cur } = await db
-    .from("leads").select("phone, email, address").eq("id", leadId).maybeSingle()
+    .from("leads").select("phone, email, address, zip").eq("id", leadId).maybeSingle()
   if (!cur) return []
   const patch: Record<string, string> = {}
   if (facts.phone && (!cur.phone || String(cur.phone).startsWith("msgr:") || String(cur.phone).startsWith("fbform:"))) {
@@ -381,7 +384,7 @@ export async function backfillLeadFromThread(
     if (p) patch.phone = p
   }
   if (facts.email && !cur.email) patch.email = facts.email
-  if (facts.zip && !cur.address) patch.address = facts.zip
+  if (facts.zip && !cur.zip) patch.zip = facts.zip
   if (Object.keys(patch).length === 0) return []
   await db.from("leads").update(patch).eq("id", leadId)
   return Object.keys(patch)

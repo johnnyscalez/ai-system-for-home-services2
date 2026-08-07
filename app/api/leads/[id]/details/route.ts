@@ -38,6 +38,13 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
   if ("first_name" in body) patch.first_name = str(body.first_name).slice(0, 60) || null
   if ("last_name" in body)  patch.last_name  = str(body.last_name).slice(0, 60) || null
   if ("address" in body)    patch.address    = str(body.address).slice(0, 300) || null
+  if ("zip" in body) {
+    const z = str(body.zip)
+    if (z && !/^\d{5}$/.test(z)) {
+      return NextResponse.json({ error: "ZIP code must be exactly 5 digits." }, { status: 400 })
+    }
+    patch.zip = z || null
+  }
 
   if ("email" in body) {
     const e = str(body.email).toLowerCase()

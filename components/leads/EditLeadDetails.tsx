@@ -14,6 +14,7 @@ interface Props {
   email: string | null
   phone: string
   address: string | null
+  zip: string | null
   /** true when this lead is already linked to a Housecall Pro customer */
   syncedToHcp?: boolean
 }
@@ -25,7 +26,7 @@ interface Props {
  * Housecall Pro as "Unknown", which is what the technician then sees.
  */
 export function EditLeadDetails({
-  leadId, firstName, lastName, email, phone, address, syncedToHcp,
+  leadId, firstName, lastName, email, phone, address, zip, syncedToHcp,
 }: Props) {
   const router = useRouter()
   const [open, setOpen] = useState(false)
@@ -40,6 +41,7 @@ export function EditLeadDetails({
     email: email ?? "",
     phone: isPlaceholder ? "" : phone,
     address: address ?? "",
+    zip: zip ?? "",
   })
 
   const set = (k: keyof typeof form) => (e: React.ChangeEvent<HTMLInputElement>) =>
@@ -54,6 +56,7 @@ export function EditLeadDetails({
         last_name: form.last_name,
         email: form.email,
         address: form.address,
+        zip: form.zip,
       }
       // Only send phone when the user actually typed one — an empty field must
       // never wipe a good number or overwrite a placeholder with junk.
@@ -139,8 +142,13 @@ export function EditLeadDetails({
               </label>
 
               <label className="block space-y-1">
-                <span className="text-xs font-medium text-muted-foreground">Service address</span>
-                <Input value={form.address} onChange={set("address")} placeholder="123 Main St, City, IL 60614" />
+                <span className="text-xs font-medium text-muted-foreground">Street address</span>
+                <Input value={form.address} onChange={set("address")} placeholder="123 Main St, City, IL" />
+              </label>
+
+              <label className="block space-y-1">
+                <span className="text-xs font-medium text-muted-foreground">ZIP code</span>
+                <Input value={form.zip} onChange={set("zip")} placeholder="60614" maxLength={5} />
               </label>
 
               {error && (

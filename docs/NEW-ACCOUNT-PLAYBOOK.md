@@ -148,6 +148,7 @@ The compact list of hard guarantees now built into the shared engines. Prompts r
 - LAST CONFIRMED VALUE WINS, everywhere: address / unit count / property type corrections save via `update_lead_details` (or the post-call extractor), update the scheduled appointment, and flag HCP-pushed jobs for the manual fix their API forces (N-2, N-3).
 - A street-address inbound auto-attaches to a street-less booking even if the model forgets the tool (the Gina backstop).
 - One shared zip extractor (last 5-digit group; a lone leading house number yields NO zip, never a wrong one) feeds routing, timezones, dispatch, and the HCP address writer (class B).
+- **ZIP and street address are SEPARATE lead fields** (`leads.zip` / `leads.address`, Aug 7 2026): a questionnaire zip lands in `zip`, never as the "address"; `address` holds a real street or nothing. The lead file shows the model both lines distinctly, the profile UI renders them under different icons, the booking zip falls back `address → lead.zip`, and confirmation timezones use the zip when no street exists yet. A bare zip stored as an address is now a data bug, not intake.
 - Quoted price ladder: agent-stated → stored corrections → price book → transcript extraction with corrections-win — the system never invents a price (N-4).
 
 **Message integrity**

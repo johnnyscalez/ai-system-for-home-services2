@@ -127,7 +127,8 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
         },
         system_type: { type: "string", description: "What they have, in plain words — e.g. 'Central AC', 'Gas furnace', 'Heat pump', 'None (new construction)'" },
         system_age: { type: "string", description: "Rough age as stated — e.g. '~2006, about 20 years', '5-7 years'" },
-        address: { type: "string", description: "The FULL service street address the moment the lead gives or corrects it — house number + street (+ city/state/zip when given). NEVER a bare zip code. If the lead corrects an address already on file, save the NEW one here — the last confirmed address is the truth everywhere (CRM, technician, confirmations)." },
+        address: { type: "string", description: "The FULL service street address the moment the lead gives or corrects it — house number + street (+ city/state/zip when given). NEVER a bare zip code — a zip alone goes in the zip field. If the lead corrects an address already on file, save the NEW one here — the last confirmed address is the truth everywhere (CRM, technician, confirmations)." },
+        zip: { type: "string", description: "The lead's 5-digit ZIP code the moment they give it — its own field, separate from address. Save a bare zip HERE, never as the address." },
         unit_count: { type: "number", description: "How many furnaces/systems the lead's home has, the moment they state or CORRECT it ('two furnaces… actually just one' → 1). The last confirmed number wins." },
         property_type: { type: "string", description: "house | townhome | condo | apartment | commercial — the moment they state or correct it." },
         situation_notes: { type: "string", description: "One short factual line of NEW information learned this turn that doesn't fit the fields above — symptoms in their words, urgency signals, vulnerable occupants, what they've tried, access notes, decision-maker situation. Appended to the lead's notes for the office and tech. Facts only, no interpretation. Check the lead file's existing notes first — never re-save a fact that's already noted, even reworded." },
@@ -141,7 +142,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
 export type LeadDetailsInput = {
   first_name?: string; last_name?: string; email?: string; timezone?: string
   job_type?: string; system_type?: string; system_age?: string; situation_notes?: string
-  address?: string; unit_count?: number; property_type?: string
+  address?: string; zip?: string; unit_count?: number; property_type?: string
 }
 
 /**
@@ -194,15 +195,21 @@ export async function saveLeadDetailsForLead(
   // recreate the exact failure this field exists to fix ("60706" as the
   // entire address on the booking, the HCP job, and the confirmation SMS).
   const { isCompleteServiceAddress, zipFromAddress } = await import("@/lib/routing")
+  // ZIP is its own field, separate from the street address. A model saving a
+  // zip never touches address; a full address also refreshes the zip.
+  if (input.zip && /^\d{5}$/.test(input.zip.trim())) patch.zip = input.zip.trim()
   let addressChanged: string | null = null
   if (input.address) {
     let a = input.address.trim().replace(/\s{2,}/g, " ")
     if (isCompleteServiceAddress(a)) {
-      if (!zipFromAddress(a)) {
+      const zipInAddr = zipFromAddress(a)
+      if (!zipInAddr) {
         // Street without a zip: carry the zip we already know forward
-        const { data: cur } = await supabase.from("leads").select("address").eq("id", leadId).maybeSingle()
-        const oldZip = zipFromAddress(cur?.address as string | null)
+        const { data: cur } = await supabase.from("leads").select("address, zip").eq("id", leadId).maybeSingle()
+        const oldZip = (cur?.zip as string | null) ?? zipFromAddress(cur?.address as string | null)
         if (oldZip) a = `${a}, ${oldZip}`
+      } else if (!patch.zip) {
+        patch.zip = zipInAddr
       }
       patch.address = a
       addressChanged = a
@@ -915,7 +922,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         try {
           await supabase
             .from("leads")
-            .update({ metadata: { ...existingMeta, service_zip: findSlotsZip } })
+            .update({ metadata: { ...existingMeta, service_zip: findSlotsZip }, zip: findSlotsZip.match(/\d{5}/)?.[0] ?? undefined })
             .eq("id", leadId)
         } catch { /* non-critical */ }
       }
@@ -1587,7 +1594,7 @@ export async function processAndSave(
       // Look up pre-selected tech from find_available_slots (saved to leads.selected_slots mid-conversation)
       const { data: freshLead } = await supabase
         .from("leads")
-        .select("job_type, address, selected_slots, first_name, last_name, timezone, service_type")
+        .select("job_type, address, zip, selected_slots, first_name, last_name, timezone, service_type")
         .eq("id", leadId)
         .single()
 
@@ -1636,7 +1643,7 @@ export async function processAndSave(
 
       const inferredJobType = inferJobType(notes ?? "")
       const bookJobType = inferredJobType ?? (freshLead?.job_type as string | null)
-      const bookZip = extractZip(address ?? freshLead?.address ?? "")
+      const bookZip = extractZip(address ?? freshLead?.address ?? "") ?? ((freshLead?.zip as string | null) ?? null)
 
       const selectedSlots = freshLead?.selected_slots as Record<string, { tech_id: string; tech_name: string }> | null
       const normalKey = scheduled_at.substring(0, 16) // YYYY-MM-DDTHH:MM
@@ -2430,7 +2437,8 @@ This person is an existing customer. They already trust the company. Your job is
 === END RETURNING CUSTOMER RULES ===` : ""}`
 
 
-  if (lead.address) ctx += `Address on file: ${lead.address}\n`
+  if (lead.address) ctx += `Street address on file: ${lead.address}\n`
+  if ((lead as Record<string, unknown>).zip) ctx += `ZIP code on file: ${(lead as Record<string, unknown>).zip}\n`
   if (lead.email) ctx += `Email: ${lead.email}\n`
   if (lead.notes) ctx += `Notes from lead form: ${lead.notes}\n`
 
@@ -2445,6 +2453,7 @@ This person is an existing customer. They already trust the company. Your job is
     const hasName = !!String(L.first_name ?? "").trim()
     const hasEmail = !!String(L.email ?? "").trim()
     const hasAddress = !!String(L.address ?? "").trim()
+    const hasZip = /^\d{5}/.test(String(L.zip ?? "").trim())
     const jobTypeStr = String(L.job_type ?? "").trim()
     const hasJobType = !!jobTypeStr
 
@@ -2457,7 +2466,8 @@ This person is an existing customer. They already trust the company. Your job is
     const isSalesConvo = effectiveServiceType === "fieldbuilt_sales"
     const hasTimezone = !!String(L.timezone ?? "").trim()
     const requiredMissing: string[] = []
-    if (!hasAddress && !isSalesConvo) requiredMissing.push("property address")
+    if (!hasAddress && !isSalesConvo) requiredMissing.push("full street address (a zip alone is not an address)")
+    if (!hasZip && !hasAddress && !isSalesConvo) requiredMissing.push("zip code (needed to check availability)")
     if (!hasTimezone && isSalesConvo) requiredMissing.push("their time zone (ask before offering times)")
     if (!hasRealPhone) requiredMissing.push("mobile phone number")
     if (!hasName) requiredMissing.push("name")
@@ -2473,7 +2483,8 @@ You are talking on: ${channelLabel}
 ${mark(hasName, "Name")}
 ${mark(hasRealPhone, "Mobile phone", channel === "whatsapp" || channel === "sms" ? "this conversation IS their phone — never ask for it" : undefined)}
 ${mark(hasEmail, "Email")}
-${mark(hasAddress, "Property address")}
+${mark(hasAddress, "Street address")}
+${mark(hasZip, "ZIP code")}
 ${mark(hasJobType, "Job type", jobTypeStr || undefined)}
 ${isSalesConvo ? mark(hasTimezone, "Time zone", String(L.timezone ?? "") || undefined) : ""}
 
