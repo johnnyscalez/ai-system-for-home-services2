@@ -16,7 +16,7 @@ export default async function LeadsPage() {
   const [{ data: leads }, { data: technicians }] = await Promise.all([
     supabase
       .from("leads")
-      .select("*")
+      .select("*, appointments(origin, status, created_at)")
       .eq("company_id", profile.company_id)
       .order("created_at", { ascending: false }),
     supabase

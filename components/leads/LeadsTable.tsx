@@ -7,6 +7,16 @@ import { DeleteLeadButton } from "@/components/leads/DeleteLeadButton"
 import { formatDistanceToNow } from "@/lib/utils"
 import type { Lead } from "@/types/database"
 
+type AptOrigin = { origin: string | null; status: string; created_at: string }
+
+/** Who booked this lead: the office (HCP-imported job) or the AI agent. */
+function bookedBadge(lead: { appointments?: AptOrigin[] }): { label: string; office: boolean } {
+  const apts = [...(lead.appointments ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at))
+  const src = apts.find((a) => a.status === "scheduled") ?? apts[0]
+  const office = src?.origin === "hcp"
+  return { label: office ? "Booked by office" : "Booked by AI", office }
+}
+
 const STATUS_LABEL: Record<string, string> = {
   just_came_in:        "Just came in",
   new:                 "Just came in",
@@ -152,9 +162,18 @@ export function LeadsTable({ initialLeads }: { initialLeads: Lead[] }) {
                 <span className="text-xs text-muted-foreground hidden md:block">
                   {formatDistanceToNow(lead.created_at)}
                 </span>
-                <Badge variant="outline" className={`text-xs ${STATUS_BADGE[lead.status] ?? ""}`}>
-                  {STATUS_LABEL[lead.status] ?? lead.status.replace(/_/g, " ")}
-                </Badge>
+                {lead.status === "appointment_booked" ? (() => {
+                  const b = bookedBadge(lead as unknown as { appointments?: AptOrigin[] })
+                  return (
+                    <Badge variant="outline" className={`text-xs ${b.office ? "bg-sky-500/15 text-sky-400 border-sky-500/20" : STATUS_BADGE[lead.status] ?? ""}`}>
+                      {b.label}
+                    </Badge>
+                  )
+                })() : (
+                  <Badge variant="outline" className={`text-xs ${STATUS_BADGE[lead.status] ?? ""}`}>
+                    {STATUS_LABEL[lead.status] ?? lead.status.replace(/_/g, " ")}
+                  </Badge>
+                )}
                 <DeleteLeadButton
                   leadId={lead.id}
                   leadName={`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim()}

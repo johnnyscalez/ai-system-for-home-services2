@@ -97,12 +97,29 @@ export default async function LeadDetailPage({
           </span>
         </div>
         <div className="flex items-center gap-2">
-          <Badge
-            variant="outline"
-            className={`text-xs capitalize ${STATUS_STYLES[lead.status] ?? ""}`}
-          >
-            {lead.status.replace(/_/g, " ")}
-          </Badge>
+          {(() => {
+            // A booked lead says WHO booked it: the office (job imported from
+            // Housecall Pro, origin "hcp") or the AI agent (origin "ai").
+            // Brittany incident: office phone-bookings looked AI-booked.
+            if (lead.status !== "appointment_booked") {
+              return (
+                <Badge variant="outline" className={`text-xs capitalize ${STATUS_STYLES[lead.status] ?? ""}`}>
+                  {lead.status.replace(/_/g, " ")}
+                </Badge>
+              )
+            }
+            const apts = [...(appointments ?? [])].sort((a, b) => String(b.created_at).localeCompare(String(a.created_at)))
+            const src = apts.find((a) => a.status === "scheduled") ?? apts[0]
+            const office = src?.origin === "hcp"
+            return (
+              <Badge
+                variant="outline"
+                className={`text-xs ${office ? "bg-sky-500/15 text-sky-400 border-sky-500/20" : STATUS_STYLES[lead.status] ?? ""}`}
+              >
+                {office ? "Booked by office" : "Booked by AI agent"}
+              </Badge>
+            )
+          })()}
           {lead.is_active_conversation && lead.last_inbound_at &&
             new Date(lead.last_inbound_at) > new Date(Date.now() - 2 * 60 * 60 * 1000) && (
             <Badge variant="outline" className="text-xs bg-emerald-500/15 text-emerald-500 border-emerald-500/20 gap-1">
