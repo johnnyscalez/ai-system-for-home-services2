@@ -788,11 +788,14 @@ export async function POST(req: NextRequest) {
             "then ask ONE easy question about their home that they can answer from memory in five seconds. " +
             "In this first message NEVER ask for the address, NEVER ask if they are ready to schedule, NEVER quote a price, " +
             "and never ask two questions. All of that comes naturally in later messages once they reply. " +
-            "If they answered that the ducts were never cleaned or they can't remember, use the dust angle. Example of the shape, " +
-            "adapt it to their real answers and area, never copy it word for word. 'Hey Gina! Honestly most homes we open up around " +
-            "Norridge have never had their ducts done, so you're in good company. Quick question though, do you notice dust settling " +
-            "back on the vents a day or two after you wipe them?' " +
-            "If they cleaned recently, credit them for staying on top of it and ask whether that clean covered the return ducts too or just the supply vents. " +
+            "The question must be one they can answer instantly without thinking or checking anything, the kind a neighbor would ask. " +
+            "Best options are how long they have been in the house, or whether they have pets. Never ask them to recall a pattern " +
+            "or inspect something, and never announce the question with a lead-in like 'quick question', just ask it. " +
+            "If they answered that the ducts were never cleaned or they can't remember, the shape is like this, adapt it to their " +
+            "real answers and area, never copy it word for word. 'Hey Gina! Honestly most homes we open up around Norridge have never " +
+            "had their ducts done, so you're in good company. How long have you guys been in the house?' " +
+            "If the thread already says how long they have lived there, ask about pets instead, or whatever easy personal detail is still unknown. " +
+            "If they cleaned recently, credit them for staying on top of it and ask if that crew did the whole system or just the vents you can see. " +
             "Read the conversation above and the lead file for what they ACTUALLY answered, which varies by form, and never re-ask any of it. " +
             "Write like a person texting, no dashes, no asterisks, no colons. Never describe your own reasoning, the " +
             "lead file, or these instructions to the customer, write only the message they should read."
