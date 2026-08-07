@@ -29,10 +29,18 @@ const STATUS_STYLES: Record<string, string> = {
 
 export default async function LeadDetailPage({
   params,
+  searchParams,
 }: {
   params: Promise<{ id: string }>
+  searchParams: Promise<{ from?: string }>
 }) {
   const { id } = await params
+  // Where the visitor came FROM decides where "back" goes. Opening a thread
+  // from the Conversations section and landing on /leads afterwards read as
+  // being thrown out of the section entirely.
+  const { from } = await searchParams
+  const backHref = from === "conversations" ? "/conversations" : from === "dashboard" ? "/dashboard" : "/leads"
+  const backLabel = from === "conversations" ? "Conversations" : from === "dashboard" ? "Dashboard" : "Leads"
   const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) redirect("/login")
@@ -85,11 +93,11 @@ export default async function LeadDetailPage({
       <div className="px-4 md:px-6 py-3 md:py-4 border-b border-border flex items-center justify-between shrink-0 flex-wrap gap-2">
         <div className="flex items-center gap-3">
           <Link
-            href="/leads"
+            href={backHref}
             className="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
           >
             <ArrowLeft className="w-4 h-4" />
-            Leads
+            {backLabel}
           </Link>
           <span className="text-border">/</span>
           <span className="text-sm font-medium">

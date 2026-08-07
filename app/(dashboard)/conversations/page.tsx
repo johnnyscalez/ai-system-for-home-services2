@@ -71,7 +71,7 @@ export default async function ConversationsPage() {
             rows.map((lead) => (
               <a
                 key={lead.id}
-                href={`/leads/${lead.id}`}
+                href={`/leads/${lead.id}?from=conversations`}
                 className="flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors"
               >
                 <div className="flex items-center gap-3 min-w-0">
