@@ -343,6 +343,16 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
         notifyNeedsAttention(integration.company_id, name, leadData.phone).catch(() => {})
       }
     }
+
+    // Post-reply sequence bookkeeping — the SAME nurture the SMS channel gets
+    // (class K fix: Messenger leads who replied but never booked previously
+    // got no follow-up of any kind).
+    try {
+      const { reseedRepliedNotBooked } = await import("@/lib/sequences")
+      await reseedRepliedNotBooked(supabase, leadId, integration.company_id, result.action as { type?: string; status?: string } | undefined)
+    } catch (e) {
+      console.error("[webhook/facebook] sequence reseed failed:", e)
+    }
   } catch (e) {
     console.error("[webhook/facebook] Messenger AI error for lead:", leadId, e)
     // Never leave a lead in dead silence mid-conversation — a crash after they

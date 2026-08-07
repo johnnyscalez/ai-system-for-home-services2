@@ -49,6 +49,66 @@ export type SequenceStep = {
   scheduledAt: Date
 }
 
+/**
+ * Post-reply sequence bookkeeping — ONE implementation for every channel.
+ * Cancels the no-reply steps (they replied), then either re-arms the
+ * replied-not-booked nurture from now, or cancels everything when the turn
+ * ended terminally. Lived only in the SMS webhook for months — so every
+ * Messenger lead who engaged and went quiet got NO nurture at all (class K,
+ * found via Brittany).
+ */
+export async function reseedRepliedNotBooked(
+  supabase: { from: (t: string) => any },
+  leadId: string,
+  companyId: string,
+  action: { type?: string; status?: string } | undefined
+): Promise<"reseeded" | "cancelled_all"> {
+  // They replied — the no-reply track is over either way
+  await supabase.from("sequences")
+    .update({ status: "cancelled" })
+    .eq("lead_id", leadId).eq("sequence_type", "no_reply").eq("status", "pending")
+
+  // Status must be re-read AFTER the AI turn — the turn may have set
+  // closed_lost (opt-out, decline); scheduling from the stale pre-turn status
+  // re-armed follow-ups for a lead who just said no (audit C8).
+  const { data: postTurn } = await supabase
+    .from("leads").select("status, ai_paused").eq("id", leadId).single()
+  const postStatus = (postTurn?.status as string | undefined) ?? ""
+  const skip = ["closed", "closed_won", "closed_lost", "appointment_booked", "lost", "unqualified", "needs_attention", "cold"]
+  const shouldSchedule =
+    action?.type !== "book_appointment" &&
+    !(action?.type === "update_status" && ["closed_lost", "needs_attention"].includes(action?.status ?? "")) &&
+    !postTurn?.ai_paused &&
+    !skip.includes(postStatus)
+
+  if (!shouldSchedule) {
+    await supabase.from("sequences")
+      .update({ status: "cancelled" })
+      .eq("lead_id", leadId).eq("status", "pending")
+    return "cancelled_all"
+  }
+
+  await supabase.from("sequences")
+    .update({ status: "cancelled" })
+    .eq("lead_id", leadId).eq("sequence_type", "replied_not_booked").eq("status", "pending")
+
+  const { data: agentCfg } = await supabase
+    .from("ai_agent_config").select("timezone").eq("company_id", companyId).single()
+  const tz = (agentCfg?.timezone as string | null) ?? "America/New_York"
+  const steps = buildRepliedNotBookedSchedule(new Date(), tz)
+  await supabase.from("sequences").insert(
+    steps.map((s) => ({
+      lead_id: leadId,
+      company_id: companyId,
+      sequence_type: "replied_not_booked",
+      step: s.step,
+      scheduled_at: s.scheduledAt.toISOString(),
+      status: "pending",
+    }))
+  )
+  return "reseeded"
+}
+
 // Voice steps: no_reply steps 1 and 4 / replied_not_booked step 3
 export function isVoiceStep(sequenceType: string, step: number): boolean {
   if (sequenceType === "no_reply" && (step === 1 || step === 4)) return true

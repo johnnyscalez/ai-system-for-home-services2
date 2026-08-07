@@ -3,7 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave, inferJobType } from "@/lib/ai-engine"
 import { sendSMS, sendWhatsApp, validateTwilioSignature, formatPhone } from "@/lib/twilio"
 import { notifyAppointmentBooked, notifyNeedsAttention } from "@/lib/notifications"
-import { buildRepliedNotBookedSchedule } from "@/lib/sequences"
+import { reseedRepliedNotBooked } from "@/lib/sequences"
 import { notifyTechnicianConfirmed } from "@/lib/appointment-reminders"
 
 // ─── Address extraction ────────────────────────────────────────────────────────
@@ -313,65 +313,8 @@ export async function POST(req: NextRequest) {
         .is("email", null)
     }
 
-    // Cancel any pending no-reply sequences since they replied
-    await supabase
-      .from("sequences")
-      .update({ status: "cancelled" })
-      .eq("lead_id", lead.id)
-      .eq("sequence_type", "no_reply")
-      .eq("status", "pending")
-
-    // Schedule replied-not-booked follow-up if not already booked.
-    // CRITICAL: the status must be re-read AFTER the AI turn — the turn we
-    // just ran may have set closed_lost (opt-out, decline), and scheduling
-    // from the stale pre-turn status re-armed 4 follow-ups for a lead who
-    // just said no (audit C8).
-    const { data: postTurn } = await supabase
-      .from("leads").select("status, ai_paused").eq("id", lead.id).single()
-    const postStatus = postTurn?.status ?? lead.status
-    const skipSequenceStatuses = ["closed", "closed_won", "closed_lost", "appointment_booked", "lost", "unqualified", "needs_attention", "cold"]
-    const shouldScheduleRepliedNotBooked =
-      result.action?.type !== "book_appointment" &&
-      !(result.action?.type === "update_status" && ["closed_lost", "needs_attention"].includes(result.action.status)) &&
-      !postTurn?.ai_paused &&
-      !skipSequenceStatuses.includes(postStatus)
-
-    if (shouldScheduleRepliedNotBooked) {
-      // Cancel all existing pending replied_not_booked steps, then pre-create all 4 fresh
-      await supabase
-        .from("sequences")
-        .update({ status: "cancelled" })
-        .eq("lead_id", lead.id)
-        .eq("sequence_type", "replied_not_booked")
-        .eq("status", "pending")
-
-      const { data: agentCfg } = await supabase
-        .from("ai_agent_config")
-        .select("timezone")
-        .eq("company_id", companyId)
-        .single()
-      const tz = (agentCfg?.timezone as string | null) ?? "America/New_York"
-
-      const steps = buildRepliedNotBookedSchedule(new Date(), tz)
-      await supabase.from("sequences").insert(
-        steps.map((s) => ({
-          lead_id: lead.id,
-          company_id: companyId,
-          sequence_type: "replied_not_booked",
-          step: s.step,
-          scheduled_at: s.scheduledAt.toISOString(),
-          status: "pending",
-        }))
-      )
-    } else {
-      // Lead is in a terminal status (booked, closed, cold, …) — no follow-up
-      // sequences; cancel anything still pending.
-      await supabase
-        .from("sequences")
-        .update({ status: "cancelled" })
-        .eq("lead_id", lead.id)
-        .eq("status", "pending")
-    }
+    // Post-reply sequence bookkeeping — shared implementation (lib/sequences)
+    await reseedRepliedNotBooked(supabase, lead.id, companyId, result.action as { type?: string; status?: string } | undefined)
 
     // Confirmation SMS + email and the contractor notification fire ONLY on
     // the turn an appointment was actually booked (or moved) — keyed off this

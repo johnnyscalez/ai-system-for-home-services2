@@ -26,7 +26,7 @@ export async function GET(req: NextRequest) {
   // ── Process pending sequence steps ─────────────────────────────────────────
   const { data: dueSteps } = await supabase
     .from("sequences")
-    .select("*, leads(id, phone, status, ai_paused, ai_voice_paused, is_active_conversation, first_name, last_name, service_type, deleted_at)")
+    .select("*, leads(id, phone, status, ai_paused, ai_voice_paused, is_active_conversation, first_name, last_name, service_type, deleted_at, channel, messenger_psid, last_inbound_at)")
     .eq("status", "pending")
     .lte("scheduled_at", now.toISOString())
     .order("scheduled_at", { ascending: true })  // oldest-first so no step is skipped
@@ -43,6 +43,7 @@ export async function GET(req: NextRequest) {
       id: string; phone: string; status: string; ai_paused: boolean; ai_voice_paused: boolean;
       is_active_conversation: boolean;
       first_name: string | null; last_name: string | null; service_type: string | null; deleted_at: string | null;
+      channel: string | null; messenger_psid: string | null; last_inbound_at: string | null;
     } | null
 
     if (!lead) continue
@@ -192,11 +193,38 @@ export async function GET(req: NextRequest) {
           asyncAmdStatusCallback: `${appUrl}/api/voice/amd?leadId=${lead.id}`,
         })
       } else {
-        // Send a follow-up SMS via AI engine with per-step angle
+        // Send a follow-up via AI engine with per-step angle
         const result = await processAndSave(lead.id, step.company_id, null, undefined, followUpAngle)
 
         if (result.response) {
-          const { sid, channel: sentVia } = await sendToLead(lead, result.response, phoneRecord.phone_number, step.company_id)
+          // Messenger leads get the follow-up ON MESSENGER — inside Meta's
+          // 24h standard window. Outside it, fall back to SMS when a real
+          // phone exists; a placeholder phone means the lead is unreachable
+          // and the step cancels instead of looping forever.
+          let sid: string | null = null
+          let sentVia: string | null = null
+          const isMessengerLead = lead.channel === "messenger" && !!lead.messenger_psid
+          const inMsgrWindow = !!lead.last_inbound_at &&
+            Date.now() - new Date(lead.last_inbound_at).getTime() < 23 * 60 * 60 * 1000
+          if (isMessengerLead && inMsgrWindow) {
+            const { data: integ } = await supabase
+              .from("integrations").select("fb_access_token").eq("company_id", step.company_id).maybeSingle()
+            if (integ?.fb_access_token) {
+              const { sendMessengerMessage } = await import("@/lib/messenger")
+              const sent = await sendMessengerMessage(integ.fb_access_token, lead.messenger_psid as string, result.response)
+              if (sent.ok) { sid = sent.messageId ?? null; sentVia = "messenger" }
+            }
+          }
+          if (!sentVia) {
+            const { isPlaceholderPhone } = await import("@/lib/twilio")
+            if (isPlaceholderPhone(lead.phone)) {
+              console.log(`[cron] step ${step.id}: messenger window closed and no real phone — cancelling`)
+              await supabase.from("sequences").update({ status: "cancelled" }).eq("id", step.id)
+              continue
+            }
+            const r = await sendToLead(lead, result.response, phoneRecord.phone_number, step.company_id)
+            sid = r.sid; sentVia = r.channel
+          }
           if (result.outboundConversationId) {
             await supabase
               .from("conversations")

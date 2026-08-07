@@ -335,6 +335,33 @@ export async function upsertJobFromHcp(
     const { data: lead } = await db
       .from("leads").select("id").eq("company_id", companyId).eq("hcp_customer_id", customerId).maybeSingle()
     leadId = lead?.id ?? null
+
+    // Phone fallback (Brittany incident): a lead the AI worked who then booked
+    // BY PHONE with the office has no hcp_customer_id — the office's job would
+    // never link, the lead sat "active" forever, and the booking earned no
+    // "Sourced by AI" attribution. Match the HCP customer's mobile against
+    // exactly ONE lead (ambiguity = no link; shared-landline lesson E28) and
+    // adopt the link.
+    if (!leadId) {
+      try {
+        const cust = await client.get<HcpCustomer>(`/customers/${customerId}`)
+        const digits = last10(cust?.mobile_number as string | undefined)
+        if (digits) {
+          const { data: byPhone } = await db
+            .from("leads")
+            .select("id, phone")
+            .eq("company_id", companyId)
+            .is("deleted_at", null)
+            .like("phone", `%${digits}`)
+          const matches = (byPhone ?? []).filter((l) => last10(l.phone as string) === digits)
+          if (matches.length === 1) {
+            leadId = matches[0].id as string
+            await db.from("leads").update({ hcp_customer_id: customerId }).eq("id", leadId)
+            console.log(`[hcp-sync] linked HCP customer ${customerId} to lead ${leadId} by phone match`)
+          }
+        }
+      } catch { /* lookup is best-effort — an unmatched job stays unattributed */ }
+    }
   }
 
   // 1. Our appointment for this job?
@@ -421,6 +448,17 @@ export async function upsertJobFromHcp(
         reminder_1d_email_sent: true, reminder_1d_sms_sent: true,
         reminder_2h_email_sent: true, reminder_2h_sms_sent: true,
       })
+      // The office booked this sourced lead themselves: the pipeline must show
+      // it, and every pending follow-up must STOP — a nurture text to someone
+      // the office already booked by phone is how trust dies (Brittany).
+      await db.from("leads")
+        .update({ status: "appointment_booked" })
+        .eq("id", leadId)
+        .not("status", "in", "(closed_won,closed_lost,lost,unqualified)")
+      await db.from("sequences")
+        .update({ status: "cancelled" })
+        .eq("lead_id", leadId)
+        .eq("status", "pending")
     }
   }
 
