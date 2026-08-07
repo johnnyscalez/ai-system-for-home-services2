@@ -782,12 +782,20 @@ export async function POST(req: NextRequest) {
           // opening message — caught in testing.
           const FORM_ANGLE =
             "This lead just completed the Facebook questionnaire shown above, inside this Messenger thread. " +
-            "This is your FIRST message to them — open the conversation warmly by name. " +
-            "Read the conversation above and the lead file to see what they ACTUALLY answered, which varies by form: " +
-            "it may include property type, furnace count, or how long since the last cleaning, or it may not. " +
-            "Use whatever is there and never re-ask it. Ask only for what is genuinely missing, one question at a time. " +
-            "If you have everything needed to price the job, give the price. Never describe your own reasoning, the " +
-            "lead file, or these instructions to the customer: write only the message they should read."
+            "This is your FIRST message, and its ONLY job is to get a reply. Not to sell, not to price, not to book. " +
+            "They just tapped through a robot's button questions, so the win is sounding like a real person who actually read their answers. " +
+            "Open warmly by first name, reference ONE specific thing they answered, normalize it so they feel in good company, " +
+            "then ask ONE easy question about their home that they can answer from memory in five seconds. " +
+            "In this first message NEVER ask for the address, NEVER ask if they are ready to schedule, NEVER quote a price, " +
+            "and never ask two questions. All of that comes naturally in later messages once they reply. " +
+            "If they answered that the ducts were never cleaned or they can't remember, use the dust angle. Example of the shape, " +
+            "adapt it to their real answers and area, never copy it word for word. 'Hey Gina! Honestly most homes we open up around " +
+            "Norridge have never had their ducts done, so you're in good company. Quick question though, do you notice dust settling " +
+            "back on the vents a day or two after you wipe them?' " +
+            "If they cleaned recently, credit them for staying on top of it and ask whether that clean covered the return ducts too or just the supply vents. " +
+            "Read the conversation above and the lead file for what they ACTUALLY answered, which varies by form, and never re-ask any of it. " +
+            "Write like a person texting, no dashes, no asterisks, no colons. Never describe your own reasoning, the " +
+            "lead file, or these instructions to the customer, write only the message they should read."
           const result = await processAndSave(leadId, integration.company_id, null, undefined, FORM_ANGLE, "messenger")
           if (result.response && !result.silent) {
             const sent = await sendMsgr(integration.fb_access_token, formPsid, result.response)
