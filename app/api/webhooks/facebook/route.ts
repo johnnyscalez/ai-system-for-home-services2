@@ -743,6 +743,28 @@ export async function POST(req: NextRequest) {
       // path (SMS openers to these leads were 100% blocked by A2P).
       if (formPsid) {
         try {
+          // THE MESSENGER AGENT CAN BE SWITCHED OFF (playbook: "never leave
+          // the mouth on with the ears off"). The page subscription is the
+          // single source of truth: no `messages` field = the agent cannot
+          // HEAR replies, so it must not SPEAK either. The lead still lands,
+          // arrives paused, and the office is pinged to work it inside Meta's
+          // 24h window. (Live: 3 leads answered a "stopped" agent's opener
+          // and then waited 13-16 hours in silence.)
+          try {
+            const subRes = await fetch(
+              `https://graph.facebook.com/v21.0/${page_id}/subscribed_apps?access_token=${integration.fb_access_token}`
+            ).then((r) => r.json())
+            const subFields: string[] = subRes?.data?.[0]?.subscribed_fields ?? []
+            if (!subFields.includes("messages")) {
+              await supabase.from("leads").update({ ai_paused: true }).eq("id", leadId)
+              notifyNeedsAttention(integration.company_id,
+                `${firstName ?? "Messenger lead"} completed the questionnaire but the Messenger agent is OFF — reply from the page inbox within 24h`,
+                phone ?? "").catch(() => {})
+              console.log(`[webhook/facebook] leadgen ${leadgen_id}: messenger agent OFF (no messages subscription) — lead paused for the office, no opener`)
+              continue
+            }
+          } catch { /* subscription check unavailable — treat the agent as ON rather than silently dropping openers */ }
+
           // Full thread context first, so the agent never re-asks something
           // the questionnaire already covered.
           const { importMessengerHistory, sendMessengerMessage: sendMsgr } = await import("@/lib/messenger")
