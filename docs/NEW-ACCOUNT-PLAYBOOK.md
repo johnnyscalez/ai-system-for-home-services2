@@ -420,4 +420,5 @@ These are the questions that have actually blocked work. Get them answered at on
 - Is there a **hard price floor**, and does it apply per unit or per job?
 - Which property types are served, and does each have its own price?
 - For multi-metro accounts: which services are available in which metro?
+- **Which days does the company ACTUALLY work?** Never assume Mon–Fri: Top Air runs 11–16 jobs every Saturday, yet `available_days`, all 7 tech schedules, AND the prompt's working-hours line all said Monday–Friday — three layers unanimously wrong, and the agent refused Saturday leads while the office sold Saturdays by hand. Verify against the HCP calendar (a day with double-digit jobs is a workday), and remember day changes touch all three layers: config `available_days`, each tech's `schedule.<day>.enabled`, and the prompt's own working-hours sentence. The anchor rule makes over-enabling safe: a tech with no real jobs on a day never gets offered on it.
 - Who can authorize work besides the owner?
