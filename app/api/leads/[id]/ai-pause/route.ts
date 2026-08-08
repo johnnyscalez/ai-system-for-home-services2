@@ -54,7 +54,7 @@ export async function POST(
           const r = await syncMessengerHistory(
             service, lead.id, lead.company_id,
             integ.fb_access_token, integ.fb_page_id, lead.messenger_psid
-          )
+          , { autoPauseOnRep: false })
           resynced = r.added
           backfilled.push(...(await backfillLeadFromThread(service, lead.id, r.facts)))
         }

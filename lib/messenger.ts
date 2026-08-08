@@ -232,6 +232,8 @@ const AUTOMATION_PATTERNS: RegExp[] = [
   /please finish answering our questions/i,
   /veuillez appuyer sur/i,           // FR variant of "please tap an option"
   /нажмите на один из предложенных/i, // RU variant
+  /toca una de las opciones/i,        // ES variant (seen live: counted as a rep and could wrongly pause the AI)
+  /respondi[oó] a? ?una publicaci[oó]n/i, // ES "replied to a post" system line
   /you are responding to a user comment/i,
   /thanks for contacting us/i,
   /we'?ve received your message/i,
@@ -305,7 +307,25 @@ export function mineHistoryFacts(history: HistoryMessage[]): MinedFacts {
 // This closes that gap safely. It ADDS only what we don't already have — it
 // never edits, never deletes, and never duplicates — so it is safe to call on
 // any thread at any time.
-export type SyncResult = { added: number; metaTotal: number; oursBefore: number; facts: MinedFacts | null }
+export type SyncResult = { added: number; metaTotal: number; oursBefore: number; facts: MinedFacts | null; humanTakeover: boolean }
+
+/** Did this import reveal a REP (page-side human, not automation) speaking
+ *  after the AI's last word? Pure logic, exported for the test battery.
+ *  lastAiMs = 0 means the AI never spoke — then any rep message in the last
+ *  7 days counts (the thread belongs to the office, not to an opener). */
+export function repTakeoverInImport(
+  imported: HistoryMessage[],
+  lastAiMs: number,
+  nowMs: number
+): boolean {
+  const RECENT_MS = 7 * 24 * 60 * 60 * 1000
+  return imported.some((m) => {
+    if (!m.fromPage || isAutomationMessage(m.text)) return false
+    const ms = new Date(m.createdTime).getTime()
+    if (lastAiMs > 0) return ms > lastAiMs
+    return nowMs - ms < RECENT_MS
+  })
+}
 
 export async function syncMessengerHistory(
   db: { from: (t: string) => any },
@@ -313,19 +333,31 @@ export async function syncMessengerHistory(
   companyId: string,
   pageAccessToken: string,
   pageId: string,
-  psid: string
+  psid: string,
+  opts?: {
+    /** Sync-level human-takeover detection (default ON). Resume passes false —
+     *  the owner just said "AI go", re-pausing on the rep messages that
+     *  prompted the pause would make Resume a no-op. */
+    autoPauseOnRep?: boolean
+    /** The inbound message that TRIGGERED this sync — Meta's history already
+     *  contains it, and without exclusion it would import as a duplicate of
+     *  the row the engine is about to insert. */
+    excludeTriggerText?: string
+  }
 ): Promise<SyncResult> {
   const history = await fetchConversationHistory(pageAccessToken, pageId, psid, 50)
-  if (history.length === 0) return { added: 0, metaTotal: 0, oursBefore: 0, facts: null }
+  if (history.length === 0) return { added: 0, metaTotal: 0, oursBefore: 0, facts: null, humanTakeover: false }
 
   const { data: existing } = await db
     .from("conversations")
-    .select("body, created_at")
+    .select("body, created_at, direction, sent_by")
     .eq("lead_id", leadId)
     .order("created_at", { ascending: true })
-  const ours = ((existing ?? []) as Array<{ body: string | null; created_at: string }>).map((r) => ({
+  const ours = ((existing ?? []) as Array<{ body: string | null; created_at: string; direction: string; sent_by: string | null }>).map((r) => ({
     body: (r.body ?? "").trim(),
     ms: new Date(r.created_at).getTime(),
+    direction: r.direction,
+    sentBy: r.sent_by,
   }))
 
   // A Meta message is "already ours" when we hold the same text at roughly the
@@ -339,9 +371,14 @@ export async function syncMessengerHistory(
   // back.
   const WINDOW_MS = 5 * 60 * 1000
   const consumed = new Array(ours.length).fill(false)
+  const trigger = opts?.excludeTriggerText?.trim()
+  const nowMs = Date.now()
   const missing = history.filter((m) => {
     const text = m.text.trim()
     const ms = new Date(m.createdTime).getTime()
+    // The message that triggered this sync is about to be inserted by the
+    // engine — importing it too would double it in the thread.
+    if (trigger && !m.fromPage && text === trigger && nowMs - ms < 10 * 60 * 1000) return false
     const idx = ours.findIndex((o, k) => !consumed[k] && o.body === text && Math.abs(o.ms - ms) <= WINDOW_MS)
     if (idx === -1) return true
     consumed[idx] = true
@@ -360,11 +397,34 @@ export async function syncMessengerHistory(
     const { error } = await db.from("conversations").insert(rows)
     if (error) {
       console.error("[messenger] history re-sync insert failed:", error.message)
-      return { added: 0, metaTotal: history.length, oursBefore: ours.length, facts: null }
+      return { added: 0, metaTotal: history.length, oursBefore: ours.length, facts: null, humanTakeover: false }
     }
     console.log(`[messenger] re-synced ${missing.length} missing messages into lead ${leadId}`)
   }
-  return { added: missing.length, metaTotal: history.length, oursBefore: ours.length, facts: mineHistoryFacts(history) }
+
+  // Redundant human-takeover detection (Gaurang incident): the owner corrected
+  // the agent from the page inbox, the echo webhooks never arrived, and the
+  // agent kept replying over him three minutes later. Echoes stay the fast
+  // path — THIS is the guarantee: any sync that reveals a rep speaking after
+  // the AI's last word pauses the AI, whether the sync came from the 15-min
+  // sweep or the pre-reply refresh.
+  let humanTakeover = false
+  if (opts?.autoPauseOnRep !== false) {
+    const lastAiMs = Math.max(0, ...ours.filter((o) => o.direction === "outbound" && o.sentBy === "ai").map((o) => o.ms))
+    if (repTakeoverInImport(missing, lastAiMs, nowMs)) {
+      const { data: cur } = await db.from("leads").select("ai_paused, first_name, phone").eq("id", leadId).maybeSingle()
+      if (cur && !cur.ai_paused) {
+        humanTakeover = true
+        await db.from("leads").update({ ai_paused: true, status: "needs_attention" }).eq("id", leadId)
+        try {
+          const { notifyNeedsAttention } = await import("@/lib/notifications")
+          notifyNeedsAttention(companyId, `${cur.first_name ?? "Messenger lead"} — a team member is in the thread, AI paused`, cur.phone ?? "").catch(() => {})
+        } catch { /* notification is best-effort */ }
+        console.log(`[messenger] sync found a rep in lead ${leadId}'s thread after the AI's last message — AI paused`)
+      }
+    }
+  }
+  return { added: missing.length, metaTotal: history.length, oursBefore: ours.length, facts: mineHistoryFacts(history), humanTakeover }
 }
 
 /** Fill ONLY blank identity fields from the thread — never overwrite real data. */

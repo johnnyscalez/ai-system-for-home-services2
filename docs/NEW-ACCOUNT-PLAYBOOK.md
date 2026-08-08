@@ -270,6 +270,11 @@ Why it matters: the agent doesn't know it's missing anything. It answers confide
 
 **Rule: any code that lets the AI speak into a thread it did not start must re-sync that thread first.** Cheap (one API call, once per thread), and it is the difference between the agent sounding informed and sounding like it wasn't listening.
 
+| L-5 | The owner corrected the agent from the page inbox; the echo webhooks never arrived, so the AI was never paused AND answered the next message blind to the correction — re-contradicting him 3 minutes later with a wrong price (Gaurang) | Echoes stay the fast path, but are no longer a single point of failure: EVERY sync (the 15-min sweep and a new pre-reply re-sync on every inbound) detects a rep speaking after the AI's last word (`repTakeoverInImport`) → pauses + needs_attention + owner ping. The pre-reply sync also puts the rep's words IN CONTEXT before the model answers, and excludes the triggering inbound so it can't double-import | Send a rep message from the page inbox WITHOUT echoes flowing, then have the lead message again → the AI must stay silent and the lead must flip to needs_attention |
+| L-6 | Spanish inbox-automation lines ("Toca una de las opciones…") were classified as human reps — with sync-level takeover detection they would wrongly pause every Spanish thread | ES patterns added to `isAutomationMessage` (plus the "respondió una publicación" system line). When a client's automation speaks another language, add its signatures BEFORE enabling the agent | Battery-tested with real Spanish rep text as the negative control |
+
+**Pricing gaps only the owner can close (Gaurang lesson):** an ambiguously written KB line ("both side-wall and ground-level exits") taught the agent the OPPOSITE of the real rule, and the agent — correctly forbidden from inventing surcharges — flattened everything into the base price. Any price with access/condition modifiers (vent exit location, floor, roof) must be written into the KB + prompt as explicit add-ons with numbers, and the agent must attach the qualifier whenever quoting the inclusive package before the condition is known (Appendix B: ask for tiered/conditional prices at onboarding).
+
 ### K. Channel drift — a capability wired on one channel only (added Aug 2026)
 
 | ID | Symptom | Root cause | New-account check |

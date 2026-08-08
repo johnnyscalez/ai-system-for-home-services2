@@ -264,25 +264,41 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     return
   }
 
-  // If the AI has never spoken in this thread, it is about to INTERVENE in a
-  // conversation someone else has been having. Re-sync from Meta first so it
-  // sees the whole story — the creation-time import is a snapshot and may
-  // predate everything the rep or the automation did since.
+  // Re-sync the thread from Meta before EVERY reply, not just the first
+  // (Gaurang incident: the owner corrected the agent from the page inbox, the
+  // echo webhooks never arrived, and the agent answered the next message
+  // blind to the correction AND unpaused). The sync pulls anything reps or
+  // automations said since we last looked, and if it reveals a rep speaking
+  // after the AI's last word it pauses the AI itself — echo delivery is no
+  // longer a single point of failure. One Graph call per inbound.
   try {
-    const { count: aiSpoke } = await supabase
-      .from("conversations").select("*", { count: "exact", head: true })
-      .eq("lead_id", leadId).eq("direction", "outbound").eq("sent_by", "ai")
-    if ((aiSpoke ?? 0) === 0) {
-      const { syncMessengerHistory, backfillLeadFromThread } = await import("@/lib/messenger")
-      const r = await syncMessengerHistory(
-        supabase, leadId, integration.company_id,
-        integration.fb_access_token, pageId, psid
-      )
-      if (r.added > 0) console.log(`[webhook/facebook] pre-intervention re-sync: +${r.added} msgs for lead ${leadId}`)
-      await backfillLeadFromThread(supabase, leadId, r.facts)
+    const { syncMessengerHistory, backfillLeadFromThread } = await import("@/lib/messenger")
+    const r = await syncMessengerHistory(
+      supabase, leadId, integration.company_id,
+      integration.fb_access_token, pageId, psid,
+      { excludeTriggerText: text }
+    )
+    if (r.added > 0) console.log(`[webhook/facebook] pre-reply re-sync: +${r.added} msgs for lead ${leadId}`)
+    await backfillLeadFromThread(supabase, leadId, r.facts)
+    if (r.humanTakeover) {
+      // Record the lead's message (unless the sync already imported it), then
+      // stay silent — the thread belongs to the team now.
+      const { count: haveIt } = await supabase
+        .from("conversations").select("*", { count: "exact", head: true })
+        .eq("lead_id", leadId).eq("direction", "inbound").eq("body", text)
+        .gte("created_at", new Date(Date.now() - 6 * 60 * 1000).toISOString())
+      if ((haveIt ?? 0) === 0) {
+        await supabase.from("conversations").insert({
+          lead_id: leadId, company_id: integration.company_id,
+          direction: "inbound", sent_by: "human", body: text, channel: "messenger",
+        })
+      }
+      await supabase.from("leads").update({ last_message_at: new Date().toISOString() }).eq("id", leadId)
+      console.log(`[webhook/facebook] rep active in thread ${leadId} (sync-detected) — no AI reply`)
+      return
     }
   } catch (err) {
-    console.error("[webhook/facebook] pre-intervention re-sync failed (continuing):", err)
+    console.error("[webhook/facebook] pre-reply re-sync failed (continuing):", err)
   }
 
   // Run the same AI engine as SMS; saves inbound + outbound with channel=messenger
