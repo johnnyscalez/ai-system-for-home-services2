@@ -193,20 +193,28 @@ export async function GET(req: NextRequest) {
           asyncAmdStatusCallback: `${appUrl}/api/voice/amd?leadId=${lead.id}`,
         })
       } else {
-        // Send a follow-up via AI engine with per-step angle
+        // Transport is decided BEFORE generating anything: a step with no way
+        // to reach the lead cancels silently instead of burning a generation
+        // and leaving a "Not delivered" ghost bubble in the thread (live: Olya).
+        const isMessengerLead = lead.channel === "messenger" && !!lead.messenger_psid
+        const inMsgrWindow = !!lead.last_inbound_at &&
+          Date.now() - new Date(lead.last_inbound_at).getTime() < 23 * 60 * 60 * 1000
+        const canMessenger = isMessengerLead && inMsgrWindow
+        const { isPlaceholderPhone } = await import("@/lib/twilio")
+        const canSms = !isPlaceholderPhone(lead.phone)
+        if (!canMessenger && !canSms) {
+          console.log(`[cron] step ${step.id}: no reachable channel (messenger window closed, no real phone) — cancelling`)
+          await supabase.from("sequences").update({ status: "cancelled" }).eq("id", step.id)
+          continue
+        }
+
         const result = await processAndSave(lead.id, step.company_id, null, undefined, followUpAngle)
 
         if (result.response) {
-          // Messenger leads get the follow-up ON MESSENGER — inside Meta's
-          // 24h standard window. Outside it, fall back to SMS when a real
-          // phone exists; a placeholder phone means the lead is unreachable
-          // and the step cancels instead of looping forever.
+          // Messenger first inside Meta's 24h window; SMS as the fallback.
           let sid: string | null = null
           let sentVia: string | null = null
-          const isMessengerLead = lead.channel === "messenger" && !!lead.messenger_psid
-          const inMsgrWindow = !!lead.last_inbound_at &&
-            Date.now() - new Date(lead.last_inbound_at).getTime() < 23 * 60 * 60 * 1000
-          if (isMessengerLead && inMsgrWindow) {
+          if (canMessenger) {
             const { data: integ } = await supabase
               .from("integrations").select("fb_access_token").eq("company_id", step.company_id).maybeSingle()
             if (integ?.fb_access_token) {
@@ -215,15 +223,18 @@ export async function GET(req: NextRequest) {
               if (sent.ok) { sid = sent.messageId ?? null; sentVia = "messenger" }
             }
           }
-          if (!sentVia) {
-            const { isPlaceholderPhone } = await import("@/lib/twilio")
-            if (isPlaceholderPhone(lead.phone)) {
-              console.log(`[cron] step ${step.id}: messenger window closed and no real phone — cancelling`)
-              await supabase.from("sequences").update({ status: "cancelled" }).eq("id", step.id)
-              continue
-            }
+          if (!sentVia && canSms) {
             const r = await sendToLead(lead, result.response, phoneRecord.phone_number, step.company_id)
             sid = r.sid; sentVia = r.channel
+          }
+          if (!sentVia) {
+            // Generated but every transport failed — remove the ghost row, cancel the step
+            if (result.outboundConversationId) {
+              await supabase.from("conversations").delete().eq("id", result.outboundConversationId)
+            }
+            console.log(`[cron] step ${step.id}: all transports failed post-generation — ghost removed, step cancelled`)
+            await supabase.from("sequences").update({ status: "cancelled" }).eq("id", step.id)
+            continue
           }
           if (result.outboundConversationId) {
             await supabase

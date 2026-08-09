@@ -251,6 +251,16 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     return
   }
 
+  // Every other inbound channel stamps these two fields; Messenger never did —
+  // so every Messenger lead had last_inbound_at NULL, the cron's 24h-window
+  // check read NULL as "window closed", and Messenger follow-ups could never
+  // fire (live: Olya — followed up 7h after her message, via a dead SMS ghost
+  // instead of the open Messenger window). is_active_conversation also gives
+  // Messenger leads the same mid-conversation follow-up protection as SMS.
+  await supabase.from("leads")
+    .update({ last_inbound_at: new Date().toISOString(), is_active_conversation: true })
+    .eq("id", leadId)
+
   // Human took over this conversation (a team member replied manually) → the AI
   // stays quiet. Still record the lead's message so the team sees the full
   // thread in the CRM; just don't generate an AI reply.
