@@ -795,7 +795,17 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   if (/^\s*\[[^\]]*\]\s*$/.test(responseText)) responseText = ""
 
   // ── find_available_slots: run the lookup, save slot→tech map, get Claude's slot-offer text ──
-  if (findSlotsToolId) {
+  // Extracted into a closure so the continuation path can re-enter it: a model
+  // granted a turn after a details-save routinely spends that turn calling
+  // find_available_slots (timezone/zip just landed — checking times IS the
+  // right next move), and dropping that call shipped "Got it." as the reply.
+  // One flow, every entry point — duplicating the lookup here would be the
+  // playbook's class K (capability wired on one path only) inside one file.
+  const runSlotsFlow = async (current: typeof claudeResponse): Promise<EngineResult> => {
+    // Text bundled with a slots call is always "let me check…" narration —
+    // the real SMS comes from the slot-offer exchange below. This reset also
+    // covers re-entry, where the continuation turn may have left filler here.
+    responseText = ""
     // A zip is REQUIRED before any slot is offered. Without one the candidate
     // pool ignores geography entirely — for a two-metro company that mixed
     // Chicago and Detroit techs in one list, and whatever the lead picked
@@ -989,7 +999,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     // Provide tool_results for EVERY tool_use in the response (Claude sometimes calls
     // update_lead_status alongside find_available_slots in the same turn — every tool_use
     // must have a corresponding tool_result or the API returns a 400).
-    const slotToolResults = (claudeResponse.content as Array<{ type: string; id?: string; name?: string }>)
+    const slotToolResults = (current.content as Array<{ type: string; id?: string; name?: string }>)
       .filter(b => b.type === "tool_use")
       .map(b => ({
         type: "tool_result" as const,
@@ -1001,7 +1011,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
 
     const slotMessages = [
       ...messages,
-      { role: "assistant" as const, content: claudeResponse.content },
+      { role: "assistant" as const, content: current.content },
       { role: "user" as const, content: slotToolResults },
     ]
 
@@ -1112,6 +1122,8 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     return { response: responseText, action }
   }
 
+  if (findSlotsToolId) return await runSlotsFlow(claudeResponse)
+
   // For initial outreach, strip any meta-commentary Claude might add — keep only the first real line
   if (isInitialOutreach && responseText) {
     const firstLine = responseText.split("\n").find(l => l.trim().length > 0 && !l.startsWith("Note:") && !l.startsWith("**")) ?? responseText
@@ -1125,16 +1137,35 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   // must have a corresponding tool_result or the API returns a 400. This also covers
   // the details/status-only turn (no action-slot tool, no text): the model saved data
   // but still owes the lead an actual reply.
-  if ((action || detailsSaved) && !responseText) {
+  //
+  // BARE-ACK TURNS COUNT AS NO REPLY (the Chef-Dan incident, Aug 2026). A model
+  // whose main act is a tool call writes token filler alongside it — "Got it,
+  // two furnaces." — because it expects the tool result and another turn, like
+  // any tool loop grants. This path only granted that turn when the text was
+  // completely EMPTY, so the filler shipped as the entire SMS and a hot lead
+  // who'd answered every question in 90 seconds sat overnight, one message
+  // short of the per-furnace price quote. Filler has a recognizable shape:
+  // short, no question, no price, no digits — nothing that moves anything.
+  // Only side-effect turns (details/status) are re-run: booking, cancel,
+  // reschedule and callback turns own their accompanying text, and re-rolling
+  // a booking confirmation risks double-booking language.
+  const sideEffectTurnOnly =
+    !findSlotsToolId &&
+    (detailsSaved || action?.type === "update_status") &&
+    !["book_appointment", "cancel_appointment", "reschedule_appointment", "request_callback"]
+      .includes(action?.type ?? "")
+  const bareAck =
+    !!responseText && responseText.length < 90 && !/[?$\d]/.test(responseText)
+  if ((action || detailsSaved) && (!responseText || (bareAck && sideEffectTurnOnly))) {
     const actionToolResults = (claudeResponse.content as Array<{ type: string; id?: string; name?: string }>)
       .filter(b => b.type === "tool_use")
       .map(b => ({
         type: "tool_result" as const,
         tool_use_id: b.id!,
         content: b.name === "update_lead_details"
-          ? "Details saved to the lead file. Now send the lead your next SMS — it MUST move the conversation forward: your next unanswered gate question, or a slot offer. Never a bare acknowledgment like 'Perfect.' or 'Got it.'"
+          ? "Details saved to the lead file. Now send the lead your next SMS — it MUST move the conversation forward: your next unanswered gate question, the exact price their answers now call for, or a slot offer. Never a bare acknowledgment like 'Perfect.' or 'Got it.' Only exception: if the conversation is naturally closed (appointment booked and confirmed, or the lead said goodbye), a short warm close is fine."
           : b.name === "update_lead_status"
-          ? "Status updated. Now send the lead your next SMS — it MUST move the conversation forward: your next unanswered gate question, or a slot offer. Never a bare acknowledgment."
+          ? "Status updated. Now send the lead your next SMS — it MUST move the conversation forward: your next unanswered gate question, the exact price their answers now call for, or a slot offer. Never a bare acknowledgment. Only exception: if the conversation is naturally closed (appointment booked and confirmed, or the lead said goodbye), a short warm close is fine."
           : action?.type === "cancel_appointment"
           ? "Appointment cancelled. Send a brief, warm confirmation to the lead that it's been cancelled."
           : action?.type === "reschedule_appointment"
@@ -1158,11 +1189,38 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       messages: toolResultMessages,
     })
 
+    // The granted turn is a REAL turn — every tool the model calls on it must
+    // execute, exactly as it would on a first response. Reading only the text
+    // here was the second layer of the Chef-Dan class: the continuation fired,
+    // the model correctly spent its turn calling find_available_slots (the
+    // timezone/zip it just saved makes checking times the natural next move),
+    // the call was silently dropped, and "Got it." shipped anyway.
     for (const block of followUp.content) {
       if (block.type === "text") {
         responseText = block.text.trim()
+      } else if (block.type === "tool_use") {
+        if (block.name === "find_available_slots") {
+          findSlotsToolId = block.id
+          const inp = block.input as { job_type?: string; zip_code?: string }
+          findSlotsJobType = inp.job_type ?? null
+          findSlotsZip     = inp.zip_code ?? null
+        } else if (block.name === "update_lead_details") {
+          await saveLeadDetails(block.input as LeadDetailsInput)
+        } else if (block.name === "update_lead_status") {
+          const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention" }
+          await saveLeadStatus(input.status)
+          if (!action) action = { type: "update_status", status: input.status }
+        } else if (block.name === "book_appointment") {
+          const input = block.input as { scheduled_at: string; address?: string; notes?: string }
+          action = { type: "book_appointment", ...input }
+        }
       }
     }
+
+    // Availability requested on the granted turn → run the full slots flow on
+    // it (lookup, slot→tech map, offer text). Same flow as a first-response
+    // call — one implementation, every entry point.
+    if (findSlotsToolId) return await runSlotsFlow(followUp)
 
     // If follow-up returned only another tool call (no text), generate a minimal fallback
     // so the conversation history stays valid and the lead gets a response.

@@ -315,6 +315,18 @@ A Messenger questionnaire captured only a ZIP; the lead accepted a slot; the age
 | N-5 | Three identical confirmation texts for one booking (each collapsed duplicate re-fired the webhook's confirmation block; two rendered in server-UTC — a stale pre-deploy instance during a rolling deploy) | Booking outcome plumbing (`created`/`moved`/`noop`) — webhooks send only on real changes; `sendConfirmations` is per-channel idempotent via the confirmation flags; every move-path resets the flags so a NEW time still confirms fresh | Battery: repeat trigger on a confirmed appointment sends nothing; a genuine move re-confirms. |
 | N-6 | "Looking at the lead file…" reached a customer (1 machinery mention in a short message slipped the scored leak check) | Instant-block tier: "lead file" and tool names block at ANY length | Unit test in the battery. |
 
+### O. The tool call that consumed the reply (the Chef-Dan class — added Aug 2026)
+
+Chef-Dan answered every qualifying question in under 90 seconds. On "2" (furnaces) the model did the right bookkeeping — called `update_lead_details`, the note landed on the lead file — and shipped **"Got it, two furnaces."** as the entire message. Dead stop, overnight, at peak intent, one message short of the per-furnace price quote the prompt fully equipped it to give ("Multiple furnaces = per-furnace pricing" was right there).
+
+The mechanism: a model whose main act is a tool call writes token *waiting-for-the-tool-result* filler as its text, because every normal tool loop grants it another turn after the result comes back. The engine had that continuation on two paths — the `find_available_slots` branch, and turns whose text was completely **empty** — but a tool call bundled WITH filler text hit neither, so the filler shipped as the SMS. The continuation instruction that would have prevented it ("never a bare acknowledgment") existed in the codebase the whole time, wired into only one branch. Not a prompt gap: a turn-granting gap.
+
+**The law of this class: a model that calls a tool believes it will get another turn — any path that doesn't grant one ships its "waiting" filler to the customer. Every tool path must either continue the loop or prove the bundled text stands on its own.**
+
+| ID | Symptom | Guard now in place | New-account check |
+|---|---|---|---|
+| O-1 | Mid-flow qualifying answer met with a bare acknowledgment and silence ("Got it, two furnaces.") while the detail saved correctly | Bare-ack detection on side-effect-only turns (details/status saves; slots and booking/cancel/reschedule/callback turns exempt — their text owns the turn): text that is short with no question, no price, and no digits counts as NO reply, and triggers the same tool_result continuation as empty text — "must move the conversation forward: next gate question, the exact price their answers now call for, or a slot offer", with license for a short warm close when the conversation is genuinely done | Battery item 32. |
+
 ---
 
 ## Phase 5 — Pre-go-live test battery (run for EVERY new account/agent)
@@ -358,6 +370,8 @@ A Messenger questionnaire captured only a ZIP; the lead accepted a slot; the age
 29. ☐ **Correction round-trip** (N-3) — after booking (and after the HCP push), correct the address in conversation: lead + appointment must update, the job must get the manual-fix note, the owner must get pinged.
 30. ☐ **Acknowledgement immunity** (M-6) — reply "thanks!" / "ok" / "great" to a booked lead several times: appointment count and time must not change, and no confirmation may re-send.
 31. ☐ **Follow-up FIRING proof — run on EVERY live channel** (K-3b, the Olya lesson: the Messenger nurture shipped fully built and could never fire, because the window check read a field that channel never wrote). The issue: follow-up sending depends on per-lead fields (`last_inbound_at`, `is_active_conversation`, `channel`, a reachable phone/PSID) that each channel's webhook must maintain — a channel that skips one write produces follow-ups that silently fizzle or ghost ("Not delivered" bubbles the lead never received). The solution baked in: every inbound webhook stamps `last_inbound_at` + `is_active_conversation`; the cron picks the transport BEFORE generating and never leaves ghosts. The CHECK, per channel (SMS, Messenger, WhatsApp, GHL — and any future one): (a) send a test inbound and confirm `last_inbound_at` updates to now; (b) reply-without-booking and confirm 4 nurture steps arm; (c) let or force step 1 to fire and confirm the message actually DELIVERS on the same channel (Messenger: sent inside the 24h window with a message id and `channel='messenger'` on the row; SMS: a real Twilio SID); (d) confirm zero "Not delivered" ghost bubbles in the thread. Arming is not the test — FIRING is.
+
+32. ☐ **Dead-end acknowledgment probe** (O-1) — mid-flow, answer a qualifying question with a bare data point ("2", "just a cat", "pacific time"): the agent's reply must contain a question, a price, or a slot offer — a reply that ENDS at an acknowledgment is a fail even when the detail saved correctly. Probe at least two different qualifying questions per agent: the stall lives in the shared engine, but each prompt's question flow creates different tool-call moments.
 
 **Known real-world untestables — verify in week 1 with real traffic instead:** actual SMS deliverability (A2P-dependent), real-caller STT quality, email spam-folder rates across providers, Messenger 24h-window behavior.
 
