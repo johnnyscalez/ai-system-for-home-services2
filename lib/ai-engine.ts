@@ -48,7 +48,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "book_appointment",
     description:
-      "Call this ONLY when the lead has confirmed a specific date and time, AND you have every field the lead file's CHANNEL & CONTACT FILE block lists as REQUIRED BEFORE BOOKING. For service visits that always includes the FULL street service address (house number + street — a zip code alone is NOT an address) — never book a visit without one. For phone/video appointments no address exists or is needed. Convert relative times like 'tomorrow at 2pm' to an ISO 8601 datetime using the current date from the lead file. Call it ONCE: if the lead file already shows this appointment booked, acknowledge it instead of calling again — only call again when the lead explicitly asks for a DIFFERENT time.",
+      "For service visits: call this ONLY after the lead replied YES to your booking recap (day, window, address, package, price) — the recap consent is a mandatory step before this tool. You must also have every field the lead file's CHANNEL & CONTACT FILE block lists as REQUIRED BEFORE BOOKING. For service visits that always includes the FULL street service address (house number + street — a zip code alone is NOT an address) — never book a visit without one. For phone/video appointments no address exists or is needed. Convert relative times like 'tomorrow at 2pm' to an ISO 8601 datetime using the current date from the lead file. Call it ONCE: if the lead file already shows this appointment booked, acknowledge it instead of calling again — only call again when the lead explicitly asks for a DIFFERENT time.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -578,8 +578,9 @@ When a lead asks a question (cost, free visit, timeline, etc.) that you can answ
 Exception: if the lead is venting frustration or describing a bad prior experience, lead with empathy first — that message is the acknowledgment. Ask the next question in your following message.
 
 BOOKING FLOW:
-• NEVER tell the lead they're booked ("you're on the schedule", "you're all set") unless you are calling book_appointment in this exact turn. Saying it without the tool call means the appointment does not exist — the worst failure this system can produce.
-• Lead confirms time → ask for address (if not on file) → book immediately.
+• NEVER tell the lead they're booked ("you're on the schedule", "you're all set", "you're booked", "locked in") unless you are calling book_appointment in this exact turn or a booking already exists. The 30-minutes-before and day-before-reminder lines are POST-BOOKING language only. Saying any of it without a real booking means the appointment does not exist — the worst failure this system can produce.
+• Lead picks a time → ask for the street address (if not on file) → send the BOOKING RECAP and ask for consent → they say yes → book in that same turn → THEN the confirmation with the reminder details.
+• THE BOOKING RECAP (required before every visit booking): one short message with the day and date, the arrival window, the address, and the package with its price, ending in a consent question. Shape: "Got you [first name]. Just to double check before I lock it in, [Day, Month D], [window], at [address], for the [package] at [price]. Sounds good?" Only a clear yes triggers book_appointment.
 • If address IS already on file, book without asking for it again.
 • After booking: one short confirmation — day, time, address. Done.
 • Normal flow: lead picks a time → you ask for address → they give it → book immediately. Do NOT ask "does that still work?" — the time was already confirmed.
@@ -905,7 +906,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         : `Available slots for this job and location:\n${slotLines}\n\n` +
           `Before offering the slots, briefly set context in one sentence — e.g.: "I'll have one of our technicians come out — they'll walk you through everything and go over all your options on-site." Then offer exactly 2 of these slots.\n\n` +
           `NEVER mention the technician by name. Always say "our technician" or "one of our techs".\n` +
-          `Use the exact scheduled_at string when calling book_appointment.\n\n` +
+          `When the lead picks a slot, do NOT book yet. First collect the full street address if it's missing. Then send the BOOKING RECAP — day and date, window, address, package and price — ending with a consent question ("Sounds good?"). ONLY after they reply with a clear yes do you call book_appointment with that slot's exact scheduled_at string. If they hesitate or want a change, adjust first. Never say "you're all set" or mention the 30-minutes-before text until the booking call succeeds.\n\n` +
           `IMPORTANT: You MUST include a plain-text SMS message in your response — do not call any tool without also outputting the text you are sending to the lead.`
     } else {
       // No slots available — take over immediately with a direct, honest reply.
@@ -1503,6 +1504,73 @@ Reply with exactly one word: QUALIFIED, UNQUALIFIED, or UNKNOWN.`,
   }
 }
 
+/** Does this outbound text use post-booking language? Exported for tests. */
+export function claimsBookingLanguage(text: string): boolean {
+  return (
+    /\byou'?re (all set|set for|booked|on the schedule)\b/i.test(text) ||
+    /\ball set\b.*\b(for|on)\b\s+(mon|tues|wednes|thurs|fri|satur|sun|jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)/i.test(text) ||
+    /\bgot you (booked|down for)\b/i.test(text) ||
+    /\blocked (you )?in\b/i.test(text) ||
+    /\b(text|reach out to|call) you (about )?(30|thirty) minutes\b/i.test(text) ||
+    /\breminder\b[^.]*\bday before\b|\bday before\b[^.]*\breminder\b/i.test(text)
+  )
+}
+
+/** Deterministic consent recap from REAL data — the replacement for a phantom
+ *  booking claim, and the exact message the flow wants next anyway. */
+export async function buildConsentRecap(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  leadId: string,
+  companyId: string,
+  modelText: string
+): Promise<string> {
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("first_name, address, zip, selected_slots, job_type, metadata, timezone")
+    .eq("id", leadId).maybeSingle()
+  const slots = Object.values((lead?.selected_slots ?? {}) as Record<string, { iso?: string }>)
+    .map((s) => s.iso).filter(Boolean) as string[]
+
+  // Pick the slot the model was talking about: match a weekday named in its
+  // text; a single offered slot wins by default.
+  const { zipToTimeZone } = await import("@/lib/timezones")
+  const tz = zipToTimeZone(lead?.zip as string | null) ?? (lead?.timezone as string | null) ?? "America/New_York"
+  const dayOf = (iso: string) => new Date(iso).toLocaleDateString("en-US", { weekday: "long", timeZone: tz }).toLowerCase()
+  const mentioned = slots.filter((iso) => modelText.toLowerCase().includes(dayOf(iso)))
+  const iso = mentioned[0] ?? (slots.length === 1 ? slots[0] : null)
+
+  const name = (lead?.first_name as string | null)?.trim()
+  if (!iso) {
+    return `Almost there${name ? `, ${name}` : ""}. Which of the times I offered works best for you? I'll get you locked in right after you confirm.`
+  }
+  const start = new Date(iso)
+  const dayLabel = start.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: tz })
+  const startH = parseInt(start.toLocaleTimeString("en-GB", { hour: "2-digit", timeZone: tz }), 10)
+  const endH = startH + 3
+  const fmtH = (h: number) => `${((h + 11) % 12) + 1}${h < 12 ? "am" : "pm"}`
+  const windowLabel = `${fmtH(startH)} to ${fmtH(endH)}`
+
+  // Price from the book when computable — never invented
+  let priceLine = ""
+  try {
+    const { priceFromRules, normalizePropertyType } = await import("@/lib/pricing")
+    const { data: cfg } = await supabase
+      .from("ai_agent_config").select("pricing_rules").eq("company_id", companyId).maybeSingle()
+    const meta = (lead?.metadata as Record<string, unknown> | null) ?? {}
+    const units = Number(meta.unit_count)
+    const cents = priceFromRules(
+      (cfg?.pricing_rules ?? null) as never,
+      normalizePropertyType(typeof meta.property_type === "string" ? meta.property_type : null),
+      (lead?.job_type as string | null) ?? null,
+      Number.isFinite(units) && units >= 1 ? Math.round(units) : 1
+    )
+    if (cents != null) priceLine = ` for the $${Math.round(cents / 100)} full clean`
+  } catch { /* recap works without a price */ }
+
+  const addr = (lead?.address as string | null)?.trim()
+  return `Got you${name ? `, ${name}` : ""}. Just to double check before I lock it in, ${dayLabel}, ${windowLabel}${addr ? `, at ${addr}` : ""}${priceLine}. Sounds good?`
+}
+
 export async function processAndSave(
   leadId: string,
   companyId: string,
@@ -1563,6 +1631,28 @@ export async function processAndSave(
   // "helpfully" generate a reply we explicitly don't want.
   if (result.response && /\[\[\s*SILENT\s*\]\]/i.test(result.response)) {
     result = { ...result, response: "", silent: true }
+  }
+
+  // Phantom-booking guard (Angela, then Syed): text that CLAIMS a booking may
+  // only ship when a booking truly exists. Voice has had this net for weeks;
+  // text channels now too. A phantom claim is replaced with the consent recap
+  // built from real data, which is also the flow's intended next message.
+  if (result.response && !result.silent && claimsBookingLanguage(result.response)) {
+    const bookedThisTurn =
+      (result.action?.type === "book_appointment") || result.action?.type === "reschedule_appointment"
+    if (!bookedThisTurn) {
+      const { count: hasApt } = await supabase
+        .from("appointments").select("*", { count: "exact", head: true })
+        .eq("lead_id", leadId).eq("status", "scheduled")
+      if ((hasApt ?? 0) === 0) {
+        const replacement = await buildConsentRecap(supabase, leadId, companyId, result.response)
+        console.error(`[ai-engine] PHANTOM BOOKING CLAIM blocked for lead ${leadId} — replaced with consent recap`)
+        if (result.outboundConversationId) {
+          await supabase.from("conversations").update({ body: replacement }).eq("id", result.outboundConversationId)
+        }
+        result = { ...result, response: replacement, action: undefined }
+      }
+    }
   }
 
   // Final guard — runConversation returned empty text. Call Claude text-only for real response.
@@ -2556,7 +2646,9 @@ ${channel === "messenger" ? `• MESSENGER SPECIFIC: you have NO phone number fo
 ${channel === "whatsapp" ? `• WHATSAPP SPECIFIC: their phone number is this chat itself. Focus on address${hasEmail ? "" : " and a one-time casual email ask"}.` : ""}
 ${isSalesConvo && !hasTimezone ? `• TIME ZONE — you need it before offering any time, but WORK IT OUT rather than asking when you can. If they have named ANY location anywhere in this conversation (a city, a state, "we're in Phoenix", "all over Texas"), derive the IANA zone yourself and save it with update_lead_details immediately — asking "what time zone are you in?" right after someone told you their city reads as not listening. Only ASK when you genuinely have no location at all: "What time zone are you in? I'll line the times up to your clock." Either way it must be saved BEFORE find_available_slots.` : ""}
 ${isSalesConvo && hasTimezone ? `• Times you are given by find_available_slots are ALREADY in this lead's own time zone, stamped with their abbreviation. Offer them exactly as written — never add, subtract, or re-label hours.` : ""}
-• THE MOMENT they pick one of the times you offered, call book_appointment in that SAME turn. Do not ask for their email, a confirmation, or anything else first — a chosen slot that isn't booked is a lost appointment. Anything optional can be asked after the booking exists.
+${isSalesConvo
+  ? `• THE MOMENT they pick one of the times you offered, call book_appointment in that SAME turn. Do not ask for their email, a confirmation, or anything else first — a chosen slot that isn't booked is a lost appointment. Anything optional can be asked after the booking exists.`
+  : `• When they pick one of the times you offered: collect the street address if missing, send the BOOKING RECAP (day and date, window, address, package and price) ending in "Sounds good?", and the MOMENT they confirm, call book_appointment in that SAME turn — a confirmed recap that isn't booked is a lost appointment. Anything optional (like email) can be asked after the booking exists.`}
 • If a REQUIRED field (listed above) is still missing, you may not book yet — collect it, then book in the same conversation. Optional fields never block a booking.
 === END CHANNEL & CONTACT FILE ===
 `
