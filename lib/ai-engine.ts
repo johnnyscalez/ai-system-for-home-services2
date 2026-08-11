@@ -29,7 +29,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "find_available_slots",
     description:
-      "Look up real available appointment slots, filtered by technician availability and zip coverage. Call this when your playbook's BOOKING GATE for this lead's job type is satisfied (the required discovery questions answered — or the lead explicitly pushed to book immediately) AND you have a zip code or address. Do NOT call it just because you happen to have an address early — an address in hand does not mean discovery is done; finish the gate first. Never offer times without calling this first, and never invent times.",
+      "Look up real available appointment slots, filtered by technician availability and zip coverage. Call this when your playbook's BOOKING GATE for this lead's job type is satisfied (the required discovery questions answered — or the lead explicitly pushed to book immediately) AND you have a zip code or address. Do NOT call it just because you happen to have an address early — an address in hand does not mean discovery is done; finish the gate first. Never offer times without calling this first, and never invent times. Never call this in the same turn as your FIRST price presentation — price lands first, times come in the following message after the lead responds.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -527,6 +527,7 @@ You are not a script-follower. You are a sharp human rep who thinks before every
 4. QUALIFIED? — Based on what I know: qualified (say so via update_lead_status and move toward booking), disqualified (handle it with respect, per the rules), or not enough information yet (keep discovering).
 5. NEXT — What is the single most useful question or action right now, and why am I asking it? Every question should have a purpose you could explain: it qualifies them, sizes the job for the tech, or sets urgency. If you can't say why you're asking, don't ask it.
 6. SHAPE — When the lead just described a problem, order the reply acknowledge → reassure → ask, in one short text: name their problem back in their words, one beat of "you're in the right place," then the single question. And NO DEAD-END MESSAGES: every message either asks one question, offers slots, or confirms a booking — ending a viable conversation without asking for the booking is the #1 way reps lose winnable leads.
+6b. FIRST PRICE MESSAGE — the first message that presents a price is a SALES moment, not a menu. Even when a form already answered every discovery question, you still sell like a person: react to their last answer in their words, mirror their situation in one small clause, and give the REASON this package fits THEM before listing what it includes. If the company's ads run an entry price, name that number first and earn the difference — never quote the bigger price as if the smaller one doesn't exist. NEVER combine the first price presentation with a slot offer and never call find_available_slots on that turn: price lands first, times come in the next message after they respond.
 
 The feel to aim for: a person texting from the office who's genuinely paying attention — curious about the specifics, remembers everything said, asks what a real dispatcher or comfort advisor would actually need to know, and never rushes a big considered purchase to a calendar link after one exchange. Speed matters on urgent repairs; attention matters on everything else. Homeowners ghost when they feel interrogated, hear jargon, or get a fumbled price answer — and they book with whoever responds fastest and sounds most like a competent human who actually cares.
 === END SILENT REASONING ===`
@@ -1869,7 +1870,7 @@ export async function processAndSave(
         const { isCompleteServiceAddress } = await import("@/lib/routing")
         const bookAddress = address ?? (freshLead?.address as string | null) ?? null
         if (needsTravel && !isCompleteServiceAddress(bookAddress)) {
-          const corrective = "Perfect — and what's the full street address for the visit? I'll lock it in right away."
+          const corrective = "Perfect. And what's the full street address for the visit? I'll lock it in right away."
           if (outboundConversationId) {
             await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
           }
@@ -2224,7 +2225,7 @@ export async function processAndSave(
 
       if (!target) {
         console.warn(`[ai-engine] cancel_appointment: id ${appointment_id} not found for lead ${leadId} — correcting instead of confirming`)
-        const corrective = "Let me double-check your appointment before I change anything — one moment. Which day was it scheduled for?"
+        const corrective = "Let me double check your appointment before I change anything. Which day was it scheduled for?"
         if (outboundConversationId) {
           await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
         }
@@ -2271,7 +2272,7 @@ export async function processAndSave(
 
       if (!oldApt) {
         console.warn(`[ai-engine] reschedule_appointment: id ${appointment_id} not found for lead ${leadId} — correcting instead of confirming`)
-        const corrective = "Let me pull up your appointment to make sure I move the right one — which day is it currently scheduled for?"
+        const corrective = "Let me pull up your appointment to make sure I move the right one. Which day is it currently scheduled for?"
         if (outboundConversationId) {
           await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
         }
