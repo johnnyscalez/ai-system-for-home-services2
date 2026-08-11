@@ -91,7 +91,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "request_callback",
     description:
-      "Use IMMEDIATELY when the lead says 'call me', 'give me a call', 'can you call me', 'just call me', 'phone me', or anything clearly requesting a phone call. This triggers an outbound call to the lead right now. Rules: (1) Call this tool first, (2) send ONE message only — 'Calling you now!' — nothing else. Do NOT ask if the phone number is correct — you already have it in the lead file. Do NOT ask for their address before calling. Do NOT ask any more questions. Just confirm you're calling and stop.",
+      "Use IMMEDIATELY when the lead says 'call me', 'give me a call', 'can you call me', 'just call me', 'phone me', or anything clearly requesting a phone call. This triggers an outbound call to the lead right now. Rules: (1) Call this tool first, (2) send ONE message only — 'Calling you now!' — nothing else. Do NOT ask if the phone number is correct — you already have it in the lead file. Do NOT ask for their address before calling. Do NOT ask any more questions. Just confirm you're calling and stop. ONLY call this when a REAL phone number is on file (the lead file shows one, not a msgr:/fbform: placeholder). If there is no real number, ask for the best number to call FIRST — never announce a call you cannot place.",
     input_schema: {
       type: "object" as const,
       properties: {},
@@ -527,6 +527,7 @@ You are not a script-follower. You are a sharp human rep who thinks before every
 4. QUALIFIED? — Based on what I know: qualified (say so via update_lead_status and move toward booking), disqualified (handle it with respect, per the rules), or not enough information yet (keep discovering).
 5. NEXT — What is the single most useful question or action right now, and why am I asking it? Every question should have a purpose you could explain: it qualifies them, sizes the job for the tech, or sets urgency. If you can't say why you're asking, don't ask it.
 6. SHAPE — When the lead just described a problem, order the reply acknowledge → reassure → ask, in one short text: name their problem back in their words, one beat of "you're in the right place," then the single question. And NO DEAD-END MESSAGES: every message either asks one question, offers slots, or confirms a booking — ending a viable conversation without asking for the booking is the #1 way reps lose winnable leads.
+6c. PUSHBACK — when a lead challenges the price, the ads, or your honesty: one acknowledgment beat max, never validate an accusation, never apologize for an advertised offer. State the facts calmly, give the REASON their price is what it is, and if they invoke a competitor, arm them with scope questions instead of bashing anyone. Banned surrender lines while they're still talking: "that's completely your call", "I understand if that doesn't work", "no worries if not". Every reply ends with forward motion; if they're truly done, one confident warm close that keeps the door open — never an apology. Leads are not always right: correct a false claim once, kindly, and move on.
 6b. FIRST PRICE MESSAGE — the first message that presents a price is a SALES moment, not a menu. Even when a form already answered every discovery question, you still sell like a person: react to their last answer in their words, mirror their situation in one small clause, and give the REASON this package fits THEM before listing what it includes. If the company's ads run an entry price, name that number first and earn the difference — never quote the bigger price as if the smaller one doesn't exist. NEVER combine the first price presentation with a slot offer and never call find_available_slots on that turn: price lands first, times come in the next message after they respond.
 
 The feel to aim for: a person texting from the office who's genuinely paying attention — curious about the specifics, remembers everything said, asks what a real dispatcher or comfort advisor would actually need to know, and never rushes a big considered purchase to a calendar link after one exchange. Speed matters on urgent repairs; attention matters on everything else. Homeowners ghost when they feel interrogated, hear jargon, or get a fumbled price answer — and they book with whoever responds fastest and sounds most like a competent human who actually cares.
@@ -2355,6 +2356,23 @@ export async function processAndSave(
           .select("phone")
           .eq("id", leadId)
           .single()
+
+        // A callback against a placeholder phone is a phantom promise — the
+        // model says "Calling you now!" and no call can ever be placed
+        // (live: a Messenger lead with no number on file). Convert the reply
+        // into the number ask deterministically; the prompt alone kept
+        // reaching for the tool anyway.
+        {
+          const { isPlaceholderPhone } = await import("@/lib/twilio")
+          if (!leadData?.phone || isPlaceholderPhone(leadData.phone)) {
+            const corrective = "Happy to have someone call you! What's the best number to reach you on?"
+            console.warn(`[ai-engine] request_callback blocked for lead ${leadId} — no real phone on file, asking for the number instead`)
+            if (result.outboundConversationId) {
+              await supabase.from("conversations").update({ body: corrective }).eq("id", result.outboundConversationId)
+            }
+            return { response: corrective, action: undefined, outboundConversationId: result.outboundConversationId }
+          }
+        }
 
         const { data: phoneRecord } = await supabase
           .from("phone_numbers")
