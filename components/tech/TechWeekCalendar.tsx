@@ -29,11 +29,23 @@ type Appointment = {
   leads?: Lead | null
 }
 
+// All calendar math runs on the COMPANY's clock, never the viewer's browser.
+function dayKeyTz(d: Date, tz: string): string {
+  return d.toLocaleDateString("en-CA", { timeZone: tz })
+}
+
+/** Local-noon moment of the company's current calendar day. */
+function companyToday(tz: string): Date {
+  return new Date(`${new Date().toLocaleDateString("en-CA", { timeZone: tz })}T12:00:00`)
+}
+
 function getWeekDates(base: Date) {
   const day = base.getDay()
   const monday = new Date(base)
   monday.setDate(base.getDate() - (day === 0 ? 6 : day - 1))
-  monday.setHours(0, 0, 0, 0)
+  // Noon, not midnight: keeps each column moment on the same calendar day in
+  // both the browser's and the company's timezone (any viewer within ±12h).
+  monday.setHours(12, 0, 0, 0)
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
@@ -41,25 +53,19 @@ function getWeekDates(base: Date) {
   })
 }
 
-function timeToY(dateStr: string): number {
-  const d = new Date(dateStr)
-  const h = d.getHours()
-  const m = d.getMinutes()
+function timeToY(dateStr: string, tz: string): number {
+  const hm = new Date(dateStr).toLocaleTimeString("en-GB", {
+    hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz,
+  })
+  const [h, m] = hm.split(":").map(Number)
   return Math.max(0, (h - START_HOUR) * HOUR_PX + (m / 60) * HOUR_PX)
 }
 
-function sameDay(a: Date, b: Date) {
-  return a.getFullYear() === b.getFullYear() &&
-         a.getMonth() === b.getMonth() &&
-         a.getDate() === b.getDate()
-}
+type Props = { initialAppointments?: Appointment[]; timezone?: string }
 
-type Props = { initialAppointments?: Appointment[] }
-
-export function TechWeekCalendar({ initialAppointments = [] }: Props) {
-  const [baseDate, setBaseDate] = useState(() => {
-    const d = new Date(); d.setHours(0, 0, 0, 0); return d
-  })
+export function TechWeekCalendar({ initialAppointments = [], timezone }: Props) {
+  const tz = timezone ?? "America/New_York"
+  const [baseDate, setBaseDate] = useState(() => companyToday(tz))
   // All loaded appointments (server-seeded + any nav fetches merged)
   const [allAppointments, setAllAppointments] = useState<Appointment[]>(initialAppointments)
   const [loading, setLoading]                 = useState(false)
@@ -72,8 +78,9 @@ export function TechWeekCalendar({ initialAppointments = [] }: Props) {
   // Only fetch from API when navigating to a week not covered by initialAppointments
   const fetchWeek = useCallback(async (start: Date, end: Date) => {
     setLoading(true)
-    const timeMin = new Date(start).toISOString()
-    const endCopy = new Date(end); endCopy.setHours(23, 59, 59)
+    const rangeStart = new Date(start.getTime() - 24 * 3600e3)
+    const endCopy = new Date(end.getTime() + 24 * 3600e3)
+    const timeMin = rangeStart.toISOString()
     const timeMax = endCopy.toISOString()
     try {
       const res = await fetch(`/api/tech/appointments/calendar?timeMin=${timeMin}&timeMax=${timeMax}`)
@@ -84,7 +91,7 @@ export function TechWeekCalendar({ initialAppointments = [] }: Props) {
       setAllAppointments(prev => {
         const outside = prev.filter(a => {
           const t = new Date(a.scheduled_at).getTime()
-          return t < start.getTime() || t > endCopy.getTime()
+          return t < rangeStart.getTime() || t > endCopy.getTime()
         })
         return [...outside, ...fetched]
       })
@@ -103,11 +110,10 @@ export function TechWeekCalendar({ initialAppointments = [] }: Props) {
 
   // Filter to this week
   const appointments = allAppointments.filter(a =>
-    sameDay(new Date(a.scheduled_at), weekStart) ||
-    weekDates.some(d => sameDay(new Date(a.scheduled_at), d))
+    weekDates.some(d => dayKeyTz(new Date(a.scheduled_at), tz) === dayKeyTz(d, tz))
   )
 
-  const today = new Date(); today.setHours(0, 0, 0, 0)
+  const todayKey = dayKeyTz(new Date(), tz)
   const HOURS = END_HOUR - START_HOUR
   const hours = Array.from({ length: HOURS + 1 }, (_, i) => START_HOUR + i)
 
@@ -135,7 +141,7 @@ export function TechWeekCalendar({ initialAppointments = [] }: Props) {
           </button>
         </div>
         <button
-          onClick={() => { const d = new Date(); d.setHours(0,0,0,0); setBaseDate(d) }}
+          onClick={() => setBaseDate(companyToday(tz))}
           className="text-xs px-3 py-1.5 rounded-lg border border-[#E7E5E4] text-[#78716C] hover:bg-[#F5F4F2] transition-colors"
         >
           Today
@@ -147,8 +153,8 @@ export function TechWeekCalendar({ initialAppointments = [] }: Props) {
         style={{ gridTemplateColumns: "52px repeat(7, 1fr)" }}>
         <div className="h-10" />
         {weekDates.map((d) => {
-          const isToday = sameDay(d, today)
-          const dayApts = appointments.filter(a => sameDay(new Date(a.scheduled_at), d))
+          const isToday = dayKeyTz(d, tz) === todayKey
+          const dayApts = appointments.filter(a => dayKeyTz(new Date(a.scheduled_at), tz) === dayKeyTz(d, tz))
           return (
             <div key={d.toISOString()} className="flex flex-col items-center justify-center py-1.5 border-l border-[#E7E5E4]">
               <span className="text-[10px] text-[#A8A29E] uppercase tracking-wide">
@@ -193,7 +199,7 @@ export function TechWeekCalendar({ initialAppointments = [] }: Props) {
 
             {/* Day columns */}
             {weekDates.map((d) => {
-              const dayApts = appointments.filter(a => sameDay(new Date(a.scheduled_at), d))
+              const dayApts = appointments.filter(a => dayKeyTz(new Date(a.scheduled_at), tz) === dayKeyTz(d, tz))
               return (
                 <div key={d.toISOString()} className="border-l border-[#E7E5E4] relative"
                   style={{ height: HOUR_PX * HOURS }}>
@@ -204,9 +210,12 @@ export function TechWeekCalendar({ initialAppointments = [] }: Props) {
                   ))}
 
                   {/* Current time line */}
-                  {sameDay(d, today) && (() => {
-                    const now = new Date()
-                    const yPx = (now.getHours() - START_HOUR) * HOUR_PX + (now.getMinutes() / 60) * HOUR_PX
+                  {dayKeyTz(d, tz) === todayKey && (() => {
+                    const hm = new Date().toLocaleTimeString("en-GB", {
+                      hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz,
+                    })
+                    const [nh, nm] = hm.split(":").map(Number)
+                    const yPx = (nh - START_HOUR) * HOUR_PX + (nm / 60) * HOUR_PX
                     if (yPx < 0 || yPx > HOUR_PX * HOURS) return null
                     return (
                       <div className="absolute left-0 right-0 z-10 flex items-center" style={{ top: yPx }}>
@@ -218,14 +227,14 @@ export function TechWeekCalendar({ initialAppointments = [] }: Props) {
 
                   {/* Appointment cards */}
                   {dayApts.map(apt => {
-                    const top = timeToY(apt.scheduled_at)
+                    const top = timeToY(apt.scheduled_at, tz)
                     const lead = apt.leads
                     const name = lead
                       ? `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Lead"
                       : "Job"
                     const isClosed = apt.status === "completed" || lead?.status === "closed_won"
                     const time = new Date(apt.scheduled_at).toLocaleTimeString("en-US", {
-                      hour: "numeric", minute: "2-digit"
+                      timeZone: tz, hour: "numeric", minute: "2-digit"
                     })
 
                     return (
@@ -316,9 +325,9 @@ export function TechWeekCalendar({ initialAppointments = [] }: Props) {
                 <div className="flex items-center gap-2 text-sm">
                   <Clock className="w-3.5 h-3.5 text-[#A8A29E] shrink-0" />
                   <span className="text-[#1C1917]">
-                    {new Date(selected.scheduled_at).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                    {new Date(selected.scheduled_at).toLocaleDateString("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric" })}
                     {" at "}
-                    {new Date(selected.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                    {new Date(selected.scheduled_at).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })}
                   </span>
                 </div>
                 {selected.address && (

@@ -23,17 +23,19 @@ export type AppointmentWithLead = {
   } | null
 }
 
-function AppCard({ apt, dim = false }: { apt: AppointmentWithLead; dim?: boolean }) {
+function AppCard({ apt, dim = false, tz }: { apt: AppointmentWithLead; dim?: boolean; tz: string }) {
   // Supabase join returns array for one-to-many; grab first element
   const lead = Array.isArray(apt.leads) ? apt.leads[0] : apt.leads
   const date = new Date(apt.scheduled_at)
-  const isToday = new Date().toDateString() === date.toDateString()
-  const isTomorrow = new Date(Date.now() + 86400000).toDateString() === date.toDateString()
+  // Job times live on the COMPANY's clock, not the viewer's browser clock
+  const dayKey = date.toLocaleDateString("en-CA", { timeZone: tz })
+  const isToday = dayKey === new Date().toLocaleDateString("en-CA", { timeZone: tz })
+  const isTomorrow = dayKey === new Date(Date.now() + 86400000).toLocaleDateString("en-CA", { timeZone: tz })
 
   const dayLabel = isToday ? "Today" : isTomorrow ? "Tomorrow" : date.toLocaleDateString("en-US", {
-    weekday: "short", month: "short", day: "numeric",
+    timeZone: tz, weekday: "short", month: "short", day: "numeric",
   })
-  const timeLabel = date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })
+  const timeLabel = date.toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })
 
   const displayAddress = apt.address || lead?.address
 
@@ -48,10 +50,10 @@ function AppCard({ apt, dim = false }: { apt: AppointmentWithLead; dim?: boolean
           {/* Date bubble */}
           <div className={`shrink-0 w-14 h-14 rounded-xl flex flex-col items-center justify-center text-center ${isToday ? "bg-[#F97316] text-white" : "bg-[#F5F4F2] text-[#1C1917]"}`}>
             <span className={`text-xs font-semibold ${isToday ? "text-white/80" : "text-[#78716C]"}`}>
-              {date.toLocaleDateString("en-US", { month: "short" })}
+              {date.toLocaleDateString("en-US", { timeZone: tz, month: "short" })}
             </span>
             <span className="text-xl font-bold leading-none">
-              {date.getDate()}
+              {date.toLocaleDateString("en-US", { timeZone: tz, day: "numeric" })}
             </span>
           </div>
 
@@ -104,11 +106,14 @@ export function TechAppointmentsList({
   upcoming,
   past,
   techName,
+  timezone,
 }: {
   upcoming: AppointmentWithLead[]
   past: AppointmentWithLead[]
   techName: string
+  timezone?: string
 }) {
+  const tz = timezone ?? "America/New_York"
   const hasAny = upcoming.length > 0 || past.length > 0
 
   return (
@@ -177,7 +182,7 @@ export function TechAppointmentsList({
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.05 }}
                     >
-                      <AppCard apt={apt} />
+                      <AppCard apt={apt} tz={tz} />
                     </motion.div>
                   ))}
                 </div>
@@ -197,7 +202,7 @@ export function TechAppointmentsList({
                       animate={{ opacity: 1, y: 0 }}
                       transition={{ delay: i * 0.04 }}
                     >
-                      <AppCard apt={apt} dim />
+                      <AppCard apt={apt} dim tz={tz} />
                     </motion.div>
                   ))}
                 </div>

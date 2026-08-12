@@ -30,6 +30,13 @@ export default async function TechAppointmentsPage() {
     .eq("company_id", tech.company_id)
     .order("scheduled_at", { ascending: true })
 
+  const { data: agentCfg } = await db
+    .from("ai_agent_config")
+    .select("timezone")
+    .eq("company_id", tech.company_id)
+    .maybeSingle()
+  const companyTz = (agentCfg?.timezone as string | null) ?? "America/New_York"
+
   const now      = new Date()
   const all      = (appointments ?? []) as unknown as AppointmentWithLead[]
   const upcoming = all.filter(a => new Date(a.scheduled_at) >= now && a.status === "scheduled")
@@ -40,6 +47,7 @@ export default async function TechAppointmentsPage() {
       upcoming={upcoming}
       past={past}
       techName={tech.name}
+      timezone={companyTz}
     />
   )
 }

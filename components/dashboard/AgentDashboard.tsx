@@ -568,8 +568,10 @@ export function AgentDashboard({
   const heroBookedCents = hero.bookedCents
   const heroPotentialCents = hero.potentialCents
 
+  // Office-facing times render in the COMPANY's timezone, never the viewer's
+  // browser clock — a 3:00 PM Chicago job read as "11 PM" from a UTC+3 browser.
   const fmtTime = (iso: string) =>
-    new Date(iso).toLocaleString("en-US", { weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
+    new Date(iso).toLocaleString("en-US", { timeZone: timezone, weekday: "short", month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
 
   return (
     <div className="relative min-h-full">

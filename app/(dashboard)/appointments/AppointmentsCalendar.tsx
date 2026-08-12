@@ -197,8 +197,17 @@ function getMonday(d: Date): Date {
   const day = date.getDay()
   const diff = day === 0 ? -6 : 1 - day
   date.setDate(date.getDate() + diff)
-  date.setHours(0, 0, 0, 0)
+  // Noon, not midnight: a midnight-local moment falls on the PREVIOUS company
+  // calendar day for any viewer east of the company (e.g. UTC+3 → the whole
+  // week grid bucketed one day off). Noon keeps browser label and company
+  // day-key on the same date for every viewer within ±12h of the company.
+  date.setHours(12, 0, 0, 0)
   return date
+}
+
+/** Local-noon moment of the COMPANY's current calendar day. */
+function companyToday(tz: string): Date {
+  return new Date(`${new Date().toLocaleDateString("en-CA", { timeZone: tz })}T12:00:00`)
 }
 
 function fmt12(t: string): string {
@@ -257,7 +266,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
 
   // ── View state ──
   const [viewMode, setViewMode] = useState<"calendar" | "list">("calendar")
-  const [weekStart, setWeekStart] = useState(() => getMonday(new Date()))
+  const [weekStart, setWeekStart] = useState(() => getMonday(companyToday(timezone)))
 
   // ── Appointment data ──
   const [appointments, setAppointments]   = useState<Appointment[]>([])
@@ -282,7 +291,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
   const [leadSearching, setLeadSearching] = useState(false)
   const [selectedLead, setSelectedLead]   = useState<LeadResult | null>(null)
   const [newForm, setNewForm]             = useState({
-    date: new Date().toLocaleDateString("en-CA"),
+    date: new Date().toLocaleDateString("en-CA", { timeZone: timezone }),
     time: "09:00",
     technician_id: "",
     technician_name: "",
@@ -507,7 +516,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
     setLeadResults([])
     setSelectedLead(null)
     setNewForm({
-      date: new Date().toLocaleDateString("en-CA"),
+      date: new Date().toLocaleDateString("en-CA", { timeZone: timezone }),
       time: "09:00",
       technician_id: "",
       technician_name: "",
@@ -549,7 +558,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
       await loadAppointments()
       if (viewMode === "list") loadListAppointments(listSearch, listStatus)
       // Jump calendar to the appointment's week
-      const aptDate = new Date(data.appointment.scheduled_at)
+      const aptDate = new Date(`${toLocalDateInput(data.appointment.scheduled_at, timezone)}T12:00:00`)
       setWeekStart(getMonday(aptDate))
     } finally {
       setCreating(false)
@@ -558,11 +567,14 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
 
   // ─── Derived values ──────────────────────────────────────────────────────────
   const weekLabel = `${weekStart.toLocaleDateString("en-US", { month: "long", day: "numeric" })} – ${weekEnd.toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}`
-  const isToday   = (d: Date) => d.toLocaleDateString("en-CA") === new Date().toLocaleDateString("en-CA")
+  const isToday   = (d: Date) =>
+    d.toLocaleDateString("en-CA", { timeZone: timezone }) === new Date().toLocaleDateString("en-CA", { timeZone: timezone })
   const isPast    = (d: Date, win: AppointmentWindow) => {
-    const [h] = win.end.split(":").map(Number)
-    const end = new Date(d); end.setHours(h, 0, 0, 0)
-    return end < new Date()
+    const dayKey   = d.toLocaleDateString("en-CA", { timeZone: timezone })
+    const todayKey = new Date().toLocaleDateString("en-CA", { timeZone: timezone })
+    if (dayKey !== todayKey) return dayKey < todayKey
+    const nowHM = new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", hour12: false, timeZone: timezone })
+    return nowHM >= win.end
   }
 
   const thisWeekApts = appointments.filter(a =>
@@ -604,7 +616,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
               </Button>
               <Button
                 variant="ghost" size="sm" className="text-xs h-8 text-[#78716C]"
-                onClick={() => setWeekStart(getMonday(new Date()))}
+                onClick={() => setWeekStart(getMonday(companyToday(timezone)))}
               >
                 Today
               </Button>

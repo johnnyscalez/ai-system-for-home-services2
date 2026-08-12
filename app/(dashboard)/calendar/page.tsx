@@ -11,6 +11,13 @@ export default async function CalendarPage() {
     .from("users").select("company_id").eq("id", user.id).single()
   if (!profile?.company_id) redirect("/onboarding")
 
+  const { data: agentCfg } = await supabase
+    .from("ai_agent_config")
+    .select("timezone")
+    .eq("company_id", profile.company_id)
+    .maybeSingle()
+  const companyTz = (agentCfg?.timezone as string | null) ?? "America/New_York"
+
   const { data: gcal } = await supabase
     .from("google_calendar_connections")
     .select("is_connected, google_email")
@@ -21,6 +28,7 @@ export default async function CalendarPage() {
     <CalendarPageClient
       isGcalConnected={gcal?.is_connected ?? false}
       gcalEmail={gcal?.google_email}
+      timezone={companyTz}
     />
   )
 }

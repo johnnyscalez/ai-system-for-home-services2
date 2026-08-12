@@ -158,6 +158,7 @@ type Props = {
     id: string; scheduled_at: string; address: string | null
     leads: { first_name: string | null; last_name: string | null; phone: string } | null
   }[]
+  timezone?: string
 }
 
 const stagger = {
@@ -166,7 +167,10 @@ const stagger = {
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
-export function DashboardClient({ greeting, firstName, companyName, initialStats, recentLeads, upcomingApts }: Props) {
+export function DashboardClient({ greeting, firstName, companyName, initialStats, recentLeads, upcomingApts, timezone }: Props) {
+  // Office-facing times render in the COMPANY's timezone, never the viewer's
+  // browser clock — a 3:00 PM Chicago job read as "11 PM" from a UTC+3 browser.
+  const tz = timezone ?? "America/New_York"
   const [range, setRange]   = useState<DateRange>(defaultRange())
   const [stats, setStats]   = useState<DashboardStats>(initialStats)
   const [fetching, setFetching] = useState(false)
@@ -532,11 +536,11 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                     >
                       <div className="w-12 shrink-0 text-center bg-gradient-to-b from-[#F97316]/5 to-transparent rounded-xl py-1.5 border border-[#F97316]/10">
                         <p className="text-[10px] font-bold text-[#F97316] uppercase tracking-wider">
-                          {date.toLocaleDateString("en-US", { month: "short" })}
+                          {date.toLocaleDateString("en-US", { timeZone: tz, month: "short" })}
                         </p>
                         <p className="text-2xl font-bold text-[#1C1917] leading-none mt-0.5"
                           style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
-                          {date.getDate()}
+                          {date.toLocaleDateString("en-US", { timeZone: tz, day: "numeric" })}
                         </p>
                       </div>
                       <div className="flex-1 min-w-0">
@@ -545,7 +549,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                         </p>
                         <p className="text-xs text-[#78716C] flex items-center gap-1.5 mt-0.5">
                           <Clock className="w-3 h-3" />
-                          {date.toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                          {date.toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })}
                           {apt.address && <span className="truncate">· {apt.address}</span>}
                         </p>
                       </div>

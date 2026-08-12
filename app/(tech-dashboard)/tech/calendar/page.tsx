@@ -19,6 +19,13 @@ export default async function TechCalendarPage() {
 
   if (!tech) redirect("/tech/login")
 
+  const { data: agentCfg } = await db
+    .from("ai_agent_config")
+    .select("timezone")
+    .eq("company_id", tech.company_id)
+    .maybeSingle()
+  const companyTz = (agentCfg?.timezone as string | null) ?? "America/New_York"
+
   // Fetch the next 30 days — client handles week slicing
   const now = new Date()
   const start = new Date(now); start.setDate(now.getDate() - 7); start.setHours(0, 0, 0, 0)
@@ -49,7 +56,7 @@ export default async function TechCalendarPage() {
 
       {/* Calendar fills remaining height */}
       <div className="relative z-10 flex-1 min-h-0 bg-white/60">
-        <TechWeekCalendar initialAppointments={(appointments ?? []) as never} />
+        <TechWeekCalendar initialAppointments={(appointments ?? []) as never} timezone={companyTz} />
       </div>
     </div>
   )

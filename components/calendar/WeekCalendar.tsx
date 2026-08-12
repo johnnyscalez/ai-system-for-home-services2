@@ -92,11 +92,25 @@ function layoutColumns(events: LayoutEvent[]): LayoutResult {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+// All calendar math runs on the COMPANY's clock, never the viewer's browser —
+// a 3:00 PM Chicago job must sit on the 3 PM row (and the right day) whether
+// the office views it from Illinois or the owner from a UTC+3 browser.
+function dayKeyTz(d: Date, tz: string): string {
+  return d.toLocaleDateString("en-CA", { timeZone: tz })
+}
+
+/** Local-noon moment of the company's current calendar day. */
+function companyToday(tz: string): Date {
+  return new Date(`${new Date().toLocaleDateString("en-CA", { timeZone: tz })}T12:00:00`)
+}
+
 function getWeekDates(base: Date) {
   const day = base.getDay()
   const monday = new Date(base)
   monday.setDate(base.getDate() - (day === 0 ? 6 : day - 1))
-  monday.setHours(0, 0, 0, 0)
+  // Noon, not midnight: keeps each column moment on the same calendar day in
+  // both the browser's and the company's timezone (any viewer within ±12h).
+  monday.setHours(12, 0, 0, 0)
   return Array.from({ length: 7 }, (_, i) => {
     const d = new Date(monday)
     d.setDate(monday.getDate() + i)
@@ -104,9 +118,12 @@ function getWeekDates(base: Date) {
   })
 }
 
-function timeToY(dateStr: string): number {
-  const d = new Date(dateStr)
-  return Math.max(0, (d.getHours() - START_HOUR) * HOUR_PX + (d.getMinutes() / 60) * HOUR_PX)
+function timeToY(dateStr: string, tz: string): number {
+  const hm = new Date(dateStr).toLocaleTimeString("en-GB", {
+    hour: "2-digit", minute: "2-digit", hour12: false, timeZone: tz,
+  })
+  const [h, m] = hm.split(":").map(Number)
+  return Math.max(0, (h - START_HOUR) * HOUR_PX + (m / 60) * HOUR_PX)
 }
 
 function durationPx(startStr: string, endStr: string, fallbackMins = 90): number {
@@ -117,12 +134,9 @@ function durationPx(startStr: string, endStr: string, fallbackMins = 90): number
 
 // ─── Component ────────────────────────────────────────────────────────────────
 
-export function WeekCalendar() {
-  const [baseDate, setBaseDate] = useState(() => {
-    const d = new Date()
-    d.setHours(0, 0, 0, 0)
-    return d
-  })
+export function WeekCalendar({ timezone }: { timezone?: string }) {
+  const tz = timezone ?? "America/New_York"
+  const [baseDate, setBaseDate] = useState(() => companyToday(tz))
   const [appointments, setAppointments] = useState<Appointment[]>([])
   const [googleEvents, setGoogleEvents] = useState<GoogleEvent[]>([])
   const [loading, setLoading] = useState(true)
@@ -134,10 +148,8 @@ export function WeekCalendar() {
 
   const load = useCallback(async () => {
     setLoading(true)
-    const timeMin = new Date(weekStart).toISOString()
-    const end = new Date(weekEnd)
-    end.setHours(23, 59, 59)
-    const timeMax = end.toISOString()
+    const timeMin = new Date(weekStart.getTime() - 24 * 3600e3).toISOString()
+    const timeMax = new Date(weekEnd.getTime() + 24 * 3600e3).toISOString()
     try {
       const res = await fetch(`/api/calendar/events?timeMin=${timeMin}&timeMax=${timeMax}`)
       const data = await res.json()
@@ -178,24 +190,16 @@ export function WeekCalendar() {
     }, [])
   }, [appointments])
 
-  const today = new Date()
-  today.setHours(0, 0, 0, 0)
+  const todayKey = dayKeyTz(new Date(), tz)
 
   const DAY_NAMES = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
   const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"]
 
   const aptsForDay = (day: Date) =>
-    appointments.filter(a => {
-      const d = new Date(a.scheduled_at)
-      return d.getDate() === day.getDate() && d.getMonth() === day.getMonth() && d.getFullYear() === day.getFullYear()
-    })
+    appointments.filter(a => dayKeyTz(new Date(a.scheduled_at), tz) === dayKeyTz(day, tz))
 
   const gcalForDay = (day: Date) =>
-    googleEvents.filter(e => {
-      if (!e.start?.dateTime) return false
-      const d = new Date(e.start.dateTime)
-      return d.getDate() === day.getDate() && d.getMonth() === day.getMonth() && d.getFullYear() === day.getFullYear()
-    })
+    googleEvents.filter(e => e.start?.dateTime && dayKeyTz(new Date(e.start.dateTime), tz) === dayKeyTz(day, tz))
 
   return (
     <div className="flex flex-col h-full">
@@ -205,7 +209,7 @@ export function WeekCalendar() {
           <Button variant="outline" size="icon" onClick={() => { const d = new Date(baseDate); d.setDate(d.getDate() - 7); setBaseDate(d) }}>
             <ChevronLeft className="w-4 h-4" />
           </Button>
-          <Button variant="outline" size="sm" onClick={() => setBaseDate(new Date())}>Today</Button>
+          <Button variant="outline" size="sm" onClick={() => setBaseDate(companyToday(tz))}>Today</Button>
           <Button variant="outline" size="icon" onClick={() => { const d = new Date(baseDate); d.setDate(d.getDate() + 7); setBaseDate(d) }}>
             <ChevronRight className="w-4 h-4" />
           </Button>
@@ -247,7 +251,7 @@ export function WeekCalendar() {
       <div className="grid border-b border-border shrink-0" style={{ gridTemplateColumns: "64px repeat(7, 1fr)" }}>
         <div className="border-r border-border bg-muted/20" />
         {weekDates.map((day, i) => {
-          const isToday = day.getTime() === today.getTime()
+          const isToday = dayKeyTz(day, tz) === todayKey
           const dayApts = aptsForDay(day)
           return (
             <div key={i} className={cn("px-2 py-2.5 text-center border-r border-border last:border-r-0", isToday ? "bg-primary/5" : "bg-muted/10")}>
@@ -283,19 +287,19 @@ export function WeekCalendar() {
 
           {/* Day columns */}
           {weekDates.map((day, dayIdx) => {
-            const isToday = day.getTime() === today.getTime()
+            const isToday = dayKeyTz(day, tz) === todayKey
             const dayApts = aptsForDay(day)
             const dayGcal = gcalForDay(day)
 
             // Compute heights for layout
             const aptHeights = dayApts.map(a => ({
               id: a.id,
-              top: timeToY(a.scheduled_at),
+              top: timeToY(a.scheduled_at, tz),
               height: Math.max(APT_MIN_H, durationPx(a.scheduled_at, "")),
             }))
             const gcalHeights = dayGcal.map(e => ({
               id: e.id ?? `gcal-${dayIdx}-${e.summary}`,
-              top: e.start?.dateTime ? timeToY(e.start.dateTime) : 0,
+              top: e.start?.dateTime ? timeToY(e.start.dateTime, tz) : 0,
               height: e.start?.dateTime
                 ? Math.max(GCAL_MIN_H, durationPx(e.start.dateTime, e.end?.dateTime ?? ""))
                 : GCAL_MIN_H,
@@ -322,7 +326,7 @@ export function WeekCalendar() {
                 {dayGcal.map((ev) => {
                   if (!ev.start?.dateTime) return null
                   const evId = ev.id ?? `gcal-${dayIdx}-${ev.summary}`
-                  const top = timeToY(ev.start.dateTime)
+                  const top = timeToY(ev.start.dateTime, tz)
                   const height = Math.max(GCAL_MIN_H, durationPx(ev.start.dateTime, ev.end?.dateTime ?? ""))
                   if (top < 0 || top > HOURS * HOUR_PX) return null
                   const layout = allLayouts[evId] ?? { col: 0, numCols: 1 }
@@ -352,8 +356,8 @@ export function WeekCalendar() {
                         {height > 50 && ev.start?.dateTime && (
                           <p className="text-[9px] text-[#F97316] flex items-center gap-0.5">
                             <Clock className="w-2 h-2 shrink-0" />
-                            {new Date(ev.start.dateTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
-                            {ev.end?.dateTime && ` – ${new Date(ev.end.dateTime).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}`}
+                            {new Date(ev.start.dateTime).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })}
+                            {ev.end?.dateTime && ` – ${new Date(ev.end.dateTime).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })}`}
                           </p>
                         )}
                         {height > 70 && ev.location && (
@@ -374,7 +378,7 @@ export function WeekCalendar() {
 
                 {/* Our appointments */}
                 {dayApts.map((apt) => {
-                  const top = timeToY(apt.scheduled_at)
+                  const top = timeToY(apt.scheduled_at, tz)
                   const height = Math.max(APT_MIN_H, durationPx(apt.scheduled_at, ""))
                   const c = getColor(apt.technician_id)
                   const layout = allLayouts[apt.id] ?? { col: 0, numCols: 1 }
@@ -403,7 +407,7 @@ export function WeekCalendar() {
                         </p>
                         <p className="text-[10px] text-slate-500 flex items-center gap-0.5">
                           <Clock className="w-2.5 h-2.5 shrink-0" />
-                          {new Date(apt.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                          {new Date(apt.scheduled_at).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })}
                         </p>
                         {apt.address && height > 75 && (
                           <p className="text-[10px] text-slate-500 truncate flex items-center gap-0.5">
@@ -445,9 +449,9 @@ export function WeekCalendar() {
                   {selectedEvent.leads?.first_name} {selectedEvent.leads?.last_name}
                 </h3>
                 <p className="text-sm text-muted-foreground mt-0.5">
-                  {new Date(selectedEvent.scheduled_at).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric" })}
+                  {new Date(selectedEvent.scheduled_at).toLocaleDateString("en-US", { timeZone: tz, weekday: "long", month: "long", day: "numeric" })}
                   {" · "}
-                  {new Date(selectedEvent.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit" })}
+                  {new Date(selectedEvent.scheduled_at).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })}
                 </p>
               </div>
               {selectedEvent.technician_name && (

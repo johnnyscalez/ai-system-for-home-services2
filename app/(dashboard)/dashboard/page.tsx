@@ -43,6 +43,13 @@ export default async function DashboardPage({
   }
 
   // ── Standalone mode → the full CRM dashboard ────────────────────────────────
+  const { data: agentCfgClassic } = await supabase
+    .from("ai_agent_config")
+    .select("timezone")
+    .eq("company_id", profile.company_id)
+    .maybeSingle()
+  const companyTz = (agentCfgClassic?.timezone as string | null) ?? "America/New_York"
+
   const now = new Date()
   const since30d = new Date(now)
   since30d.setDate(since30d.getDate() - 30)
@@ -155,6 +162,7 @@ export default async function DashboardPage({
         id: string; scheduled_at: string; address: string | null;
         leads: { first_name: string | null; last_name: string | null; phone: string } | null;
       }[]}
+      timezone={companyTz}
     />
   )
 }

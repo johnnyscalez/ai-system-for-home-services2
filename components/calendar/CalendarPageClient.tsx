@@ -9,9 +9,10 @@ import { CalendarCheck, ExternalLink, SlidersHorizontal } from "lucide-react"
 type Props = {
   isGcalConnected: boolean
   gcalEmail?: string | null
+  timezone?: string
 }
 
-export function CalendarPageClient({ isGcalConnected, gcalEmail }: Props) {
+export function CalendarPageClient({ isGcalConnected, gcalEmail, timezone }: Props) {
   const [drawerOpen, setDrawerOpen] = useState(false)
 
   return (
@@ -52,7 +53,7 @@ export function CalendarPageClient({ isGcalConnected, gcalEmail }: Props) {
 
       {/* Calendar — always full height */}
       <div className="flex-1 overflow-hidden">
-        <WeekCalendar />
+        <WeekCalendar timezone={timezone} />
       </div>
 
       {/* Backdrop */}
