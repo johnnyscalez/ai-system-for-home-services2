@@ -150,7 +150,10 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
         source: "facebook",
         channel: "messenger",
         status: "just_came_in",
-        metadata: { page_id: pageId, messenger: true },
+        // name_source: Facebook autofills/serves PROFILE names, which are
+        // often aliases (live: "KTrin Brownskin" = Katrina Lewis). The booking
+        // gate requires the customer to state their real full name.
+        metadata: { page_id: pageId, messenger: true, ...(profile.firstName ? { name_source: "facebook_profile" } : {}) },
       })
       .select("id")
       .single()
@@ -671,12 +674,23 @@ export async function POST(req: NextRequest) {
           if (formPsid) merge.messenger_psid = formPsid
           if (formPsid) merge.channel = "messenger"
           const { data: cur } = await supabase
-            .from("leads").select("phone, email, first_name").eq("id", leadId).maybeSingle()
+            .from("leads").select("phone, email, first_name, metadata").eq("id", leadId).maybeSingle()
           if (phone && (!cur?.phone || cur.phone.startsWith("msgr:") || cur.phone.startsWith("fbform:"))) merge.phone = phone
           if (leadEmail && !cur?.email) merge.email = leadEmail
           if (firstName && !cur?.first_name) merge.first_name = firstName
           if (lastName) merge.last_name = lastName
           if (Object.keys(merge).length > 0) await supabase.from("leads").update(merge).eq("id", leadId)
+          // A form name that just filled (or matches) the record is Facebook
+          // profile autofill — unverified for booking until the customer
+          // states it themselves.
+          {
+            const curMeta = (cur?.metadata as Record<string, unknown> | null) ?? {}
+            if ((merge.first_name || cur?.first_name) && !curMeta.name_source) {
+              await supabase.from("leads")
+                .update({ metadata: { ...curMeta, name_source: "facebook_profile" } })
+                .eq("id", leadId)
+            }
+          }
         }
       } else {
         isNewLead = true
@@ -711,7 +725,7 @@ export async function POST(req: NextRequest) {
             status: rejected ? "unqualified" : phone ? "just_came_in" : "needs_attention",
             ...(rejected ? { ai_paused: true } : {}),
             notes: formNotes,
-            metadata: { leadgen_id, page_id, form_id, job_type: jobType, ...(formZip ? { service_zip: formZip } : {}), ...(phone ? {} : { phone_missing: true, form_keys: Object.keys(fields) }), ...(funnelQual ? { techs: funnelQual.techs, revenue: funnelQual.revenue, tier: funnelQual.tier, qualified: funnelQual.qualified, qualification: funnelQual.undetermined ? "not_asked_on_form" : "from_form" } : {}) },
+            metadata: { leadgen_id, page_id, form_id, job_type: jobType, ...(firstName ? { name_source: "facebook_profile" } : {}), ...(formZip ? { service_zip: formZip } : {}), ...(phone ? {} : { phone_missing: true, form_keys: Object.keys(fields) }), ...(funnelQual ? { techs: funnelQual.techs, revenue: funnelQual.revenue, tier: funnelQual.tier, qualified: funnelQual.qualified, qualification: funnelQual.undetermined ? "not_asked_on_form" : "from_form" } : {}) },
             // Pre-classify the job_type COLUMN (the metadata job_type above is
             // the raw form field text) so the first AI turn runs the focused
             // job playbook instead of the identify module

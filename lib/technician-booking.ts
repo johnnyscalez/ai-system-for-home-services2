@@ -615,8 +615,26 @@ export async function techCanTakeBooking(
           if (!offered) return false
         }
       } else {
-        // Time outside every configured window (legacy/manual booking) — fall
-        // back to the old ±2h overlap rule so oddball times still can't stack.
+        // Time outside every configured window. When the company HAS enabled
+        // windows, this is not a business time at all — it can never be a
+        // legitimate AI booking. Live: KTrin — the model composed a datetime
+        // that landed at 8:00 PM her time; the day was anchored, nothing sat
+        // within ±2h, and this branch let it through. Only a time the slot
+        // tool itself offered may pass (which, being a window start, should
+        // never reach this branch anyway — the escape exists for config drift
+        // between offer time and booking time).
+        if (windows.length > 0) {
+          let offeredOddball = false
+          if (leadId) {
+            const { data: leadRow } = await db
+              .from("leads").select("selected_slots").eq("id", leadId).maybeSingle()
+            const slotMap = (leadRow?.selected_slots ?? {}) as Record<string, unknown>
+            offeredOddball = !!slotMap[new Date(startMs).toISOString().substring(0, 16)]
+          }
+          if (!offeredOddball) return false
+        }
+        // No windows configured (legacy/manual booking) — fall back to the
+        // old ±2h overlap rule so oddball times still can't stack.
         const JOB_MS = 2 * 60 * 60 * 1000
         if (sameDay.some((a) => Math.abs(Date.parse(a.scheduled_at) - startMs) < JOB_MS)) return false
         // Anchor rule applies here too — an oddball time must not become the

@@ -49,6 +49,8 @@ MANDATORY RULES — never break these:
 17. BOOK ONCE: book_appointment is called EXACTLY ONE TIME per call. If an "APPOINTMENT ALREADY BOOKED THIS CALL" block appears in this prompt, the booking is DONE — "okay", "yes", "thank you", "bye" are NOT requests to book again. Never call book_appointment after that block appears; for a time change call reschedule_appointment instead.
 18. PRICE CAPTURE: When a total price was agreed on this call, ALWAYS pass quoted_total (total dollars, all units combined) and unit_count when calling book_appointment. Use the FINAL corrected numbers — if the caller first said two furnaces and then corrected to one, one is the truth.
 19. CHANGED DETAILS: When the caller states something that CONTRADICTS the lead file (a different address, furnace count, property type, name), acknowledge both and confirm once: "I have [old] on file — should I go with [new]?" The LAST CONFIRMED value is the truth: book with it, quote with it. A full street address (house number + street) is required for a visit — a zip code alone is never an address.
+20. FULL NAME FOR THE BOOKING: Before calling book_appointment, make sure you have the caller's full name FROM THEIR OWN MOUTH this call or a verified name on file. If the file has no name or marks it as an unverified Facebook profile name, ask once: "And what's your full name for the booking?" — then save it with update_lead_details and book under THAT name. Never book under a social-media display name.
+21. EXACT SLOT TIMES: book_appointment's scheduled_at is ALWAYS the exact ISO string from the find_available_slots result the caller accepted — copied character for character. Never compute, convert, or adjust the datetime yourself.
 === END VOICE RULES ===`
 
 // ─── Tool definitions ──────────────────────────────────────────────────────────
@@ -777,12 +779,47 @@ export async function executeTool(
         zipFromAddress(leadRow?.address as string | null) ??
         ((leadRow?.zip as string | null) ?? null)
 
+      // THE AGREED-TIME CONTRACT (voice leg). The model composes datetimes
+      // unreliably (live: KTrin, text side — "3 to 6pm" agreed, 8:00 PM
+      // booked). When the model's ISO is not one the slot tool offered,
+      // resolve the slot the caller actually agreed to from the offered map
+      // and the call transcript, and book THAT. Voice never blocks (dead air
+      // is the worst voice failure) — an unresolvable time proceeds and the
+      // post-insert policy audit flags it for the office.
+      let scheduledAtFinal = scheduled_at
+      let bookMsFinal = bookMs
+      {
+        const slotMapIso = (leadRow?.selected_slots ?? {}) as Record<string, { iso?: string }>
+        const offeredIsos = Object.values(slotMapIso).map((v) => v?.iso).filter(Boolean) as string[]
+        if (offeredIsos.length > 0) {
+          try {
+            const { resolveAgreedSlot } = await import("@/lib/ai-engine")
+            const transcript = session.messages.slice(-8)
+              .map((m) => (typeof m.content === "string" ? m.content : ""))
+              .filter(Boolean)
+              .reverse()
+            const agreed = resolveAgreedSlot(offeredIsos, bookMs, tz, transcript)
+            if (agreed && Math.abs(Date.parse(agreed.iso) - bookMs) >= 60_000) {
+              console.warn(`[voice] snapped booking for lead ${session.lead_id}: model sent ${scheduled_at} → ${agreed.iso} (${agreed.how})`)
+            }
+            if (agreed) {
+              scheduledAtFinal = agreed.iso
+              bookMsFinal = Date.parse(agreed.iso)
+            } else {
+              console.warn(`[voice] unagreed booking time ${scheduled_at} for lead ${session.lead_id} — offered ${offeredIsos.join(", ")}; proceeding, audit will flag`)
+            }
+          } catch (err) {
+            console.error("[voice] agreed-slot resolution failed:", err)
+          }
+        }
+      }
+
       // Tech decided at SLOT time — find_available_slots wrote the slot→tech
       // map, and the booking inherits it so the HCP push carries the
       // assignment from the first second instead of racing a re-selection
       // (live: every voice job reached HCP unassigned → wrong tech stamped).
       const slotMap = (leadRow?.selected_slots ?? {}) as Record<string, { tech_id?: string; tech_name?: string }>
-      const mapTech = slotMap[new Date(bookMs).toISOString().substring(0, 16)] ?? null
+      const mapTech = slotMap[new Date(bookMsFinal).toISOString().substring(0, 16)] ?? null
 
       const rememberBooking = async (aptId: string, atMs: number) => {
         const label = new Date(atMs).toLocaleString("en-US", {
@@ -806,10 +843,10 @@ export async function executeTool(
       const auditBooking = (aptId: string, techId: string | null) => {
         if (!techId) return
         import("@/lib/technician-booking")
-          .then(({ techCanTakeBooking }) => techCanTakeBooking(techId, jobType, zip, scheduled_at, session.lead_id, aptId))
+          .then(({ techCanTakeBooking }) => techCanTakeBooking(techId, jobType, zip, scheduledAtFinal, session.lead_id, aptId))
           .then(async (ok) => {
             if (ok) return
-            console.error(`[voice] booking ${aptId} failed policy audit (tech=${techId} zip=${zip} at=${scheduled_at})`)
+            console.error(`[voice] booking ${aptId} failed policy audit (tech=${techId} zip=${zip} at=${scheduledAtFinal})`)
             await db.from("leads").update({ status: "needs_attention" }).eq("id", session.lead_id)
             const { data: aptRow } = await db.from("appointments").select("notes").eq("id", aptId).maybeSingle()
             await db.from("appointments").update({
@@ -838,9 +875,9 @@ export async function executeTool(
         .maybeSingle()
 
       if (existing) {
-        const sameTime = Math.abs(Date.parse(existing.scheduled_at) - bookMs) < 60_000
+        const sameTime = Math.abs(Date.parse(existing.scheduled_at) - bookMsFinal) < 60_000
         const duplicate = sameTime ||
-          await sameWindowBucket(session.company_id, existing.scheduled_at, scheduled_at, zip).catch(() => false)
+          await sameWindowBucket(session.company_id, existing.scheduled_at, scheduledAtFinal, zip).catch(() => false)
         if (duplicate) {
           console.log(`[voice] duplicate booking suppressed — lead ${session.lead_id} already booked at ${existing.scheduled_at}`)
           await rememberBooking(existing.id, Date.parse(existing.scheduled_at))
@@ -850,7 +887,7 @@ export async function executeTool(
         // Different day/window while an appointment exists = a reschedule.
         const pushed = !!existing.hcp_job_id && !String(existing.hcp_job_id).startsWith("pending:")
         const updates: Record<string, unknown> = {
-          scheduled_at,
+          scheduled_at: scheduledAtFinal,
           rescheduled_from: existing.scheduled_at,
           confirmation_sms_sent: false, confirmation_email_sent: false,
           reminder_2d_email_sent: false, reminder_2d_sms_sent: false,
@@ -874,7 +911,7 @@ export async function executeTool(
           last_message_at: new Date().toISOString(),
           ...(address ? { address } : {}),
         }).eq("id", session.lead_id)
-        await rememberBooking(existing.id, bookMs)
+        await rememberBooking(existing.id, bookMsFinal)
         if (pushed) {
           const { notifyNeedsAttention } = await import("@/lib/notifications")
           notifyNeedsAttention(session.company_id, "Phone reschedule — move the Housecall Pro job manually", "").catch(() => {})
@@ -884,14 +921,14 @@ export async function executeTool(
             .catch((err) => console.error("[hcp-sync] voice reschedule push failed:", err))
         }
         auditBooking(existing.id, (mapTech?.tech_id ?? existing.technician_id) as string | null)
-        console.log(`[voice] duplicate booking collapsed into ${existing.id} — moved to ${scheduled_at}`)
-        return { type: "book", scheduled_at, address: address ?? (existing.address as string | null) ?? "", notes }
+        console.log(`[voice] duplicate booking collapsed into ${existing.id} — moved to ${scheduledAtFinal}`)
+        return { type: "book", scheduled_at: scheduledAtFinal, address: address ?? (existing.address as string | null) ?? "", notes }
       }
 
       const { data: apt, error: aptErr } = await db.from("appointments").insert({
         lead_id:             session.lead_id,
         company_id:          session.company_id,
-        scheduled_at,
+        scheduled_at:        scheduledAtFinal,
         address:             address ?? null,
         notes:               notes ?? null,
         status:              "scheduled",
@@ -914,7 +951,7 @@ export async function executeTool(
             return { type: "continue" }
           }
         }
-        console.error("[voice] appointment insert FAILED:", aptErr.message, "| scheduled_at:", scheduled_at)
+        console.error("[voice] appointment insert FAILED:", aptErr.message, "| scheduled_at:", scheduledAtFinal)
       }
 
       await db.from("leads").update({
@@ -924,7 +961,7 @@ export async function executeTool(
       }).eq("id", session.lead_id)
 
       if (apt) {
-        await rememberBooking(apt.id, bookMs)
+        await rememberBooking(apt.id, bookMsFinal)
 
         // Structured scope facts → lead file (last confirmed wins; pricing
         // and future conversations read them)
@@ -958,7 +995,7 @@ export async function executeTool(
           let techId: string | null = mapTech?.tech_id ?? null
           if (!techId) {
             try {
-              const res = await selectTechnician(session.company_id, apt.id, scheduled_at, jobType, zip)
+              const res = await selectTechnician(session.company_id, apt.id, scheduledAtFinal, jobType, zip)
               if (res.found) {
                 techId = res.technician.id
               } else {
@@ -1010,8 +1047,8 @@ export async function executeTool(
                 summary:     `Estimate: ${lead?.first_name ?? ""} ${lead?.last_name ?? ""}`.trim(),
                 description: notes ?? "",
                 location:    address,
-                startTime:   scheduled_at,
-                endTime:     new Date(new Date(scheduled_at).getTime() + 60 * 60000).toISOString(),
+                startTime:   scheduledAtFinal,
+                endTime:     new Date(new Date(scheduledAtFinal).getTime() + 60 * 60000).toISOString(),
               }
             )
             await db.from("appointments")
@@ -1021,7 +1058,7 @@ export async function executeTool(
         } catch { /* non-blocking */ }
       }
 
-      return { type: "book", scheduled_at, address, notes }
+      return { type: "book", scheduled_at: scheduledAtFinal, address, notes }
     }
 
     case "reschedule_appointment": {

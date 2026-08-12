@@ -48,7 +48,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "book_appointment",
     description:
-      "For service visits: call this ONLY after the lead replied YES to your booking recap (day, window, address, package, price) — the recap consent is a mandatory step before this tool. You must also have every field the lead file's CHANNEL & CONTACT FILE block lists as REQUIRED BEFORE BOOKING. For service visits that always includes the FULL street service address (house number + street — a zip code alone is NOT an address) — never book a visit without one. For phone/video appointments no address exists or is needed. Convert relative times like 'tomorrow at 2pm' to an ISO 8601 datetime using the current date from the lead file. Call it ONCE: if the lead file already shows this appointment booked, acknowledge it instead of calling again — only call again when the lead explicitly asks for a DIFFERENT time.",
+      "For service visits: call this ONLY after the lead replied YES to your booking recap (day, window, address, package, price) — the recap consent is a mandatory step before this tool. You must also have every field the lead file's CHANNEL & CONTACT FILE block lists as REQUIRED BEFORE BOOKING. For service visits that always includes the FULL street service address (house number + street — a zip code alone is NOT an address) — never book a visit without one, AND the customer's full name for the booking (if the file marks the name as an unverified Facebook profile name, ask 'And what's your full name for the booking?' before the recap). For phone/video appointments no address exists or is needed. scheduled_at MUST be the exact ISO datetime string returned by find_available_slots for the slot the lead agreed to — copy it verbatim, character for character. NEVER compose, convert, or re-derive the datetime yourself: a hand-built datetime books the customer at the wrong hour. Call it ONCE: if the lead file already shows this appointment booked, acknowledge it instead of calling again — only call again when the lead explicitly asks for a DIFFERENT time.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -143,6 +143,9 @@ export type LeadDetailsInput = {
   first_name?: string; last_name?: string; email?: string; timezone?: string
   job_type?: string; system_type?: string; system_age?: string; situation_notes?: string
   address?: string; zip?: string; unit_count?: number; property_type?: string
+  /** True when the name came from the customer's own words this conversation —
+   *  it verifies the record for booking (replaces a Facebook profile alias). */
+  name_verified?: boolean
 }
 
 /**
@@ -225,6 +228,10 @@ export async function saveLeadDetailsForLead(
     if (n >= 1 && n <= 20) metaPatch.unit_count = n
   }
   if (input.property_type?.trim()) metaPatch.property_type = input.property_type.trim().toLowerCase()
+  if (input.name_verified === true && (first || last)) {
+    metaPatch.name_verified = true
+    metaPatch.name_source = "customer_stated"
+  }
   if (Object.keys(metaPatch).length > 0) {
     const { data: cur } = await supabase.from("leads").select("metadata").eq("id", leadId).maybeSingle()
     patch.metadata = { ...((cur?.metadata as Record<string, unknown> | null) ?? {}), ...metaPatch }
@@ -520,7 +527,7 @@ You are not a script-follower. You are a sharp human rep who thinks before every
 
 1. JOB — What exactly does this lead need? If you can't name the job type yet, your next message asks it — nothing else matters until you know. The moment you learn it (or any system details), call update_lead_details so it's saved to their file.
 2. KNOWN — What has this lead already told me, anywhere? Re-read the lead file and the whole conversation, including things they volunteered without being asked. Never re-ask any of it. Volunteered info counts as captured.
-2b. NAME — Do I have this lead's name on file? If the lead file shows no name, getting it is part of the job: ask for it naturally early on ("Who am I speaking with?"), and when they give only a first name, ask for the last name once at booking time ("And your last name for the appointment?"). The moment they tell you ANY part of their name, call update_lead_details with first_name (and last_name) — writing it into situation_notes does NOT save it, and the customer then reaches the technician's schedule as "Unknown". Never invent, guess, or infer a name, and never nag: ask for the surname once, and if they don't give it, book with the first name and move on.
+2b. NAME — Do I have this lead's name on file? If the lead file shows no name, getting it is part of the job: ask for it naturally early on ("Who am I speaking with?"), and when they give only a first name, ask for the last name once at booking time ("And your last name for the appointment?"). The moment they tell you ANY part of their name, call update_lead_details with first_name (and last_name) — writing it into situation_notes does NOT save it, and the customer then reaches the technician's schedule as "Unknown". Never invent, guess, or infer a name, and never nag: ask for the surname once, and if they don't give it, book with the first name and move on. If the lead file marks the name as a FACEBOOK PROFILE NAME (not verified), it may be a nickname — before the booking recap, ask "And what's your full name for the booking?", save the answer with update_lead_details, and put THAT name on the recap and the job.
 2c. CHANGED DETAILS — Did the lead just give a value that CONTRADICTS what's on file (a different address, furnace/system count, property type, email, phone, name)? Acknowledge both and confirm once: "I have [old] on file — should I go with [new]?" The moment they confirm (or plainly assert the new value), call update_lead_details with it: the LAST CONFIRMED value is the truth everywhere — the CRM, the technician's job, the confirmation texts. A correction acknowledged in words but never saved means the tech drives to the OLD address. This includes counts: "two furnaces… actually one" → update_lead_details with unit_count 1.
 2d. ADDRESS — A site visit needs a FULL street address (house number + street). A zip code alone is NOT an address — it tells us the area, not the door. If only a zip is on file when the lead picks a time, ask for the street address in the same breath ("Perfect — what's the full street address?") and book the moment they give it. The moment any full address appears, call update_lead_details with address so it reaches the booking and the technician.
 3. GATE — For this job type, which required discovery/qualification items are still missing? (Your playbook defines them; your QUALIFICATION RULES define who qualifies.) Count them one by one — one covered item does not check off the others.
@@ -766,7 +773,19 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         findSlotsJobType = inp.job_type ?? null
         findSlotsZip     = inp.zip_code ?? null
       } else if (block.name === "update_lead_details") {
-        await saveLeadDetails(block.input as { job_type?: string; system_type?: string; system_age?: string; situation_notes?: string })
+        const detailsInput = { ...(block.input as LeadDetailsInput) }
+        // A name counts as CUSTOMER-STATED (→ verified for booking) only when
+        // it appears in the customer's own message this turn. Stops the model
+        // from "verifying" the Facebook alias it already sees on the file.
+        const claimedName = `${detailsInput.first_name ?? ""} ${detailsInput.last_name ?? ""}`.trim()
+        if (claimedName && incomingMessage) {
+          const inboundLower = incomingMessage.toLowerCase()
+          const stated = claimedName
+            .split(/\s+/)
+            .some((w) => w.length >= 2 && inboundLower.includes(w.toLowerCase()))
+          if (stated) detailsInput.name_verified = true
+        }
+        await saveLeadDetails(detailsInput)
       } else if (block.name === "book_appointment") {
         const input = block.input as { scheduled_at: string; address?: string; notes?: string }
         action = { type: "book_appointment", ...input }
@@ -1442,6 +1461,99 @@ function slotClockLabel(iso: string, tz: string): string {
     .trim()
 }
 
+/**
+ * Arrival-window labels like "3 to 6pm", "8-11am", "11 to 2pm" → the START
+ * clock label ("3:00 pm"). Bare end-times must not count as agreement with a
+ * slot: in "12 to 3pm or 3 to 6pm" the "3pm" that matters is a window START.
+ */
+export function windowStartsIn(text: string): string[] {
+  const out: string[] = []
+  const re = /\b(\d{1,2})(?::(\d{2}))?\s*(am|pm)?\s*(?:to|until|[-–—])\s*(\d{1,2})(?::(\d{2}))?\s*(am|pm)\b/gi
+  let m: RegExpExecArray | null
+  while ((m = re.exec(text)) !== null) {
+    const sh = parseInt(m[1], 10)
+    const eh = parseInt(m[4], 10)
+    if (sh < 1 || sh > 12 || eh < 1 || eh > 12) continue
+    let mer = (m[3] ?? m[6]).toLowerCase()
+    // "11 to 2pm" crosses noon: the start is on the OTHER side of it.
+    // Compare on a 0-11 clock — hour 12 IS the start of its half ("12 to 3pm"
+    // stays pm), so 12 ranks lowest, not highest.
+    if (!m[3] && sh % 12 > eh % 12) mer = m[6].toLowerCase() === "pm" ? "am" : "pm"
+    out.push(`${sh}:${m[2] ?? "00"} ${mer}`)
+  }
+  return [...new Set(out)]
+}
+
+/**
+ * THE AGREED-TIME CONTRACT. The model is unreliable at composing datetimes
+ * (live: KTrin — the lead agreed to "3 to 6pm" and the model passed an ISO
+ * that resolved to 8:00 PM her time; the office had to drag the HCP job back
+ * into the real window). The slot tool's ISOs and the words exchanged in the
+ * thread are the only authorities on WHEN. The model's own datetime is a
+ * HINT used to disambiguate — never the booked value.
+ *
+ *  1. Model time exactly matches an offered slot (±60s) → that slot, verbatim.
+ *  2. Else scan the thread newest→oldest for a clock time / window label that
+ *     names one offered slot (narrowed by month-day, weekday, then the model's
+ *     calendar day when several days share a clock).
+ *  3. Else, if exactly one offered slot sits on the model's calendar day →
+ *     that slot.
+ *  4. Else null → the caller refuses the booking and re-asks. Refuse-not-guess.
+ *
+ * Every possible return value is an ISO the slot engine itself generated —
+ * which by construction is a configured arrival-window start on a bookable
+ * day. An AI booking can no longer land outside the company's windows.
+ */
+export function resolveAgreedSlot(
+  offeredIsos: string[],
+  modelMs: number,
+  leadTz: string,
+  texts: string[]
+): { iso: string; how: "exact" | "thread-text" | "same-day" } | null {
+  if (offeredIsos.length === 0) return null
+  const exact = offeredIsos.find((iso) => Math.abs(Date.parse(iso) - modelMs) < 60_000)
+  if (exact) return { iso: exact, how: "exact" }
+
+  const dayKey = (ms: number) => new Date(ms).toLocaleDateString("en-CA", { timeZone: leadTz })
+  const modelDay = dayKey(modelMs)
+
+  for (const t of texts.slice(0, 8)) {
+    if (!t) continue
+    const starts = windowStartsIn(t)
+    const said = starts.length ? starts : clockTimesIn(t)
+    if (!said.length) continue
+    let hits = offeredIsos.filter((iso) => said.includes(slotClockLabel(iso, leadTz)))
+    if (hits.length > 1) {
+      // Same clock on several days ("3pm" on Aug 18, 19, 28…) — narrow by
+      // date words in the SAME text, then by the model's own calendar day.
+      const monthDay = hits.filter((iso) => {
+        const d = new Date(iso)
+        const day = d.toLocaleDateString("en-US", { timeZone: leadTz, day: "numeric" })
+        const long = d.toLocaleDateString("en-US", { timeZone: leadTz, month: "long" })
+        const short = d.toLocaleDateString("en-US", { timeZone: leadTz, month: "short" })
+        return new RegExp(`\\b(${long}|${short})\\.?\\s+${day}\\b`, "i").test(t)
+      })
+      if (monthDay.length >= 1) hits = monthDay
+    }
+    if (hits.length > 1) {
+      const weekday = hits.filter((iso) =>
+        new RegExp(`\\b${new Date(iso).toLocaleDateString("en-US", { timeZone: leadTz, weekday: "long" })}\\b`, "i").test(t)
+      )
+      if (weekday.length >= 1) hits = weekday
+    }
+    if (hits.length > 1) {
+      const sameDay = hits.filter((iso) => dayKey(Date.parse(iso)) === modelDay)
+      if (sameDay.length >= 1) hits = sameDay
+    }
+    if (hits.length === 1) return { iso: hits[0], how: "thread-text" }
+    if (hits.length > 1) continue
+  }
+
+  const sameDay = offeredIsos.filter((iso) => dayKey(Date.parse(iso)) === modelDay)
+  if (sameDay.length === 1) return { iso: sameDay[0], how: "same-day" }
+  return null
+}
+
 /** Real openings on the company's GoHighLevel calendar, in the lead's zone. */
 async function salesSlotsFor(companyId: string, leadTz: string) {
   try {
@@ -1744,7 +1856,7 @@ export async function processAndSave(
       // Look up pre-selected tech from find_available_slots (saved to leads.selected_slots mid-conversation)
       const { data: freshLead } = await supabase
         .from("leads")
-        .select("job_type, address, zip, selected_slots, first_name, last_name, timezone, service_type")
+        .select("job_type, address, zip, selected_slots, first_name, last_name, timezone, service_type, metadata")
         .eq("id", leadId)
         .single()
 
@@ -1795,19 +1907,6 @@ export async function processAndSave(
       const bookJobType = inferredJobType ?? (freshLead?.job_type as string | null)
       const bookZip = extractZip(address ?? freshLead?.address ?? "") ?? ((freshLead?.zip as string | null) ?? null)
 
-      const selectedSlots = freshLead?.selected_slots as Record<string, { tech_id: string; tech_name: string }> | null
-      const normalKey = scheduled_at.substring(0, 16) // YYYY-MM-DDTHH:MM
-      let preSelected = selectedSlots
-        ? Object.entries(selectedSlots).find(([k]) => k.substring(0, 16) === normalKey)?.[1] ?? null
-        : null
-
-      // A sales booking must land on a time the lead was actually offered.
-      // Observed live: the agent offered "9am or 10am", the lead said "the
-      // first one", and it booked 9:30 — a genuinely free slot, so no
-      // availability check would ever catch it, and the prospect would arrive
-      // half an hour late to their own walkthrough. What was SAID is the only
-      // authority here. A different time means the model must pull fresh
-      // availability first (which rewrites selected_slots), so re-ask instead.
       let svcTypeForBooking = freshLead?.service_type as string | null
       if (!svcTypeForBooking) {
         const { data: co } = await supabase
@@ -1815,47 +1914,73 @@ export async function processAndSave(
         svcTypeForBooking = (co?.service_type as string | null) ?? null
       }
       const salesBooking = svcTypeForBooking === "fieldbuilt_sales"
+      const { data: travelCfg } = await supabase
+        .from("ai_agent_config").select("requires_travel").eq("company_id", companyId).maybeSingle()
+      const needsTravel = (travelCfg?.requires_travel as boolean | null) ?? true
+
+      // ── THE AGREED-TIME CONTRACT (every booking, sales AND service) ────────
+      // The booked ISO must be a slot the tool offered and the lead agreed to.
+      // First shipped for sales only (live: 9:30 booked when "9am or 10am" was
+      // offered); the service-visit hole booked KTrin at 8:00 PM — the model
+      // composed the datetime itself and nothing checked it. resolveAgreedSlot
+      // is the single authority now: exact match, else the thread's own words,
+      // else refuse and re-ask. Never the model's arithmetic.
       {
         const offeredIsos = Object.values(
           (freshLead?.selected_slots ?? {}) as Record<string, { iso?: string }>
         ).map((v) => v?.iso).filter(Boolean) as string[]
 
-        if (salesBooking && offeredIsos.length > 0) {
-          const onOffer = offeredIsos.some((iso) => Math.abs(Date.parse(iso) - bookMs) < 60_000)
-          if (!onOffer) {
-            // The model is unreliable at composing UTC itself — live, it wrote
-            // "Locked in, Wednesday 9:30 AM EDT" and passed 16:30Z (12:30 EDT).
-            // Its own sentence is what the lead believes, so trust the words
-            // and snap to the offered slot that matches them.
-            const snapTz = freshLead?.timezone as string | null
-            const said = clockTimesIn(result.response ?? "")
-            const snapped =
-              snapTz && said.length > 0
-                ? offeredIsos.find((iso) => slotClockLabel(iso, snapTz) === said[0]) ?? null
-                : null
-
-            if (snapped) {
-              console.warn(
-                `[ai-engine] snapped booking for lead ${leadId}: model sent ${scheduled_at}, ` +
-                `agent said ${said[0]} → ${snapped}`
-              )
-              scheduled_at = snapped
-              bookMs = Date.parse(snapped)
-            } else {
-              console.warn(
-                `[ai-engine] refused unoffered time ${scheduled_at} for lead ${leadId} — ` +
-                `offered ${offeredIsos.join(", ")}`
-              )
-              const corrective =
-                "Almost there — which of the times I offered works best for you? I'll lock it in right away."
-              if (outboundConversationId) {
-                await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
-              }
-              return { response: corrective, action: undefined, outboundConversationId }
-            }
+        const refuseBooking = async (corrective: string, why: string) => {
+          console.warn(`[ai-engine] booking refused for lead ${leadId} — ${why} (model sent ${rawScheduledAt} → ${scheduled_at})`)
+          if (outboundConversationId) {
+            await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
           }
+          return { response: corrective, action: undefined, outboundConversationId }
+        }
+
+        if (offeredIsos.length > 0) {
+          const { zipToTimeZone } = await import("@/lib/timezones")
+          const agreeTz =
+            (freshLead?.timezone as string | null) ?? zipToTimeZone(bookZip) ?? "America/New_York"
+          const { data: recentRows } = await supabase
+            .from("conversations")
+            .select("body")
+            .eq("lead_id", leadId)
+            .order("created_at", { ascending: false })
+            .limit(6)
+          const texts = [result.response ?? "", ...(recentRows ?? []).map((r) => (r.body as string) ?? "")]
+
+          const agreed = resolveAgreedSlot(offeredIsos, bookMs, agreeTz, texts)
+          if (!agreed) {
+            return await refuseBooking(
+              "Almost there — which of the times I offered works best for you? I'll lock it in right away.",
+              `no offered slot matches (offered ${offeredIsos.join(", ")})`
+            )
+          }
+          if (agreed.how !== "exact") {
+            console.warn(
+              `[ai-engine] snapped booking for lead ${leadId}: model sent ${scheduled_at} → ${agreed.iso} (${agreed.how})`
+            )
+          }
+          scheduled_at = agreed.iso
+          bookMs = Date.parse(agreed.iso)
+        } else if (!salesBooking && needsTravel) {
+          // No slots were ever offered — a visit booking has nothing agreed to
+          // land on. The model must run find_available_slots first.
+          return await refuseBooking(
+            "Let me pull up our openings for you real quick — one moment and I'll send you the times.",
+            "book_appointment with no offered slots on file"
+          )
         }
       }
+
+      // Tech decided at SLOT time — looked up AFTER the agreed-time snap so a
+      // corrected ISO inherits the technician the tool mapped to that slot.
+      const selectedSlots = freshLead?.selected_slots as Record<string, { tech_id: string; tech_name: string }> | null
+      const normalKey = scheduled_at.substring(0, 16) // YYYY-MM-DDTHH:MM
+      let preSelected = selectedSlots
+        ? Object.entries(selectedSlots).find(([k]) => k.substring(0, 16) === normalKey)?.[1] ?? null
+        : null
 
       // A site visit cannot be dispatched to a zip alone (live: Gina — the
       // whole address was "60706"; the booking, the HCP job, and the
@@ -1865,9 +1990,6 @@ export async function processAndSave(
       // model books next turn with the street. Sales/video bookings (no
       // truck rolls) are exempt, as are requires_travel=false companies.
       if (!salesBooking) {
-        const { data: travelCfg } = await supabase
-          .from("ai_agent_config").select("requires_travel").eq("company_id", companyId).maybeSingle()
-        const needsTravel = (travelCfg?.requires_travel as boolean | null) ?? true
         const { isCompleteServiceAddress } = await import("@/lib/routing")
         const bookAddress = address ?? (freshLead?.address as string | null) ?? null
         if (needsTravel && !isCompleteServiceAddress(bookAddress)) {
@@ -1882,6 +2004,23 @@ export async function processAndSave(
         // lead record carries it even when update_lead_details wasn't called.
         if (address && isCompleteServiceAddress(address) && address !== freshLead?.address) {
           await saveLeadDetailsForLead(supabase, leadId, companyId, { address }).catch(() => false)
+        }
+
+        // A booking is made under the customer's OWN stated name, never a
+        // Facebook profile alias (live: KTrin Brownskin — booked and pushed to
+        // HCP under her Messenger display name; the office chased the real
+        // name, "Katrina Lewis", that night). Facebook autofills lead-form
+        // names from the profile, so an FB-sourced name is unverified until
+        // the customer states their name in the conversation.
+        const leadMeta = (freshLead?.metadata as Record<string, unknown> | null) ?? {}
+        const fbAlias = leadMeta.name_source === "facebook_profile" && leadMeta.name_verified !== true
+        if (needsTravel && (!freshLead?.first_name || fbAlias)) {
+          const corrective = "Perfect. And what's your full name for the booking?"
+          if (outboundConversationId) {
+            await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
+          }
+          console.warn(`[ai-engine] booking held for lead ${leadId} — ${!freshLead?.first_name ? "no name on file" : "Facebook profile name not verified"}`)
+          return { response: corrective, action: undefined, outboundConversationId }
         }
       }
 
@@ -2280,10 +2419,60 @@ export async function processAndSave(
         return { response: corrective, action: undefined, outboundConversationId }
       }
 
+      // THE AGREED-TIME CONTRACT applies to moves exactly as to bookings — this
+      // path wrote the model's raw datetime until Aug 2026 (same composed-
+      // datetime class that booked KTrin at 8 PM). The new time must resolve
+      // to a tool-offered slot via the same ladder; a day we never offered
+      // means the model must run find_available_slots first.
+      let moveIso = new_scheduled_at
+      {
+        const { data: moveLead } = await supabase
+          .from("leads").select("timezone, zip, selected_slots").eq("id", leadId).maybeSingle()
+        const { zipToTimeZone } = await import("@/lib/timezones")
+        const moveTz = (moveLead?.timezone as string | null) ?? zipToTimeZone(moveLead?.zip as string | null) ?? "America/New_York"
+        if (!/([zZ]|[+-]\d{2}:?\d{2})$/.test(moveIso.trim())) {
+          try {
+            const { localSlotToUtcIso } = await import("@/lib/technician-booking")
+            const naive = moveIso.trim()
+            moveIso = localSlotToUtcIso(naive.slice(0, 10), naive.slice(11, 16) || "09:00", moveTz)
+          } catch { /* sanity below handles it */ }
+        }
+        const moveMs = Date.parse(moveIso)
+        const offeredIsos = Object.values(
+          (moveLead?.selected_slots ?? {}) as Record<string, { iso?: string }>
+        ).map((v) => v?.iso).filter(Boolean) as string[]
+        const { data: recentRows } = await supabase
+          .from("conversations").select("body").eq("lead_id", leadId)
+          .order("created_at", { ascending: false }).limit(6)
+        const texts = [result.response ?? "", ...(recentRows ?? []).map((r) => (r.body as string) ?? "")]
+        let agreed = Number.isNaN(moveMs) ? null : resolveAgreedSlot(offeredIsos, moveMs, moveTz, texts)
+        // Self-move tell: "rescheduling" onto the CURRENT time is never what
+        // the customer asked (observed: the model composed 3 PM for a "12 to
+        // 3pm" request — coincidentally the slot they already held). The
+        // words name the real target — resolve again without the current time.
+        const curMs = Date.parse(oldApt.scheduled_at as string)
+        if (agreed && Math.abs(Date.parse(agreed.iso) - curMs) < 60_000) {
+          const others = offeredIsos.filter((iso) => Math.abs(Date.parse(iso) - curMs) >= 60_000)
+          agreed = resolveAgreedSlot(others, moveMs, moveTz, texts)
+        }
+        if (!agreed) {
+          console.warn(`[ai-engine] reschedule refused for lead ${leadId} — ${new_scheduled_at} is not an offered slot (offered ${offeredIsos.join(", ") || "none"})`)
+          const corrective = "Happy to move it! Which of the times I offered works best? If you need a different day, just tell me the day and I'll check our openings."
+          if (outboundConversationId) {
+            await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
+          }
+          return { response: corrective, action: undefined, outboundConversationId }
+        }
+        if (agreed.how !== "exact") {
+          console.warn(`[ai-engine] reschedule snapped for lead ${leadId}: model sent ${new_scheduled_at} → ${agreed.iso} (${agreed.how})`)
+        }
+        moveIso = agreed.iso
+      }
+
       await supabase
         .from("appointments")
         .update({
-          scheduled_at: new_scheduled_at,
+          scheduled_at: moveIso,
           rescheduled_from: oldApt?.scheduled_at ?? null,
           // Reset confirmation + reminder flags so the new time gets a fresh
           // confirmation and its own reminder cycle
@@ -2321,8 +2510,8 @@ export async function processAndSave(
               {
                 summary: `Estimate: ${leadData?.first_name ?? ""} ${leadData?.last_name ?? ""}`.trim(),
                 description: "",
-                startTime: new_scheduled_at,
-                endTime: new Date(new Date(new_scheduled_at).getTime() + 60 * 60000).toISOString(),
+                startTime: moveIso,
+                endTime: new Date(new Date(moveIso).getTime() + 60 * 60000).toISOString(),
               }
             )
             await supabase.from("appointments").update({ google_event_id: newGcalEvent.id ?? null }).eq("id", appointment_id)
@@ -2581,8 +2770,11 @@ function buildLeadContext(
   const upcomingDaysBlock = `Upcoming dates (use THESE exact dates — do NOT compute dates yourself):\n${upcomingDays.map((d, i) => `  +${i + 1}: ${d}`).join("\n")}`
 
   const isMessengerOnly = typeof lead.phone === "string" && lead.phone.startsWith("msgr:")
+  const leadMetaCtx = (lead.metadata ?? {}) as Record<string, unknown>
+  const fbNameUnverified =
+    leadMetaCtx.name_source === "facebook_profile" && leadMetaCtx.name_verified !== true
   let ctx = `=== LEAD FILE (READ THIS BEFORE EVERY RESPONSE) ===
-Name: ${`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Unknown"}
+Name: ${`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Unknown"}${fbNameUnverified ? ` — FACEBOOK PROFILE NAME, NOT VERIFIED FOR BOOKING. Profile names are often nicknames ("KTrin Brownskin" was really Katrina Lewis). Keep greeting them casually by the first name, but BEFORE the booking recap ask: "And what's your full name for the booking?" — then save their answer with update_lead_details (first_name + last_name) and use THAT name on the recap. The booking will not go through under an unverified profile name.` : ""}
 Phone: ${isMessengerOnly ? "NOT ON FILE — this lead is messaging on Facebook Messenger. You MUST collect their phone number naturally before booking (\"What's the best number for our tech to reach you on?\"). Do not book without it." : lead.phone}
 Service requested: ${effectiveServiceType ?? "home services"}
 Lead source: ${lead.source ?? "unknown"}
