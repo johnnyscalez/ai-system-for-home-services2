@@ -161,6 +161,7 @@ The compact list of hard guarantees now built into the shared engines. Prompts r
 
 **Sync integrity**
 - One HCP push per appointment (atomic claim + retry cron); the reconcile pass mirrors office edits back but never reverts a pending phone reschedule (M-5); office-created HCP jobs import with comms owned by the office.
+- **Takeover pauses, never demotes a booked lead (Aug 14 2026, the Viloren lesson):** every human-takeover path (sync rep-detection, human-owned thread imports) checks for an upcoming scheduled appointment before writing `needs_attention` — a rep stepping into a booked lead's thread (usually the office doing its job, e.g. pulling a visit earlier) pauses the AI but keeps `appointment_booked`, so the pipeline never loses a real booking. Corollary watch-item: when the office MOVES a visit by creating a NEW HCP job instead of editing the old one, the original job stays live on the HCP schedule — the import creates the second appointment here, but only the office can cancel the first in HCP (their API can't). The reconcile can't tell "replaced" from "two real visits", so a same-lead duplicate needs an office ping.
 
 ---
 

@@ -214,9 +214,13 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
           lead_id: leadId, company_id: integration.company_id,
           direction: "inbound", sent_by: "human", body: text, channel: "messenger",
         })
+        // Pause, but never demote a lead with an upcoming visit (Viloren class)
+        const { data: upcomingApt } = await supabase.from("appointments")
+          .select("id").eq("lead_id", leadId).eq("status", "scheduled")
+          .gt("scheduled_at", new Date().toISOString()).limit(1)
         await supabase.from("leads").update({
           ai_paused: true,
-          status: "needs_attention",
+          ...((upcomingApt ?? []).length > 0 ? {} : { status: "needs_attention" }),
           last_message_at: new Date().toISOString(),
         }).eq("id", leadId)
         const { notifyNeedsAttention } = await import("@/lib/notifications")
@@ -819,8 +823,12 @@ export async function POST(req: NextRequest) {
                 integration.fb_access_token, page_id, formPsid, "__leadgen_no_trigger_msg__"
               )
           if (humanOwned) {
+            const { data: upcomingApt2 } = await supabase.from("appointments")
+              .select("id").eq("lead_id", leadId).eq("status", "scheduled")
+              .gt("scheduled_at", new Date().toISOString()).limit(1)
             await supabase.from("leads")
-              .update({ ai_paused: true, status: "needs_attention" }).eq("id", leadId)
+              .update({ ai_paused: true, ...((upcomingApt2 ?? []).length > 0 ? {} : { status: "needs_attention" }) })
+              .eq("id", leadId)
             notifyNeedsAttention(integration.company_id,
               `${firstName ?? "Messenger lead"} completed the form but a team member is already in that thread — AI holding back`,
               phone ?? "").catch(() => {})

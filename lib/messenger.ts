@@ -415,12 +415,22 @@ export async function syncMessengerHistory(
       const { data: cur } = await db.from("leads").select("ai_paused, first_name, phone").eq("id", leadId).maybeSingle()
       if (cur && !cur.ai_paused) {
         humanTakeover = true
-        await db.from("leads").update({ ai_paused: true, status: "needs_attention" }).eq("id", leadId)
+        // A rep in the thread pauses the AI — but it must never strip the
+        // booked tag off a lead with an upcoming visit (live: Viloren — the
+        // office pulled her job EARLIER, and the takeover flag demoted a
+        // booked lead to needs_attention; the pipeline lost the booking).
+        const { data: upcoming } = await db.from("appointments")
+          .select("id").eq("lead_id", leadId).eq("status", "scheduled")
+          .gt("scheduled_at", new Date().toISOString()).limit(1)
+        const hasUpcoming = (upcoming ?? []).length > 0
+        await db.from("leads")
+          .update(hasUpcoming ? { ai_paused: true } : { ai_paused: true, status: "needs_attention" })
+          .eq("id", leadId)
         try {
           const { notifyNeedsAttention } = await import("@/lib/notifications")
           notifyNeedsAttention(companyId, `${cur.first_name ?? "Messenger lead"} — a team member is in the thread, AI paused`, cur.phone ?? "").catch(() => {})
         } catch { /* notification is best-effort */ }
-        console.log(`[messenger] sync found a rep in lead ${leadId}'s thread after the AI's last message — AI paused`)
+        console.log(`[messenger] sync found a rep in lead ${leadId}'s thread after the AI's last message — AI paused${hasUpcoming ? ", booked status KEPT (upcoming visit)" : ", status → needs_attention"}`)
       }
     }
   }
