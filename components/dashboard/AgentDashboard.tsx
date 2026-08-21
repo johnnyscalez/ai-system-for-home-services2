@@ -565,7 +565,6 @@ export function AgentDashboard({
     }
   }, [bookings, leadsAll, revenueEvents, conversationRows, aiLeadSet, teamLeadSet, fromMs, toMs])
 
-  const heroBookedCents = hero.bookedCents
   const heroPotentialCents = hero.potentialCents
 
   // Office-facing times render in the COMPANY's timezone, never the viewer's
@@ -620,13 +619,10 @@ export function AgentDashboard({
             </p>
             {/* Money first, on its own line and given real room. Two numbers
                 that answer "what did this make me" before anything else. */}
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <div className="grid grid-cols-1 gap-4">
               <NightMoney label="Potential revenue booked by AI"
                 subLabel="Value of the jobs your AI booked, priced from each conversation"
                 cents={heroPotentialCents} tone="amber" />
-              <NightMoney label="Revenue closed by the team"
-                subLabel="Collected in Housecall Pro on those AI-booked jobs"
-                cents={heroBookedCents} delay={80} />
             </div>
 
             {/* Activity underneath, quieter and evenly spaced. A hairline
@@ -731,13 +727,12 @@ export function AgentDashboard({
         </motion.div>
 
         {/* ── Money row ── */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-4 mb-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
           <MoneyCard label="Potential revenue booked by AI"
             subLabel={money.potentialUnpriced > 0
               ? `Value of AI-booked jobs in range · ${money.potentialPriced} priced, ${money.potentialUnpriced} without a price yet`
               : "Value of AI-booked jobs in range — priced from each booking conversation"}
             cents={money.potentialCents} count={money.potentialPriced} />
-          <MoneyCard label="Revenue closed by the team from AI agent jobs" subLabel="Collected in Housecall Pro on jobs the AI booked" cents={money.bookedCents} count={money.bookedCount} />
           <MoneyCard label="Sourced by your AI" subLabel="Customers the AI brought in — your office booked the job" cents={money.sourcedCents} delay={100} />
         </div>
 
