@@ -52,7 +52,11 @@ export async function middleware(request: NextRequest) {
     path.startsWith("/api/dev") ||
     path.startsWith("/api/tech/") ||
     path.startsWith("/api/property-image") ||
-    path.endsWith(".html")
+    path.endsWith(".html") ||
+    // Static assets served from /public (images, fonts, media). Without this
+    // they get redirected to /login and render as broken images on the
+    // public marketing pages.
+    /\.(png|jpe?g|svg|gif|webp|avif|ico|mp4|webm|woff2?|ttf|txt|xml|pdf)$/i.test(path)
   const isProtected = !isAuthRoute && !isTechLogin && !isPublicRoute
 
   // Unauthenticated: redirect to the right login page

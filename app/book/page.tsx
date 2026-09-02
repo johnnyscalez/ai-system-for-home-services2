@@ -18,7 +18,7 @@ import { useRef } from "react"
 import { motion, useInView } from "framer-motion"
 import {
   Zap, MessagesSquare, CalendarCheck, Route, ClipboardList, Repeat,
-  CloudRain, Flame, Check, TrendingUp, Moon, BarChart3,
+  Check, TrendingUp, Moon, BarChart3,
 } from "lucide-react"
 import { C, FieldFMark, GhlBookingWidget, MinimalFooter } from "@/components/landing/shared"
 
@@ -66,6 +66,30 @@ const BENEFITS = [
     icon: Repeat,
     title: "Follow-up that never forgets",
     body: "The lead who didn’t book today gets chased for two weeks — SMS, Messenger, WhatsApp, and a phone call — until they book or say stop. That’s revenue your office never had time to recover.",
+  },
+]
+
+// ── PROOF ────────────────────────────────────────────────────────────────────
+// Marker red — deliberately NOT the brand orange. This is the "circled it by
+// hand" colour: it reads as evidence marked up, not as designed marketing.
+const PROOF_RED = "#DC2626"
+
+// Screenshots live in /public/proof and are cropped above the jobs list, which
+// contains real homeowners' names, addresses and phone numbers.
+const PROOFS = [
+  {
+    img: "/proof/proof-24h.png",
+    h: 486,
+    alt: "FieldBuilt dashboard, Aug 2 to Aug 3: 27 new leads, 14 AI conversations, 3 jobs booked, $756 of work booked",
+    headline: "14 cold leads → 3 booked jobs. In under 24 hours.",
+    caption: "Day one live for a real HVAC company. 27 leads came in, the AI had 14 conversations, and put 3 jobs on the calendar — $756 of work — before anyone in the office picked up a phone.",
+  },
+  {
+    img: "/proof/proof-9days.png",
+    h: 588,
+    alt: "FieldBuilt dashboard, Aug 2 to Aug 11: 130 new leads, 77 AI conversations, 13 jobs booked, $2,646 of work booked",
+    headline: "77 cold leads → 13 booked jobs in 9 days.",
+    caption: "Same company, first 9 days. 130 leads in, 77 worked by the AI, 13 jobs booked — at least $2,646 of work on the schedule. No new office staff. No extra ad spend.",
   },
 ]
 
@@ -179,73 +203,72 @@ export default function BookPage() {
         </div>
       </section>
 
-      {/* ── 3. THE SWING — the pain, named precisely ── */}
+      {/* ── 3. PROOF — real dashboards, marked up in red ── */}
+      {/* Screenshots are cropped above the jobs list on purpose: that list shows
+          real homeowners' names, addresses and phone numbers. Never publish it. */}
       <section className="relative py-20 px-6 overflow-hidden" style={{ background: "#201A17" }}>
         <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
              style={{ backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.10) 1.2px, transparent 1.2px)", backgroundSize: "30px 30px",
                       WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)",
                       maskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)" }} />
-        <div className="relative max-w-3xl mx-auto">
-          <Reveal className="text-center mb-12">
+        <div className="relative max-w-4xl mx-auto">
+          <Reveal className="text-center mb-14">
             <div className="flex items-center justify-center gap-3 mb-5">
-              <span className="w-8 h-px" style={{ background: C.orange }} />
-              <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>
-                Why your schedule swings
+              <span className="w-8 h-px" style={{ background: PROOF_RED }} />
+              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#FCA5A5", fontFamily: "var(--font-jetbrains)" }}>
+                Proof
               </span>
-              <span className="w-8 h-px" style={{ background: C.orange }} />
+              <span className="w-8 h-px" style={{ background: PROOF_RED }} />
             </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight"
+            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-4"
                 style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
-              You&rsquo;ve lived both versions
-              <br /><span style={{ color: C.orange }}>of the same bad week.</span>
+              Here it is working.
+              <br /><span style={{ color: C.orange }}>Real account. Real jobs booked.</span>
             </h2>
+            <p className="text-base leading-relaxed max-w-lg mx-auto" style={{ color: "rgba(250,250,248,0.55)" }}>
+              Screenshots straight from a real HVAC company&rsquo;s dashboard — leads
+              their office had already given up on.
+            </p>
           </Reveal>
 
-          <div className="grid sm:grid-cols-2 gap-4 mb-10">
-            <Reveal delay={0.05}>
-              <div className="rounded-2xl p-6 h-full" style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                <div className="flex items-center gap-2.5 mb-4">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(148,163,184,0.12)" }}>
-                    <CloudRain className="w-4.5 h-4.5 text-slate-400" aria-hidden="true" />
-                  </div>
-                  <span className="font-bold text-base" style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>The quiet week</span>
+          {PROOFS.map((p, i) => (
+            <Reveal key={p.img} delay={0.05 + i * 0.08} className="mb-14 last:mb-0">
+              {/* Red marker headline — the one line they must understand */}
+              <div className="flex justify-center mb-5">
+                <div className="rounded-2xl px-6 py-3.5 text-center"
+                     style={{ background: PROOF_RED, border: "3px solid rgba(255,255,255,0.92)",
+                              boxShadow: "0 10px 34px rgba(220,38,38,0.40)" }}>
+                  <span className="block font-extrabold text-white leading-tight"
+                        style={{ fontFamily: "var(--font-jakarta)", fontSize: "clamp(1.05rem, 3.4vw, 1.6rem)", letterSpacing: "-0.01em" }}>
+                    {p.headline}
+                  </span>
                 </div>
-                <ul className="space-y-2.5">
-                  {["Techs sitting at home — payroll due anyway", "Gaps in the schedule you can't fill fast enough", "Ad spend still running, leads going quiet", "You lie awake doing revenue math"].map(t => (
-                    <li key={t} className="flex items-start gap-2.5 text-sm leading-relaxed" style={{ color: "rgba(250,250,248,0.65)" }}>
-                      <span className="w-1 h-1 rounded-full mt-2 shrink-0 bg-slate-400" aria-hidden="true" /> {t}
-                    </li>
-                  ))}
-                </ul>
               </div>
-            </Reveal>
-            <Reveal delay={0.12}>
-              <div className="rounded-2xl p-6 h-full" style={{ background: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.20)" }}>
-                <div className="flex items-center gap-2.5 mb-4">
-                  <div className="w-9 h-9 rounded-xl flex items-center justify-center" style={{ background: "rgba(249,115,22,0.14)" }}>
-                    <Flame className="w-4.5 h-4.5" style={{ color: C.orange }} aria-hidden="true" />
-                  </div>
-                  <span className="font-bold text-base" style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>The slammed week</span>
-                </div>
-                <ul className="space-y-2.5">
-                  {["Phones overloaded — calls ringing out", "Follow-up dies the moment it gets busy", "Dispatch by whoever's-free, not whoever closes", "Leads you paid $80 for book with competitors"].map(t => (
-                    <li key={t} className="flex items-start gap-2.5 text-sm leading-relaxed" style={{ color: "rgba(250,250,248,0.65)" }}>
-                      <span className="w-1 h-1 rounded-full mt-2 shrink-0" style={{ background: C.orange }} aria-hidden="true" /> {t}
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            </Reveal>
-          </div>
 
-          <Reveal delay={0.15}>
-            <div className="rounded-2xl p-7 text-center" style={{ background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.22)" }}>
-              <p className="text-lg sm:text-xl font-bold leading-snug mb-2" style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>
-                Neither week is a leads problem. It&rsquo;s a capture problem —
-                nothing answers, qualifies, and fills the calendar evenly.
+              {/* The screenshot itself */}
+              <div className="rounded-2xl overflow-hidden"
+                   style={{ border: `3px solid ${PROOF_RED}`, boxShadow: "0 24px 60px rgba(0,0,0,0.45)" }}>
+                <img src={p.img} alt={p.alt} width={1200} height={p.h}
+                     className="w-full block" loading="lazy" />
+              </div>
+
+              {/* Plain-English explanation */}
+              <p className="text-center text-sm sm:text-base leading-relaxed max-w-2xl mx-auto mt-5"
+                 style={{ color: "rgba(250,250,248,0.62)" }}>
+                {p.caption}
+              </p>
+            </Reveal>
+          ))}
+
+          <Reveal delay={0.2}>
+            <div className="rounded-2xl p-7 text-center mt-4"
+                 style={{ background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.22)" }}>
+              <p className="text-lg sm:text-xl font-bold leading-snug mb-2"
+                 style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>
+                Same leads. Same crew. Same ad spend. Nobody in the office lifted a finger.
               </p>
               <p className="text-sm" style={{ color: "rgba(250,250,248,0.55)" }}>
-                That&rsquo;s a machine&rsquo;s job. It was never supposed to be yours.
+                That&rsquo;s the whole point — the work was already sitting in their pipeline.
               </p>
             </div>
           </Reveal>
