@@ -223,7 +223,7 @@ export default function BookPage() {
 
         <div className="relative max-w-3xl mx-auto w-full text-center">
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-5 py-2 rounded-full mb-7 text-sm font-extrabold uppercase tracking-widest text-white"
+            className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full mb-7 text-[11px] sm:text-sm font-extrabold uppercase tracking-widest text-white whitespace-nowrap"
             style={{ background: C.orange, boxShadow: "0 4px 20px rgba(249,115,22,0.45)", fontFamily: "var(--font-jetbrains)" }}>
             For HVAC shops running 4+ techs
           </motion.div>
@@ -231,7 +231,7 @@ export default function BookPage() {
           <motion.h1 initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.7 }}
             className="font-extrabold tracking-tight mb-6"
             style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
-                     fontSize: "clamp(2.3rem, 6.5vw, 3.9rem)", lineHeight: 1.05 }}>
+                     fontSize: "clamp(1.9rem, 6.4vw, 3.9rem)", lineHeight: 1.06, textWrap: "balance" }}>
             4x Your Ducting / HVAC Jobs On Autopilot
             <br /><span style={{ color: C.orange }}>Without Extra Ad Spend, Work Or Hires</span>
           </motion.h1>
@@ -293,10 +293,14 @@ export default function BookPage() {
               </span>
               <span className="w-8 h-px" style={{ background: PROOF_RED }} />
             </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-4"
-                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
-              Turn your cold leads
-              <br /><span style={{ color: C.orange }}>into cash.</span>
+            <h2 className="font-extrabold tracking-tight mb-4"
+                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
+                         fontSize: "clamp(2.2rem, 7.5vw, 3.6rem)", lineHeight: 1.05 }}>
+              Turn your cold{" "}
+              <br className="sm:hidden" />
+              leads{" "}
+              <br className="hidden sm:inline" />
+              <span style={{ color: C.orange }}>into cash.</span>
             </h2>
             <p className="text-base leading-relaxed max-w-lg mx-auto" style={{ color: "rgba(250,250,248,0.55)" }}>
               Screenshots straight from a real HVAC company&rsquo;s dashboard — leads
@@ -312,7 +316,8 @@ export default function BookPage() {
                      style={{ background: PROOF_RED, border: "3px solid rgba(255,255,255,0.92)",
                               boxShadow: "0 10px 34px rgba(220,38,38,0.40)" }}>
                   <span className="block font-extrabold text-white leading-tight"
-                        style={{ fontFamily: "var(--font-jakarta)", fontSize: "clamp(1.05rem, 3.4vw, 1.6rem)", letterSpacing: "-0.01em" }}>
+                        style={{ fontFamily: "var(--font-jakarta)", fontSize: "clamp(1.02rem, 3.4vw, 1.6rem)",
+                                 letterSpacing: "-0.01em", textWrap: "balance" }}>
                     {p.headline}
                   </span>
                 </div>
@@ -363,10 +368,12 @@ export default function BookPage() {
               </span>
               <span className="w-8 h-px" style={{ background: C.orange }} />
             </div>
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-4"
-                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
+            <h2 className="font-extrabold tracking-tight mb-4"
+                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em", textWrap: "balance",
+                         fontSize: "clamp(1.6rem, 5.2vw, 2.25rem)", lineHeight: 1.15 }}>
               One system does the office work
-              <br /><span style={{ color: C.orangeDk }}>of three people. Around the clock.</span>
+              <br /><span style={{ color: C.orangeDk }}>of three people.{" "}
+                <br className="sm:hidden" />Around the clock.</span>
             </h2>
             <p className="text-base leading-relaxed max-w-xl mx-auto" style={{ color: C.muted }}>
               Every lead captured, worked, and turned into a job on the calendar —
@@ -401,8 +408,9 @@ export default function BookPage() {
                       maskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)" }} />
         <div className="relative max-w-3xl mx-auto">
           <Reveal className="text-center mb-12">
-            <h2 className="text-3xl sm:text-4xl font-extrabold tracking-tight mb-4"
-                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
+            <h2 className="font-extrabold tracking-tight mb-4"
+                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em", textWrap: "balance",
+                         fontSize: "clamp(1.6rem, 5.2vw, 2.25rem)", lineHeight: 1.15 }}>
               You get more booked jobs
               <br /><span style={{ color: "#A3E635" }}>and you get peace of mind.</span>
             </h2>
@@ -433,8 +441,9 @@ export default function BookPage() {
       <section className="relative py-20 px-6 overflow-hidden" style={{ background: C.bg }}>
         <div className="relative max-w-2xl mx-auto text-center">
           <Reveal>
-            <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight mb-5"
-                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
+            <h2 className="font-extrabold tracking-tight mb-5"
+                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em", textWrap: "balance",
+                         fontSize: "clamp(1.5rem, 4.3vw, 2.05rem)", lineHeight: 1.15 }}>
               In 20 minutes we&rsquo;ll show you exactly how
               <br /><span style={{ color: C.orangeDk }}>we book you more HVAC jobs.</span>
             </h2>
