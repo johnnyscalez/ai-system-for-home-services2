@@ -339,14 +339,37 @@ export default function BookPage() {
           ))}
 
           <Reveal delay={0.2}>
-            <div className="rounded-2xl p-7 text-center mt-4"
-                 style={{ background: "rgba(249,115,22,0.08)", border: "1px solid rgba(249,115,22,0.22)" }}>
-              <p className="text-lg sm:text-xl font-bold leading-snug mb-2"
-                 style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>
-                Same leads. Same crew. Same ad spend. Nobody in the office lifted a finger.
+            {/* The payoff. Marker red carries over from the annotations above, but
+                as a glowing figure rather than a third red pill — the number is
+                the point, and it shouldn't compete with the proof headlines. */}
+            <div className="relative rounded-2xl overflow-hidden text-center mt-4 px-6 sm:px-9 py-9"
+                 style={{ background: "linear-gradient(160deg, rgba(220,38,38,0.10) 0%, rgba(220,38,38,0.04) 100%)",
+                          border: `1px solid ${PROOF_RED}55`,
+                          boxShadow: "0 18px 50px rgba(220,38,38,0.13)" }}>
+              <div className="absolute inset-x-0 top-0 h-px" aria-hidden="true"
+                   style={{ background: `linear-gradient(90deg, transparent, ${PROOF_RED}, transparent)` }} />
+
+              <div className="text-[11px] font-bold uppercase tracking-[0.2em] mb-4"
+                   style={{ color: "#FCA5A5", fontFamily: "var(--font-jetbrains)" }}>
+                What that adds up to
+              </div>
+
+              <div className="font-bold leading-none mb-5"
+                   style={{ color: "#FF5F5F", fontFamily: "var(--font-jetbrains)",
+                            fontSize: "clamp(2.3rem, 8.6vw, 4.1rem)", letterSpacing: "-0.02em",
+                            textShadow: "0 0 44px rgba(220,38,38,0.55)" }}>
+                $47K&ndash;$156K
+              </div>
+
+              <p className="font-bold leading-snug mb-3 max-w-xl mx-auto"
+                 style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)",
+                          fontSize: "clamp(1.05rem, 3.6vw, 1.35rem)", textWrap: "balance" }}>
+                in recovered revenue per year — from leads you already had.
               </p>
-              <p className="text-sm" style={{ color: "rgba(250,250,248,0.55)" }}>
-                That&rsquo;s the whole point — the work was already sitting in their pipeline.
+              <p className="text-sm leading-relaxed max-w-lg mx-auto"
+                 style={{ color: "rgba(250,250,248,0.58)", textWrap: "balance" }}>
+                No new ad spend. No new hires. Just the leads sitting in your
+                pipeline, finally getting booked.
               </p>
             </div>
           </Reveal>
