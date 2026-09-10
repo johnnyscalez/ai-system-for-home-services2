@@ -26,8 +26,8 @@ const jetbrains = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "FieldBuilt AI — AI Operations Installed for Home Service Companies",
-  description: "Your AI operation installed in a day. Every lead gets a response in 3.7 seconds. Automatically.",
+  title: "FieldBuilt — The Operating System That Runs Your HVAC Business 24/7 Without You",
+  description: "Every call, text, form, and missed call answered immediately. Qualified by your rules, routed to the right technician, booked with availability checks, logged in your CRM.",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
