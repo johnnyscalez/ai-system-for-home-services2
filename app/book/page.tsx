@@ -340,7 +340,7 @@ export default function BookPage() {
           className="absolute rounded-full blur-3xl pointer-events-none" aria-hidden="true"
           style={{ width: 620, height: 620, background: "rgba(249,115,22,0.08)", top: "-16%", left: "-8%" }} />
 
-        <div className="relative max-w-3xl mx-auto w-full text-center">
+        <div className="relative max-w-4xl mx-auto w-full text-center">
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
             className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full mb-7 text-[11px] sm:text-sm font-extrabold uppercase tracking-widest text-white whitespace-nowrap"
             style={{ background: C.orange, boxShadow: "0 4px 20px rgba(249,115,22,0.45)", fontFamily: "var(--font-jetbrains)" }}>
@@ -350,7 +350,7 @@ export default function BookPage() {
           <motion.h1 initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.7 }}
             className="font-extrabold tracking-tight mb-6"
             style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
-                     fontSize: "clamp(1.55rem, 4.9vw, 2.7rem)", lineHeight: 1.1, textWrap: "balance" }}>
+                     fontSize: "clamp(1.55rem, 5.4vw, 3.2rem)", lineHeight: 1.08, textWrap: "balance" }}>
             Get 25 Extra HVAC Jobs a Month On Autopilot
             <br /><span style={{ color: C.orange }}>
               With a New HVAC{" "}
