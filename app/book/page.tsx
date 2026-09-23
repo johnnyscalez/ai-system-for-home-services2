@@ -231,10 +231,13 @@ export default function BookPage() {
           <motion.h1 initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.7 }}
             className="font-extrabold tracking-tight mb-6"
             style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
-                     fontSize: "clamp(1.6rem, 5.2vw, 3rem)", lineHeight: 1.1, textWrap: "balance" }}>
-            Get 25 Extra HVAC Jobs a Month
-            <br className="hidden sm:inline" /> From Leads You Already Have
-            <br /><span style={{ color: C.orange }}>&amp; Get Your Life Back</span>
+                     fontSize: "clamp(1.55rem, 4.9vw, 2.7rem)", lineHeight: 1.1, textWrap: "balance" }}>
+            Get 25 Extra HVAC Jobs a Month On Autopilot
+            <br /><span style={{ color: C.orange }}>
+              With a New HVAC{" "}
+              <br className="sm:hidden" />
+              Operations Office
+            </span>
           </motion.h1>
 
           <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28, duration: 0.6 }}
