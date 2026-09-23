@@ -1,26 +1,28 @@
 "use client"
 
 // ─── BOOKING PAGE — /book ────────────────────────────────────────────────────
-// Direct booking page: headline → calendar → why-this-works. Sent to warm
-// traffic (email, DMs, retargeting, "book a call" links). The visitor already
-// half-wants the call — this page's job is to close the booking and harden
-// the decision while they're picking a slot.
+// Warm-traffic booking page. Page order follows the buyer's question stack:
+//   what is this → why believe you → what's it worth to ME → book it
+// so the calendar sits AFTER the proof and the revenue math, not before it.
+// A hero CTA anchor-scrolls straight to #book for anyone already sold.
 //
-// Messaging spine (from ICP research, owners running 4+ techs):
+// Messaging spine (ICP: HVAC owners, 4–15 techs, ~$1M+):
 //   Surface desire: more booked jobs.
-//   Real desire: predictable, profitable capacity — every tech busy with
-//   work worth running, without the owner holding it together.
-//   Real pain: the feast/famine swing + everything depending on the owner.
-// Copy sells CONTROL, and frames inaction as paying for leads competitors win.
+//   Real desire: predictable capacity without the owner holding it together.
+// We sell "an AI front office that gets installed", never software/platform.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import { motion, useInView } from "framer-motion"
 import {
-  Zap, MessagesSquare, CalendarCheck, Route, ClipboardList, Repeat,
-  Check, TrendingUp, Moon, BarChart3, Star,
+  Zap, MessagesSquare, CalendarCheck, Repeat, Check, X, Star, ChevronDown,
+  Route, ClipboardList, BarChart3, Moon, TrendingUp, Bell, ArrowDown, Phone,
 } from "lucide-react"
 import { C, FieldFMark, GhlBookingWidget, MinimalFooter } from "@/components/landing/shared"
+
+// Drop a headshot in /public/brand and set this to e.g. "/brand/jonathan.jpg".
+// While empty the founder card falls back to a monogram — never a broken image.
+const FOUNDER_PHOTO_URL = ""
 
 // ── Section reveal helper ─────────────────────────────────────────────────────
 function Reveal({ children, delay = 0, className = "" }: {
@@ -36,38 +38,29 @@ function Reveal({ children, delay = 0, className = "" }: {
   )
 }
 
-const BENEFITS = [
-  {
-    icon: Zap,
-    title: "Answered in 2 seconds",
-    body: "Every lead gets a personal text back in 2 seconds — 2am, Sunday, Christmas morning. Speed is the whole game: homeowners book with whoever answers first, and now that's always you.",
-  },
-  {
-    icon: MessagesSquare,
-    title: "Qualified like your best CSR",
-    body: "It asks the right questions for the job — repair, replacement, ductwork — handles “just getting quotes,” and screens out the tire-kickers before they ever cost a truck roll.",
-  },
-  {
-    icon: CalendarCheck,
-    title: "Booked, not just “contacted”",
-    body: "Real slots on your real calendar. Confirmation texts, day-before reminders, and a reschedule flow that rescues cancellations instead of losing them.",
-  },
-  {
-    icon: Route,
-    title: "Dispatched to the right tech",
-    body: "Jobs route by area and by who actually closes that job type — not whoever happens to be free. Your best installer stops losing big jobs to the schedule.",
-  },
-  {
-    icon: ClipboardList,
-    title: "Logged without lifting a finger",
-    body: "Every conversation becomes a lead file: notes, system details, history, address — street view included. Your techs walk in knowing the house. Nobody typed anything.",
-  },
-  {
-    icon: Repeat,
-    title: "Follow-up that never forgets",
-    body: "The lead who didn’t book today gets chased for two weeks — SMS, Messenger, WhatsApp, and a phone call — until they book or say stop. That’s revenue your office never had time to recover.",
-  },
-]
+// ── The one CTA, repeated ─────────────────────────────────────────────────────
+// Same words every time so the offer never drifts: it names what happens on the
+// call, not what the call is called. "Strategy session" is the language this
+// buyer has been burned by.
+function Cta({ tone = "light", compact = false }: { tone?: "light" | "dark"; compact?: boolean }) {
+  return (
+    <div className="text-center">
+      <a href="#book"
+         className="inline-flex items-center justify-center gap-2 rounded-xl font-bold text-white transition-transform hover:scale-[1.03]"
+         style={{ background: C.orange, boxShadow: "0 8px 32px rgba(249,115,22,0.40)",
+                  padding: compact ? "15px 26px" : "17px 30px",
+                  fontSize: "clamp(0.95rem, 2.6vw, 1.05rem)", lineHeight: 1.25, maxWidth: "94vw" }}>
+        Watch It Run On Your Own Leads &mdash; 20 Minutes
+        <ArrowDown className="w-4 h-4 shrink-0 hidden sm:block" aria-hidden="true" />
+      </a>
+      <p className="text-sm leading-relaxed max-w-md mx-auto mt-4"
+         style={{ color: tone === "dark" ? "rgba(250,250,248,0.52)" : C.muted }}>
+        Screen share, no pitch deck. You&rsquo;ll see the live dashboard and your own
+        leak map. If the numbers don&rsquo;t make the case, you owe nothing.
+      </p>
+    </div>
+  )
+}
 
 // ── PROOF ────────────────────────────────────────────────────────────────────
 // Marker red — deliberately NOT the brand orange. This is the "circled it by
@@ -82,43 +75,78 @@ const PROOFS = [
     h: 486,
     alt: "FieldBuilt dashboard, Aug 2 to Aug 3: 27 new leads, 14 AI conversations, 3 jobs booked, $756 of work booked",
     headline: "14 cold leads → 3 booked jobs. In under 24 hours.",
-    caption: "Day one live for a real HVAC company. 27 leads came in, the AI had 14 conversations, and put 3 jobs on the calendar — $756 of work — before anyone in the office picked up a phone.",
+    caption: "Day one live. Nobody in the office picked up a phone.",
   },
   {
     img: "/proof/proof-9days.png",
     h: 588,
     alt: "FieldBuilt dashboard, Aug 2 to Aug 11: 130 new leads, 77 AI conversations, 13 jobs booked, $2,646 of work booked",
     headline: "77 cold leads → 13 booked jobs in 9 days.",
-    caption: "Same company, first 9 days. 130 leads in, 77 worked by the AI, 13 jobs booked — at least $2,646 of work on the schedule. No new office staff. No extra ad spend.",
+    caption: "Same shop, first 9 days. No new ad spend. No new hires.",
   },
 ]
 
-const OUTCOMES = [
+// ── The four that separate this from an AI receptionist ──────────────────────
+const CORE = [
+  { icon: Zap, label: "Answered instantly",
+    body: "Every lead gets a real text back in 2 seconds. 2am, Sunday, Christmas morning." },
+  { icon: MessagesSquare, label: "Qualified properly",
+    body: "Asks what your best CSR would ask, and screens out tire-kickers before they cost a truck roll." },
+  { icon: CalendarCheck, label: "Booked, not contacted",
+    body: "Real slots on your real calendar, with the right tech assigned. Not a message taken." },
+  { icon: Repeat, label: "Chased for two weeks",
+    body: "Didn't book today? SMS, Messenger, WhatsApp, then a phone call, until they book or say stop." },
+]
+
+const EXTRAS = [
+  { icon: Route, text: "Smart dispatch — routes by service area, job type and who actually closes it" },
+  { icon: ClipboardList, text: "Every conversation saved to the lead file, street view included" },
+  { icon: Bell, text: "Confirmations, day-before reminders and a reschedule flow that rescues cancellations" },
+  { icon: Phone, text: "Inbound and outbound calls, plus Messenger and WhatsApp on the same brain" },
+  { icon: BarChart3, text: "Close rate and revenue per tech, per job type, per lead source — live" },
+  { icon: TrendingUp, text: "Writes the booked job into Housecall Pro with the technician assigned" },
+  { icon: Moon, text: "Runs nights, weekends and holidays without anyone watching it" },
+]
+
+const FIT_YES = [
+  "You run 4 to 15 technicians",
+  "You already pay for leads (Facebook, Google, Angi)",
+  "Leads go quiet after hours and on weekends",
+  "You want the calendar full without another office hire",
+]
+const FIT_NO = [
+  "You run 1 to 3 techs — there isn't enough to dispatch yet",
+  "You want software you configure yourself",
+  "All your work is word of mouth, with no inbound lead flow",
+]
+
+const FAQ = [
   {
-    icon: TrendingUp,
-    title: "You know where next month’s revenue is coming from",
-    body: "A calendar that fills itself, evenly — including the duct cleanings and maintenance work that keep techs earning between the big jobs. No more feast-or-famine whiplash.",
+    q: "Does it sound like a robot?",
+    a: "Read the transcripts on the call and decide for yourself. It texts in plain language, handles “I’m just getting quotes” without pushing, and never diagnoses or quotes a job price. If a homeowner asks whether they’re talking to a person, it tells them the truth straight away.",
   },
   {
-    icon: BarChart3,
-    title: "Every truck earns its overhead",
-    body: "You see close rate and revenue per tech, per job type, per lead source — live. Idle techs and underpriced work stop hiding in your gut feel.",
+    q: "What happens to my CRM?",
+    a: "Nothing. It plugs into what you already run. On Housecall Pro your CRM stays the system of record — every booking is written in with the right technician assigned, so your office keeps working exactly the way it works now. You are not migrating anything.",
   },
   {
-    icon: Moon,
-    title: "It runs when you stop watching",
-    body: "Leads captured, booked, dispatched, and logged while you’re at dinner, on a roof, or asleep. The business stops needing you in every loop — that’s the point of owning it.",
+    q: "How does it know which tech to send?",
+    a: "It pulls your technician roster, their service areas, skills and availability, then books into a real open slot with the right person on it. A duct job in one metro doesn't get handed to the tech two hours away.",
+  },
+  {
+    q: "What happens after the 14 days?",
+    a: "If it worked, installation is $5,997 and it runs for $799 a month. No contract — cancel any time and your data leaves with you. If it didn't work, you walk away owing nothing and you keep the leak map.",
+  },
+  {
+    q: "How long does setup take?",
+    a: "I install it myself. Most shops are live within a day — you hand over access, I do the rest, and you watch the first conversations come in.",
   },
 ]
 
 // ── TRUST BADGES ─────────────────────────────────────────────────────────────
-// Drawn as inline SVG rather than pasted image files: the marks stay sharp at
-// any size, carry no white box behind them, and cost no network request.
-//
-// These assert real credentials, so they stay claim-only by default. Set
-// GOOGLE_RATING (and optionally GOOGLE_REVIEW_COUNT) to the REAL numbers from
-// the Google Business Profile and the badge switches to a star rating on its
-// own. Never put an invented rating in front of buyers.
+// Inline SVG, not pasted images: the marks stay sharp, carry no white box, and
+// cost no network request. Claim-only by default — set GOOGLE_RATING to a REAL
+// Business Profile rating and the badge switches to stars on its own.
 const GOOGLE_RATING: string | null = null
 const GOOGLE_REVIEW_COUNT: number | null = null
 
@@ -133,7 +161,6 @@ function GoogleGMark({ size = 18 }: { size?: number }) {
   )
 }
 
-// Meta's verification badge: the scalloped blue burst with a white check.
 function MetaVerifiedMark({ size = 18 }: { size?: number }) {
   return (
     <svg width={size} height={size} viewBox="0 0 24 24" aria-hidden="true" className="shrink-0">
@@ -151,7 +178,7 @@ function TrustBadges() {
     boxShadow: "0 2px 10px rgba(28,25,23,0.05)",
   } as const
   return (
-    <div className="flex flex-wrap items-center justify-center gap-2.5 mt-7">
+    <div className="flex flex-wrap items-center justify-center gap-2.5 mt-6">
       <div className="inline-flex items-center gap-2 rounded-full pl-3 pr-4 py-2" style={pill}>
         <GoogleGMark />
         {GOOGLE_RATING ? (
@@ -172,13 +199,103 @@ function TrustBadges() {
           </span>
         )}
       </div>
-
       <div className="inline-flex items-center gap-2 rounded-full pl-3 pr-4 py-2" style={pill}>
         <MetaVerifiedMark />
-        <span className="text-[13px] font-bold whitespace-nowrap" style={{ color: C.text }}>
-          Meta Verified
+        <span className="text-[13px] font-bold whitespace-nowrap" style={{ color: C.text }}>Meta Verified</span>
+      </div>
+    </div>
+  )
+}
+
+// ── Revenue math you can drive ────────────────────────────────────────────────
+// Replaces the old unexplained "$47K–$156K" range. A visible calculation the
+// visitor drives with their own ticket size turns a claim into a demonstration.
+function RevenueMath() {
+  const [jobs, setJobs] = useState(25)
+  const [ticket, setTicket] = useState(350)
+  const monthly = jobs * ticket
+  const yearly = monthly * 12
+  const money = (n: number) => "$" + n.toLocaleString("en-US")
+
+  const tile = {
+    color: "#F5F3F0", fontFamily: "var(--font-jetbrains)", fontWeight: 700,
+    background: "rgba(250,250,248,0.06)", border: "1px solid rgba(250,250,248,0.10)",
+    borderRadius: 10, padding: "8px 12px", fontVariantNumeric: "tabular-nums" as const,
+    fontSize: "clamp(0.95rem, 3.4vw, 1.125rem)",
+  }
+  const op = {
+    color: "rgba(250,250,248,0.40)", fontFamily: "var(--font-jetbrains)",
+    fontWeight: 700, fontSize: "1.05rem",
+  }
+  const slider = {
+    width: "100%", height: 6, borderRadius: 999, appearance: "none" as const,
+    accentColor: C.orange, background: "rgba(250,250,248,0.14)", cursor: "pointer",
+  }
+
+  return (
+    <div className="rounded-3xl px-5 sm:px-9 py-8 sm:py-10"
+         style={{ background: "linear-gradient(160deg, rgba(249,115,22,0.09) 0%, rgba(249,115,22,0.03) 100%)",
+                  border: "1px solid rgba(249,115,22,0.26)",
+                  boxShadow: "0 20px 60px rgba(0,0,0,0.35)" }}>
+
+      {/* the two dials */}
+      <div className="grid sm:grid-cols-2 gap-6 sm:gap-8 mb-8">
+        <div>
+          <div className="flex items-baseline justify-between mb-3">
+            <label htmlFor="rm-jobs" className="text-sm font-semibold" style={{ color: "rgba(250,250,248,0.72)" }}>
+              Extra jobs a month
+            </label>
+            <span className="text-xl font-bold tabular-nums"
+                  style={{ color: "#F5F3F0", fontFamily: "var(--font-jetbrains)" }}>{jobs}</span>
+          </div>
+          <input id="rm-jobs" type="range" min={5} max={50} step={1} value={jobs}
+                 onChange={(e) => setJobs(Number(e.target.value))} style={slider} />
+        </div>
+
+        <div>
+          <div className="flex items-baseline justify-between mb-3">
+            <label htmlFor="rm-ticket" className="text-sm font-semibold" style={{ color: "rgba(250,250,248,0.72)" }}>
+              Your average ticket
+            </label>
+            <span className="text-xl font-bold tabular-nums"
+                  style={{ color: "#F5F3F0", fontFamily: "var(--font-jetbrains)" }}>{money(ticket)}</span>
+          </div>
+          <input id="rm-ticket" type="range" min={150} max={1500} step={25} value={ticket}
+                 onChange={(e) => setTicket(Number(e.target.value))} style={slider} />
+        </div>
+      </div>
+
+      {/* the arithmetic, shown on purpose */}
+      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 mb-7 text-center">
+        <span style={tile}>{jobs} jobs</span>
+        <span style={op}>×</span>
+        <span style={tile}>{money(ticket)}</span>
+        {/* the equals travels with its result so it never strands at a line end */}
+        <span className="inline-flex items-center gap-3 whitespace-nowrap">
+          <span style={op}>=</span>
+          <span style={tile}>{money(monthly)} a month</span>
         </span>
       </div>
+
+      {/* the payoff */}
+      <div className="text-center">
+        <div className="font-bold leading-none tabular-nums"
+             style={{ color: "#A3E635", fontFamily: "var(--font-jetbrains)",
+                      fontSize: "clamp(2.4rem, 9vw, 4rem)", letterSpacing: "-0.02em",
+                      textShadow: "0 0 44px rgba(163,230,53,0.40)" }}>
+          {money(yearly)}
+        </div>
+        <div className="text-sm font-semibold uppercase tracking-[0.18em] mt-3"
+             style={{ color: "rgba(163,230,53,0.80)", fontFamily: "var(--font-jetbrains)" }}>
+          recovered in a year
+        </div>
+      </div>
+
+      <p className="text-xs leading-relaxed text-center mt-7 pt-6 max-w-md mx-auto"
+         style={{ color: "rgba(250,250,248,0.42)", borderTop: "1px solid rgba(250,250,248,0.08)" }}>
+        Starting point comes from the shop above: 13 jobs in 9 days is about 43 a
+        month. We set the dial lower on purpose. Drag both to your own numbers.
+      </p>
     </div>
   )
 }
@@ -186,14 +303,14 @@ function TrustBadges() {
 export default function BookPage() {
   return (
     <main style={{ fontFamily: "var(--font-inter), Inter, sans-serif", background: C.bg }}>
-      {/* ── Slim header ── */}
-      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-6 py-4"
+      {/* ── Slim header — carries a permanent route to the calendar ── */}
+      <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-5 sm:px-6 py-3.5"
               style={{ background: "rgba(26,22,20,0.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(249,115,22,0.10)" }}>
         <div className="flex items-center gap-2.5">
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.dark }}>
             <FieldFMark size={18} />
           </div>
-          <span className="font-extrabold text-xl tracking-tight"
+          <span className="font-extrabold text-lg sm:text-xl tracking-tight"
                 style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
             FIELDBUILT
             <span className="inline-flex items-center justify-center text-white font-bold rounded ml-1"
@@ -202,10 +319,15 @@ export default function BookPage() {
             </span>
           </span>
         </div>
+        <a href="#book"
+           className="inline-flex items-center gap-1.5 rounded-lg text-[13px] sm:text-sm font-bold text-white transition-transform hover:scale-[1.04] px-3.5 sm:px-4 py-2 whitespace-nowrap"
+           style={{ background: C.orange, boxShadow: "0 4px 16px rgba(249,115,22,0.35)" }}>
+          Book a walkthrough
+        </a>
       </header>
 
       {/* ── 1. HERO ── */}
-      <section className="relative flex flex-col justify-center pt-32 pb-12 px-6 overflow-hidden"
+      <section className="relative flex flex-col justify-center pt-28 sm:pt-32 pb-14 px-6 overflow-hidden"
                style={{ background: "linear-gradient(180deg, #141110 0%, #1A1614 100%)" }}>
         <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
              style={{
@@ -217,9 +339,6 @@ export default function BookPage() {
         <motion.div animate={{ y: [0, -22, 0], x: [0, 10, 0] }} transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
           className="absolute rounded-full blur-3xl pointer-events-none" aria-hidden="true"
           style={{ width: 620, height: 620, background: "rgba(249,115,22,0.08)", top: "-16%", left: "-8%" }} />
-        <motion.div animate={{ y: [0, 18, 0] }} transition={{ duration: 11, repeat: Infinity, ease: "easeInOut", delay: 1.2 }}
-          className="absolute rounded-full blur-3xl pointer-events-none" aria-hidden="true"
-          style={{ width: 480, height: 480, background: "rgba(163,230,53,0.05)", bottom: "-12%", right: "-6%" }} />
 
         <div className="relative max-w-3xl mx-auto w-full text-center">
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
@@ -241,15 +360,93 @@ export default function BookPage() {
           </motion.h1>
 
           <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28, duration: 0.6 }}
-            className="text-lg leading-relaxed max-w-2xl mx-auto" style={{ color: "rgba(250,250,248,0.62)" }}>
-            Get the full map of how HVAC companies get more booked jobs fast — with
-            no extra headache or ad spend. Pick a time, see it running, and see how
-            it can <strong style={{ color: "#F5F3F0" }}>4x your jobs</strong>.
+            className="text-lg leading-relaxed max-w-2xl mx-auto mb-9" style={{ color: "rgba(250,250,248,0.62)" }}>
+            One HVAC company booked <strong style={{ color: "#F5F3F0" }}>13 jobs in 9 days</strong> from
+            leads their office had given up on. No new ad spend, no new hires. Book a
+            20-minute walkthrough and watch it run on your own leads.
           </motion.p>
+
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.42, duration: 0.55 }}>
+            <Cta tone="dark" />
+          </motion.div>
         </div>
       </section>
 
-      {/* ── 2. CALENDAR ── */}
+      {/* ── 2. PROOF — kept short: two screenshots, one line each ── */}
+      <section className="relative py-16 sm:py-20 px-6 overflow-hidden" style={{ background: "#201A17" }}>
+        <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
+             style={{ backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.10) 1.2px, transparent 1.2px)", backgroundSize: "30px 30px",
+                      WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)",
+                      maskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)" }} />
+        <div className="relative max-w-4xl mx-auto">
+          <Reveal className="text-center mb-10">
+            <div className="flex items-center justify-center gap-3 mb-5">
+              <span className="w-8 h-px" style={{ background: PROOF_RED }} />
+              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#FCA5A5", fontFamily: "var(--font-jetbrains)" }}>
+                Proof
+              </span>
+              <span className="w-8 h-px" style={{ background: PROOF_RED }} />
+            </div>
+            <h2 className="font-extrabold tracking-tight"
+                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
+                         fontSize: "clamp(2.1rem, 7.2vw, 3.4rem)", lineHeight: 1.05, textWrap: "balance" }}>
+              Turn your cold{" "}
+              <br className="sm:hidden" />
+              leads{" "}
+              <br className="hidden sm:inline" />
+              <span style={{ color: C.orange }}>into cash.</span>
+            </h2>
+          </Reveal>
+
+          {PROOFS.map((p, i) => (
+            <Reveal key={p.img} delay={0.05 + i * 0.08} className="mb-10 last:mb-0">
+              <div className="flex justify-center mb-4">
+                <div className="rounded-2xl px-5 sm:px-6 py-3 text-center"
+                     style={{ background: PROOF_RED, border: "3px solid rgba(255,255,255,0.92)",
+                              boxShadow: "0 10px 34px rgba(220,38,38,0.40)" }}>
+                  <span className="block font-extrabold text-white leading-tight"
+                        style={{ fontFamily: "var(--font-jakarta)", fontSize: "clamp(1.02rem, 3.4vw, 1.5rem)",
+                                 letterSpacing: "-0.01em", textWrap: "balance" }}>
+                    {p.headline}
+                  </span>
+                </div>
+              </div>
+              <div className="rounded-2xl overflow-hidden"
+                   style={{ border: `3px solid ${PROOF_RED}`, boxShadow: "0 24px 60px rgba(0,0,0,0.45)" }}>
+                <img src={p.img} alt={p.alt} width={1200} height={p.h} className="w-full block" loading="lazy" />
+              </div>
+              <p className="text-center text-sm leading-relaxed mt-4" style={{ color: "rgba(250,250,248,0.58)" }}>
+                {p.caption}
+              </p>
+            </Reveal>
+          ))}
+        </div>
+      </section>
+
+      {/* ── 3. THE MATH, DRIVEN BY THE VISITOR ── */}
+      <section className="relative py-16 sm:py-20 px-6 overflow-hidden" style={{ background: "#1A1614" }}>
+        <div className="relative max-w-2xl mx-auto">
+          <Reveal className="text-center mb-9">
+            <h2 className="font-extrabold tracking-tight mb-3"
+                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
+                         fontSize: "clamp(1.6rem, 5.2vw, 2.25rem)", lineHeight: 1.15, textWrap: "balance" }}>
+              What is that worth
+              <br /><span style={{ color: "#A3E635" }}>in your shop?</span>
+            </h2>
+            <p className="text-base leading-relaxed max-w-md mx-auto" style={{ color: "rgba(250,250,248,0.55)" }}>
+              Put your own ticket size in. The number moves with it.
+            </p>
+          </Reveal>
+
+          <Reveal delay={0.1}><RevenueMath /></Reveal>
+
+          <Reveal delay={0.15} className="mt-10">
+            <Cta tone="dark" compact />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── 4. CALENDAR — met at the moment of belief, not before ── */}
       <section id="book" className="relative px-6 overflow-hidden scroll-mt-20" style={{ background: C.bg }}>
         <div className="absolute top-0 left-0 right-0 h-32 pointer-events-none" aria-hidden="true"
              style={{ background: "linear-gradient(180deg, #1A1614 0%, rgba(250,250,248,0) 100%)" }} />
@@ -259,12 +456,20 @@ export default function BookPage() {
                       maskImage: "radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 80%)" }} />
 
         <div className="relative max-w-3xl mx-auto pt-16 pb-16">
-          <Reveal delay={0.1}>
+          <Reveal delay={0.05}>
             <div className="rounded-3xl p-2 sm:p-3"
                  style={{ background: C.surface, border: `1px solid ${C.border}`,
                           boxShadow: "0 24px 60px rgba(249,115,22,0.10), 0 4px 20px rgba(0,0,0,0.05)" }}>
               <GhlBookingWidget />
             </div>
+          </Reveal>
+
+          {/* founder-voice scarcity, directly under the widget where it counts */}
+          <Reveal delay={0.1}>
+            <p className="text-center text-sm sm:text-base font-semibold leading-relaxed mt-6 max-w-lg mx-auto"
+               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
+              I take a couple of shops a month. When the calendar&rsquo;s full, it&rsquo;s full.
+            </p>
           </Reveal>
 
           <Reveal delay={0.15}>
@@ -280,213 +485,192 @@ export default function BookPage() {
         </div>
       </section>
 
-      {/* ── 3. PROOF — real dashboards, marked up in red ── */}
-      {/* Screenshots are cropped above the jobs list on purpose: that list shows
-          real homeowners' names, addresses and phone numbers. Never publish it. */}
-      <section className="relative py-20 px-6 overflow-hidden" style={{ background: "#201A17" }}>
-        <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
-             style={{ backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.10) 1.2px, transparent 1.2px)", backgroundSize: "30px 30px",
-                      WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)",
-                      maskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)" }} />
+      {/* ── 5. THE FOUR THINGS THAT MATTER (+ the rest, folded away) ── */}
+      <section className="relative py-16 sm:py-20 px-6 overflow-hidden" style={{ background: C.bg }}>
         <div className="relative max-w-4xl mx-auto">
-          <Reveal className="text-center mb-14">
-            <div className="flex items-center justify-center gap-3 mb-5">
-              <span className="w-8 h-px" style={{ background: PROOF_RED }} />
-              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#FCA5A5", fontFamily: "var(--font-jetbrains)" }}>
-                Proof
-              </span>
-              <span className="w-8 h-px" style={{ background: PROOF_RED }} />
-            </div>
-            <h2 className="font-extrabold tracking-tight mb-4"
-                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
-                         fontSize: "clamp(2.2rem, 7.5vw, 3.6rem)", lineHeight: 1.05 }}>
-              Turn your cold{" "}
-              <br className="sm:hidden" />
-              leads{" "}
-              <br className="hidden sm:inline" />
-              <span style={{ color: C.orange }}>into cash.</span>
+          <Reveal className="text-center mb-10">
+            <h2 className="font-extrabold tracking-tight mb-3"
+                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
+                         fontSize: "clamp(1.6rem, 5.2vw, 2.25rem)", lineHeight: 1.15, textWrap: "balance" }}>
+              An answering service takes a message.
+              <br /><span style={{ color: C.orangeDk }}>This one books the job.</span>
             </h2>
-            <p className="text-base leading-relaxed max-w-lg mx-auto" style={{ color: "rgba(250,250,248,0.55)" }}>
-              Screenshots straight from a real HVAC company&rsquo;s dashboard — leads
-              their office had already given up on.
-            </p>
           </Reveal>
 
-          {PROOFS.map((p, i) => (
-            <Reveal key={p.img} delay={0.05 + i * 0.08} className="mb-14 last:mb-0">
-              {/* Red marker headline — the one line they must understand */}
-              <div className="flex justify-center mb-5">
-                <div className="rounded-2xl px-6 py-3.5 text-center"
-                     style={{ background: PROOF_RED, border: "3px solid rgba(255,255,255,0.92)",
-                              boxShadow: "0 10px 34px rgba(220,38,38,0.40)" }}>
-                  <span className="block font-extrabold text-white leading-tight"
-                        style={{ fontFamily: "var(--font-jakarta)", fontSize: "clamp(1.02rem, 3.4vw, 1.6rem)",
-                                 letterSpacing: "-0.01em", textWrap: "balance" }}>
-                    {p.headline}
-                  </span>
-                </div>
-              </div>
-
-              {/* The screenshot itself */}
-              <div className="rounded-2xl overflow-hidden"
-                   style={{ border: `3px solid ${PROOF_RED}`, boxShadow: "0 24px 60px rgba(0,0,0,0.45)" }}>
-                <img src={p.img} alt={p.alt} width={1200} height={p.h}
-                     className="w-full block" loading="lazy" />
-              </div>
-
-              {/* Plain-English explanation */}
-              <p className="text-center text-sm sm:text-base leading-relaxed max-w-2xl mx-auto mt-5"
-                 style={{ color: "rgba(250,250,248,0.62)" }}>
-                {p.caption}
-              </p>
-            </Reveal>
-          ))}
-
-          <Reveal delay={0.2}>
-            {/* The payoff. Marker red carries over from the annotations above, but
-                as a glowing figure rather than a third red pill — the number is
-                the point, and it shouldn't compete with the proof headlines. */}
-            <div className="relative rounded-2xl overflow-hidden text-center mt-4 px-6 sm:px-9 py-9"
-                 style={{ background: "linear-gradient(160deg, rgba(220,38,38,0.10) 0%, rgba(220,38,38,0.04) 100%)",
-                          border: `1px solid ${PROOF_RED}55`,
-                          boxShadow: "0 18px 50px rgba(220,38,38,0.13)" }}>
-              <div className="absolute inset-x-0 top-0 h-px" aria-hidden="true"
-                   style={{ background: `linear-gradient(90deg, transparent, ${PROOF_RED}, transparent)` }} />
-
-              <div className="text-[11px] font-bold uppercase tracking-[0.2em] mb-4"
-                   style={{ color: "#FCA5A5", fontFamily: "var(--font-jetbrains)" }}>
-                What that adds up to
-              </div>
-
-              <div className="font-bold leading-none mb-5"
-                   style={{ color: "#FF5F5F", fontFamily: "var(--font-jetbrains)",
-                            fontSize: "clamp(2.3rem, 8.6vw, 4.1rem)", letterSpacing: "-0.02em",
-                            textShadow: "0 0 44px rgba(220,38,38,0.55)" }}>
-                $47K&ndash;$156K
-              </div>
-
-              <p className="font-bold leading-snug mb-3 max-w-xl mx-auto"
-                 style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)",
-                          fontSize: "clamp(1.05rem, 3.6vw, 1.35rem)", textWrap: "balance" }}>
-                in recovered revenue per year — from leads you already had.
-              </p>
-              <p className="text-sm leading-relaxed max-w-lg mx-auto"
-                 style={{ color: "rgba(250,250,248,0.58)", textWrap: "balance" }}>
-                No new ad spend. No new hires. Just the leads sitting in your
-                pipeline, finally getting booked.
-              </p>
-            </div>
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ── 4. WHAT THE SYSTEM DOES ── */}
-      <section className="relative py-20 px-6 overflow-hidden" style={{ background: C.bg }}>
-        <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
-             style={{ backgroundImage: "radial-gradient(rgba(249,115,22,0.10) 1px, transparent 1px)", backgroundSize: "28px 28px",
-                      WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 50% 50%, #000 20%, transparent 80%)",
-                      maskImage: "radial-gradient(ellipse 80% 70% at 50% 50%, #000 20%, transparent 80%)" }} />
-        <div className="relative max-w-5xl mx-auto">
-          <Reveal className="text-center mb-12">
-            <div className="flex items-center justify-center gap-3 mb-5">
-              <span className="w-8 h-px" style={{ background: C.orange }} />
-              <span className="text-xs font-semibold uppercase tracking-widest" style={{ color: C.orangeDk, fontFamily: "var(--font-jetbrains)" }}>
-                What runs from day one
-              </span>
-              <span className="w-8 h-px" style={{ background: C.orange }} />
-            </div>
-            <h2 className="font-extrabold tracking-tight mb-4"
-                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em", textWrap: "balance",
-                         fontSize: "clamp(1.6rem, 5.2vw, 2.25rem)", lineHeight: 1.15 }}>
-              One system does the office work
-              <br /><span style={{ color: C.orangeDk }}>of three people.{" "}
-                <br className="sm:hidden" />Around the clock.</span>
-            </h2>
-            <p className="text-base leading-relaxed max-w-xl mx-auto" style={{ color: C.muted }}>
-              Every lead captured, worked, and turned into a job on the calendar —
-              across SMS, Messenger, WhatsApp, web forms, and missed calls.
-            </p>
-          </Reveal>
-
-          <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-            {BENEFITS.map((b, i) => (
-              <Reveal key={b.title} delay={0.05 + (i % 3) * 0.07}>
-                <div className="h-full rounded-2xl p-6 transition-transform hover:scale-[1.01]"
+          <div className="grid sm:grid-cols-2 gap-4 mb-8">
+            {CORE.map((b, i) => (
+              <Reveal key={b.label} delay={0.05 + (i % 2) * 0.07}>
+                <div className="h-full rounded-2xl p-6 flex items-start gap-4"
                      style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(249,115,22,0.07)" }}>
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center mb-4" style={{ background: "rgba(249,115,22,0.10)" }}>
+                  <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
+                       style={{ background: "rgba(249,115,22,0.10)" }}>
                     <b.icon className="w-5 h-5" style={{ color: C.orangeDk }} aria-hidden="true" />
                   </div>
-                  <h3 className="font-bold text-lg mb-2" style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.01em" }}>
-                    {b.title}
-                  </h3>
-                  <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{b.body}</p>
+                  <div>
+                    <h3 className="font-bold text-lg mb-1.5"
+                        style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.01em" }}>
+                      {b.label}
+                    </h3>
+                    <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{b.body}</p>
+                  </div>
                 </div>
               </Reveal>
             ))}
           </div>
+
+          <Reveal delay={0.1}>
+            <details className="group rounded-2xl overflow-hidden"
+                     style={{ background: C.subtle, border: `1px solid ${C.border}` }}>
+              <summary className="flex items-center justify-between gap-3 cursor-pointer list-none px-6 py-4">
+                <span className="font-bold text-sm sm:text-base" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
+                  Everything else it does
+                </span>
+                <ChevronDown className="w-5 h-5 shrink-0 transition-transform group-open:rotate-180"
+                             style={{ color: C.orangeDk }} aria-hidden="true" />
+              </summary>
+              <ul className="px-6 pb-6 pt-1 space-y-3">
+                {EXTRAS.map((e) => (
+                  <li key={e.text} className="flex items-start gap-3 text-sm leading-relaxed" style={{ color: C.muted }}>
+                    <e.icon className="w-4 h-4 mt-0.5 shrink-0" style={{ color: C.orangeDk }} aria-hidden="true" />
+                    {e.text}
+                  </li>
+                ))}
+              </ul>
+            </details>
+          </Reveal>
+
+          <Reveal delay={0.15} className="mt-12">
+            <Cta compact />
+          </Reveal>
         </div>
       </section>
 
-      {/* ── 5. WHAT ACTUALLY CHANGES — the real desire: control ── */}
-      <section className="relative py-20 px-6 overflow-hidden" style={{ background: "#201A17" }}>
-        <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
-             style={{ backgroundImage: "radial-gradient(circle, rgba(163,230,53,0.08) 1.2px, transparent 1.2px)", backgroundSize: "32px 32px",
-                      WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)",
-                      maskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)" }} />
-        <div className="relative max-w-3xl mx-auto">
-          <Reveal className="text-center mb-12">
-            <h2 className="font-extrabold tracking-tight mb-4"
-                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em", textWrap: "balance",
-                         fontSize: "clamp(1.6rem, 5.2vw, 2.25rem)", lineHeight: 1.15 }}>
-              You get more booked jobs
-              <br /><span style={{ color: "#A3E635" }}>and you get peace of mind.</span>
+      {/* ── 6. FIT CHECK — selectivity that also pre-qualifies the booking ── */}
+      <section className="relative py-16 sm:py-20 px-6" style={{ background: C.subtle }}>
+        <div className="relative max-w-4xl mx-auto">
+          <Reveal className="text-center mb-10">
+            <h2 className="font-extrabold tracking-tight"
+                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
+                         fontSize: "clamp(1.6rem, 5.2vw, 2.25rem)", lineHeight: 1.15, textWrap: "balance" }}>
+              This isn&rsquo;t for every shop.
             </h2>
           </Reveal>
 
-          <div className="space-y-4">
-            {OUTCOMES.map((o, i) => (
-              <Reveal key={o.title} delay={0.05 + i * 0.08}>
-                <div className="flex items-start gap-5 rounded-2xl p-6 sm:p-7"
-                     style={{ background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)" }}>
-                  <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0" style={{ background: "rgba(163,230,53,0.10)" }}>
-                    <o.icon className="w-5 h-5" style={{ color: "#A3E635" }} aria-hidden="true" />
-                  </div>
-                  <div>
-                    <h3 className="font-bold text-lg mb-1.5" style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.01em" }}>
-                      {o.title}
-                    </h3>
-                    <p className="text-sm leading-relaxed" style={{ color: "rgba(250,250,248,0.60)" }}>{o.body}</p>
-                  </div>
-                </div>
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Reveal delay={0.05}>
+              <div className="h-full rounded-2xl p-6 sm:p-7"
+                   style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(22,163,74,0.08)" }}>
+                <div className="text-xs font-bold uppercase tracking-widest mb-4"
+                     style={{ color: C.success, fontFamily: "var(--font-jetbrains)" }}>It fits if</div>
+                <ul className="space-y-3">
+                  {FIT_YES.map(t => (
+                    <li key={t} className="flex items-start gap-3 text-sm leading-relaxed" style={{ color: C.text }}>
+                      <Check className="w-4 h-4 mt-0.5 shrink-0" style={{ color: C.success }} aria-hidden="true" />{t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+            <Reveal delay={0.12}>
+              <div className="h-full rounded-2xl p-6 sm:p-7"
+                   style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+                <div className="text-xs font-bold uppercase tracking-widest mb-4"
+                     style={{ color: C.muted, fontFamily: "var(--font-jetbrains)" }}>It doesn&rsquo;t if</div>
+                <ul className="space-y-3">
+                  {FIT_NO.map(t => (
+                    <li key={t} className="flex items-start gap-3 text-sm leading-relaxed" style={{ color: C.muted }}>
+                      <X className="w-4 h-4 mt-0.5 shrink-0" style={{ color: "#A8A29E" }} aria-hidden="true" />{t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
+      {/* ── 7. FAQ — the objections that actually stop the booking ── */}
+      <section className="relative py-16 sm:py-20 px-6" style={{ background: C.bg }}>
+        <div className="relative max-w-2xl mx-auto">
+          <Reveal className="text-center mb-9">
+            <h2 className="font-extrabold tracking-tight"
+                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
+                         fontSize: "clamp(1.6rem, 5.2vw, 2.25rem)", lineHeight: 1.15, textWrap: "balance" }}>
+              Before you book.
+            </h2>
+          </Reveal>
+
+          <div className="space-y-3">
+            {FAQ.map((f, i) => (
+              <Reveal key={f.q} delay={0.04 * i}>
+                <details className="group rounded-2xl overflow-hidden"
+                         style={{ background: C.surface, border: `1px solid ${C.border}` }}>
+                  <summary className="flex items-center justify-between gap-4 cursor-pointer list-none px-5 sm:px-6 py-4">
+                    <span className="font-bold text-[15px] sm:text-base leading-snug"
+                          style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>{f.q}</span>
+                    <ChevronDown className="w-5 h-5 shrink-0 transition-transform group-open:rotate-180"
+                                 style={{ color: C.orangeDk }} aria-hidden="true" />
+                  </summary>
+                  <p className="px-5 sm:px-6 pb-5 pt-0 text-sm leading-relaxed" style={{ color: C.muted }}>{f.a}</p>
+                </details>
               </Reveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── 6. THE COST OF WAITING + FINAL CTA ── */}
-      <section className="relative py-20 px-6 overflow-hidden" style={{ background: C.bg }}>
+      {/* ── 8. FOUNDER — answers "who are you" faster than a paragraph ── */}
+      <section className="relative py-16 px-6" style={{ background: C.subtle }}>
+        <div className="relative max-w-2xl mx-auto">
+          <Reveal>
+            <div className="rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left"
+                 style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(249,115,22,0.07)" }}>
+              {FOUNDER_PHOTO_URL ? (
+                <img src={FOUNDER_PHOTO_URL} alt="Jonathan, founder of FieldBuilt AI"
+                     width={96} height={96}
+                     className="w-24 h-24 rounded-2xl object-cover shrink-0"
+                     style={{ border: `2px solid ${C.border}` }} />
+              ) : (
+                <div className="w-24 h-24 rounded-2xl flex items-center justify-center shrink-0"
+                     style={{ background: C.dark }}>
+                  <span className="text-4xl font-extrabold" style={{ color: C.orange, fontFamily: "var(--font-jakarta)" }}>J</span>
+                </div>
+              )}
+              <div>
+                <div className="font-bold text-lg mb-1" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
+                  Jonathan &middot; founder, FieldBuilt AI
+                </div>
+                <p className="text-sm leading-relaxed" style={{ color: C.muted }}>
+                  You&rsquo;re not meeting a sales rep. I build and install every system myself,
+                  which is why I only take a couple of shops a month. Come with your hardest
+                  questions &mdash; the weird edge cases, the &ldquo;my market is different.&rdquo;
+                  That&rsquo;s the part of the call I&rsquo;m best at.
+                </p>
+              </div>
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── 9. FINAL CTA ── */}
+      <section className="relative py-16 sm:py-20 px-6 overflow-hidden" style={{ background: "#1A1614" }}>
+        <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
+             style={{ backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.10) 1.2px, transparent 1.2px)", backgroundSize: "30px 30px",
+                      WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 75%)",
+                      maskImage: "radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 75%)" }} />
         <div className="relative max-w-2xl mx-auto text-center">
           <Reveal>
-            <h2 className="font-extrabold tracking-tight mb-5"
-                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em", textWrap: "balance",
-                         fontSize: "clamp(1.5rem, 4.3vw, 2.05rem)", lineHeight: 1.15 }}>
+            <h2 className="font-extrabold tracking-tight mb-6"
+                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
+                         fontSize: "clamp(1.6rem, 5.2vw, 2.4rem)", lineHeight: 1.15, textWrap: "balance" }}>
               In 20 minutes we&rsquo;ll show you exactly how
-              <br /><span style={{ color: C.orangeDk }}>we book you more HVAC jobs.</span>
+              <br /><span style={{ color: C.orange }}>
+                we book you more{" "}
+                <br className="sm:hidden" />
+                HVAC jobs.
+              </span>
             </h2>
-            <p className="text-base leading-relaxed max-w-xl mx-auto mb-9" style={{ color: C.muted }}>
-              The setup is free for 14 days, on your real leads, built by the founder
-              — and if the numbers don&rsquo;t make the case, you walk away with your leak
-              map and owe nothing. The only cost you can&rsquo;t get back is another month
-              of leads going cold.
-            </p>
-            <a href="#book" className="inline-flex items-center gap-2 px-8 py-4 rounded-xl text-base font-bold text-white transition-transform hover:scale-[1.03]"
-               style={{ background: C.orange, boxShadow: "0 8px 32px rgba(249,115,22,0.40)" }}>
-              Book Your FREE Strategy Session
-            </a>
-            <p className="text-xs mt-4" style={{ color: C.muted }}>
-              I take a couple of shops a month. When the calendar&rsquo;s full, it&rsquo;s full.
-            </p>
+            <Cta tone="dark" />
           </Reveal>
         </div>
       </section>
