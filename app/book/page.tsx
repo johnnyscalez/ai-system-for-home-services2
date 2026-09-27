@@ -135,7 +135,7 @@ const FAQ = [
   },
   {
     q: "What happens after the 14 days?",
-    a: "If it worked, installation is $5,997 and it runs for $799 a month. No contract — cancel any time and your data leaves with you. If it didn't work, you walk away owing nothing and you keep the leak map.",
+    a: "If it worked, we talk through what it costs to keep it running. No contract — cancel any time and your data leaves with you. If it didn't work, you walk away owing nothing and you keep the leak map.",
   },
   {
     q: "How long does setup take?",

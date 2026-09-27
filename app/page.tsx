@@ -3,7 +3,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 // FIELDBUILT — offer-first site for HVAC owners.
 // Structure: the claim → the leak → what happens → proof (thread + receipts) →
-// what you get installed → what it never does → who it's for → pricing → ask.
+// what you get installed → what it never does → who it's for → ask.
 // Warm off-white, deep ink, one orange accent, mono for real data only.
 // ─────────────────────────────────────────────────────────────────────────────
 
@@ -376,17 +376,6 @@ export default function Home() {
             <LedgerRow dark label="You can scale safely." sub="When capture is fixed, every ad dollar you add converts instead of leaking." />
             <div style={{ borderTop: "1px solid rgba(243,239,234,0.14)" }} />
           </div>
-
-          <p style={{ fontFamily: jakarta, fontWeight: 600, fontSize: 17, color: "#F3EFEA", margin: "56px 0 6px" }}>What it costs:</p>
-          <div style={{ maxWidth: 680 }}>
-            <LedgerRow dark label="One-time installation" sub="Scope-dependent, can be higher or lower based on complexity." value="$5,997" strong />
-            <LedgerRow dark label="Optional ongoing optimization" value="$200-500/mo" />
-            <div style={{ borderTop: "1px solid rgba(243,239,234,0.14)" }} />
-          </div>
-          <p style={{ marginTop: 14, fontSize: 14.5, lineHeight: 1.6, color: "rgba(243,239,234,0.6)", maxWidth: 620 }}>
-            Compare that to what it replaces: an answering service that books nothing, a night
-            dispatcher's salary, or another month of ad spend leaking through the same holes.
-          </p>
 
           <div style={{ marginTop: 60 }}>
             <p style={{ fontSize: 18, lineHeight: 1.6, color: "rgba(243,239,234,0.85)", marginBottom: 24 }}>
