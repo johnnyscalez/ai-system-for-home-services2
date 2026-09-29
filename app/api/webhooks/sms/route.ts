@@ -276,6 +276,18 @@ export async function POST(req: NextRequest) {
   }
 
   try {
+    {
+      const { officeCoversNowForCompany } = await import("@/lib/office-hours")
+      if (await officeCoversNowForCompany(companyId)) {
+        await supabase.from("conversations").insert({
+          lead_id: lead.id, company_id: companyId,
+          direction: "inbound", sent_by: "human", body: messageBody, channel: "sms", twilio_sid: twilioSid,
+        })
+        await supabase.from("leads").update({ last_message_at: new Date().toISOString(), last_inbound_at: new Date().toISOString() }).eq("id", lead.id)
+        console.log(`[webhook/sms] office hours — inbound stored for lead ${lead.id}, agent off duty`)
+        return new Response("<Response></Response>", { headers: { "Content-Type": "text/xml" } })
+      }
+    }
     const result = await processAndSave(lead.id, companyId, messageBody, twilioSid)
 
     if (result.response) {

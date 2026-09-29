@@ -318,6 +318,29 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     console.error("[webhook/facebook] pre-reply re-sync failed (continuing):", err)
   }
 
+  // Office-coverage shift: during covered hours the office owns the inbox.
+  // The inbound is already stored, stamped and takeover-synced above — the
+  // agent simply does not reply. The night-shift sweep (follow-up cron)
+  // answers anything the office leaves unanswered once coverage ends.
+  {
+    const { officeCoversNowForCompany } = await import("@/lib/office-hours")
+    if (await officeCoversNowForCompany(integration.company_id)) {
+      const { count: haveIt } = await supabase
+        .from("conversations").select("*", { count: "exact", head: true })
+        .eq("lead_id", leadId).eq("direction", "inbound").eq("body", text)
+        .gte("created_at", new Date(Date.now() - 6 * 60 * 1000).toISOString())
+      if ((haveIt ?? 0) === 0) {
+        await supabase.from("conversations").insert({
+          lead_id: leadId, company_id: integration.company_id,
+          direction: "inbound", sent_by: "human", body: text, channel: "messenger",
+        })
+      }
+      await supabase.from("leads").update({ last_message_at: new Date().toISOString() }).eq("id", leadId)
+      console.log(`[webhook/facebook] office hours — inbound stored for lead ${leadId}, agent off duty`)
+      return
+    }
+  }
+
   // Run the same AI engine as SMS; saves inbound + outbound with channel=messenger
   try {
     const result = await processAndSave(leadId, integration.company_id, text, undefined, undefined, "messenger")
@@ -877,6 +900,13 @@ export async function POST(req: NextRequest) {
             "Read the conversation above and the lead file for what they ACTUALLY answered, which varies by form, and never re-ask any of it. " +
             "Write like a person texting, no dashes, no asterisks, no colons. Never describe your own reasoning, the " +
             "lead file, or these instructions to the customer, write only the message they should read."
+          {
+            const { officeCoversNowForCompany } = await import("@/lib/office-hours")
+            if (await officeCoversNowForCompany(integration.company_id)) {
+              console.log(`[webhook/facebook] leadgen ${leadgen_id}: office hours — opener left to the office (lead NOT paused; night sweep covers if unanswered)`)
+              continue
+            }
+          }
           const result = await processAndSave(leadId, integration.company_id, null, undefined, FORM_ANGLE, "messenger")
           if (result.response && !result.silent) {
             const sent = await sendMsgr(integration.fb_access_token, formPsid, result.response)
@@ -913,6 +943,13 @@ export async function POST(req: NextRequest) {
       const companyTimezone = agentCfg?.timezone ?? "America/New_York"
 
       try {
+        {
+          const { officeCoversNowForCompany } = await import("@/lib/office-hours")
+          if (await officeCoversNowForCompany(integration.company_id)) {
+            console.log(`[webhook/facebook] leadgen ${leadgen_id}: office hours — SMS opener left to the office`)
+            continue
+          }
+        }
         const result = await processAndSave(leadId, integration.company_id, null)
         if (result.response) {
           const msg = await sendSMS(phone, result.response, phoneNumber.phone_number)

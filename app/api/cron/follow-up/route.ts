@@ -38,6 +38,7 @@ export async function GET(req: NextRequest) {
   const { companyAiBlocked } = await import("@/lib/billing-gate")
   const billingBlockCache = new Map<string, string | null>()
 
+  const officeCoverCache = new Map<string, boolean>()
   for (const step of dueSteps ?? []) {
     const lead = step.leads as {
       id: string; phone: string; status: string; ai_paused: boolean; ai_voice_paused: boolean;
@@ -64,6 +65,19 @@ export async function GET(req: NextRequest) {
     if (billingBlock) continue
 
     const stepIsVoice = isVoiceStep(step.sequence_type, step.step)
+
+    // Office-coverage shift: while the office covers the inbox, follow-up
+    // sends are DEFERRED, never cancelled — the step stays pending and fires
+    // on the first cron pass after coverage ends (the agent's shift start).
+    {
+      let covered = officeCoverCache.get(step.company_id)
+      if (covered === undefined) {
+        const { officeCoversNowForCompany } = await import("@/lib/office-hours")
+        covered = await officeCoversNowForCompany(step.company_id)
+        officeCoverCache.set(step.company_id, covered)
+      }
+      if (covered) continue
+    }
 
     // A deleted lead should never receive further automated outreach —
     // deleting is meant to stop the relationship, not just hide it from
@@ -386,6 +400,83 @@ export async function GET(req: NextRequest) {
     }
   }
 
-  return NextResponse.json({ processed, callsProcessed })
+  // ── Night-shift sweep ──────────────────────────────────────────────────
+  // For companies on the office-coverage shift model: once the office is off
+  // duty, answer any Messenger inbound the office left unanswered. Without
+  // this, a 5:50 PM question would sit silent all night — the webhook only
+  // fires on NEW inbounds. Idempotent: after the agent replies, the thread's
+  // last row is outbound and the lead no longer matches.
+  let swept = 0
+  try {
+    const { data: shiftCompanies } = await supabase
+      .from("ai_agent_config")
+      .select("company_id, office_coverage, timezone")
+      .not("office_coverage", "is", null)
+    const { officeCoversNow } = await import("@/lib/office-hours")
+    for (const cfg of shiftCompanies ?? []) {
+      const cov = cfg.office_coverage as { enabled?: boolean } | null
+      if (!cov?.enabled) continue
+      if (officeCoversNow(cov, (cfg.timezone as string | null) ?? "America/New_York")) continue // office on duty
+
+      // Candidates: live Messenger leads with a fresh inbound (inside Meta's
+      // 24h window) whose LAST message is from the lead, ≥10 min old (give the
+      // office takeover echoes and webhook retries time to land).
+      const { data: candidates } = await supabase
+        .from("leads")
+        .select("id, messenger_psid, status, ai_paused, last_inbound_at")
+        .eq("company_id", cfg.company_id)
+        .eq("channel", "messenger")
+        .eq("ai_paused", false)
+        .not("messenger_psid", "is", null)
+        .gte("last_inbound_at", new Date(Date.now() - 23 * 60 * 60 * 1000).toISOString())
+        .lte("last_inbound_at", new Date(Date.now() - 10 * 60 * 1000).toISOString())
+        .limit(40)
+
+      for (const lead of candidates ?? []) {
+        if (swept >= 15) break // cap per pass; next pass continues
+        if (isTerminalLeadStatus(lead.status)) continue
+        const { data: lastMsg } = await supabase
+          .from("conversations")
+          .select("direction, sent_by")
+          .eq("lead_id", lead.id)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle()
+        if (!lastMsg || lastMsg.direction !== "inbound") continue
+
+        try {
+          // Pre-reply thread sync — same takeover safety as the live webhook.
+          const { data: integ } = await supabase
+            .from("integrations").select("fb_access_token, fb_page_id").eq("company_id", cfg.company_id).eq("type", "facebook").maybeSingle()
+          if (!integ?.fb_access_token) continue
+          const { syncMessengerHistory, sendMessengerMessage } = await import("@/lib/messenger")
+          const r = await syncMessengerHistory(supabase, lead.id, cfg.company_id, integ.fb_access_token, integ.fb_page_id, lead.messenger_psid as string, {})
+          if (r.humanTakeover) continue
+          const { data: still } = await supabase.from("leads").select("ai_paused").eq("id", lead.id).maybeSingle()
+          if (still?.ai_paused) continue
+
+          const result = await processAndSave(lead.id, cfg.company_id, null, undefined, undefined, "messenger")
+          if (result.response) {
+            const sent = await sendMessengerMessage(integ.fb_access_token, lead.messenger_psid as string, result.response)
+            if (sent.ok) {
+              if (result.outboundConversationId) {
+                await supabase.from("conversations").update({ channel: "messenger", twilio_sid: sent.messageId ?? null }).eq("id", result.outboundConversationId)
+              }
+              swept++
+              console.log(`[cron] night-shift sweep answered lead ${lead.id}`)
+            } else if (result.outboundConversationId) {
+              await supabase.from("conversations").delete().eq("id", result.outboundConversationId)
+            }
+          }
+        } catch (e) {
+          console.error(`[cron] night-shift sweep failed for lead ${lead.id}:`, e)
+        }
+      }
+    }
+  } catch (e) {
+    console.error("[cron] night-shift sweep block failed:", e)
+  }
+
+  return NextResponse.json({ processed, callsProcessed, swept })
 }
 
