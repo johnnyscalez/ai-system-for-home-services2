@@ -12,11 +12,12 @@
 // We sell "an AI front office that gets installed", never software/platform.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useRef, useState } from "react"
+import { useRef } from "react"
 import { motion, useInView } from "framer-motion"
 import {
   Zap, MessagesSquare, CalendarCheck, Repeat, Check, X, Star, ChevronDown,
   Route, ClipboardList, BarChart3, Moon, TrendingUp, Bell, ArrowDown, Phone,
+  Settings2, Target, MapPin,
 } from "lucide-react"
 import { C, FieldFMark, GhlBookingWidget, MinimalFooter } from "@/components/landing/shared"
 
@@ -87,6 +88,16 @@ const PROOFS = [
 ]
 
 // ── The four that separate this from an AI receptionist ──────────────────────
+// What the walkthrough actually covers — straight from the call structure.
+const DISCOVER = [
+  { icon: Settings2, title: "Inside the system",
+    body: "How replacement-focused ads, qualification, follow-up and booking work together." },
+  { icon: Target, title: "Your replacement opportunity audit",
+    body: "Where your service area, preferred work and crew capacity leave room for more qualified estimates." },
+  { icon: MapPin, title: "Geographical gap audit",
+    body: "The demand in your area, which zones run hottest, and who is capturing it today." },
+]
+
 const CORE = [
   { icon: Zap, label: "Answered instantly",
     body: "Every lead gets a real text back in 2 seconds. 2am, Sunday, Christmas morning." },
@@ -207,99 +218,6 @@ function TrustBadges() {
   )
 }
 
-// ── Revenue math you can drive ────────────────────────────────────────────────
-// Replaces the old unexplained "$47K–$156K" range. A visible calculation the
-// visitor drives with their own ticket size turns a claim into a demonstration.
-function RevenueMath() {
-  const [jobs, setJobs] = useState(25)
-  const [ticket, setTicket] = useState(350)
-  const monthly = jobs * ticket
-  const yearly = monthly * 12
-  const money = (n: number) => "$" + n.toLocaleString("en-US")
-
-  const tile = {
-    color: "#F5F3F0", fontFamily: "var(--font-jetbrains)", fontWeight: 700,
-    background: "rgba(250,250,248,0.06)", border: "1px solid rgba(250,250,248,0.10)",
-    borderRadius: 10, padding: "8px 12px", fontVariantNumeric: "tabular-nums" as const,
-    fontSize: "clamp(0.95rem, 3.4vw, 1.125rem)",
-  }
-  const op = {
-    color: "rgba(250,250,248,0.40)", fontFamily: "var(--font-jetbrains)",
-    fontWeight: 700, fontSize: "1.05rem",
-  }
-  const slider = {
-    width: "100%", height: 6, borderRadius: 999, appearance: "none" as const,
-    accentColor: C.orange, background: "rgba(250,250,248,0.14)", cursor: "pointer",
-  }
-
-  return (
-    <div className="rounded-3xl px-5 sm:px-9 py-8 sm:py-10"
-         style={{ background: "linear-gradient(160deg, rgba(249,115,22,0.09) 0%, rgba(249,115,22,0.03) 100%)",
-                  border: "1px solid rgba(249,115,22,0.26)",
-                  boxShadow: "0 20px 60px rgba(0,0,0,0.35)" }}>
-
-      {/* the two dials */}
-      <div className="grid sm:grid-cols-2 gap-6 sm:gap-8 mb-8">
-        <div>
-          <div className="flex items-baseline justify-between mb-3">
-            <label htmlFor="rm-jobs" className="text-sm font-semibold" style={{ color: "rgba(250,250,248,0.72)" }}>
-              Extra jobs a month
-            </label>
-            <span className="text-xl font-bold tabular-nums"
-                  style={{ color: "#F5F3F0", fontFamily: "var(--font-jetbrains)" }}>{jobs}</span>
-          </div>
-          <input id="rm-jobs" type="range" min={5} max={50} step={1} value={jobs}
-                 onChange={(e) => setJobs(Number(e.target.value))} style={slider} />
-        </div>
-
-        <div>
-          <div className="flex items-baseline justify-between mb-3">
-            <label htmlFor="rm-ticket" className="text-sm font-semibold" style={{ color: "rgba(250,250,248,0.72)" }}>
-              Your average ticket
-            </label>
-            <span className="text-xl font-bold tabular-nums"
-                  style={{ color: "#F5F3F0", fontFamily: "var(--font-jetbrains)" }}>{money(ticket)}</span>
-          </div>
-          <input id="rm-ticket" type="range" min={150} max={1500} step={25} value={ticket}
-                 onChange={(e) => setTicket(Number(e.target.value))} style={slider} />
-        </div>
-      </div>
-
-      {/* the arithmetic, shown on purpose */}
-      <div className="flex flex-wrap items-center justify-center gap-x-3 gap-y-2 mb-7 text-center">
-        <span style={tile}>{jobs} jobs</span>
-        <span style={op}>×</span>
-        <span style={tile}>{money(ticket)}</span>
-        {/* the equals travels with its result so it never strands at a line end */}
-        <span className="inline-flex items-center gap-3 whitespace-nowrap">
-          <span style={op}>=</span>
-          <span style={tile}>{money(monthly)} a month</span>
-        </span>
-      </div>
-
-      {/* the payoff */}
-      <div className="text-center">
-        <div className="font-bold leading-none tabular-nums"
-             style={{ color: "#A3E635", fontFamily: "var(--font-jetbrains)",
-                      fontSize: "clamp(2.4rem, 9vw, 4rem)", letterSpacing: "-0.02em",
-                      textShadow: "0 0 44px rgba(163,230,53,0.40)" }}>
-          {money(yearly)}
-        </div>
-        <div className="text-sm font-semibold uppercase tracking-[0.18em] mt-3"
-             style={{ color: "rgba(163,230,53,0.80)", fontFamily: "var(--font-jetbrains)" }}>
-          recovered in a year
-        </div>
-      </div>
-
-      <p className="text-xs leading-relaxed text-center mt-7 pt-6 max-w-md mx-auto"
-         style={{ color: "rgba(250,250,248,0.42)", borderTop: "1px solid rgba(250,250,248,0.08)" }}>
-        Starting point comes from the shop above: 13 jobs in 9 days is about 43 a
-        month. We set the dial lower on purpose. Drag both to your own numbers.
-      </p>
-    </div>
-  )
-}
-
 export default function BookPage() {
   return (
     <main style={{ fontFamily: "var(--font-inter), Inter, sans-serif", background: C.bg }}>
@@ -344,7 +262,7 @@ export default function BookPage() {
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
             className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full mb-7 text-[11px] sm:text-sm font-extrabold uppercase tracking-widest text-white whitespace-nowrap"
             style={{ background: C.orange, boxShadow: "0 4px 20px rgba(249,115,22,0.45)", fontFamily: "var(--font-jetbrains)" }}>
-            For HVAC shops running 4+ techs
+            For Established HVAC Business Owners
           </motion.div>
 
           <motion.h1 initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.7 }}
@@ -361,9 +279,8 @@ export default function BookPage() {
 
           <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28, duration: 0.6 }}
             className="text-lg leading-relaxed max-w-2xl mx-auto mb-9" style={{ color: "rgba(250,250,248,0.62)" }}>
-            One HVAC company booked <strong style={{ color: "#F5F3F0" }}>13 jobs in 9 days</strong> from
-            leads their office had given up on. No new ad spend, no new hires. Book a
-            20-minute walkthrough and watch it run on your own leads.
+            Without wasting money on ad spend, relying on referrals, or having to
+            chase leads after the estimate.
           </motion.p>
 
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.42, duration: 0.55 }}>
@@ -372,7 +289,76 @@ export default function BookPage() {
         </div>
       </section>
 
-      {/* ── 2. PROOF — kept short: two screenshots, one line each ── */}
+      {/* ── 2. CALENDAR — step two of the doc's flow, straight after the promise ── */}
+      <section id="book" className="relative px-6 overflow-hidden scroll-mt-20" style={{ background: C.bg }}>
+        <div className="absolute top-0 left-0 right-0 h-32 pointer-events-none" aria-hidden="true"
+             style={{ background: "linear-gradient(180deg, #1A1614 0%, rgba(250,250,248,0) 100%)" }} />
+        <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
+             style={{ backgroundImage: "radial-gradient(rgba(249,115,22,0.12) 1px, transparent 1px)", backgroundSize: "28px 28px",
+                      WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 80%)",
+                      maskImage: "radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 80%)" }} />
+
+        <div className="relative max-w-3xl mx-auto pt-16 pb-16">
+          <Reveal delay={0.05}>
+            <div className="rounded-3xl p-2 sm:p-3"
+                 style={{ background: C.surface, border: `1px solid ${C.border}`,
+                          boxShadow: "0 24px 60px rgba(249,115,22,0.10), 0 4px 20px rgba(0,0,0,0.05)" }}>
+              <GhlBookingWidget />
+            </div>
+          </Reveal>
+
+          {/* founder-voice scarcity, directly under the widget where it counts */}
+          <Reveal delay={0.1}>
+            <p className="text-center text-sm sm:text-base font-semibold leading-relaxed mt-6 max-w-lg mx-auto"
+               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
+              I take a couple of shops a month. When the calendar&rsquo;s full, it&rsquo;s full.
+            </p>
+          </Reveal>
+
+          <Reveal delay={0.15}>
+            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-6">
+              {["No pitch deck — the product on screen", "Built and installed by the founder", "Free for 14 days on your real leads"].map(t => (
+                <span key={t} className="inline-flex items-center gap-1.5 text-sm font-medium" style={{ color: C.muted }}>
+                  <Check className="w-4 h-4 shrink-0" style={{ color: C.success }} aria-hidden="true" /> {t}
+                </span>
+              ))}
+            </div>
+            <TrustBadges />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── 3. WHAT THE CALL COVERS — sets expectations right after booking ── */}
+      <section className="relative py-14 sm:py-16 px-6" style={{ background: C.subtle }}>
+        <div className="relative max-w-3xl mx-auto">
+          <Reveal className="text-center mb-8">
+            <h2 className="font-extrabold tracking-tight"
+                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
+                         fontSize: "clamp(1.5rem, 4.8vw, 2.1rem)", lineHeight: 1.15, textWrap: "balance" }}>
+              What you&rsquo;ll discover on the call
+            </h2>
+          </Reveal>
+
+          <div className="grid sm:grid-cols-3 gap-4">
+            {DISCOVER.map((d, i) => (
+              <Reveal key={d.title} delay={0.05 + i * 0.07}>
+                <div className="h-full rounded-2xl p-5 sm:p-6"
+                     style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(249,115,22,0.06)" }}>
+                  <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-4"
+                       style={{ background: "rgba(249,115,22,0.10)" }}>
+                    <d.icon className="w-4.5 h-4.5" style={{ color: C.orangeDk }} aria-hidden="true" />
+                  </div>
+                  <h3 className="font-bold text-[15px] mb-1.5 leading-snug"
+                      style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>{d.title}</h3>
+                  <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{d.body}</p>
+                </div>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── 4. PROOF — kept short: two screenshots, one line each ── */}
       <section className="relative py-16 sm:py-20 px-6 overflow-hidden" style={{ background: "#201A17" }}>
         <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
              style={{ backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.10) 1.2px, transparent 1.2px)", backgroundSize: "30px 30px",
@@ -420,68 +406,6 @@ export default function BookPage() {
               </p>
             </Reveal>
           ))}
-        </div>
-      </section>
-
-      {/* ── 3. THE MATH, DRIVEN BY THE VISITOR ── */}
-      <section className="relative py-16 sm:py-20 px-6 overflow-hidden" style={{ background: "#1A1614" }}>
-        <div className="relative max-w-2xl mx-auto">
-          <Reveal className="text-center mb-9">
-            <h2 className="font-extrabold tracking-tight mb-3"
-                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
-                         fontSize: "clamp(1.6rem, 5.2vw, 2.25rem)", lineHeight: 1.15, textWrap: "balance" }}>
-              What is that worth
-              <br /><span style={{ color: "#A3E635" }}>in your shop?</span>
-            </h2>
-            <p className="text-base leading-relaxed max-w-md mx-auto" style={{ color: "rgba(250,250,248,0.55)" }}>
-              Put your own ticket size in. The number moves with it.
-            </p>
-          </Reveal>
-
-          <Reveal delay={0.1}><RevenueMath /></Reveal>
-
-          <Reveal delay={0.15} className="mt-10">
-            <Cta tone="dark" compact />
-          </Reveal>
-        </div>
-      </section>
-
-      {/* ── 4. CALENDAR — met at the moment of belief, not before ── */}
-      <section id="book" className="relative px-6 overflow-hidden scroll-mt-20" style={{ background: C.bg }}>
-        <div className="absolute top-0 left-0 right-0 h-32 pointer-events-none" aria-hidden="true"
-             style={{ background: "linear-gradient(180deg, #1A1614 0%, rgba(250,250,248,0) 100%)" }} />
-        <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
-             style={{ backgroundImage: "radial-gradient(rgba(249,115,22,0.12) 1px, transparent 1px)", backgroundSize: "28px 28px",
-                      WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 80%)",
-                      maskImage: "radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 80%)" }} />
-
-        <div className="relative max-w-3xl mx-auto pt-16 pb-16">
-          <Reveal delay={0.05}>
-            <div className="rounded-3xl p-2 sm:p-3"
-                 style={{ background: C.surface, border: `1px solid ${C.border}`,
-                          boxShadow: "0 24px 60px rgba(249,115,22,0.10), 0 4px 20px rgba(0,0,0,0.05)" }}>
-              <GhlBookingWidget />
-            </div>
-          </Reveal>
-
-          {/* founder-voice scarcity, directly under the widget where it counts */}
-          <Reveal delay={0.1}>
-            <p className="text-center text-sm sm:text-base font-semibold leading-relaxed mt-6 max-w-lg mx-auto"
-               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-              I take a couple of shops a month. When the calendar&rsquo;s full, it&rsquo;s full.
-            </p>
-          </Reveal>
-
-          <Reveal delay={0.15}>
-            <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-6">
-              {["No pitch deck — the product on screen", "Built and installed by the founder", "Free for 14 days on your real leads"].map(t => (
-                <span key={t} className="inline-flex items-center gap-1.5 text-sm font-medium" style={{ color: C.muted }}>
-                  <Check className="w-4 h-4 shrink-0" style={{ color: C.success }} aria-hidden="true" /> {t}
-                </span>
-              ))}
-            </div>
-            <TrustBadges />
-          </Reveal>
         </div>
       </section>
 
