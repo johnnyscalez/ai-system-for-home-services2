@@ -9,13 +9,13 @@
 // the next 24-48 hours; this page is the counterweight.
 //
 // Structure (the psychological arc):
-//   1. Confirmation hero — relief, lock-in, "check your phone" live demo
-//   2. The leak map, made concrete — five leaks as questions about HIS shop
-//      he can't currently answer (curiosity + loss-awareness)
-//   3. Product tour — SMS thread, dispatch, lead profile w/ street view + AI
-//      notes, tech portal, tech dashboard. All JSX mockups, captioned in
-//      "your" language so he pre-owns the system before the call.
-//   4. Founder note + homework — personal accountability + micro-commitment
+//   1. "Not confirmed yet" hero — the booking is real, but one action is still
+//      owed. Details + setup line + the thumbs-up micro-commitment, which is
+//      this page's single most important job.
+//   2. Pre-call briefing video + the line that reframes the call.
+//   3. Product tour — SMS thread, lead profile w/ street view + AI notes, tech
+//      portal, tech dashboard. JSX mockups in "your" language, so he pre-owns
+//      the system before the call.
 //
 // Optional query params (GHL can append merge fields to the redirect URL):
 //   ?time=<appointment time — shown verbatim; if it parses as a date, an
@@ -28,15 +28,15 @@ import { Suspense, useRef } from "react"
 import { useSearchParams } from "next/navigation"
 import { motion, useInView } from "framer-motion"
 import {
-  Phone, Calendar, PencilLine, ArrowUpRight, MapPin, Zap, Moon,
-  Repeat, Route, BarChart3, Bell, Navigation, StickyNote,
+  Calendar, ArrowUpRight, MapPin, Route, Bell, Repeat, Navigation, StickyNote,
+  Video, Clock, MessageSquare, AlertCircle, PlayCircle,
 } from "lucide-react"
 import { C, FieldFMark, MinimalFooter, TechDashboardPreview } from "@/components/landing/shared"
 
-// Paste the founder video URL here when it's filmed (mp4 or an embed URL).
-// While empty, the video section stays hidden — no visible placeholder ships
-// to real leads.
-const FOUNDER_VIDEO_URL = ""
+// Paste the pre-call briefing video here once it's filmed (mp4 or embed URL).
+// While empty the slot still renders, as a styled placeholder — deliberate, so
+// the section keeps its place in the layout while the video is pending.
+const PRECALL_VIDEO_URL = ""
 
 function googleCalendarLink(start: Date): string {
   const fmt = (d: Date) => d.toISOString().replace(/[-:]|\.\d{3}/g, "")
@@ -49,43 +49,6 @@ function googleCalendarLink(start: Date): string {
   })
   return `https://calendar.google.com/calendar/render?${params.toString()}`
 }
-
-// ─────────────────────────────────────────────────────────────────────────────
-// THE FIVE LEAKS — the leak map, made concrete. Each row is a question the
-// owner can't currently answer about his own shop. That gap IS the pitch.
-// ─────────────────────────────────────────────────────────────────────────────
-const LEAKS = [
-  {
-    icon: Zap,
-    label: "The speed leak",
-    question: "When a lead comes in, how many minutes until someone answers?",
-    detail: "Past five minutes, most homeowners have already texted the next company on the list. You paid for that lead either way.",
-  },
-  {
-    icon: Moon,
-    label: "The after-hours leak",
-    question: "Who answers the form that comes in at 8:17 on a Tuesday night?",
-    detail: "Evenings and weekends are when homeowners sit down and ask for help. For most shops, that's exactly when nobody's answering.",
-  },
-  {
-    icon: Repeat,
-    label: "The follow-up leak",
-    question: "The lead who didn't book on the first text — who chases him tomorrow?",
-    detail: "And the day after, and next week? In most shops the honest answer is nobody. That's paid-for revenue going quiet.",
-  },
-  {
-    icon: Route,
-    label: "The dispatch leak",
-    question: "Do jobs go to whoever's free, or whoever actually closes?",
-    detail: "One shop we pulled numbers for: busiest tech closed 61%, the quiet one closed 79%. Every big job had gone to the wrong guy for years.",
-  },
-  {
-    icon: BarChart3,
-    label: "The visibility leak",
-    question: "Close rate per tech. Revenue per lead source. Where do those numbers live?",
-    detail: "If the answer is “in my gut,” that's the leak feeding all the others — you can't fix what you can't see.",
-  },
-] as const
 
 // ─────────────────────────────────────────────────────────────────────────────
 // MOCKUP: SMS conversation — condensed version of the thread on /start.
@@ -319,8 +282,6 @@ function BookedContent() {
   const parsed = timeRaw ? new Date(timeRaw) : null
   const timeValid = parsed !== null && !isNaN(parsed.getTime())
 
-  const leakRef = useRef(null)
-  const leakInView = useInView(leakRef, { once: true, margin: "-60px" })
 
   return (
     <main style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
@@ -342,7 +303,7 @@ function BookedContent() {
         </div>
       </header>
 
-      {/* ── 1. CONFIRMATION HERO ── */}
+      {/* ── 1. NOT CONFIRMED YET — the page's one job is the thumbs-up reply ── */}
       <section className="relative flex flex-col justify-center pt-28 pb-14 px-6 overflow-hidden"
                style={{ background: "linear-gradient(180deg, #141110 0%, #1A1614 100%)" }}>
         <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
@@ -353,58 +314,57 @@ function BookedContent() {
                maskImage: "radial-gradient(ellipse 90% 80% at 50% 40%, #000 20%, transparent 80%)",
              }} />
         <motion.div animate={{ y: [0, -20, 0] }} transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute rounded-full blur-3xl pointer-events-none"
-          style={{ width: 600, height: 600, background: "rgba(22,163,74,0.06)", top: "-15%", left: "-10%" }} aria-hidden="true" />
+          className="absolute rounded-full blur-3xl pointer-events-none" aria-hidden="true"
+          style={{ width: 600, height: 600, background: "rgba(251,191,36,0.07)", top: "-15%", left: "-10%" }} />
 
         <div className="relative max-w-2xl mx-auto w-full text-center">
+          {/* amber, not green: something is still owed */}
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1, duration: 0.5 }}
             className="inline-flex items-center gap-2 px-5 py-2 rounded-full mb-7 text-sm font-bold"
-            style={{ background: "rgba(22,163,74,0.14)", color: "#4ADE80", border: "1px solid rgba(22,163,74,0.30)" }}>
-            &#10003; You&rsquo;re locked in
+            style={{ background: "rgba(251,191,36,0.14)", color: "#FCD34D", border: "1px solid rgba(251,191,36,0.32)" }}>
+            <AlertCircle className="w-4 h-4" aria-hidden="true" /> One step left
           </motion.div>
 
           <motion.h1 initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.7 }}
             className="font-extrabold tracking-tight mb-5"
             style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
-                     fontSize: "clamp(2.2rem, 7.5vw, 3.6rem)", lineHeight: 1.06 }}>
-            {name ? `${name}, your` : "Your"} walkthrough
-            <br /><span style={{ color: C.orange }}>is on the calendar.</span>
+                     fontSize: "clamp(2rem, 7vw, 3.4rem)", lineHeight: 1.06, textWrap: "balance" }}>
+            {name ? `${name}, your call ` : "Your call "}
+            <span style={{ color: "#FBBF24" }}>isn&rsquo;t confirmed yet.</span>
           </motion.h1>
 
-          {timeRaw && (
-            <motion.div initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.5 }}
-              className="inline-flex items-center gap-2 px-5 py-2.5 rounded-xl mb-6"
-              style={{ background: "rgba(250,250,248,0.05)", border: "1px solid rgba(249,115,22,0.22)" }}>
-              <Calendar className="w-4 h-4" style={{ color: C.orange }} aria-hidden="true" />
-              <span className="text-base font-bold" style={{ color: "#F5F3F0", fontFamily: "var(--font-jetbrains)" }}>
-                {timeValid
-                  ? parsed!.toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })
-                  : timeRaw}
-              </span>
-            </motion.div>
-          )}
-
-          <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.6 }}
-            className="text-lg leading-relaxed max-w-xl mx-auto mb-8" style={{ color: "rgba(250,250,248,0.62)" }}>
-            Twenty minutes. You&rsquo;ll leave with a map of exactly where your shop
-            leaks money — and you&rsquo;ll watch the system that plugs every leak
-            running live.
+          <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4, duration: 0.6 }}
+            className="text-lg leading-relaxed max-w-xl mx-auto mb-9" style={{ color: "rgba(250,250,248,0.62)" }}>
+            You&rsquo;ve booked your HVAC Booking Walkthrough. Check your email for the
+            appointment details, then watch the short briefing below so you know
+            what we&rsquo;ll cover.
           </motion.p>
 
-          {/* Check your phone — the product demos itself */}
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.55 }}
-            className="flex items-start gap-3 text-left rounded-2xl px-6 py-5 mb-6"
-            style={{ background: "rgba(249,115,22,0.09)", border: "1px solid rgba(249,115,22,0.28)" }}>
-            <Phone className="w-5 h-5 mt-0.5 shrink-0" style={{ color: C.orange }} aria-hidden="true" />
-            <p className="text-base leading-relaxed" style={{ color: "#F5F3F0" }}>
-              <strong>Check your phone right now.</strong>{" "}
-              A text just went out to confirm your spot. That&rsquo;s the same system
-              that&rsquo;ll be answering <em>your</em> leads — consider it the first demo.
-            </p>
+          {/* details */}
+          <motion.div initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.55 }}
+            className="rounded-2xl overflow-hidden text-left mb-7"
+            style={{ background: "rgba(250,250,248,0.04)", border: "1px solid rgba(250,250,248,0.10)" }}>
+            {[
+              { icon: Video, k: "Where", v: "Google Meet call — the link has been sent to your email" },
+              { icon: Clock, k: "Duration", v: "15 to 30 minutes" },
+              { icon: Calendar, k: "Date & time", v: timeValid
+                  ? parsed!.toLocaleString("en-US", { weekday: "long", month: "long", day: "numeric", hour: "numeric", minute: "2-digit" })
+                  : timeRaw || "Check your email for the confirmed time slot" },
+            ].map((row, i) => (
+              <div key={row.k} className="flex items-start gap-3.5 px-5 sm:px-6 py-4"
+                   style={{ borderTop: i === 0 ? "none" : "1px solid rgba(250,250,248,0.07)" }}>
+                <row.icon className="w-4.5 h-4.5 mt-0.5 shrink-0" style={{ color: C.orange }} aria-hidden="true" />
+                <div>
+                  <div className="text-[11px] font-bold uppercase tracking-widest mb-0.5"
+                       style={{ color: "rgba(250,250,248,0.40)", fontFamily: "var(--font-jetbrains)" }}>{row.k}</div>
+                  <div className="text-[15px] leading-snug" style={{ color: "#F5F3F0" }}>{row.v}</div>
+                </div>
+              </div>
+            ))}
           </motion.div>
 
           {timeValid && (
-            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.75 }}>
+            <motion.div initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.6 }} className="mb-7 -mt-2">
               <a href={googleCalendarLink(parsed!)} target="_blank" rel="noopener noreferrer"
                  className="inline-flex items-center gap-2 text-sm font-bold hover:underline underline-offset-4"
                  style={{ color: C.orange }}>
@@ -413,92 +373,73 @@ function BookedContent() {
               </a>
             </motion.div>
           )}
+
+          {/* setup line */}
+          <motion.p initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.5 }}
+            className="text-base leading-relaxed max-w-xl mx-auto mb-9" style={{ color: "rgba(250,250,248,0.55)" }}>
+            We&rsquo;re preparing a personalized HVAC Appointment Booking System review
+            around your business, your replacement-work capacity, and your current
+            path from inquiry to booked estimate.
+          </motion.p>
+
+          {/* THE micro-commitment — loudest element on the page */}
+          <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.7, duration: 0.55 }}
+            className="rounded-2xl px-6 py-7 text-left"
+            style={{ background: "linear-gradient(160deg, rgba(251,191,36,0.13) 0%, rgba(251,191,36,0.05) 100%)",
+                     border: "1px solid rgba(251,191,36,0.38)", boxShadow: "0 18px 50px rgba(251,191,36,0.10)" }}>
+            <div className="flex items-start gap-3.5">
+              <MessageSquare className="w-5 h-5 mt-1 shrink-0" style={{ color: "#FBBF24" }} aria-hidden="true" />
+              <div>
+                <p className="text-base sm:text-lg font-bold leading-snug mb-2"
+                   style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>
+                  To secure your spot, reply to the confirmation text you just
+                  received with a <span style={{ fontSize: "1.15em" }}>👍</span>
+                </p>
+                <p className="text-sm leading-relaxed mb-3" style={{ color: "rgba(250,250,248,0.65)" }}>
+                  If we don&rsquo;t receive your confirmation, your call slot is released
+                  to another HVAC business owner automatically.
+                </p>
+                <p className="text-sm font-semibold" style={{ color: "#FCD34D" }}>
+                  We only open a few of these sessions each day, so please confirm right away.
+                </p>
+              </div>
+            </div>
+          </motion.div>
         </div>
       </section>
 
-      {/* ── FOUNDER VIDEO (hidden until FOUNDER_VIDEO_URL is set) ── */}
-      {FOUNDER_VIDEO_URL && (
-        <section className="relative py-16 px-6" style={{ background: C.dark }}>
-          <div className="relative max-w-2xl mx-auto text-center">
-            <h2 className="text-2xl sm:text-3xl font-extrabold tracking-tight mb-6"
-                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.02em" }}>
-              A quick hello before we talk.
-            </h2>
+      {/* ── 2. PRE-CALL BRIEFING ── */}
+      <section className="relative py-16 sm:py-20 px-6" style={{ background: C.dark }}>
+        <div className="relative max-w-2xl mx-auto text-center">
+          <h2 className="font-extrabold tracking-tight mb-7"
+              style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
+                       fontSize: "clamp(1.6rem, 5.2vw, 2.25rem)", lineHeight: 1.15, textWrap: "balance" }}>
+            See the path we&rsquo;ll map together
+          </h2>
+
+          {PRECALL_VIDEO_URL ? (
             <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(249,115,22,0.20)" }}>
-              <video src={FOUNDER_VIDEO_URL} controls playsInline className="w-full" preload="metadata" />
+              <video src={PRECALL_VIDEO_URL} controls playsInline className="w-full" preload="metadata" />
             </div>
-          </div>
-        </section>
-      )}
-
-      {/* ── 2. THE LEAK MAP, MADE CONCRETE ── */}
-      <section ref={leakRef} className="relative px-6 overflow-hidden" style={{ background: C.bg }}>
-        <div className="absolute top-0 left-0 right-0 h-32 pointer-events-none" aria-hidden="true"
-             style={{ background: "linear-gradient(180deg, #1A1614 0%, rgba(250,250,248,0) 100%)" }} />
-        <div className="absolute inset-0 pointer-events-none opacity-50" aria-hidden="true"
-             style={{
-               backgroundImage: "radial-gradient(rgba(249,115,22,0.10) 1px, transparent 1px)",
-               backgroundSize: "28px 28px",
-               WebkitMaskImage: "radial-gradient(ellipse 80% 60% at 50% 40%, #000 20%, transparent 80%)",
-               maskImage: "radial-gradient(ellipse 80% 60% at 50% 40%, #000 20%, transparent 80%)",
-             }} />
-        <div className="relative max-w-2xl mx-auto pt-24 pb-20">
-          <motion.div initial={{ opacity: 0, y: 20 }} animate={leakInView ? { opacity: 1, y: 0 } : {}} transition={{ duration: 0.6 }}>
-            <div className="flex items-center gap-3 mb-4">
-              <span className="w-8 h-px" style={{ background: C.orange }} />
-              <span className="text-xs font-semibold uppercase tracking-widest"
-                    style={{ color: C.orangeDk, fontFamily: "var(--font-jetbrains)" }}>What you&rsquo;re actually getting</span>
+          ) : (
+            <div className="rounded-2xl flex flex-col items-center justify-center gap-3"
+                 style={{ aspectRatio: "16 / 9", background: "rgba(250,250,248,0.035)",
+                          border: "1px solid rgba(249,115,22,0.22)" }}>
+              <PlayCircle className="w-14 h-14" style={{ color: "rgba(249,115,22,0.55)" }} aria-hidden="true" />
+              <span className="text-sm font-semibold" style={{ color: "rgba(250,250,248,0.42)" }}>
+                Briefing video
+              </span>
             </div>
-            <h2 className="text-2xl sm:text-4xl font-extrabold tracking-tight mb-5"
-                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
-              Your leak map: the five places
-              <br /><span style={{ color: C.orangeDk }}>money quietly walks out of your shop.</span>
-            </h2>
-            <p className="text-base leading-relaxed mb-10 max-w-xl" style={{ color: C.muted }}>
-              Between the moment a homeowner asks for help and the moment your tech
-              rings the doorbell, every shop leaks in the same five places. On the
-              call we mark all five for <em>your</em> shop — your numbers, not
-              industry averages. Here&rsquo;s what we&rsquo;re looking for:
-            </p>
-          </motion.div>
+          )}
 
-          {/* The five leaks */}
-          <div className="space-y-4 mb-8">
-            {LEAKS.map((leak, i) => (
-              <motion.div key={leak.label}
-                initial={{ opacity: 0, y: 16 }} animate={leakInView ? { opacity: 1, y: 0 } : {}}
-                transition={{ delay: 0.15 + i * 0.1, duration: 0.5 }}
-                className="flex items-start gap-4 rounded-2xl p-5 sm:p-6"
-                style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(249,115,22,0.06)" }}>
-                <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                     style={{ background: "rgba(249,115,22,0.10)" }}>
-                  <leak.icon className="w-5 h-5" style={{ color: C.orangeDk }} aria-hidden="true" />
-                </div>
-                <div className="min-w-0">
-                  <div className="text-xs font-bold uppercase tracking-widest mb-1.5"
-                       style={{ color: C.orangeDk, fontFamily: "var(--font-jetbrains)" }}>{leak.label}</div>
-                  <div className="font-bold text-base sm:text-lg leading-snug mb-1.5"
-                       style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>{leak.question}</div>
-                  <p className="text-sm leading-relaxed" style={{ color: C.muted }}>{leak.detail}</p>
-                </div>
-              </motion.div>
-            ))}
-          </div>
-
-          <motion.div initial={{ opacity: 0, y: 16 }} animate={leakInView ? { opacity: 1, y: 0 } : {}}
-            transition={{ delay: 0.7, duration: 0.5 }}
-            className="rounded-2xl p-6 sm:p-7 text-center"
-            style={{ background: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.18)" }}>
-            <p className="text-base sm:text-lg font-bold leading-snug mb-2"
-               style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-              Almost every owner finds one number on this map he didn&rsquo;t know.
-              Usually it&rsquo;s the expensive one.
-            </p>
-            <p className="text-sm leading-relaxed" style={{ color: C.muted }}>
-              You keep the map whether we ever work together or not.
-              No pitch until you ask for one.
-            </p>
-          </motion.div>
+          <blockquote className="text-base sm:text-lg leading-relaxed max-w-xl mx-auto mt-8"
+                      style={{ color: "rgba(250,250,248,0.72)" }}>
+            &ldquo;Most HVAC owners say the same thing once they see the numbers:{" "}
+            <em style={{ color: "#F5F3F0", fontStyle: "normal", fontWeight: 700 }}>
+              I had no idea how many people in my own area were looking for this and
+              booking somewhere else.
+            </em>&rdquo;
+          </blockquote>
         </div>
       </section>
 
@@ -567,43 +508,6 @@ function BookedContent() {
             caption="Who actually closes — not who&rsquo;s busiest. Which jobs make you money. Where every lead came from. Live, on one screen, every morning.">
             <TechDashboardPreview caption="Every tech, every close rate, every dollar — one screen." />
           </TourItem>
-        </div>
-      </section>
-
-      {/* ── 4. FOUNDER NOTE + HOMEWORK ── */}
-      <section className="relative px-6" style={{ background: C.bg }}>
-        <div className="relative max-w-2xl mx-auto pt-20 pb-14 space-y-6">
-          {/* Founder note — he's meeting the builder, not a rep */}
-          <div className="rounded-2xl p-7"
-               style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(249,115,22,0.07)" }}>
-            <div className="font-bold text-base mb-2" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-              One more thing — you&rsquo;re not meeting a sales rep.
-            </div>
-            <p className="text-sm leading-relaxed" style={{ color: C.muted }}>
-              You&rsquo;re meeting the person who builds every install. I take a couple
-              of shops a month, I set the system up myself, and it runs free in your
-              shop for 14 days before you pay anything. So come with your hardest
-              questions — the weird edge cases, the &ldquo;yeah but my market is
-              different.&rdquo; That&rsquo;s the part of the call I&rsquo;m best at.
-            </p>
-          </div>
-
-          {/* Homework — small investment, big show-rate effect */}
-          <div className="flex items-start gap-4 rounded-2xl p-6"
-               style={{ background: "rgba(249,115,22,0.06)", border: "1px solid rgba(249,115,22,0.16)" }}>
-            <div className="w-10 h-10 rounded-xl flex items-center justify-center shrink-0"
-                 style={{ background: "rgba(249,115,22,0.12)" }}>
-              <PencilLine className="w-5 h-5" style={{ color: C.orangeDk }} aria-hidden="true" />
-            </div>
-            <div>
-              <div className="font-bold text-base mb-1" style={{ color: C.text }}>One thing to do before the call</div>
-              <p className="text-sm leading-relaxed" style={{ color: C.muted }}>
-                Jot down roughly how many leads came in last month. Even a guess.
-                On the call we&rsquo;ll find the real number together — the gap between
-                the two is usually the whole conversation.
-              </p>
-            </div>
-          </div>
         </div>
       </section>
 
