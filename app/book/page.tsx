@@ -145,10 +145,6 @@ const FAQ = [
     a: "It pulls your technician roster, their service areas, skills and availability, then books into a real open slot with the right person on it. A duct job in one metro doesn't get handed to the tech two hours away.",
   },
   {
-    q: "What happens after the 14 days?",
-    a: "If it worked, we talk through what it costs to keep it running. No contract — cancel any time and your data leaves with you. If it didn't work, you walk away owing nothing and you keep the leak map.",
-  },
-  {
     q: "How long does setup take?",
     a: "I install it myself. Most shops are live within a day — you hand over access, I do the rest, and you watch the first conversations come in.",
   },
@@ -317,7 +313,7 @@ export default function BookPage() {
 
           <Reveal delay={0.15}>
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-6">
-              {["No pitch deck — the product on screen", "Built and installed by the founder", "Free for 14 days on your real leads"].map(t => (
+              {["No pitch deck — the product on screen", "Built and installed by the founder", "20 minutes, on your own numbers"].map(t => (
                 <span key={t} className="inline-flex items-center gap-1.5 text-sm font-medium" style={{ color: C.muted }}>
                   <Check className="w-4 h-4 shrink-0" style={{ color: C.success }} aria-hidden="true" /> {t}
                 </span>
