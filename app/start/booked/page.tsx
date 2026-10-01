@@ -309,7 +309,7 @@ function BookedContent() {
       </header>
 
       {/* ── 1. NOT CONFIRMED YET — the page's one job is the thumbs-up reply ── */}
-      <section className="relative flex flex-col justify-center pt-28 pb-14 px-6 overflow-hidden"
+      <section className="relative flex flex-col justify-center pt-28 pb-8 px-6 overflow-hidden"
                style={{ background: "linear-gradient(180deg, #141110 0%, #1A1614 100%)" }}>
         <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
              style={{
@@ -322,7 +322,7 @@ function BookedContent() {
           className="absolute rounded-full blur-3xl pointer-events-none" aria-hidden="true"
           style={{ width: 600, height: 600, background: "rgba(251,191,36,0.07)", top: "-15%", left: "-10%" }} />
 
-        <div className="relative max-w-2xl mx-auto w-full text-center">
+        <div className="relative max-w-4xl mx-auto w-full text-center">
           {/* amber, not green: something is still owed */}
           <motion.div initial={{ opacity: 0, scale: 0.9 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.1, duration: 0.5 }}
             className="inline-flex items-center gap-2 px-5 py-2 rounded-full mb-7 text-sm font-bold"
@@ -333,7 +333,7 @@ function BookedContent() {
           <motion.h1 initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.7 }}
             className="font-extrabold tracking-tight mb-5"
             style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
-                     fontSize: "clamp(2rem, 7vw, 3.4rem)", lineHeight: 1.06, textWrap: "balance" }}>
+                     fontSize: "clamp(1.5rem, 4.5vw, 2.9rem)", lineHeight: 1.1, textWrap: "balance" }}>
             {name ? `${name}, your call ` : "Your call "}
             <span style={{ color: "#FBBF24" }}>isn&rsquo;t confirmed yet.</span>
           </motion.h1>
@@ -382,9 +382,8 @@ function BookedContent() {
           {/* setup line */}
           <motion.p initial={{ opacity: 0, y: 12 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.6, duration: 0.5 }}
             className="text-base leading-relaxed max-w-xl mx-auto mb-9" style={{ color: "rgba(250,250,248,0.55)" }}>
-            We&rsquo;re preparing a personalized HVAC Appointment Booking System review
-            around your business, your replacement-work capacity, and your current
-            path from inquiry to booked estimate.
+            We&rsquo;re preparing a personalized review of your path from inquiry
+            to booked estimate.
           </motion.p>
 
           {/* THE micro-commitment — loudest element on the page */}
@@ -414,9 +413,9 @@ function BookedContent() {
       </section>
 
       {/* ── 2. PRE-CALL BRIEFING ── */}
-      <section className="relative py-16 sm:py-20 px-6" style={{ background: C.dark }}>
+      <section className="relative pt-8 sm:pt-10 pb-16 sm:pb-20 px-6" style={{ background: C.dark }}>
         <div className="relative max-w-2xl mx-auto text-center">
-          <h2 className="font-extrabold tracking-tight mb-7"
+          <h2 className="font-extrabold tracking-tight mb-6"
               style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
                        fontSize: "clamp(1.6rem, 5.2vw, 2.25rem)", lineHeight: 1.15, textWrap: "balance" }}>
             See the path we&rsquo;ll map together

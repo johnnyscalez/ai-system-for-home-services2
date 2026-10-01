@@ -46,20 +46,6 @@ function Reveal({ children, delay = 0, className = "" }: {
   )
 }
 
-// ── Numbered step label ───────────────────────────────────────────────────────
-function StepLabel({ n, tone = "light" }: { n: number; tone?: "light" | "dark" }) {
-  return (
-    <div className="flex items-center justify-center gap-2.5 mb-4">
-      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full text-[13px] font-extrabold text-white"
-            style={{ background: C.orange, fontFamily: "var(--font-jetbrains)" }}>{n}</span>
-      <span className="text-xs font-bold uppercase tracking-widest"
-            style={{ color: tone === "dark" ? C.orange : C.orangeDk, fontFamily: "var(--font-jetbrains)" }}>
-        Step {n}
-      </span>
-    </div>
-  )
-}
-
 // ── The one CTA, repeated ─────────────────────────────────────────────────────
 // Same words every time so the offer never drifts: it names what happens on the
 // call, not what the call is called. "Strategy session" is the language this
@@ -265,7 +251,7 @@ export default function BookPage() {
       </header>
 
       {/* ── 1. HERO ── */}
-      <section className="relative flex flex-col justify-center pt-28 sm:pt-32 pb-14 px-6 overflow-hidden"
+      <section className="relative flex flex-col justify-center pt-28 sm:pt-32 pb-4 px-6 overflow-hidden"
                style={{ background: "linear-gradient(180deg, #141110 0%, #1A1614 100%)" }}>
         <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
              style={{
@@ -298,29 +284,25 @@ export default function BookPage() {
           </motion.h1>
 
           <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28, duration: 0.6 }}
-            className="text-lg leading-relaxed max-w-2xl mx-auto mb-9" style={{ color: "rgba(250,250,248,0.62)" }}>
+            className="text-lg leading-relaxed max-w-2xl mx-auto" style={{ color: "rgba(250,250,248,0.62)" }}>
             Without wasting money on ad spend, relying on referrals, or having to
             chase leads after the estimate.
           </motion.p>
 
-          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.42, duration: 0.55 }}>
-            <Cta tone="dark" />
-          </motion.div>
         </div>
       </section>
 
       {/* ── 2. STEP 1 — the VSL (Wistia) ── */}
-      <section className="relative py-16 sm:py-20 px-6 overflow-hidden" style={{ background: "#1A1614" }}>
+      <section className="relative pt-6 sm:pt-7 pb-14 sm:pb-16 px-6 overflow-hidden" style={{ background: "#1A1614" }}>
         <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
              style={{ backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.10) 1.2px, transparent 1.2px)", backgroundSize: "30px 30px",
                       WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)",
                       maskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)" }} />
-        <div className="relative max-w-3xl mx-auto">
-          <Reveal className="text-center mb-8">
-            <StepLabel n={1} tone="dark" />
-            <h2 className="font-extrabold tracking-tight"
-                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
-                         fontSize: "clamp(1.5rem, 4.8vw, 2.1rem)", lineHeight: 1.18, textWrap: "balance" }}>
+        <div className="relative max-w-4xl mx-auto">
+          <Reveal className="text-center mb-5">
+            <h2 className="font-bold tracking-tight"
+                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.015em",
+                         fontSize: "clamp(1.05rem, 2.9vw, 1.45rem)", lineHeight: 1.3, textWrap: "balance" }}>
               See how the HVAC Appointment Booking System connects
               replacement-focused demand, qualification, follow-up
               &amp; calendar booking.
@@ -354,7 +336,6 @@ export default function BookPage() {
 
         <div className="relative max-w-3xl mx-auto pt-16 pb-16">
           <Reveal className="text-center mb-8">
-            <StepLabel n={2} />
             <h2 className="font-extrabold tracking-tight"
                 style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
                          fontSize: "clamp(1.5rem, 4.8vw, 2.1rem)", lineHeight: 1.18, textWrap: "balance" }}>
