@@ -83,7 +83,13 @@ export async function findSlotsForLead(
   companyId: string,
   jobType:   string | null,
   zip:       string | null,
-  leadTimezone?: string | null
+  leadTimezone?: string | null,
+  // The asking lead's own scheduled booking must not CONSUME capacity when
+  // availability is re-checked for them (the Hussein regret, Oct 2026: the
+  // agent booked Friday, a re-check 6s later counted that very booking as
+  // filling the window, and told the lead "Friday isn't available"). Their
+  // job still ANCHORS its day — it is real routed work.
+  excludeLeadId?: string | null
 ): Promise<FindSlotsResult> {
   const db = createServiceRoleClient()
 
@@ -180,7 +186,7 @@ export async function findSlotsForLead(
 
   const [{ data: existingApts }, { data: companyRow }] = await Promise.all([
     db.from("appointments")
-      .select("scheduled_at, technician_id, address")
+      .select("scheduled_at, technician_id, address, lead_id")
       .eq("company_id", companyId)
       .in("technician_id", techIds)
       .gte("scheduled_at", now.toISOString())
@@ -227,9 +233,16 @@ export async function findSlotsForLead(
     const containing = windows.find((w) => mins >= toMin(w.start) && mins < toMin(w.end))
     return containing ? { dateStr, windowId: containing.id } : null
   }
+  const selfAnchors: Array<{ techId: string; startMs: number }> = []
   for (const a of existingApts ?? []) {
     if (!a.technician_id) continue
     const startMs = new Date(a.scheduled_at).getTime()
+    if (excludeLeadId && (a as { lead_id?: string | null }).lead_id === excludeLeadId) {
+      // Own booking: no capacity consumption, no route blocking — but the
+      // day stays anchored (the tech really is routed there).
+      selfAnchors.push({ techId: a.technician_id, startMs })
+      continue
+    }
     addBusy(a.technician_id, startMs, startMs + JOB_MS, addressToPoint(a.address))
     const bucket = bucketOf(startMs)
     if (bucket) {
@@ -278,6 +291,9 @@ export async function findSlotsForLead(
       for (const j of jobs) {
         anchorDays.add(`${techId}|${new Date(j.startMs).toLocaleDateString("en-CA", { timeZone: tz })}`)
       }
+    }
+    for (const s of selfAnchors) {
+      anchorDays.add(`${s.techId}|${new Date(s.startMs).toLocaleDateString("en-CA", { timeZone: tz })}`)
     }
   }
 

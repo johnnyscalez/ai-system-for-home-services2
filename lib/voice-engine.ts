@@ -523,7 +523,7 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
       ? slotToolBlock!.input as { zip: string; job_type?: string }
       : { zip: forcedZip!, job_type: (lead.job_type as string | undefined) ?? undefined }
 
-    const slotsResult = await findSlotsForLead(session.company_id, job_type ?? null, zip ?? null)
+    const slotsResult = await findSlotsForLead(session.company_id, job_type ?? null, zip ?? null, null, session.lead_id)
 
     // Remember that slots were checked so the forced trigger never double-fires.
     // Also capture the address text from this message — the booking safety net

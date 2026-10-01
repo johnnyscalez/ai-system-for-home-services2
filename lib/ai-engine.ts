@@ -895,7 +895,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
           }
         : { found: false, reason: "no_slots" }
     } else {
-      slotsResult = await findSlotsForLead(companyId, findSlotsJobType, zip5, leadTz)
+      slotsResult = await findSlotsForLead(companyId, findSlotsJobType, zip5, leadTz, leadId)
     }
 
     let toolResultText: string
@@ -1695,9 +1695,10 @@ export async function processAndSave(
 ): Promise<EngineResult> {
   const supabase = createServiceRoleClient()
 
-  // Save the inbound message first
+  // Save the inbound message first — it must exist even if this turn folds.
+  let inboundStoredAt: string | null = null
   if (incomingMessage !== null) {
-    await supabase.from("conversations").insert({
+    const { data: inRow } = await supabase.from("conversations").insert({
       lead_id: leadId,
       company_id: companyId,
       direction: "inbound",
@@ -1705,7 +1706,8 @@ export async function processAndSave(
       body: incomingMessage,
       twilio_sid: incomingTwilioSid ?? null,
       channel,
-    })
+    }).select("created_at").single()
+    inboundStoredAt = (inRow?.created_at as string | null) ?? new Date().toISOString()
 
     // Move to active_conversation on first reply (from any "just came in" state)
     await supabase
@@ -1717,6 +1719,51 @@ export async function processAndSave(
       .eq("id", leadId)
       .in("status", ["just_came_in", "new", "contacted", "following_up", "followed_up", "nurturing", "cold"])
   }
+
+  // ── PER-LEAD TURN LOCK (the Hussein race, Oct 2026) ─────────────────────
+  // Rapid-fire inbounds used to spawn CONCURRENT turns: one booked Friday,
+  // a parallel turn re-checked availability 6 seconds later, saw the lead's
+  // own fresh booking occupying the window, and told him "Friday isn't
+  // available" — right after "you're all set". Turns now serialize per lead
+  // through a DB claim (survives rolling deploys). A turn that cannot claim
+  // in time folds: its inbound is already stored, and if the lock holder's
+  // reply postdates it the burst was answered — stay silent instead of
+  // double-replying.
+  let turnClaimed = false
+  for (let attempt = 0; attempt < 8; attempt++) {
+    const { data: got } = await supabase.rpc("claim_lead_turn", { p_lead_id: leadId })
+    if (got === true) { turnClaimed = true; break }
+    await new Promise((r) => setTimeout(r, 3000))
+  }
+  if (!turnClaimed) {
+    if (incomingMessage === null) {
+      // Background turn (follow-up cron / sweep): let the caller retry later.
+      throw new Error(`lead ${leadId} turn-locked — background turn deferred`)
+    }
+    const { data: newest } = await supabase
+      .from("conversations").select("direction, created_at")
+      .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle()
+    if (newest?.direction === "outbound" && inboundStoredAt && newest.created_at > inboundStoredAt) {
+      console.log(`[ai-engine] turn folded for lead ${leadId} — burst already answered by the lock holder`)
+      return { response: "", action: undefined } as unknown as EngineResult
+    }
+    console.warn(`[ai-engine] lead ${leadId} lock wait exhausted and inbound unanswered — proceeding WITHOUT lock (last resort)`)
+  }
+  try {
+
+  // After a late claim, the previous holder may have already answered this
+  // very message (it was stored before we waited). One cheap read prevents
+  // the double reply.
+  if (turnClaimed && incomingMessage !== null && inboundStoredAt) {
+    const { data: newest } = await supabase
+      .from("conversations").select("direction, created_at")
+      .eq("lead_id", leadId).order("created_at", { ascending: false }).limit(1).maybeSingle()
+    if (newest?.direction === "outbound" && newest.created_at > inboundStoredAt) {
+      console.log(`[ai-engine] turn folded post-claim for lead ${leadId} — burst already answered`)
+      return { response: "", action: undefined } as unknown as EngineResult
+    }
+  }
+
 
   // Billing gate (F36): cancelled subscription = AI hard-stop (pilots exempt).
   // The inbound message above is still recorded so the team sees the thread —
@@ -2680,6 +2727,13 @@ export async function processAndSave(
   }
 
   return { ...result, outboundConversationId }
+
+  } finally {
+    if (turnClaimed) {
+      await supabase.rpc("release_lead_turn", { p_lead_id: leadId }).then(
+        () => {}, (e: unknown) => console.error("[ai-engine] turn-lock release failed:", e))
+    }
+  }
 }
 
 export function buildQualificationBlock(disqualifiers: string | null, qualifyingQuestions: string[] = []): string {
