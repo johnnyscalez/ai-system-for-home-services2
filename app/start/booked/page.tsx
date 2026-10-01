@@ -24,19 +24,21 @@
 // Both are optional — the page reads fine without them.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { Suspense, useRef } from "react"
+import { Suspense, createElement, useRef } from "react"
+import Script from "next/script"
 import { useSearchParams } from "next/navigation"
 import { motion, useInView } from "framer-motion"
 import {
   Calendar, ArrowUpRight, MapPin, Route, Bell, Repeat, Navigation, StickyNote,
-  Video, Clock, MessageSquare, AlertCircle, PlayCircle,
+  Video, Clock, MessageSquare, AlertCircle,
 } from "lucide-react"
 import { C, FieldFMark, MinimalFooter, TechDashboardPreview } from "@/components/landing/shared"
 
-// Paste the pre-call briefing video here once it's filmed (mp4 or embed URL).
-// While empty the slot still renders, as a styled placeholder — deliberate, so
-// the section keeps its place in the layout while the video is pending.
-const PRECALL_VIDEO_URL = ""
+// The pre-call briefing (Wistia). WISTIA_CSS is Wistia's own placeholder rule:
+// it paints the poster frame, blurred, until the custom element is defined, so
+// the slot never flashes empty while the player script loads.
+const WISTIA_ID = "fnwt94a1n6"
+const WISTIA_CSS = `wistia-player[media-id='${WISTIA_ID}']:not(:defined) { background: center / contain no-repeat url('https://fast.wistia.com/embed/medias/${WISTIA_ID}/swatch'); display: block; filter: blur(5px); padding-top: 64.79%; }`
 
 function googleCalendarLink(start: Date): string {
   const fmt = (d: Date) => d.toISOString().replace(/[-:]|\.\d{3}/g, "")
@@ -285,6 +287,9 @@ function BookedContent() {
 
   return (
     <main style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
+      <style dangerouslySetInnerHTML={{ __html: WISTIA_CSS }} />
+      <Script src="https://fast.wistia.com/player.js" strategy="afterInteractive" />
+      <Script src={`https://fast.wistia.com/embed/${WISTIA_ID}.js`} type="module" strategy="afterInteractive" />
       {/* Slim header — no CTA; he already converted */}
       <header className="fixed top-0 left-0 right-0 z-50 flex items-center px-6 py-4"
               style={{ background: "rgba(26,22,20,0.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(249,115,22,0.10)" }}>
@@ -417,20 +422,17 @@ function BookedContent() {
             See the path we&rsquo;ll map together
           </h2>
 
-          {PRECALL_VIDEO_URL ? (
-            <div className="rounded-2xl overflow-hidden" style={{ border: "1px solid rgba(249,115,22,0.20)" }}>
-              <video src={PRECALL_VIDEO_URL} controls playsInline className="w-full" preload="metadata" />
-            </div>
-          ) : (
-            <div className="rounded-2xl flex flex-col items-center justify-center gap-3"
-                 style={{ aspectRatio: "16 / 9", background: "rgba(250,250,248,0.035)",
-                          border: "1px solid rgba(249,115,22,0.22)" }}>
-              <PlayCircle className="w-14 h-14" style={{ color: "rgba(249,115,22,0.55)" }} aria-hidden="true" />
-              <span className="text-sm font-semibold" style={{ color: "rgba(250,250,248,0.42)" }}>
-                Briefing video
-              </span>
-            </div>
-          )}
+          <div className="rounded-2xl overflow-hidden"
+               style={{ border: "1px solid rgba(249,115,22,0.22)", boxShadow: "0 24px 60px rgba(0,0,0,0.45)" }}>
+            {/* Wistia web component, rendered via createElement so the custom
+                tag needs no JSX intrinsic-element declaration. */}
+            {createElement("wistia-player", {
+              "media-id": WISTIA_ID,
+              seo: "false",
+              aspect: "1.5434083601286173",
+              style: { display: "block" },
+            })}
+          </div>
 
           <blockquote className="text-base sm:text-lg leading-relaxed max-w-xl mx-auto mt-8"
                       style={{ color: "rgba(250,250,248,0.72)" }}>
