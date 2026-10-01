@@ -12,7 +12,8 @@
 // We sell "an AI front office that gets installed", never software/platform.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useRef } from "react"
+import { createElement, useRef } from "react"
+import Script from "next/script"
 import { motion, useInView } from "framer-motion"
 import {
   Zap, MessagesSquare, CalendarCheck, Repeat, Check, X, Star, ChevronDown,
@@ -25,6 +26,12 @@ import { C, FieldFMark, GhlBookingWidget, MinimalFooter } from "@/components/lan
 // While empty the founder card falls back to a monogram — never a broken image.
 const FOUNDER_PHOTO_URL = ""
 
+// Wistia VSL. WISTIA_CSS is Wistia's own placeholder rule: it paints the
+// poster frame (blurred) until the custom element is defined, so the slot
+// never flashes empty while the player script loads.
+const WISTIA_ID = "sayad6x3vm"
+const WISTIA_CSS = `wistia-player[media-id='${WISTIA_ID}']:not(:defined) { background: center / contain no-repeat url('https://fast.wistia.com/embed/medias/${WISTIA_ID}/swatch'); display: block; filter: blur(5px); padding-top: 64.79%; }`
+
 // ── Section reveal helper ─────────────────────────────────────────────────────
 function Reveal({ children, delay = 0, className = "" }: {
   children: React.ReactNode; delay?: number; className?: string
@@ -36,6 +43,20 @@ function Reveal({ children, delay = 0, className = "" }: {
       transition={{ duration: 0.6, delay }} className={className}>
       {children}
     </motion.div>
+  )
+}
+
+// ── Numbered step label ───────────────────────────────────────────────────────
+function StepLabel({ n, tone = "light" }: { n: number; tone?: "light" | "dark" }) {
+  return (
+    <div className="flex items-center justify-center gap-2.5 mb-4">
+      <span className="inline-flex items-center justify-center w-7 h-7 rounded-full text-[13px] font-extrabold text-white"
+            style={{ background: C.orange, fontFamily: "var(--font-jetbrains)" }}>{n}</span>
+      <span className="text-xs font-bold uppercase tracking-widest"
+            style={{ color: tone === "dark" ? C.orange : C.orangeDk, fontFamily: "var(--font-jetbrains)" }}>
+        Step {n}
+      </span>
+    </div>
   )
 }
 
@@ -217,6 +238,9 @@ function TrustBadges() {
 export default function BookPage() {
   return (
     <main style={{ fontFamily: "var(--font-inter), Inter, sans-serif", background: C.bg }}>
+      <style dangerouslySetInnerHTML={{ __html: WISTIA_CSS }} />
+      <Script src="https://fast.wistia.com/player.js" strategy="afterInteractive" />
+      <Script src={`https://fast.wistia.com/embed/${WISTIA_ID}.js`} type="module" strategy="afterInteractive" />
       {/* ── Slim header — carries a permanent route to the calendar ── */}
       <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-5 sm:px-6 py-3.5"
               style={{ background: "rgba(26,22,20,0.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(249,115,22,0.10)" }}>
@@ -285,7 +309,41 @@ export default function BookPage() {
         </div>
       </section>
 
-      {/* ── 2. CALENDAR — step two of the doc's flow, straight after the promise ── */}
+      {/* ── 2. STEP 1 — the VSL (Wistia) ── */}
+      <section className="relative py-16 sm:py-20 px-6 overflow-hidden" style={{ background: "#1A1614" }}>
+        <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
+             style={{ backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.10) 1.2px, transparent 1.2px)", backgroundSize: "30px 30px",
+                      WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)",
+                      maskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)" }} />
+        <div className="relative max-w-3xl mx-auto">
+          <Reveal className="text-center mb-8">
+            <StepLabel n={1} tone="dark" />
+            <h2 className="font-extrabold tracking-tight"
+                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
+                         fontSize: "clamp(1.5rem, 4.8vw, 2.1rem)", lineHeight: 1.18, textWrap: "balance" }}>
+              See how the HVAC Appointment Booking System connects
+              replacement-focused demand, qualification, follow-up
+              &amp; calendar booking.
+            </h2>
+          </Reveal>
+
+          <Reveal delay={0.1}>
+            <div className="rounded-2xl overflow-hidden"
+                 style={{ border: "1px solid rgba(249,115,22,0.22)", boxShadow: "0 24px 60px rgba(0,0,0,0.45)" }}>
+              {/* Wistia web component. Rendered via createElement so the custom
+                  tag needs no JSX intrinsic-element declaration. */}
+              {createElement("wistia-player", {
+                "media-id": WISTIA_ID,
+                seo: "false",
+                aspect: "1.5434083601286173",
+                style: { display: "block" },
+              })}
+            </div>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── 3. STEP 2 — the calendar ── */}
       <section id="book" className="relative px-6 overflow-hidden scroll-mt-20" style={{ background: C.bg }}>
         <div className="absolute top-0 left-0 right-0 h-32 pointer-events-none" aria-hidden="true"
              style={{ background: "linear-gradient(180deg, #1A1614 0%, rgba(250,250,248,0) 100%)" }} />
@@ -295,6 +353,15 @@ export default function BookPage() {
                       maskImage: "radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 80%)" }} />
 
         <div className="relative max-w-3xl mx-auto pt-16 pb-16">
+          <Reveal className="text-center mb-8">
+            <StepLabel n={2} />
+            <h2 className="font-extrabold tracking-tight"
+                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
+                         fontSize: "clamp(1.5rem, 4.8vw, 2.1rem)", lineHeight: 1.18, textWrap: "balance" }}>
+              Choose a time for your HVAC Operations Office Walkthrough.
+            </h2>
+          </Reveal>
+
           <Reveal delay={0.05}>
             <div className="rounded-3xl p-2 sm:p-3"
                  style={{ background: C.surface, border: `1px solid ${C.border}`,
