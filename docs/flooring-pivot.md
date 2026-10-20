@@ -29,6 +29,7 @@ outside the USA.
 ### The offer (exact wording)
 **Guaranteed 20 in-home measures in 60 days, and every quote chased until it signs or says no.**
 
+- /book headline variant, set by Jonathan 2026-10-20: "Get 20+ Shown In-Home Measures in 60 Days, and Every Quote Chased Until It Books. Guaranteed" with the sub "...qualified flooring leads contacted, answered and booked within 2 seconds, to guarantee you 20+ shown in-home measures on autopilot." The homepage keeps the original wording above.
 - Never state what happens if the 20 aren't hit (no refund / "you don't pay" / "we work free"
   wording). The guarantee terms are not public yet.
 - Never show or quote price on any public page or ad. Price is discussed on the call only.

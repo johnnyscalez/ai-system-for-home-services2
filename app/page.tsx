@@ -1,413 +1,494 @@
 "use client"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FIELDBUILT — offer-first site for flooring contractors with install crews.
-// Positioning source of truth: docs/flooring-pivot.md (offer wording, no price,
-// no guarantee failure terms, no invented flooring proof).
-// Structure: the offer → the leak → how it works → example thread → receipts →
-// what gets installed → what it never does → who it's for → ask.
-// Light mode throughout: warm off-white, white cards, deep ink, one orange accent,
-// mono for real data only.
+// FIELDBUILT — homepage for flooring contractors with install crews.
+// Positioning rules: docs/flooring-pivot.md (exact offer wording, no price,
+// no guarantee failure terms, no invented flooring results, examples labelled).
+// Light, warm, white-card design. Signature: a faint parquet texture behind the
+// hero and the closing section. Live panels live in components/site/live.tsx.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from "react"
 import Link from "next/link"
+import { motion } from "framer-motion"
+import {
+  ArrowRight, ArrowUpRight, BadgeCheck, CalendarCheck, CalendarX, Car, Check, ChevronDown,
+  Clock, Megaphone, MessageSquareText, Phone, Repeat, Snowflake, Users, Wrench, X, Zap,
+  ListChecks, LineChart, ShieldCheck,
+} from "lucide-react"
+import { CountUp, HeroBoard, Marquee, Parquet, PhoneChat, Pipeline, T } from "@/components/site/live"
+import { Accent, Eyebrow, GhostCta, H2, IcpCallout, IconTile, Logo, PrimaryCta, Reveal } from "@/components/site/ui"
 
-const C = {
-  paper:   "#FAFAF8",
-  white:   "#FFFFFF",
-  ink:     "#1C1917",
-  muted:   "#78716C",
-  line:    "#E7E5E4",
-  parch:   "#F5F4F2",
-  soft:    "#FFF3EC",
-  orange:  "#F97316",
-  orangeD: "#EA580C",
-} as const
-
-const jakarta = "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif"
-const mono = "var(--font-jetbrains), 'JetBrains Mono', monospace"
-
-function ArrowUpRight({ size = 14, color = "currentColor" }: { size?: number; color?: string }) {
-  return (
-    <svg width={size} height={size} viewBox="0 0 14 14" fill="none" aria-hidden="true">
-      <path d="M3.2 10.8 10.8 3.2M4.6 3.2h6.2v6.2" stroke={color} strokeWidth="1.6" strokeLinecap="round" strokeLinejoin="round" />
-    </svg>
-  )
-}
-
-function PillCta({ children }: { children: React.ReactNode }) {
-  const [hover, setHover] = useState(false)
-  return (
-    <Link
-      href="/book"
-      onMouseEnter={() => setHover(true)}
-      onMouseLeave={() => setHover(false)}
-      style={{
-        display: "inline-flex", alignItems: "center", gap: 10,
-        background: hover ? C.orangeD : C.orange, color: "#FFF7F0",
-        fontFamily: jakarta, fontWeight: 600, fontSize: 16.5,
-        padding: "16px 30px", borderRadius: 999,
-        transition: "background 180ms ease",
-      }}
-    >
-      {children}
-      <ArrowUpRight color="#FFF7F0" />
-    </Link>
-  )
-}
-
-function SectionTitle({ children, max = 780 }: { children: React.ReactNode; max?: number }) {
-  return (
-    <h2 style={{ fontFamily: jakarta, fontWeight: 800, fontSize: "clamp(28px, 3.8vw, 44px)", letterSpacing: "-0.02em", lineHeight: 1.12, maxWidth: max }}>
-      {children}
-    </h2>
-  )
-}
-
-function LedgerRow({ label, value, sub, strong = false, index }: {
-  label: string; value?: string; sub?: string; strong?: boolean; index?: number
-}) {
-  return (
-    <div style={{ borderTop: `1px solid ${C.line}`, padding: "17px 2px", display: "flex", alignItems: "baseline", gap: 16 }}>
-      {index !== undefined && (
-        <span style={{ fontFamily: mono, fontSize: 13, color: C.orangeD, minWidth: 26, fontVariantNumeric: "tabular-nums" }}>
-          {String(index).padStart(2, "0")}
-        </span>
-      )}
-      <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontFamily: jakarta, fontWeight: strong ? 800 : 600, fontSize: strong ? 19 : 16.5, color: C.ink, lineHeight: 1.45 }}>{label}</p>
-        {sub && <p style={{ fontWeight: 400, fontSize: 14.5, color: C.muted, marginTop: 5, lineHeight: 1.6, maxWidth: 600 }}>{sub}</p>}
-      </div>
-      {value && (
-        <span style={{ fontFamily: mono, fontSize: strong ? 26 : 17, fontWeight: strong ? 700 : 400, color: strong ? C.orangeD : C.ink, whiteSpace: "nowrap", letterSpacing: "0.02em", fontVariantNumeric: "tabular-nums" }}>
-          {value}
-        </span>
-      )}
-    </div>
-  )
-}
-
-// An example of how a conversation runs, labelled as an example on the page.
-// Agent style rules apply: no dashes, ranges written "9 to 11am".
-const THREAD: { t: string; who: "sys" | "lead"; text: string }[] = [
-  { t: "8:42 PM", who: "lead", text: "Hi, saw your ad. Looking at LVP for the living room and hallway." },
-  { t: "8:42 PM", who: "sys",  text: "Thanks for reaching out! Quick heads up, I'm the AI assistant for the team. Roughly how big is the area, and what's on the floor now?" },
-  { t: "8:44 PM", who: "lead", text: "Maybe 600 sq ft. Old carpet. We want it done before the holidays." },
-  { t: "8:44 PM", who: "sys",  text: "That's very doable. What's your ZIP so I can check we cover your area?" },
-  { t: "8:45 PM", who: "lead", text: "46032" },
-  { t: "8:45 PM", who: "sys",  text: "You're in our area. Next step is a free in-home measure so the team can give you an exact quote. Will everyone who decides on the floor be home for it?" },
-  { t: "8:46 PM", who: "lead", text: "Yes, my husband and I are both home after 5" },
-  { t: "8:46 PM", who: "sys",  text: "We have Thursday 5 to 6pm or Saturday 9 to 10am. Which works better?" },
-  { t: "8:47 PM", who: "lead", text: "Thursday" },
-  { t: "8:48 PM", who: "sys",  text: "You're booked for Thursday, 5 to 6pm. You'll get a reminder the day before, and the estimator will text when they're on the way." },
+// ── content ─────────────────────────────────────────────────────────────────
+const PROJECTS = [
+  "Luxury vinyl plank", "Hardwood install", "Hardwood refinishing", "Tile and stone", "Carpet",
+  "Laminate", "Stairs and landings", "Basements", "Whole-home flooring", "Shop-at-home", "Showrooms that install",
 ]
 
-const HOW_IT_WORKS: { line: string; outcome: string }[] = [
-  { line: "We run the ads in your service area.",
-    outcome: "Meta ads built for homeowners who are ready for new floors, aimed only at the ZIP codes your crews cover. You pay the ad spend straight to Meta, so you can see every dollar." },
-  { line: "Every homeowner gets answered in seconds.",
-    outcome: "Text and phone, nights and weekends included. Homeowners ask three flooring companies at once and book whoever answers first. That's you now." },
-  { line: "Every lead gets qualified before it reaches your calendar.",
-    outcome: "Project type, rough size, timeline, ZIP code, and whether every decision maker will be home. No more 45-minute drives to hear \"my husband needs to see it first.\"" },
-  { line: "Every qualified homeowner gets booked as an in-home measure.",
-    outcome: "Real openings on your real calendar, with a confirmation, a day-before reminder, and an easy reschedule so measures don't no-show." },
-  { line: "Every quote gets chased until it signs or says no.",
-    outcome: "After the measure, it follows up by text, call and email. Nothing dies in a \"let me think about it\" pile, and nobody on your team has to remember." },
+const PAINS = [
+  { icon: Users,     title: "Shared leads",            body: "The same homeowner gets sold to four other flooring companies. Half never pick up." },
+  { icon: Clock,     title: "Slow callbacks",          body: "Homeowners ask three companies at once and book whoever answers first." },
+  { icon: Car,       title: "Wasted measure drives",   body: "45 minutes out, then: \"my husband needs to be here before we decide.\"" },
+  { icon: CalendarX, title: "Quotes that go quiet",    body: "The quote goes out, life gets busy, nobody follows up. The job just disappears." },
+  { icon: Snowflake, title: "The winter dip",          body: "Early fall is packed. November to February, the calendar thins out fast." },
+  { icon: Wrench,    title: "Crews waiting on work",   body: "You have the installers. What you don't have is a steady line of measures." },
 ]
 
-const INSTALL_SCOPE: string[] = [
-  "Meta ad campaigns for homeowners in your service area",
-  "Ad creative and copy written for your market",
-  "Instant text and phone response, 24/7",
-  "Qualification rules: project type, size, timeline, ZIP",
-  "Decision-maker check before every measure",
-  "In-home measure booking on your real availability",
-  "Confirmations, reminders and reschedule paths",
-  "Quote follow-up by text, call and email",
-  "Stop rules the moment a homeowner says no",
-  "Every conversation logged where your team can see it",
-  "Human escalation rules for anything unusual",
-  "Testing before it touches a real homeowner",
+const SERVICES = [
+  { icon: Megaphone,         title: "Meta ads we run for you",    body: "Ads built for homeowners ready for new floors, aimed only at the ZIP codes your crews cover. You pay the ad spend straight to Meta." },
+  { icon: Zap,               title: "Answered in seconds",        body: "Every homeowner gets a reply by text or phone the moment they reach out. Nights, weekends, holidays." },
+  { icon: ListChecks,        title: "Qualified before the visit", body: "Project type, size, timeline, ZIP code, and every decision maker home. Tire kickers never reach your calendar." },
+  { icon: CalendarCheck,     title: "Measures booked for you",    body: "Real openings on your real calendar, with a confirmation, a day-before reminder and an easy reschedule." },
+  { icon: Repeat,            title: "Every quote chased",         body: "After the measure it follows up by text, call and email until the homeowner signs or says no." },
+  { icon: LineChart,         title: "You see everything",         body: "Every conversation, every measure and every quote in one place. You always know where each job stands." },
 ]
 
+const STEPS = [
+  { n: "01", title: "Walkthrough call",       body: "20 minutes. We look at your service area, your crews and how your quotes get followed up today." },
+  { n: "02", title: "We build it",            body: "Your ads, your service area, your qualification rules and your calendar, set up and tested by us." },
+  { n: "03", title: "Ads go live",            body: "Homeowners start coming in. Every one is answered, qualified and booked for a measure." },
+  { n: "04", title: "Measures and signed quotes", body: "Your estimator runs the measures. We chase every quote until you get a yes or a no." },
+]
+
+const FAQ = [
+  { q: "Who pays for the ads?",
+    a: "You do, directly to Meta, on your own card. It never passes through us and it's separate from our fee. You see every dollar and every result." },
+  { q: "Does the AI pretend to be a person?",
+    a: "Never. It tells every homeowner it's the AI assistant for your team. It writes in plain, friendly language and hands anything unusual to you." },
+  { q: "Will it quote my prices?",
+    a: "No. It never gives a flooring price. It books the in-home measure, and the quote comes from you after the measure, like it does today." },
+  { q: "What if I already have a CRM or calendar?",
+    a: "Keep it. We plug into the calendar and CRM you already use, so your office keeps working the way it works now." },
+  { q: "What kind of flooring companies is this for?",
+    a: "US flooring contractors with their own install crews: shop-at-home companies, showrooms that install, and installer-led contractors." },
+  { q: "How do the 20 measures get counted?",
+    a: "Every in-home measure booked with a qualified homeowner in your service area counts. We'll walk you through exactly how it works on the call." },
+]
+
+// ── page ────────────────────────────────────────────────────────────────────
 export default function Home() {
-  return (
-    <main style={{ background: C.paper, color: C.ink, fontFamily: "var(--font-inter), Inter, sans-serif", overflowX: "clip" }}>
-      <style>{`
-        @media (max-width: 600px) {
-          .fb-nav-login { display: none !important; }
-          .fb-nav-cta { padding: 9px 16px !important; font-size: 13px !important; }
-        }
-      `}</style>
+  const [open, setOpen] = useState<number | null>(0)
 
-      {/* ── NAV ──────────────────────────────────────────────────────────── */}
-      <header style={{ position: "sticky", top: 0, zIndex: 50, background: "rgba(250,250,248,0.92)", backdropFilter: "blur(8px)", borderBottom: `1px solid ${C.line}` }}>
-        <div style={{ maxWidth: 1140, margin: "0 auto", padding: "16px 28px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
-          <Link href="/" style={{ fontFamily: jakarta, fontWeight: 800, fontSize: 18, letterSpacing: "-0.01em", color: C.ink }}>FIELDBUILT</Link>
-          <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
-            <Link href="/login" className="fb-nav-login" style={{ fontSize: 14, fontWeight: 600, color: C.muted }}>Log in</Link>
-            <Link href="/book" className="fb-nav-cta" style={{ fontFamily: jakarta, fontWeight: 600, fontSize: 14, color: "#FFF7F0", background: C.orange, padding: "10px 20px", borderRadius: 999 }}>
+  return (
+    <main className="overflow-x-clip font-sans" style={{ background: T.cream, color: T.ink }}>
+
+      {/* ── announcement ─────────────────────────────────────────────────── */}
+      <div className="border-b px-4 py-2.5 text-center text-[13px]" style={{ background: T.soft, borderColor: "rgba(249,115,22,0.15)" }}>
+        <Link href="/book" className="inline-flex items-center gap-2 font-semibold" style={{ color: T.ink }}>
+          <span className="rounded-full px-2 py-0.5 font-mono text-[10.5px] font-bold uppercase tracking-wider text-white" style={{ background: T.orange }}>New</span>
+          The flooring program is open. See if your service area is a fit
+          <ArrowRight className="h-3.5 w-3.5" style={{ color: T.orangeD }} aria-hidden="true" />
+        </Link>
+      </div>
+
+      {/* ── nav ──────────────────────────────────────────────────────────── */}
+      <header className="sticky top-0 z-50 border-b backdrop-blur-md" style={{ background: "rgba(255,255,255,0.86)", borderColor: T.line }}>
+        <div className="mx-auto flex max-w-[1200px] items-center justify-between px-5 py-3.5 sm:px-8">
+          <Link href="/"><Logo /></Link>
+          <nav className="hidden items-center gap-8 text-[14.5px] font-medium md:flex" style={{ color: T.body }}>
+            <a href="#how" className="hover:text-[#1C1917]">How it works</a>
+            <a href="#offer" className="hover:text-[#1C1917]">The offer</a>
+            <a href="#process" className="hover:text-[#1C1917]">Process</a>
+            <a href="#faq" className="hover:text-[#1C1917]">FAQ</a>
+          </nav>
+          <div className="flex items-center gap-4">
+            <Link href="/login" className="hidden text-[14.5px] font-medium sm:block" style={{ color: T.body }}>Log in</Link>
+            <Link href="/book" className="rounded-full px-4 py-2.5 font-heading text-[13.5px] font-bold text-white sm:px-5"
+                  style={{ background: T.orange }}>
               Book a walkthrough
             </Link>
           </div>
         </div>
       </header>
 
-      {/* ── 1 · THE OFFER ────────────────────────────────────────────────── */}
-      <section style={{ padding: "clamp(60px, 9vw, 110px) 0 0" }}>
-        <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 28px" }}>
-          <p style={{ fontFamily: mono, fontSize: 12.5, letterSpacing: "0.1em", color: C.orangeD, marginBottom: 18 }}>
-            FOR FLOORING CONTRACTORS WITH THEIR OWN INSTALL CREWS
-          </p>
-          <h1 style={{ fontFamily: jakarta, fontWeight: 800, fontSize: "clamp(38px, 5.6vw, 68px)", lineHeight: 1.05, letterSpacing: "-0.025em", maxWidth: 900, margin: 0 }}>
-            Guaranteed 20 in-home measures in 60 days.
-          </h1>
-          <p style={{ fontFamily: jakarta, fontWeight: 700, fontSize: "clamp(20px, 2.4vw, 28px)", lineHeight: 1.3, letterSpacing: "-0.01em", maxWidth: 760, marginTop: 16, color: C.orangeD }}>
-            And every quote chased until it signs or says no.
-          </p>
-          <p style={{ fontSize: "clamp(17px, 1.8vw, 20px)", lineHeight: 1.6, color: C.muted, maxWidth: 660, marginTop: 24 }}>
-            You have the crews. What you need is a steady calendar of measures. We run the ads in
-            your service area, answer every homeowner in seconds, qualify them, book the measure,
-            and follow up on every quote until you get an answer.
-          </p>
-          <div style={{ marginTop: 34, display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <PillCta>Book a 20-minute walkthrough</PillCta>
-            <span style={{ fontSize: 14.5, color: C.muted }}>We&apos;ll map the demand in your service area on the call.</span>
+      {/* ── hero ─────────────────────────────────────────────────────────── */}
+      <section className="relative overflow-hidden" style={{ background: `linear-gradient(180deg, ${T.white} 0%, ${T.cream} 100%)` }}>
+        <Parquet opacity={0.055}
+                 className="[mask-image:radial-gradient(ellipse_70%_70%_at_75%_30%,#000_20%,transparent_75%)]" />
+        <div className="relative mx-auto grid max-w-[1200px] items-center gap-14 px-5 pb-20 pt-14 sm:px-8 lg:grid-cols-[1.05fr_1fr] lg:pb-28 lg:pt-20">
+          <div>
+            <IcpCallout />
+
+            <motion.h1 initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, delay: 0.08 }}
+                       className="mt-6 font-heading text-[clamp(36px,5.8vw,70px)] font-extrabold leading-[1.02] tracking-[-0.035em]"
+                       style={{ color: T.ink }}>
+              Guaranteed <span className="relative sm:whitespace-nowrap" style={{ color: T.orangeD }}>
+                20 in-home measures
+                <svg aria-hidden="true" viewBox="0 0 300 12" preserveAspectRatio="none" className="absolute -bottom-1 left-0 hidden h-[0.18em] w-full sm:block">
+                  <motion.path d="M2 9 C 80 2, 200 2, 298 7" fill="none" stroke={T.orange} strokeWidth="4" strokeLinecap="round"
+                               initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.9, delay: 0.6 }} />
+                </svg>
+              </span> in 60 days.
+            </motion.h1>
+
+            <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }}
+                      className="mt-6 font-heading text-[clamp(19px,2vw,23px)] font-bold leading-snug" style={{ color: T.ink }}>
+              And every quote chased until it signs or says no.
+            </motion.p>
+            <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.28 }}
+                      className="mt-4 max-w-[540px] text-[17px] leading-relaxed" style={{ color: T.body }}>
+              We run the Meta ads in your service area, answer every homeowner in seconds, qualify them,
+              book the measure on your calendar, and follow up on every quote. You keep your crews busy.
+            </motion.p>
+
+            <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.36 }}
+                        className="mt-9 flex flex-wrap items-center gap-3">
+              <PrimaryCta big>Book a 20-minute walkthrough</PrimaryCta>
+              <GhostCta href="#how">See how it works</GhostCta>
+            </motion.div>
+
+            <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, delay: 0.5 }}
+                       className="mt-9 grid gap-x-6 gap-y-2.5 text-[14.5px] font-medium sm:grid-cols-2" style={{ color: T.body }}>
+              {["We run the Meta ads for you", "Answered in seconds, 24/7", "Every decision maker home for the measure", "Installed by the founder"].map((t) => (
+                <li key={t} className="flex items-center gap-2">
+                  <BadgeCheck className="h-[18px] w-[18px] shrink-0" style={{ color: T.orange }} aria-hidden="true" />{t}
+                </li>
+              ))}
+            </motion.ul>
           </div>
+
+          <motion.div initial={{ opacity: 0, y: 30, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
+                      transition={{ duration: 0.8, delay: 0.25, ease: "easeOut" }} className="lg:pl-4">
+            <HeroBoard />
+          </motion.div>
         </div>
       </section>
 
-      {/* ── 2 · THE LEAK ─────────────────────────────────────────────────── */}
-      <section style={{ padding: "clamp(80px, 10vw, 130px) 0 0" }}>
-        <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 28px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "48px 72px", alignItems: "start" }}>
-          <div>
-            <SectionTitle>Your crews are ready. Your calendar isn&apos;t.</SectionTitle>
-            <p style={{ marginTop: 18, fontSize: 16.5, lineHeight: 1.65, color: C.muted, maxWidth: 520 }}>
-              Shared leads get sold to four other flooring companies, and half of them never pick
-              up. The ones who do are booking whoever calls back first. Then the measure happens,
-              the quote goes out, and nobody follows up.
-            </p>
-            <p style={{ marginTop: 16, fontSize: 16.5, lineHeight: 1.65, color: C.ink, fontWeight: 600, maxWidth: 520 }}>
-              More leads don&apos;t fix that. A system that books the measure and chases the
-              quote does. That&apos;s the only thing we build.
-            </p>
-          </div>
-          <div style={{ background: C.white, border: `1px solid ${C.line}`, borderRadius: 16, padding: "22px 26px" }}>
-            <p style={{ fontFamily: mono, fontSize: 12.5, letterSpacing: "0.08em", color: C.muted, marginBottom: 4 }}>A TYPICAL WEEK, WITHOUT A SYSTEM</p>
-            {[
-              ["MON 8:40 PM", "Homeowner asks three flooring companies for a quote."],
-              ["TUE 9:15 AM", "You call back. They booked a measure with whoever answered."],
-              ["THU 5:00 PM", "45-minute drive to a measure. The husband isn't home."],
-              ["FRI", "Quote sent on the one measure that went ahead."],
-              ["3 WEEKS LATER", "No reply. Nobody followed up. The job is gone."],
-            ].map(([t, txt], i, arr) => (
-              <div key={t} style={{ display: "flex", gap: 18, alignItems: "baseline", borderTop: `1px solid ${C.parch}`, padding: "12px 0" }}>
-                <span style={{ fontFamily: mono, fontSize: 12.5, color: i === arr.length - 1 ? C.orangeD : C.muted, minWidth: 104, fontVariantNumeric: "tabular-nums" }}>{t}</span>
-                <span style={{ fontSize: 15, lineHeight: 1.5, fontWeight: i === arr.length - 1 ? 600 : 400 }}>{txt}</span>
-              </div>
-            ))}
-          </div>
-        </div>
+      {/* ── marquee ──────────────────────────────────────────────────────── */}
+      <section className="border-y py-10" style={{ background: T.white, borderColor: T.line }}>
+        <p className="mb-6 text-center font-mono text-[12px] uppercase tracking-[0.16em]" style={{ color: T.muted }}>
+          Built for every project your crews install
+        </p>
+        <Marquee items={PROJECTS} />
       </section>
 
-      {/* ── 3 · HOW IT WORKS (five steps, each with its outcome) ─────────── */}
-      <section style={{ padding: "clamp(90px, 11vw, 140px) 0 0" }}>
-        <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 28px" }}>
-          <SectionTitle>From the first ad click to a signed quote.</SectionTitle>
-          <div style={{ marginTop: 30 }}>
-            {HOW_IT_WORKS.map((w, i) => (
-              <LedgerRow key={w.line} index={i + 1} label={w.line} sub={w.outcome} />
-            ))}
-            <div style={{ borderTop: `1px solid ${C.line}` }} />
-          </div>
-        </div>
-      </section>
-
-      {/* ── 4 · EXAMPLE THREAD ───────────────────────────────────────────── */}
-      <section style={{ padding: "clamp(90px, 11vw, 140px) 0 0" }}>
-        <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 28px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "48px 72px", alignItems: "start" }}>
-          <div>
-            <SectionTitle>A homeowner messages at 8:42 PM. The measure is booked by 8:48.</SectionTitle>
-            <p style={{ marginTop: 18, fontSize: 16.5, lineHeight: 1.65, color: C.muted, maxWidth: 500 }}>
-              Here&apos;s an example of how a conversation runs. Office closed, nobody on the phone.
-              The homeowner is qualified, every decision maker is confirmed, and the measure is on
-              your calendar six minutes after the first message.
+      {/* ── pains ────────────────────────────────────────────────────────── */}
+      <section className="px-5 py-24 sm:px-8 lg:py-32">
+        <div className="mx-auto max-w-[1200px]">
+          <Reveal className="mx-auto max-w-[760px] text-center">
+            <Eyebrow>Sound familiar?</Eyebrow>
+            <H2 className="mt-4">Your crews are ready. <Accent>Your calendar isn&apos;t.</Accent></H2>
+            <p className="mt-5 text-[17px] leading-relaxed" style={{ color: T.body }}>
+              More leads don&apos;t fix this. A system that books the measure and chases the quote does.
             </p>
-            <div style={{ marginTop: 30, background: C.white, border: `1px solid ${C.line}`, borderRadius: 16, overflow: "hidden" }}>
-              <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-                <span style={{ fontFamily: jakarta, fontWeight: 800, fontSize: 15 }}>Measure booked · on your calendar</span>
-                <span style={{ fontFamily: mono, fontSize: 12.5, color: C.orangeD, fontVariantNumeric: "tabular-nums" }}>8:48 PM</span>
-              </div>
-              <div style={{ padding: "4px 20px 14px" }}>
-                {[
-                  ["Qualified by your rules", "LVP · ~600 sq ft · before holidays"],
-                  ["Service area checked", "ZIP 46032 · covered"],
-                  ["Decision makers confirmed", "both home for the measure"],
-                  ["Reminders scheduled", "day before · on the way"],
-                  ["Quote follow-up armed", "starts after the measure"],
-                ].map(([a, b]) => (
-                  <div key={a} style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "baseline", padding: "10px 0", borderTop: `1px solid ${C.parch}` }}>
-                    <span style={{ fontSize: 14.5, fontWeight: 600 }}>{a}</span>
-                    <span style={{ fontFamily: mono, fontSize: 12, color: C.muted, textAlign: "right" }}>{b}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          </div>
-
-          <div>
-            <p style={{ fontFamily: mono, fontSize: 11.5, letterSpacing: "0.08em", color: C.muted, marginBottom: 14 }}>EXAMPLE CONVERSATION</p>
-            {THREAD.map((m) => (
-              <div key={m.t + m.text.slice(0, 12)} style={{ marginBottom: 18, display: "flex", flexDirection: "column", alignItems: m.who === "lead" ? "flex-start" : "flex-end" }}>
-                <span style={{ fontFamily: mono, fontSize: 11.5, color: m.t === "8:48 PM" ? C.orangeD : C.muted, letterSpacing: "0.05em", fontVariantNumeric: "tabular-nums" }}>{m.t}</span>
-                <div style={{
-                  marginTop: 5, maxWidth: 440, padding: "12px 16px", fontSize: 14.5, lineHeight: 1.5,
-                  background: m.who === "lead" ? C.white : C.soft,
-                  color: C.ink,
-                  border: m.who === "lead" ? `1px solid ${C.line}` : "1px solid rgba(249,115,22,0.22)",
-                  borderRadius: m.who === "lead" ? "4px 16px 16px 16px" : "16px 4px 16px 16px",
-                }}>
-                  {m.text}
+          </Reveal>
+          <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {PAINS.map((p, i) => (
+              <Reveal key={p.title} delay={0.04 * i}>
+                <div className="h-full rounded-[20px] border bg-white p-7 transition-shadow hover:shadow-[0_18px_40px_-24px_rgba(28,25,23,0.3)]"
+                     style={{ borderColor: T.line }}>
+                  <IconTile icon={p.icon} tone="ink" />
+                  <h3 className="mt-5 font-heading text-[18px] font-bold" style={{ color: T.ink }}>{p.title}</h3>
+                  <p className="mt-2 text-[15px] leading-relaxed" style={{ color: T.body }}>{p.body}</p>
                 </div>
-              </div>
+              </Reveal>
             ))}
           </div>
         </div>
       </section>
 
-      {/* ── 5 · RECEIPTS ─────────────────────────────────────────────────── */}
-      {/* Top Air numbers: label as a home-services account, never as flooring. */}
-      <section style={{ padding: "clamp(90px, 11vw, 140px) 28px 0" }}>
-        <div style={{ maxWidth: 1140, margin: "0 auto", background: C.parch, border: `1px solid ${C.line}`, borderRadius: 24, padding: "clamp(30px, 4.5vw, 56px)", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "44px 72px", alignItems: "start" }}>
-          <div>
-            <SectionTitle max={440}>The same booking engine, live today.</SectionTitle>
-            <p style={{ marginTop: 16, fontSize: 16, lineHeight: 1.65, color: C.muted, maxWidth: 440 }}>
-              These numbers come from a live home-services account running the same booking and
-              follow-up engine. Every one is a timestamped row in that company&apos;s CRM. Our
-              flooring program is new, and we&apos;ll show flooring numbers here as soon as
-              they&apos;re in.
+      {/* ── services ─────────────────────────────────────────────────────── */}
+      <section id="how" className="scroll-mt-24 px-5 pb-24 sm:px-8 lg:pb-32">
+        <div className="mx-auto max-w-[1200px]">
+          <Reveal className="mx-auto max-w-[780px] text-center">
+            <Eyebrow>How it works</Eyebrow>
+            <H2 className="mt-4">Everything between the ad <Accent>and the signed quote.</Accent></H2>
+            <p className="mt-5 text-[17px] leading-relaxed" style={{ color: T.body }}>
+              One system, installed and run for you. No shared leads, no answering service, nobody on your team chasing.
             </p>
-          </div>
-          <div>
-            <p style={{ fontFamily: mono, fontSize: 12.5, letterSpacing: "0.08em", color: C.muted, marginBottom: 4 }}>NINE DAYS · ONE HOME-SERVICES ACCOUNT</p>
-            <LedgerRow label="Leads in" value="130" />
-            <LedgerRow label="Cold leads worked" value="77" />
-            <LedgerRow label="Appointments booked" value="13" strong />
-            <p style={{ fontFamily: mono, fontSize: 12.5, letterSpacing: "0.08em", color: C.muted, margin: "36px 0 4px" }}>THE FIRST 24 HOURS</p>
-            <LedgerRow label="Leads answered" value="27" />
-            <LedgerRow label="Conversations held" value="14" />
-            <LedgerRow label="Appointments booked" value="3" strong />
-            <div style={{ borderTop: `1px solid ${C.line}` }} />
+          </Reveal>
+          <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            {SERVICES.map((s, i) => (
+              <Reveal key={s.title} delay={0.04 * i}>
+                <div className="group relative h-full overflow-hidden rounded-[20px] border bg-white p-7 transition-all hover:-translate-y-1 hover:shadow-[0_24px_50px_-28px_rgba(249,115,22,0.45)]"
+                     style={{ borderColor: T.line }}>
+                  <span className="absolute right-6 top-6 font-mono text-[12px]" style={{ color: T.muted }}>0{i + 1}</span>
+                  <IconTile icon={s.icon} />
+                  <h3 className="mt-5 font-heading text-[18px] font-bold" style={{ color: T.ink }}>{s.title}</h3>
+                  <p className="mt-2 text-[15px] leading-relaxed" style={{ color: T.body }}>{s.body}</p>
+                </div>
+              </Reveal>
+            ))}
           </div>
         </div>
       </section>
 
-      {/* ── 6 · WHAT GETS INSTALLED ──────────────────────────────────────── */}
-      <section style={{ padding: "clamp(90px, 11vw, 140px) 0 0" }}>
-        <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 28px" }}>
-          <SectionTitle>Ads, booking and follow-up, installed as one system.</SectionTitle>
-          <p style={{ marginTop: 18, fontSize: 16.5, lineHeight: 1.65, color: C.muted, maxWidth: 640 }}>
-            You don&apos;t log into anything or figure anything out. We build your service area,
-            your rules and your calendar into it, test it, and run it. You get measures on the
-            calendar and an answer on every quote.
+      {/* ── the offer, in numbers ────────────────────────────────────────── */}
+      <section id="offer" className="scroll-mt-24 px-5 sm:px-8">
+        <div className="relative mx-auto max-w-[1200px] overflow-hidden rounded-[28px] px-6 py-14 sm:px-12"
+             style={{ background: `linear-gradient(135deg, ${T.soft} 0%, #FFE6D3 100%)` }}>
+          <Parquet opacity={0.06} />
+          <div className="relative">
+            <p className="text-center font-heading text-[clamp(20px,2.4vw,26px)] font-extrabold" style={{ color: T.ink, textWrap: "balance" }}>
+              Guaranteed 20 in-home measures in 60 days, and every quote chased until it signs or says no.
+            </p>
+            <div className="mt-10 grid grid-cols-2 gap-y-10 lg:grid-cols-4">
+              {[
+                { v: <CountUp to={20} />,      l: "In-home measures",   s: "with qualified homeowners" },
+                { v: <CountUp to={60} />,      l: "Days",               s: "from launch" },
+                { v: <><CountUp to={24} />/7</>, l: "Answered",         s: "nights and weekends too" },
+                { v: <CountUp to={100} suffix="%" />, l: "Of quotes chased", s: "to a yes or a no" },
+              ].map((x) => (
+                <div key={x.l} className="text-center">
+                  <p className="font-heading text-[clamp(40px,5vw,58px)] font-extrabold leading-none tracking-[-0.03em]" style={{ color: T.orangeD }}>{x.v}</p>
+                  <p className="mt-2 font-heading text-[15px] font-bold" style={{ color: T.ink }}>{x.l}</p>
+                  <p className="text-[13px]" style={{ color: T.body }}>{x.s}</p>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      </section>
+
+      {/* ── pipeline feature ─────────────────────────────────────────────── */}
+      <section className="px-5 py-24 sm:px-8 lg:py-32">
+        <div className="mx-auto grid max-w-[1200px] items-center gap-14 lg:grid-cols-[0.9fr_1.1fr]">
+          <Reveal>
+            <Eyebrow>Click to signed</Eyebrow>
+            <H2 className="mt-4">Watch every homeowner <Accent>move to a yes or a no.</Accent></H2>
+            <p className="mt-5 text-[17px] leading-relaxed" style={{ color: T.body }}>
+              Nothing sits in a &quot;let me think about it&quot; pile. Every homeowner is answered, qualified,
+              booked for a measure, quoted and followed up, and you can see exactly where each one stands.
+            </p>
+            <div className="mt-8 grid gap-x-6 gap-y-4 sm:grid-cols-2">
+              {[
+                [Zap, "Instant first reply"], [ShieldCheck, "Your rules, your service area"],
+                [CalendarCheck, "Reminders so measures show"], [Phone, "Text, call and email follow-up"],
+                [MessageSquareText, "Every message visible to you"], [X, "Stops the moment they say no"],
+              ].map(([Icon, t]) => {
+                const I = Icon as React.ComponentType<{ className?: string; style?: React.CSSProperties }>
+                return (
+                  <div key={t as string} className="flex items-center gap-3">
+                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: T.soft }}>
+                      <I className="h-4 w-4" style={{ color: T.orangeD }} />
+                    </span>
+                    <span className="text-[15px] font-semibold" style={{ color: T.ink }}>{t as string}</span>
+                  </div>
+                )
+              })}
+            </div>
+            <div className="mt-10 flex flex-wrap gap-3">
+              <PrimaryCta />
+            </div>
+          </Reveal>
+          <Reveal delay={0.1}><Pipeline /></Reveal>
+        </div>
+      </section>
+
+      {/* ── example conversation ─────────────────────────────────────────── */}
+      <section className="border-y px-5 py-24 sm:px-8 lg:py-32" style={{ background: T.white, borderColor: T.line }}>
+        <div className="mx-auto grid max-w-[1100px] items-center gap-16 lg:grid-cols-2">
+          <Reveal className="order-2 lg:order-1"><PhoneChat /></Reveal>
+          <Reveal className="order-1 lg:order-2">
+            <Eyebrow>An example conversation</Eyebrow>
+            <H2 className="mt-4">8:42 PM, office closed. <Accent>Measure booked by 8:48.</Accent></H2>
+            <p className="mt-5 text-[17px] leading-relaxed" style={{ color: T.body }}>
+              This is how a conversation runs. The homeowner is answered right away, the project and
+              service area are checked, every decision maker is confirmed, and the measure lands on your calendar.
+            </p>
+            <ul className="mt-8 space-y-3.5">
+              {[
+                "Always says it's an AI assistant",
+                "Never quotes your price, the quote comes from you",
+                "Confirms everyone who decides will be home",
+                "Sends reminders so the measure actually happens",
+              ].map((t) => (
+                <li key={t} className="flex items-start gap-3 text-[15.5px] font-medium" style={{ color: T.ink }}>
+                  <span className="mt-0.5 flex h-5 w-5 shrink-0 items-center justify-center rounded-full" style={{ background: T.greenS }}>
+                    <Check className="h-3 w-3" style={{ color: T.green }} aria-hidden="true" />
+                  </span>
+                  {t}
+                </li>
+              ))}
+            </ul>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── process ──────────────────────────────────────────────────────── */}
+      <section id="process" className="scroll-mt-24 px-5 py-24 sm:px-8 lg:py-32">
+        <div className="mx-auto max-w-[1200px]">
+          <Reveal className="mx-auto max-w-[720px] text-center">
+            <Eyebrow>The process</Eyebrow>
+            <H2 className="mt-4">From the first call <Accent>to measures on your calendar.</Accent></H2>
+          </Reveal>
+          <div className="relative mt-16 grid gap-6 md:grid-cols-4">
+            <div aria-hidden="true" className="absolute left-0 right-0 top-[27px] hidden h-px md:block"
+                 style={{ background: `repeating-linear-gradient(90deg, ${T.line} 0 8px, transparent 8px 14px)` }} />
+            {STEPS.map((s, i) => (
+              <Reveal key={s.n} delay={0.08 * i} className="relative">
+                <span className="relative z-10 flex h-14 w-14 items-center justify-center rounded-2xl border bg-white font-mono text-[15px] font-bold"
+                      style={{ borderColor: i === 3 ? T.orange : T.line, color: i === 3 ? T.orangeD : T.ink,
+                               boxShadow: "0 10px 24px -16px rgba(28,25,23,0.35)" }}>
+                  {s.n}
+                </span>
+                <h3 className="mt-6 font-heading text-[18px] font-bold" style={{ color: T.ink }}>{s.title}</h3>
+                <p className="mt-2 text-[15px] leading-relaxed" style={{ color: T.body }}>{s.body}</p>
+              </Reveal>
+            ))}
+          </div>
+        </div>
+      </section>
+
+      {/* ── proof (honest) ───────────────────────────────────────────────── */}
+      {/* Top Air numbers: only ever labelled as a home-services account, never flooring. */}
+      <section className="px-5 sm:px-8">
+        <div className="mx-auto grid max-w-[1200px] gap-10 rounded-[28px] border bg-white p-8 sm:p-12 lg:grid-cols-[1fr_1.2fr] lg:items-center"
+             style={{ borderColor: T.line }}>
+          <Reveal>
+            <Eyebrow>Already running live</Eyebrow>
+            <H2 className="mt-4 !text-[clamp(26px,3.2vw,38px)]">The same engine, booking appointments today.</H2>
+            <p className="mt-4 text-[15.5px] leading-relaxed" style={{ color: T.body }}>
+              These numbers come from a live home-services account running the same answering, booking and
+              follow-up engine. Our flooring program is new, and flooring numbers go here the moment they&apos;re in.
+            </p>
+          </Reveal>
+          <Reveal delay={0.1}>
+            <div className="grid gap-4 sm:grid-cols-2">
+              {[
+                { label: "First 24 hours", rows: [["Leads answered", 27], ["Conversations", 14], ["Booked", 3]] },
+                { label: "First 9 days",   rows: [["Leads in", 130], ["Cold leads worked", 77], ["Booked", 13]] },
+              ].map((b) => (
+                <div key={b.label} className="rounded-2xl p-5" style={{ background: T.cream }}>
+                  <p className="font-mono text-[11.5px] uppercase tracking-[0.14em]" style={{ color: T.muted }}>{b.label}</p>
+                  {b.rows.map(([k, v], i) => (
+                    <div key={k as string} className="flex items-baseline justify-between border-b py-2.5 last:border-0" style={{ borderColor: T.line }}>
+                      <span className="text-[14.5px]" style={{ color: i === 2 ? T.ink : T.body, fontWeight: i === 2 ? 700 : 500 }}>{k}</span>
+                      <span className="font-heading font-extrabold" style={{ fontSize: i === 2 ? 26 : 18, color: i === 2 ? T.green : T.ink }}>
+                        <CountUp to={v as number} />
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              ))}
+            </div>
+            <p className="mt-3 text-[12.5px]" style={{ color: T.muted }}>A live home-services account. Not a flooring company.</p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── fit ──────────────────────────────────────────────────────────── */}
+      <section className="px-5 py-24 sm:px-8 lg:py-32">
+        <div className="mx-auto max-w-[1000px]">
+          <Reveal className="text-center">
+            <Eyebrow>Is this for you?</Eyebrow>
+            <H2 className="mt-4">Built for flooring companies <Accent>that install.</Accent></H2>
+          </Reveal>
+          <div className="mt-12 grid gap-4 md:grid-cols-2">
+            <Reveal>
+              <div className="h-full rounded-[20px] border bg-white p-8" style={{ borderColor: T.line, boxShadow: "0 18px 40px -30px rgba(22,163,74,0.5)" }}>
+                <p className="font-heading text-[17px] font-bold" style={{ color: T.green }}>A great fit if</p>
+                <ul className="mt-5 space-y-3.5">
+                  {["You run a flooring company in the USA with your own install crews",
+                    "Your crews can take on more installs than the calendar feeds them",
+                    "You do in-home measures before you quote",
+                    "You're tired of shared leads and quotes that go quiet"].map((t) => (
+                    <li key={t} className="flex items-start gap-3 text-[15.5px]" style={{ color: T.ink }}>
+                      <Check className="mt-0.5 h-5 w-5 shrink-0" style={{ color: T.green }} aria-hidden="true" />{t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+            <Reveal delay={0.08}>
+              <div className="h-full rounded-[20px] border p-8" style={{ borderColor: T.line, background: T.sand }}>
+                <p className="font-heading text-[17px] font-bold" style={{ color: T.body }}>Not a fit if</p>
+                <ul className="mt-5 space-y-3.5">
+                  {["You don't have an install crew yet",
+                    "You only sub for stores, so the homeowner isn't your customer",
+                    "You want a list of shared leads to call yourself"].map((t) => (
+                    <li key={t} className="flex items-start gap-3 text-[15.5px]" style={{ color: T.body }}>
+                      <X className="mt-0.5 h-5 w-5 shrink-0" style={{ color: T.muted }} aria-hidden="true" />{t}
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            </Reveal>
+          </div>
+        </div>
+      </section>
+
+      {/* ── FAQ ──────────────────────────────────────────────────────────── */}
+      <section id="faq" className="scroll-mt-24 border-t px-5 py-24 sm:px-8 lg:py-32" style={{ background: T.white, borderColor: T.line }}>
+        <div className="mx-auto max-w-[780px]">
+          <Reveal className="text-center">
+            <Eyebrow>FAQ</Eyebrow>
+            <H2 className="mt-4">Questions flooring owners ask.</H2>
+          </Reveal>
+          <div className="mt-12 space-y-3">
+            {FAQ.map((f, i) => {
+              const isOpen = open === i
+              return (
+                <div key={f.q} className="overflow-hidden rounded-2xl border transition-colors"
+                     style={{ borderColor: isOpen ? "rgba(249,115,22,0.35)" : T.line, background: isOpen ? T.cream : T.white }}>
+                  <button type="button" onClick={() => setOpen(isOpen ? null : i)} aria-expanded={isOpen}
+                          className="flex w-full items-center justify-between gap-4 px-6 py-5 text-left">
+                    <span className="font-heading text-[16.5px] font-bold" style={{ color: T.ink }}>{f.q}</span>
+                    <ChevronDown className={`h-5 w-5 shrink-0 transition-transform duration-300 ${isOpen ? "rotate-180" : ""}`}
+                                 style={{ color: T.orangeD }} aria-hidden="true" />
+                  </button>
+                  <motion.div initial={false} animate={{ height: isOpen ? "auto" : 0, opacity: isOpen ? 1 : 0 }}
+                              transition={{ duration: 0.3, ease: "easeOut" }} className="overflow-hidden">
+                    <p className="px-6 pb-6 text-[15.5px] leading-relaxed" style={{ color: T.body }}>{f.a}</p>
+                  </motion.div>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+      </section>
+
+      {/* ── final CTA ────────────────────────────────────────────────────── */}
+      <section className="relative overflow-hidden px-5 py-24 sm:px-8 lg:py-32"
+               style={{ background: `linear-gradient(180deg, ${T.cream} 0%, ${T.soft} 100%)` }}>
+        <Parquet opacity={0.07} className="[mask-image:radial-gradient(ellipse_60%_70%_at_50%_50%,#000_10%,transparent_75%)]" />
+        <Reveal className="relative mx-auto max-w-[820px] text-center">
+          <H2 className="!text-[clamp(34px,5vw,60px)]">Your crews are ready. <Accent>Let&apos;s fill the calendar.</Accent></H2>
+          <p className="mx-auto mt-6 max-w-[620px] text-[18px] leading-relaxed" style={{ color: T.body }}>
+            &quot;I install every system myself. On the call we&apos;ll look at your service area and I&apos;ll show you
+            exactly how the 20 measures get booked.&quot;
           </p>
-          <div style={{ marginTop: 34, columnWidth: 330, columnGap: 56 }}>
-            {INSTALL_SCOPE.map((s) => (
-              <div key={s} style={{ breakInside: "avoid", display: "flex", gap: 12, alignItems: "baseline", borderTop: `1px solid ${C.line}`, padding: "13px 2px" }}>
-                <span aria-hidden="true" style={{ width: 7, height: 7, borderRadius: 999, background: C.orange, flexShrink: 0, position: "relative", top: -1 }} />
-                <span style={{ fontSize: 15.5, fontWeight: 600, lineHeight: 1.45 }}>{s}</span>
-              </div>
-            ))}
+          <p className="mt-4 font-heading text-[15px] font-bold" style={{ color: T.ink }}>Jonathan, founder of FieldBuilt AI</p>
+          <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
+            <PrimaryCta big>Book a 20-minute walkthrough</PrimaryCta>
+            <GhostCta href="#how">How it works</GhostCta>
           </div>
-        </div>
+        </Reveal>
       </section>
 
-      {/* ── 7 · WHAT IT NEVER DOES ───────────────────────────────────────── */}
-      <section style={{ padding: "clamp(90px, 11vw, 140px) 0 0" }}>
-        <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 28px" }}>
-          <SectionTitle>It follows your rules. It doesn&apos;t make decisions for you.</SectionTitle>
-          <div style={{ marginTop: 28 }}>
-            {[
-              ["It never quotes your price.", "The quote comes from you, after the measure. It only books the visit."],
-              ["It never books outside your rules.", "Out of area, wrong project, decision maker missing: it doesn't force it, it flags it."],
-              ["It never pretends to be a person.", "It tells every homeowner it's an AI assistant, every time."],
-              ["It never keeps chasing after a no.", "The moment a homeowner says no or stop, the follow-up ends."],
-              ["It never sells your leads to anyone else.", "Every homeowner from your ads is yours alone."],
-              ["It never leaves you out of the loop.", "You see every message, and anything unusual comes to you with the whole thread."],
-            ].map(([a, b]) => <LedgerRow key={a} label={a} sub={b} />)}
-            <div style={{ borderTop: `1px solid ${C.line}` }} />
-          </div>
-        </div>
-      </section>
-
-      {/* ── 8 · POSITION + WHO IT'S FOR ──────────────────────────────────── */}
-      <section style={{ padding: "clamp(90px, 11vw, 140px) 0 0" }}>
-        <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 28px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "48px 72px", alignItems: "start" }}>
+      {/* ── footer ───────────────────────────────────────────────────────── */}
+      <footer className="border-t px-5 pb-10 pt-16 sm:px-8" style={{ background: T.white, borderColor: T.line }}>
+        <div className="mx-auto grid max-w-[1200px] gap-12 md:grid-cols-[1.4fr_1fr_1fr_1fr]">
           <div>
-            <p style={{ fontFamily: jakarta, fontWeight: 600, fontSize: 17, lineHeight: 1.6, color: C.muted }}>
-              Not shared leads. Not an answering service. Not an agency that hands you a list.
-            </p>
-            <p style={{ marginTop: 12, fontFamily: jakarta, fontWeight: 800, fontSize: "clamp(26px, 3.4vw, 40px)", lineHeight: 1.15, letterSpacing: "-0.02em" }}>
-              The system between an ad click and <span style={{ color: C.orangeD }}>a signed quote.</span>
-            </p>
-            <p style={{ marginTop: 18, fontSize: 16, lineHeight: 1.65, color: C.muted, maxWidth: 480 }}>
-              Lead sellers hand you names. Answering services take messages. Agencies send you a
-              report. None of them book the measure and chase the quote. That&apos;s where the
-              jobs get lost, and that&apos;s the whole job here.
+            <Logo />
+            <p className="mt-4 max-w-[300px] text-[14.5px] leading-relaxed" style={{ color: T.body }}>
+              In-home measures and chased quotes for flooring contractors with their own install crews.
             </p>
           </div>
-          <div>
-            <p style={{ fontFamily: jakarta, fontWeight: 800, fontSize: 17, marginBottom: 4 }}>Built for you if:</p>
-            <LedgerRow label="You run a flooring company in the USA with your own install crews" />
-            <LedgerRow label="Your crews can take on more installs than the calendar feeds them" />
-            <LedgerRow label="You do in-home measures before you quote" />
-            <LedgerRow label="You're tired of shared leads and quotes that go quiet" />
-            <div style={{ borderTop: `1px solid ${C.line}` }} />
-            <p style={{ fontFamily: jakarta, fontWeight: 800, fontSize: 17, margin: "34px 0 4px", color: C.muted }}>Not for you if:</p>
-            <LedgerRow label="You don't have an install crew yet" sub="We fill calendars. Without a crew there's nothing to fill." />
-            <LedgerRow label="You only sub for stores" sub="The homeowner has to be your customer, not someone else's." />
-            <div style={{ borderTop: `1px solid ${C.line}` }} />
-          </div>
-        </div>
-      </section>
-
-      {/* ── 9 · RESULT + ASK ─────────────────────────────────────────────── */}
-      <section style={{ padding: "clamp(90px, 11vw, 140px) 28px 0" }}>
-        <div style={{ maxWidth: 1140, margin: "0 auto", background: C.white, border: `1px solid ${C.line}`, borderRadius: 24, padding: "clamp(40px, 6vw, 80px) clamp(24px, 5vw, 72px)" }}>
-          <div style={{ maxWidth: 760 }}>
-            <h2 style={{ fontFamily: jakarta, fontWeight: 800, fontSize: "clamp(30px, 4.2vw, 50px)", letterSpacing: "-0.022em", lineHeight: 1.1 }}>
-              What you get:
-            </h2>
-            <div style={{ marginTop: 24 }}>
-              <LedgerRow label="20 in-home measures on your calendar in 60 days, guaranteed." strong />
-              <LedgerRow label="Every quote followed up until it signs or says no." />
-              <LedgerRow label="Qualified homeowners only, with the decision makers home." />
-              <LedgerRow label="No sales hire, no shared leads, nobody on your team chasing." />
-              <div style={{ borderTop: `1px solid ${C.line}` }} />
+          {[
+            { h: "How it works", l: [["Meta ads", "#how"], ["Answering and qualifying", "#how"], ["Measure booking", "#how"], ["Quote follow-up", "#how"]] },
+            { h: "Company", l: [["The offer", "#offer"], ["Process", "#process"], ["FAQ", "#faq"]] },
+            { h: "Get started", l: [["Book a walkthrough", "/book"], ["Log in", "/login"]] },
+          ].map((c) => (
+            <div key={c.h}>
+              <p className="font-heading text-[15px] font-bold" style={{ color: T.ink }}>{c.h}</p>
+              <ul className="mt-4 space-y-2.5">
+                {c.l.map(([t, href]) => (
+                  <li key={t}><a href={href} className="text-[14.5px] hover:text-[#1C1917]" style={{ color: T.body }}>{t}</a></li>
+                ))}
+              </ul>
             </div>
-
-            <div style={{ marginTop: 52 }}>
-              <p style={{ fontSize: 18, lineHeight: 1.6, color: C.muted, marginBottom: 24 }}>
-                Want to see if your service area is a fit?
-              </p>
-              <PillCta>Book a 20-minute walkthrough</PillCta>
-              <p style={{ marginTop: 16, fontSize: 15, color: C.muted }}>
-                We&apos;ll show you the demand in your area and exactly how the 20 measures get booked.
-              </p>
-            </div>
-          </div>
+          ))}
         </div>
-      </section>
-
-      {/* ── FOOTER ───────────────────────────────────────────────────────── */}
-      <footer style={{ marginTop: "clamp(70px, 8vw, 100px)", borderTop: `1px solid ${C.line}` }}>
-        <div style={{ maxWidth: 1140, margin: "0 auto", padding: "26px 28px", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
-          <span style={{ fontFamily: jakarta, fontWeight: 800, fontSize: 15, color: C.ink }}>FIELDBUILT</span>
-          <div style={{ display: "flex", gap: 26 }}>
-            <Link href="/privacy" style={{ fontSize: 13.5, color: C.muted }}>Privacy</Link>
-            <Link href="/terms" style={{ fontSize: 13.5, color: C.muted }}>Terms</Link>
-            <Link href="/login" style={{ fontSize: 13.5, color: C.muted }}>Log in</Link>
+        <div className="mx-auto mt-14 flex max-w-[1200px] flex-wrap items-center justify-between gap-4 border-t pt-7 text-[13.5px]"
+             style={{ borderColor: T.line, color: T.muted }}>
+          <span>© {new Date().getFullYear()} FieldBuilt AI. All rights reserved.</span>
+          <div className="flex gap-6">
+            <Link href="/privacy" className="hover:text-[#1C1917]">Privacy</Link>
+            <Link href="/terms" className="hover:text-[#1C1917]">Terms</Link>
+            <Link href="/book" className="inline-flex items-center gap-1 font-semibold" style={{ color: T.orangeD }}>
+              Book a walkthrough <ArrowUpRight className="h-3.5 w-3.5" aria-hidden="true" />
+            </Link>
           </div>
         </div>
       </footer>
