@@ -1,34 +1,35 @@
 "use client"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// AUTOPILOT ANGLE — sections for /start/autopilot
+// AUTOPILOT ANGLE — sections for /start/autopilot (FLOORING, speed-to-lead)
 //
-// Scent-matched to the winning ad: the Sarah chat (lead in at 8:17 PM, booked,
-// routed and logged by 8:29, nobody touched a thing, free for 2 weeks).
-// The recreated chat IS the signature artifact of the page — a fully populated,
-// real product conversation. All content renders visible by default; motion is
-// additive only (settle transforms, a drawn check, soft parallax) and gated
-// behind prefers-reduced-motion.
+// Angle: homeowners message several flooring companies at once and book
+// whoever answers first. The chat is an EXAMPLE conversation (labelled as
+// such, per docs/flooring-pivot.md): a homeowner answered in seconds,
+// qualified (project, rooms, timeline, ZIP, decision makers home) and booked
+// for an in-home measure. The AI discloses it's an AI and never quotes price.
+// Light mode only. All content renders visible by default; motion is additive
+// only and gated behind prefers-reduced-motion.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useCallback, useEffect, useRef, useState } from "react"
 import { motion, useInView, useReducedMotion, useScroll, useTransform } from "framer-motion"
 import { C } from "./shared"
 
-// ── The conversation, verbatim from the ad ──────────────────────────────────
+// ── The example conversation ────────────────────────────────────────────────
 type Msg = { from: "ai" | "lead"; text: string; stamp?: string }
 
 const CHAT: Msg[] = [
-  { from: "ai",   stamp: "Tue 8:17 PM", text: "Hey Sarah! This is Alex from Comfort Pro. Just saw your form about the AC not keeping up. Is it running at all, or totally off?" },
-  { from: "lead", stamp: "8:21 PM",     text: "its running but house wont get below 78. been like this 2 weeks" },
-  { from: "ai",                          text: "That's miserable in this heat. Does it run non-stop, or kick on and off?" },
-  { from: "lead", stamp: "8:23 PM",     text: "non stop. never shuts off" },
-  { from: "ai",                          text: "Got it, that's worth catching early. What's the address? I'll check which tech covers your area." },
-  { from: "lead", stamp: "8:24 PM",     text: "3214 maple creek dr" },
-  { from: "lead",                        text: "btw im just getting a few quotes, not sure what i need yet" },
-  { from: "ai",                          text: "Totally fair \u{1F44D} Our tech comes out, checks everything, and tells you exactly what's going on. You decide from there, zero pressure. Does Monday morning work? I've got 9 or 11." },
-  { from: "lead", stamp: "8:28 PM",     text: "11 is better" },
-  { from: "ai",                          text: "Done! Monday 11am at 3214 Maple Creek ✓ Mike's your tech, he knows the area. You'll get a reminder Sunday night." },
+  { from: "ai",   stamp: "Tue 8:17 PM", text: "Hi Sarah! This is the AI assistant for Summit Floors. Just saw your request about new floors. What are you thinking, LVP, hardwood, carpet?" },
+  { from: "lead", stamp: "8:19 PM",     text: "lvp probably. living room hallway and kitchen" },
+  { from: "ai",                          text: "Nice, that's a popular combo. When are you hoping to have it done? And what's your ZIP?" },
+  { from: "lead", stamp: "8:21 PM",     text: "next month. 75204" },
+  { from: "lead",                        text: "btw im getting a few quotes. how much would it be?" },
+  { from: "ai",                          text: "Totally fair. The price comes from the measure so it's real, not a guess. Will you and anyone else deciding both be home for it?" },
+  { from: "lead", stamp: "8:23 PM",     text: "my husband is home after 5" },
+  { from: "ai",                          text: "Perfect. I have Thursday at 5:30 or Saturday at 10. Which works for both of you?" },
+  { from: "lead", stamp: "8:24 PM",     text: "thursday 5:30" },
+  { from: "ai",                          text: "Booked! Thursday 5:30pm at your place. You'll get a reminder the day before, and you can reschedule right here anytime." },
 ]
 
 // ── Chat bubble ──────────────────────────────────────────────────────────────
@@ -48,7 +49,7 @@ function Bubble({ msg }: { msg: Msg }) {
         <div
           className="max-w-[82%] px-3.5 py-2.5 text-[13.5px] leading-snug"
           style={ai
-            ? { background: "#0A84FF", color: "#fff", borderRadius: "16px 16px 4px 16px" }
+            ? { background: C.orangeSoft, color: C.text, border: "1px solid rgba(249,115,22,0.22)", borderRadius: "16px 16px 4px 16px" }
             : { background: "#EDEAE7", color: C.text, borderRadius: "16px 16px 16px 4px" }}
         >
           {msg.text}
@@ -58,7 +59,7 @@ function Bubble({ msg }: { msg: Msg }) {
   )
 }
 
-// ── The booked-job receipt that closes the chat ─────────────────────────────
+// ── The booked-measure receipt that closes the chat ─────────────────────────
 function BookedReceipt() {
   const ref = useRef(null)
   const inView = useInView(ref, { once: true, margin: "-40px" })
@@ -79,19 +80,19 @@ function BookedReceipt() {
           />
         </svg>
         <span className="text-[13px] font-extrabold tracking-tight" style={{ color: "#14532D", fontFamily: "var(--font-jakarta)" }}>
-          Job booked. Monday 11:00 AM
+          Measure booked. Thursday 5:30 PM
         </span>
       </div>
       <div className="px-3.5 pb-3 pt-1.5 text-[12px] leading-relaxed" style={{ color: "#3F6212" }}>
-        3214 Maple Creek Dr &middot; Tech: Mike R. &middot; Reminder set for Sunday night
+        LVP &middot; 3 rooms &middot; ZIP 75204 &middot; Both decision makers home &middot; Reminder set for Wednesday
       </div>
       <div className="flex items-center justify-between px-3.5 py-2"
            style={{ background: "rgba(22,163,74,0.08)", borderTop: "1px solid rgba(22,163,74,0.18)" }}>
         <span className="text-[11px] font-semibold" style={{ color: "#166534" }}>
-          Logged to CRM &middot; routed &amp; dispatched
+          On the calendar &middot; quote follow-up armed
         </span>
         <span className="text-[11px] font-bold" style={{ color: "#166534", fontFamily: "var(--font-jetbrains)" }}>
-          8:29 PM
+          8:24 PM
         </span>
       </div>
     </div>
@@ -105,12 +106,12 @@ function TypingDots({ from }: { from: "ai" | "lead" }) {
     <div className={`flex ${ai ? "justify-end" : "justify-start"}`}>
       <div className="px-4 py-3"
            style={ai
-             ? { background: "#0A84FF", borderRadius: "16px 16px 4px 16px" }
+             ? { background: C.orangeSoft, border: "1px solid rgba(249,115,22,0.22)", borderRadius: "16px 16px 4px 16px" }
              : { background: "#EDEAE7", borderRadius: "16px 16px 16px 4px" }}>
         <div className="flex items-center gap-1">
           {[0, 1, 2].map((i) => (
             <motion.span key={i} className="block w-1.5 h-1.5 rounded-full"
-              style={{ background: ai ? "rgba(255,255,255,0.85)" : "#A8A29E" }}
+              style={{ background: ai ? C.orange : "#A8A29E" }}
               animate={{ y: [0, -3.5, 0] }}
               transition={{ duration: 0.75, repeat: Infinity, delay: i * 0.14, ease: "easeInOut" }}
             />
@@ -195,10 +196,10 @@ export function ChatArtifact() {
             <span className="text-white font-bold text-sm">S</span>
           </div>
           <div className="text-[14px] font-extrabold" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-            Sarah &mdash; New Lead
+            Sarah &mdash; New Homeowner Lead
           </div>
           <div className="text-[11.5px] mt-0.5" style={{ color: "#9C948E" }}>
-            Web form &middot; 3214 Maple Creek Dr
+            Facebook ad form &middot; Example conversation
           </div>
         </div>
 
@@ -249,11 +250,11 @@ function HeroCta() {
       <a href="#form"
          className="inline-flex w-full sm:w-auto items-center justify-center gap-2 font-bold text-white text-[15px] sm:text-base px-5 sm:px-7 py-4 rounded-xl transition-colors hover:bg-orange-600"
          style={{ background: C.orange }}>
-        Show Me How It Books My Leads, Free
+        See If We&rsquo;re a Fit
         <ArrowUpRight />
       </a>
-      <p className="text-[12.5px] mt-3" style={{ color: "rgba(250,250,248,0.42)" }}>
-        Runs on your real leads &middot; Your CRM stays &middot; Setup in days
+      <p className="text-[12.5px] mt-3" style={{ color: C.muted }}>
+        We run the ads &middot; It answers in seconds &middot; Jonathan installs it
       </p>
     </>
   )
@@ -261,46 +262,48 @@ function HeroCta() {
 
 function HeroSub() {
   return (
-    <p className="text-base sm:text-lg leading-relaxed max-w-xl" style={{ color: "rgba(250,250,248,0.62)" }}>
-      FieldBuilt is the 24/7 employee working the back end of your shop:
-      it texts every lead the moment they come in, follows up until they
-      answer, qualifies them, books the job, routes the right tech, and
-      logs it all in <strong style={{ color: "rgba(250,250,248,0.9)" }}>your</strong> CRM.
-      You change nothing about how you work.
+    <p className="text-base sm:text-lg leading-relaxed max-w-xl" style={{ color: C.muted }}>
+      We run Meta ads for homeowners in your area. Every lead gets an answer in
+      seconds, by text and phone, 24/7. It qualifies the project, checks that
+      every decision maker will be home, books the in-home measure, and then
+      chases the quote until it signs or says no.{" "}
+      <strong style={{ color: C.text }}>
+        Guaranteed 20 in-home measures in 60 days, and every quote chased until it signs or says no.
+      </strong>
     </p>
   )
 }
 
 export function AutopilotHero() {
   return (
-    <section className="relative pt-[5.25rem] lg:pt-28 pb-0 px-5 sm:px-6" style={{ background: C.dark }}>
+    <section className="relative pt-[5.25rem] lg:pt-28 pb-0 px-4 sm:px-6" style={{ background: C.bg }}>
       <div className="max-w-6xl mx-auto">
         <div className="grid lg:grid-cols-[1.05fr_0.95fr] gap-7 lg:gap-10 items-start">
 
           {/* Copy column — compact and centered on mobile, full on desktop */}
           <div className="pt-2 lg:pt-14 lg:pb-24 text-center lg:text-left">
-            <p className="text-[13px] lg:text-sm font-semibold mb-3 lg:mb-5" style={{ color: "rgba(250,250,248,0.45)" }}>
-              For HVAC owners running 4+ techs
+            <p className="text-[13px] lg:text-sm font-semibold mb-3 lg:mb-5" style={{ color: C.muted }}>
+              For flooring contractors with their own install crews
             </p>
 
             <h1 className="font-extrabold tracking-tight leading-[1.06] mb-2.5 lg:mb-4"
                 style={{
-                  color: "#F5F3F0",
+                  color: C.text,
                   fontFamily: "var(--font-jakarta)",
                   fontSize: "clamp(1.7rem, 4.8vw, 3.35rem)",
                   letterSpacing: "-0.03em",
                 }}>
-              Every lead answered in seconds. Booked, routed, and logged.
+              Homeowners call three flooring companies. They book whoever answers first.
             </h1>
 
             <p className="font-extrabold tracking-tight mb-5 lg:mb-6"
                style={{
-                 color: C.orange,
+                 color: C.orangeDk,
                  fontFamily: "var(--font-jakarta)",
                  fontSize: "clamp(1.1rem, 2.6vw, 1.7rem)",
                  letterSpacing: "-0.02em",
                }}>
-              Nobody on your team touches a thing.
+              Make sure that&rsquo;s you, every time.
             </p>
 
             {/* Mobile: CTA immediately, so button + top of the chat share the fold */}
@@ -326,8 +329,8 @@ export function AutopilotHero() {
         </div>
       </div>
 
-      {/* Timeline rail — the ad's 12-minute claim, receipts attached */}
-      <div className="relative mt-8 lg:mt-0" style={{ background: C.darkCard, borderTop: "1px solid rgba(249,115,22,0.10)" }}>
+      {/* Timeline rail — the example's 7-minute story, start to booked */}
+      <div className="relative mt-8 lg:mt-0" style={{ background: C.surface, borderTop: `1px solid ${C.border}` }}>
         <div className="max-w-6xl mx-auto px-0 py-7 lg:py-9 lg:pr-[44%]">
           <TimelineRail />
         </div>
@@ -336,12 +339,12 @@ export function AutopilotHero() {
   )
 }
 
-// ── The 8:17 → 8:29 rail ─────────────────────────────────────────────────────
+// ── The 8:17 → 8:24 rail (example conversation) ─────────────────────────────
 const STOPS = [
-  { t: "8:17 PM", label: "Lead texts in" },
+  { t: "8:17 PM", label: "Ad form comes in" },
   { t: "8:17 PM", label: "First reply out" },
-  { t: "8:28 PM", label: "Job booked" },
-  { t: "8:29 PM", label: "Routed & logged" },
+  { t: "8:23 PM", label: "Decision makers confirmed" },
+  { t: "8:24 PM", label: "Measure booked" },
 ]
 
 function TimelineRail() {
@@ -360,66 +363,68 @@ function TimelineRail() {
                  style={{ background: i === STOPS.length - 1 ? C.orange : "rgba(249,115,22,0.45)" }} />
             <div className="sm:pr-3">
               <div className="text-[12px] font-bold mb-0.5"
-                   style={{ color: C.orange, fontFamily: "var(--font-jetbrains)" }}>
+                   style={{ color: C.orangeDk, fontFamily: "var(--font-jetbrains)" }}>
                 {s.t}
               </div>
-              <div className="text-[12.5px] leading-tight font-medium" style={{ color: "rgba(250,250,248,0.68)" }}>
+              <div className="text-[12.5px] leading-tight font-medium" style={{ color: C.text }}>
                 {s.label}
               </div>
             </div>
           </div>
         ))}
       </div>
-      <p className="mt-5 text-[13.5px] font-semibold" style={{ color: "rgba(250,250,248,0.72)" }}>
-        Twelve minutes, start to booked. Total human involvement: zero.
+      <p className="mt-5 text-[13.5px] font-semibold" style={{ color: C.muted }}>
+        Seven minutes, form to booked measure. An example conversation, not a customer&rsquo;s record.
       </p>
     </div>
   )
 }
 
-// ── THE MATH — you already paid for that lead ────────────────────────────────
+// ── THE RACE — whoever answers first books the measure ──────────────────────
+// No speed-to-lead statistics here on purpose: the pivot doc forbids numbers
+// we can't source. The point is made in plain contractor language instead.
 export function PaidLeadMath() {
+  const moments = [
+    { k: "8:17 PM", d: "Sarah fills out forms for three flooring companies from her couch." },
+    { k: "8:17 PM", d: "Company one is closed. Company two's office checks messages in the morning." },
+    { k: "8:24 PM", d: "Company three already answered, asked the right questions, and booked the measure." },
+  ]
   return (
-    <section className="relative py-20 px-6" style={{ background: C.bg }}>
+    <section className="relative py-16 sm:py-20 px-4 sm:px-6" style={{ background: C.bg }}>
       <div className="max-w-5xl mx-auto">
         <div className="grid md:grid-cols-[1.1fr_0.9fr] gap-10 md:gap-14 items-center">
           <div>
             <h2 className="font-extrabold tracking-tight mb-5"
                 style={{ color: C.text, fontFamily: "var(--font-jakarta)", fontSize: "clamp(1.7rem, 3.4vw, 2.4rem)", letterSpacing: "-0.025em" }}>
-              You already paid for that lead. Then it hit voicemail.
+              Homeowners don&rsquo;t wait for the morning. They book the first one back.
             </h2>
             <p className="text-base leading-relaxed mb-4" style={{ color: C.muted }}>
-              Every lead that reaches you cost real money: the ad spend, the website,
-              the years of reviews behind it. The expensive part is over by the time
-              they text you. What decides whether it becomes a job is what happens in
-              the next few minutes.
+              Most people shopping for new floors reach out to several companies at
+              once, usually at night or on a weekend, when your office is closed and
+              your crews are on a job.
             </p>
             <p className="text-base leading-relaxed" style={{ color: C.muted }}>
-              And most of them come in when nobody can grab the phone: dinner time,
-              Sunday afternoon, the middle of a crawlspace. They don&rsquo;t leave a
-              voicemail. They text the next company on the list.
+              By the time someone calls back the next day, the measure is already on
+              somebody else&rsquo;s calendar. Not because they were better. Because they
+              answered first.
             </p>
           </div>
 
           <div className="space-y-3">
-            {[
-              { n: "78%", d: "of customers hire the company that responds first" },
-              { n: "21x", d: "more likely to connect when you reply within 5 minutes instead of 30" },
-              { n: "$0",  d: "of your ad spend is refunded when the lead goes cold" },
-            ].map((s, i) => (
+            {moments.map((m, i) => (
               <div key={i} className="flex items-baseline gap-5 rounded-2xl px-6 py-5"
-                   style={{ background: C.surface, border: `1px solid ${C.border}` }}>
-                <span className="font-black shrink-0 w-[4.2rem] text-right"
-                      style={{ color: C.orange, fontFamily: "var(--font-jetbrains)", fontSize: "1.65rem", letterSpacing: "-0.01em" }}>
-                  {s.n}
+                   style={{ background: C.surface, border: `1px solid ${i === 2 ? "rgba(249,115,22,0.35)" : C.border}` }}>
+                <span className="font-bold shrink-0 text-[13px]"
+                      style={{ color: i === 2 ? C.orangeDk : C.muted, fontFamily: "var(--font-jetbrains)" }}>
+                  {m.k}
                 </span>
                 <span className="text-[14px] leading-snug font-medium" style={{ color: C.text }}>
-                  {s.d}
+                  {m.d}
                 </span>
               </div>
             ))}
             <p className="text-[11.5px] pl-1" style={{ color: C.muted }}>
-              Response-time figures: industry speed-to-lead research.
+              An example evening, not a real customer.
             </p>
           </div>
         </div>
@@ -428,9 +433,7 @@ export function PaidLeadMath() {
   )
 }
 
-// ── THE REVENUE CHAIN — speed → booking rate → revenue ──────────────────────
-// Compact by design: one visual sentence, not a section of copy. The point
-// lands as an equation the eye reads in three seconds.
+// ── THE CHAIN — answered first → measure → quote chased → install ──────────
 function ChainArrow() {
   return (
     <svg width="34" height="34" viewBox="0 0 34 34" fill="none" aria-hidden="true"
@@ -442,62 +445,36 @@ function ChainArrow() {
 }
 
 export function RevenueChainSection() {
+  const nodes = [
+    "Answered first, in seconds",
+    "Measure booked, decision makers home",
+    "Quote chased until yes or no",
+  ]
   return (
-    <section className="relative py-16 px-6" style={{ background: C.dark }}>
+    <section className="relative py-16 px-4 sm:px-6" style={{ background: C.surface, borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}` }}>
       <div className="max-w-5xl mx-auto text-center">
         <div className="flex flex-col md:flex-row items-center justify-center gap-5 md:gap-7">
-
-          <div className="max-w-[240px]">
-            <div className="text-lg font-extrabold leading-snug tracking-tight"
-                 style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>
-              Every lead answered in under a minute
+          {nodes.map((n, i) => (
+            <div key={n} className="contents">
+              <div className="max-w-[220px] text-lg font-extrabold leading-snug tracking-tight"
+                   style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
+                {n}
+              </div>
+              <ChainArrow />
+              {i === nodes.length - 1 && (
+                <div className="text-xl font-black leading-tight tracking-tight"
+                     style={{ color: C.success, fontFamily: "var(--font-jakarta)" }}>
+                  Signed installs for your crews.
+                </div>
+              )}
             </div>
-          </div>
-
-          <ChainArrow />
-
-          <div>
-            <div className="font-black leading-none"
-                 style={{ color: C.orange, fontFamily: "var(--font-jetbrains)", fontSize: "clamp(3rem, 7vw, 4.6rem)", letterSpacing: "-0.02em" }}>
-              +391%
-            </div>
-            <div className="text-[13px] font-semibold mt-1.5" style={{ color: "rgba(250,250,248,0.55)" }}>
-              more likely to convert
-            </div>
-          </div>
-
-          <ChainArrow />
-
-          {/* The payoff node — revenue rising, drawn to balance the +391% */}
-          <div className="flex flex-col items-center">
-            <svg width="118" height="62" viewBox="0 0 118 62" fill="none" aria-hidden="true" className="mb-2">
-              {/* the climb — booked jobs stacking into revenue */}
-              <path d="M8 52 C 36 52, 52 38, 104 12"
-                    stroke={C.orange} strokeWidth="4" strokeLinecap="round" fill="none" />
-              {/* arrowhead */}
-              <path d="M92 8 L106 11 L100 24"
-                    stroke={C.orange} strokeWidth="4" strokeLinecap="round" strokeLinejoin="round" fill="none" />
-              {/* booked jobs landing on the line */}
-              <circle cx="8"  cy="52" r="4.5" fill={C.orange} />
-              <circle cx="47" cy="41" r="4.5" fill={C.orange} />
-              <circle cx="76" cy="27" r="4.5" fill={C.orange} />
-            </svg>
-            <div className="text-lg font-extrabold leading-tight tracking-tight"
-                 style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)" }}>
-              More booked jobs.
-            </div>
-            <div className="font-black leading-tight tracking-tight"
-                 style={{ color: C.orange, fontFamily: "var(--font-jakarta)", fontSize: "1.4rem" }}>
-              More revenue.
-            </div>
-          </div>
+          ))}
         </div>
 
-        <p className="mt-9 text-[14px] max-w-2xl mx-auto leading-relaxed" style={{ color: "rgba(250,250,248,0.55)" }}>
-          This is a revenue tool, not a convenience tool. Speed is the booking-rate
-          lever, and booking rate is the revenue lever: industry response-time
-          research found leads contacted within one minute convert{" "}
-          <strong style={{ color: "rgba(250,250,248,0.85)" }}>391% more often</strong>.
+        <p className="mt-9 text-[14px] max-w-2xl mx-auto leading-relaxed" style={{ color: C.muted }}>
+          Speed gets you the measure. The right questions make the drive worth it.
+          The follow-up turns the quote into an install. Most shops lose at least one
+          of those three every week.
         </p>
       </div>
     </section>
@@ -506,13 +483,13 @@ export function RevenueChainSection() {
 
 // ── THE WORK ORDER — it works like an employee ───────────────────────────────
 const DUTIES = [
-  "Captures every lead from every source, the second it comes in",
-  "Texts back in seconds, any hour, any day",
-  "Follows up until they answer, so nothing goes quiet",
-  "Qualifies the job and handles “just getting quotes”",
-  "Books it straight onto your calendar",
-  "Routes the right tech to the right zip",
-  "Logs every word in your CRM",
+  "Runs Meta ads for homeowners in your service area",
+  "Answers every lead in seconds, by text and phone, any hour",
+  "Asks project type, rooms, timeline and ZIP",
+  "Checks every decision maker will be home for the measure",
+  "Books the measure, sends the confirmation and the reminder",
+  "Handles reschedules so measures don’t no-show",
+  "Chases every quote by text, call and email until yes or no",
 ]
 
 function CheckMark() {
@@ -525,7 +502,7 @@ function CheckMark() {
 
 export function WorkOrderSection() {
   return (
-    <section className="relative py-20 px-6" style={{ background: C.subtle }}>
+    <section className="relative py-16 sm:py-20 px-4 sm:px-6" style={{ background: C.subtle }}>
       <div className="max-w-5xl mx-auto">
         <div className="grid md:grid-cols-[0.95fr_1.05fr] gap-10 md:gap-14 items-center">
 
@@ -538,7 +515,6 @@ export function WorkOrderSection() {
                  clipPath: "polygon(0 0, calc(100% - 26px) 0, 100% 26px, 100% 100%, 0 100%)",
                  boxShadow: "0 1px 2px rgba(26,22,20,0.05), 0 16px 36px -20px rgba(26,22,20,0.18)",
                }}>
-            {/* folded corner */}
             <div aria-hidden="true" className="absolute top-0 right-0"
                  style={{ width: 26, height: 26, background: "#EDEAE7", clipPath: "polygon(0 0, 100% 100%, 0 100%)" }} />
 
@@ -546,10 +522,10 @@ export function WorkOrderSection() {
                  style={{ borderBottom: `1px dashed ${C.border}` }}>
               <div>
                 <div className="text-[11px] font-bold tracking-wide mb-1" style={{ color: C.muted, fontFamily: "var(--font-jetbrains)" }}>
-                  WORK ORDER &middot; BACK OFFICE
+                  WORK ORDER &middot; FRONT OFFICE
                 </div>
                 <div className="text-lg font-extrabold tracking-tight" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-                  Lead response &amp; booking
+                  Measures &amp; quote follow-up
                 </div>
               </div>
               <span className="text-[11px] font-bold px-2.5 py-1.5 rounded-md"
@@ -569,7 +545,7 @@ export function WorkOrderSection() {
 
             <div className="px-6 py-4 flex flex-wrap gap-x-6 gap-y-1.5"
                  style={{ borderTop: `1px dashed ${C.border}`, background: "#FBFAF9", borderRadius: "0 0 18px 18px" }}>
-              {[["Shift", "nights, weekends, holidays"], ["Sick days", "0"], ["Added payroll", "$0"]].map(([k, v], i) => (
+              {[["Shift", "nights, weekends, holidays"], ["Quotes it forgets", "0"], ["Price it quotes", "never, that's yours"]].map(([k, v], i) => (
                 <span key={i} className="text-[12px]" style={{ color: C.muted }}>
                   <strong style={{ color: C.text }}>{k}:</strong> {v}
                 </span>
@@ -580,16 +556,16 @@ export function WorkOrderSection() {
           <div>
             <h2 className="font-extrabold tracking-tight mb-5"
                 style={{ color: C.text, fontFamily: "var(--font-jakarta)", fontSize: "clamp(1.7rem, 3.4vw, 2.4rem)", letterSpacing: "-0.025em" }}>
-              It works like an employee. It just never clocks out.
+              It works like your best salesperson. It just never clocks out.
             </h2>
             <p className="text-base leading-relaxed mb-4" style={{ color: C.muted }}>
-              Not a chatbot bolted onto your website. A back-office worker that picks
-              up every lead, talks like your best CSR, and finishes the job all the
-              way through: booked, dispatched, documented.
+              Not a chatbot on your website. An AI that tells homeowners it&rsquo;s an AI,
+              asks what your best salesperson would ask, and only books measures worth
+              the drive.
             </p>
             <p className="text-base leading-relaxed" style={{ color: C.muted }}>
-              Your office manager keeps her day. The AI takes the 9 PMs, the Sundays,
-              and the overflow when the phones stack up.
+              Your team keeps its day. The AI takes the 9 PMs, the Sundays, and the
+              follow-up calls nobody has time to make.
             </p>
           </div>
         </div>
@@ -598,22 +574,22 @@ export function WorkOrderSection() {
   )
 }
 
-// ── YOUR STACK STAYS ─────────────────────────────────────────────────────────
+// ── HOW YOU RUN STAYS ────────────────────────────────────────────────────────
 export function StackStaysSection() {
   return (
-    <section className="relative py-16 px-6" style={{ background: C.bg }}>
+    <section className="relative py-16 px-4 sm:px-6" style={{ background: C.bg }}>
       <div className="max-w-3xl mx-auto text-center">
         <h2 className="font-extrabold tracking-tight mb-4"
             style={{ color: C.text, fontFamily: "var(--font-jakarta)", fontSize: "clamp(1.5rem, 3vw, 2.1rem)", letterSpacing: "-0.025em" }}>
-          Your stack stays your stack.
+          You keep running your shop your way.
         </h2>
         <p className="text-base leading-relaxed mb-8 max-w-xl mx-auto" style={{ color: C.muted }}>
-          It plugs into what you already run. Jobs land in the CRM you use today,
-          from the phone number your customers already know. Nothing migrates,
-          nobody re-trains, no six-week onboarding.
+          Jonathan installs it around how you already run measures, quotes and
+          installs. Your crews show up to measure and install. Your quote still
+          comes from you. Nobody on your team has to learn anything new.
         </p>
         <div className="flex flex-wrap items-center justify-center gap-x-9 gap-y-3">
-          {["Your CRM", "Your phone number", "Your booking process"].map((t, i) => (
+          {["Your crews", "Your quotes", "Your calendar"].map((t, i) => (
             <span key={i} className="inline-flex items-center gap-2 text-[15px] font-bold" style={{ color: C.text }}>
               <CheckMark />
               {t}

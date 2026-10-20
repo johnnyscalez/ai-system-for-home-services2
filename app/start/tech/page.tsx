@@ -1,40 +1,40 @@
 "use client"
 
-// ─── VARIANT 3: BEST TECH ────────────────────────────────────────────────────
-// Ad angle: blindness — he can't name his best tech, only his busiest
-// Use this URL in your Facebook ad when running the "Best Tech" angle:
-//   fieldbuiltai.com/start/tech
+// ─── VARIANT 3: THE WASTED DRIVE ─────────────────────────────────────────────
+// Ad angle: 45 minutes out to a measure, then "my husband needs to be here".
+// Use this URL in the Facebook ad running the "wasted drive" angle:
+//   fieldbuiltai.com/start/tech   (URL kept from the old "best tech" angle)
 //
 // No fabricated testimonials on this page. Trust comes from the honest
-// founder block (FounderTrustSection) + the free two-week trial, not from
-// stock-photo quotes. The dashboard showcase gives this page its own
-// product demonstration, since its entire angle is the number owners can't see.
+// founder block and the labelled live home-services numbers. The decision
+// maker check gives this page its own demonstration, since its whole angle is
+// the measure that should never have been booked.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import {
-  MinimalHeader, WoundHero, TryFailSection, ProofStatsSection, ReframeSection,
-  ScopeSection, DashboardShowcaseSection, WedgeSection, FounderTrustSection,
-  LeadFormSection, FaqSection, MinimalFooter, StickyBottomCta,
+  MinimalHeader, WoundHero, PainSection, ReframeSection, HowItWorksSection,
+  DecisionMakerSection, ProofSection, OfferSection, FounderTrustSection,
+  LeadFormSection, FaqSection, MinimalFooter, StickyBottomCta, C,
 } from "@/components/landing/shared"
 
 export default function StartTechPage() {
   return (
-    <main style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
+    <main style={{ fontFamily: "var(--font-inter), Inter, sans-serif", background: C.bg }}>
       <MinimalHeader />
       <WoundHero
-        eyebrow="For HVAC owners running on instinct"
-        line1="Who's your best tech?"
-        line2="Not your busiest. Your best."
-        sub="Closes the most, fewest callbacks, makes you the most per job. You've got a gut feeling. That's the problem."
+        eyebrow="For flooring owners who run their own measures"
+        line1="45 minutes to the measure."
+        line2={"Then: “my husband needs to be here.”"}
+        sub="Gas, a whole evening, and a quote you can't close because the person who decides wasn't home. That measure should never have been booked."
       />
-      <TryFailSection />
-      <ProofStatsSection />
+      <DecisionMakerSection />
+      <PainSection />
       <ReframeSection />
-      <ScopeSection />
-      <DashboardShowcaseSection />
-      <WedgeSection />
+      <HowItWorksSection />
+      <ProofSection />
+      <OfferSection />
       <FounderTrustSection />
-      <LeadFormSection source="best-tech" />
+      <LeadFormSection source="wasted-drive" />
       <FaqSection />
       <MinimalFooter />
       <StickyBottomCta />

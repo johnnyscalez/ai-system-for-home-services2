@@ -1,31 +1,31 @@
 "use client"
 
-// ─── VARIANT 4: THE HIRING REFRAME ───────────────────────────────────────────
-// Ad angle: hiring frustration — the next tech is already on the payroll
-// Use this URL in your Facebook ad when running the "hiring" angle:
-//   fieldbuiltai.com/start/hire
+// ─── VARIANT 4: CREWS READY, CALENDAR THIN ───────────────────────────────────
+// Ad angle: the owner has the crews, not the measures.
+// Use this URL in the Facebook ad running the "crews ready" angle:
+//   fieldbuiltai.com/start/hire   (URL kept from the old "hiring" angle)
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { MinimalHeader, WoundHero, LandingBody } from "@/components/landing/shared"
+import { MinimalHeader, WoundHero, LandingBody, C } from "@/components/landing/shared"
 
 export default function StartHirePage() {
   return (
-    <main style={{ fontFamily: "var(--font-inter), Inter, sans-serif" }}>
+    <main style={{ fontFamily: "var(--font-inter), Inter, sans-serif", background: C.bg }}>
       <MinimalHeader />
       <WoundHero
-        eyebrow="For HVAC owners trying to hire"
-        line1="You don't need another tech."
-        line2="You need leads answered in seconds."
+        eyebrow="For flooring owners with crews ready to install"
+        line1="You have the crews."
+        line2="You don't have the measures."
         sub={
           <>
-            You&rsquo;ve run the ads, raised the pay, chased the no-shows. It&rsquo;s not you.{" "}
-            <strong style={{ color: "#F5F3F0" }}>
-              The leads dying while your crew is slammed? That&rsquo;s not a staffing problem.
+            Good installers, ready to go, and a calendar that doesn&rsquo;t feed them.{" "}
+            <strong style={{ color: C.text }}>
+              That&rsquo;s not a crew problem. It&rsquo;s a measure problem, and it&rsquo;s fixable.
             </strong>
           </>
         }
       />
-      <LandingBody source="hiring" />
+      <LandingBody source="crews-ready" />
     </main>
   )
 }

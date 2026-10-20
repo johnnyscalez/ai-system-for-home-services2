@@ -26,8 +26,8 @@ const jetbrains = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "FieldBuilt — The Operating System That Runs Your HVAC Business 24/7 Without You",
-  description: "Every call, text, form, and missed call answered immediately. Qualified by your rules, routed to the right technician, booked with availability checks, logged in your CRM.",
+  title: "FieldBuilt AI | In-Home Measures for Flooring Contractors",
+  description: "We run the ads, answer every homeowner in seconds, book the in-home measure, and chase every quote. Guaranteed 20 in-home measures in 60 days, and every quote chased until it signs or says no.",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

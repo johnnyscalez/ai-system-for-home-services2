@@ -1,12 +1,10 @@
 import type { Metadata } from "next"
 
-// Route-scoped metadata override — does not touch the shared root layout,
-// which the main site relies on. Keeps the ad-funnel pages' claims
-// (response time, trial length) consistent with what Facebook link previews
-// show, matching the on-page copy.
+// Route-scoped metadata override for the ad-funnel pages. Keeps what Facebook
+// link previews show consistent with the on-page copy (docs/flooring-pivot.md).
 export const metadata: Metadata = {
-  title: "How Many Leads Did You Lose Last Month? — FieldBuilt AI",
-  description: "Most HVAC shops can't answer that — a lead nobody logs never shows up on a report. Try the fix free for 14 days. No card. I set it up.",
+  title: "How Many Quotes Went Quiet Last Month? | FieldBuilt AI",
+  description: "For flooring contractors with install crews. Guaranteed 20 in-home measures in 60 days, and every quote chased until it signs or says no.",
 }
 
 export default function StartLayout({ children }: { children: React.ReactNode }) {

@@ -1,10 +1,13 @@
 "use client"
 
 // ─────────────────────────────────────────────────────────────────────────────
-// FIELDBUILT — offer-first site for HVAC owners.
-// Structure: the claim → the leak → what happens → proof (thread + receipts) →
-// what you get installed → what it never does → who it's for → ask.
-// Warm off-white, deep ink, one orange accent, mono for real data only.
+// FIELDBUILT — offer-first site for flooring contractors with install crews.
+// Positioning source of truth: docs/flooring-pivot.md (offer wording, no price,
+// no guarantee failure terms, no invented flooring proof).
+// Structure: the offer → the leak → how it works → example thread → receipts →
+// what gets installed → what it never does → who it's for → ask.
+// Light mode throughout: warm off-white, white cards, deep ink, one orange accent,
+// mono for real data only.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { useState } from "react"
@@ -14,10 +17,10 @@ const C = {
   paper:   "#FAFAF8",
   white:   "#FFFFFF",
   ink:     "#1C1917",
-  night:   "#1A1614",
   muted:   "#78716C",
   line:    "#E7E5E4",
   parch:   "#F5F4F2",
+  soft:    "#FFF3EC",
   orange:  "#F97316",
   orangeD: "#EA580C",
 } as const
@@ -62,19 +65,22 @@ function SectionTitle({ children, max = 780 }: { children: React.ReactNode; max?
   )
 }
 
-function LedgerRow({ label, value, sub, strong = false, dark = false }: {
-  label: string; value?: string; sub?: string; strong?: boolean; dark?: boolean
+function LedgerRow({ label, value, sub, strong = false, index }: {
+  label: string; value?: string; sub?: string; strong?: boolean; index?: number
 }) {
-  const inkC = dark ? "#F3EFEA" : C.ink
-  const mutedC = dark ? "rgba(243,239,234,0.6)" : C.muted
   return (
-    <div style={{ borderTop: `1px solid ${dark ? "rgba(243,239,234,0.14)" : C.line}`, padding: "17px 2px", display: "flex", alignItems: "baseline", gap: 16 }}>
+    <div style={{ borderTop: `1px solid ${C.line}`, padding: "17px 2px", display: "flex", alignItems: "baseline", gap: 16 }}>
+      {index !== undefined && (
+        <span style={{ fontFamily: mono, fontSize: 13, color: C.orangeD, minWidth: 26, fontVariantNumeric: "tabular-nums" }}>
+          {String(index).padStart(2, "0")}
+        </span>
+      )}
       <div style={{ flex: 1, minWidth: 0 }}>
-        <p style={{ fontFamily: jakarta, fontWeight: strong ? 800 : 600, fontSize: strong ? 19 : 16.5, color: inkC, lineHeight: 1.45 }}>{label}</p>
-        {sub && <p style={{ fontWeight: 400, fontSize: 14.5, color: mutedC, marginTop: 5, lineHeight: 1.6, maxWidth: 600 }}>{sub}</p>}
+        <p style={{ fontFamily: jakarta, fontWeight: strong ? 800 : 600, fontSize: strong ? 19 : 16.5, color: C.ink, lineHeight: 1.45 }}>{label}</p>
+        {sub && <p style={{ fontWeight: 400, fontSize: 14.5, color: C.muted, marginTop: 5, lineHeight: 1.6, maxWidth: 600 }}>{sub}</p>}
       </div>
       {value && (
-        <span style={{ fontFamily: mono, fontSize: strong ? 26 : 17, fontWeight: strong ? 700 : 400, color: strong ? C.orangeD : inkC, whiteSpace: "nowrap", letterSpacing: "0.02em", fontVariantNumeric: "tabular-nums" }}>
+        <span style={{ fontFamily: mono, fontSize: strong ? 26 : 17, fontWeight: strong ? 700 : 400, color: strong ? C.orangeD : C.ink, whiteSpace: "nowrap", letterSpacing: "0.02em", fontVariantNumeric: "tabular-nums" }}>
           {value}
         </span>
       )}
@@ -82,50 +88,47 @@ function LedgerRow({ label, value, sub, strong = false, dark = false }: {
   )
 }
 
-// The replay thread — the real shape of a real booked conversation, office closed.
+// An example of how a conversation runs, labelled as an example on the page.
+// Agent style rules apply: no dashes, ranges written "9 to 11am".
 const THREAD: { t: string; who: "sys" | "lead"; text: string }[] = [
-  { t: "7:07 PM", who: "lead", text: "Yes, interested. It's a house, one furnace. Can't remember the last time the ducts were done." },
-  { t: "7:07 PM", who: "sys",  text: "Good to know, most homes we open up are the same. What's your ZIP code so I can check who covers your area?" },
-  { t: "7:08 PM", who: "lead", text: "60007" },
-  { t: "7:08 PM", who: "sys",  text: "You're in the service area. Normally if it's been more than 3 years we recommend the full system cleaning, $189 per furnace. That includes supply vents, cold air returns, basic furnace cleaning, deodorizer, and dryer vent cleaning, ground level side wall exit only." },
-  { t: "7:10 PM", who: "lead", text: "Ok let's do it. When can you come?" },
-  { t: "7:10 PM", who: "sys",  text: "We have Saturday with an arrival window of 3 to 6pm. Would you like to set it up? I'll need your full street address." },
-  { t: "7:12 PM", who: "lead", text: "Saturday works. 1418 Berkley Ln, Elk Grove Village" },
-  { t: "7:13 PM", who: "sys",  text: "Just to double check before I lock it in, Saturday, 3 to 6pm, at 1418 Berkley Ln, for the $189 full system cleaning. Sounds good?" },
-  { t: "7:16 PM", who: "lead", text: "Yes" },
-  { t: "7:17 PM", who: "sys",  text: "You're all set. Our technician will text you about 30 minutes before arrival, and you'll get a reminder the day before. Please make sure the vents are accessible." },
+  { t: "8:42 PM", who: "lead", text: "Hi, saw your ad. Looking at LVP for the living room and hallway." },
+  { t: "8:42 PM", who: "sys",  text: "Thanks for reaching out! Quick heads up, I'm the AI assistant for the team. Roughly how big is the area, and what's on the floor now?" },
+  { t: "8:44 PM", who: "lead", text: "Maybe 600 sq ft. Old carpet. We want it done before the holidays." },
+  { t: "8:44 PM", who: "sys",  text: "That's very doable. What's your ZIP so I can check we cover your area?" },
+  { t: "8:45 PM", who: "lead", text: "46032" },
+  { t: "8:45 PM", who: "sys",  text: "You're in our area. Next step is a free in-home measure so the team can give you an exact quote. Will everyone who decides on the floor be home for it?" },
+  { t: "8:46 PM", who: "lead", text: "Yes, my husband and I are both home after 5" },
+  { t: "8:46 PM", who: "sys",  text: "We have Thursday 5 to 6pm or Saturday 9 to 10am. Which works better?" },
+  { t: "8:47 PM", who: "lead", text: "Thursday" },
+  { t: "8:48 PM", who: "sys",  text: "You're booked for Thursday, 5 to 6pm. You'll get a reminder the day before, and the estimator will text when they're on the way." },
 ]
 
-const WHAT_HAPPENS: { line: string; outcome: string }[] = [
-  { line: "Every call, text, form, and missed call gets an immediate response.",
-    outcome: "The 9 PM lead gets answered at 9 PM. No voicemail, no callback queue, no \"we went with someone else.\"" },
-  { line: "Every inquiry gets qualified by your rules.",
-    outcome: "ZIP code, job type, urgency, service area. Out-of-area tire kickers never reach your dispatcher's desk." },
-  { line: "Every qualified opportunity gets routed to the right technician.",
-    outcome: "The tech who covers that ZIP and does that job type. Not whoever happens to be free." },
-  { line: "Every appointment gets booked with availability checks.",
-    outcome: "Real openings on real calendars. No double-bookings, no jobs promised on a day your crew is full." },
-  { line: "Every exception gets escalated to you.",
-    outcome: "Anything outside your rules lands on your phone with the whole thread attached. You decide, once." },
-  { line: "Every lead gets logged in your CRM.",
-    outcome: "Housecall Pro, ServiceTitan, whatever you run. Your data, your system, the full journey visible." },
+const HOW_IT_WORKS: { line: string; outcome: string }[] = [
+  { line: "We run the ads in your service area.",
+    outcome: "Meta ads built for homeowners who are ready for new floors, aimed only at the ZIP codes your crews cover. You pay the ad spend straight to Meta, so you can see every dollar." },
+  { line: "Every homeowner gets answered in seconds.",
+    outcome: "Text and phone, nights and weekends included. Homeowners ask three flooring companies at once and book whoever answers first. That's you now." },
+  { line: "Every lead gets qualified before it reaches your calendar.",
+    outcome: "Project type, rough size, timeline, ZIP code, and whether every decision maker will be home. No more 45-minute drives to hear \"my husband needs to see it first.\"" },
+  { line: "Every qualified homeowner gets booked as an in-home measure.",
+    outcome: "Real openings on your real calendar, with a confirmation, a day-before reminder, and an easy reschedule so measures don't no-show." },
+  { line: "Every quote gets chased until it signs or says no.",
+    outcome: "After the measure, it follows up by text, call and email. Nothing dies in a \"let me think about it\" pile, and nobody on your team has to remember." },
 ]
 
 const INSTALL_SCOPE: string[] = [
-  "Response workflows built around how your company actually runs",
-  "Voice and SMS handling",
-  "Missed-call and web-lead recovery",
-  "Qualification and exclusion rules",
-  "ZIP and service-area logic",
-  "Job-type and urgency classification",
-  "Technician routing",
-  "Availability and booking flow",
-  "Confirmation, reminder, reschedule and cancellation paths",
-  "CRM logging and lead-status structure",
-  "Human escalation rules",
-  "Test scenarios and QA before it touches a real customer",
-  "Documentation and staff handoff",
-  "A released system your company owns",
+  "Meta ad campaigns for homeowners in your service area",
+  "Ad creative and copy written for your market",
+  "Instant text and phone response, 24/7",
+  "Qualification rules: project type, size, timeline, ZIP",
+  "Decision-maker check before every measure",
+  "In-home measure booking on your real availability",
+  "Confirmations, reminders and reschedule paths",
+  "Quote follow-up by text, call and email",
+  "Stop rules the moment a homeowner says no",
+  "Every conversation logged where your team can see it",
+  "Human escalation rules for anything unusual",
+  "Testing before it touches a real homeowner",
 ]
 
 export default function Home() {
@@ -145,29 +148,32 @@ export default function Home() {
           <div style={{ display: "flex", alignItems: "center", gap: 22 }}>
             <Link href="/login" className="fb-nav-login" style={{ fontSize: 14, fontWeight: 600, color: C.muted }}>Log in</Link>
             <Link href="/book" className="fb-nav-cta" style={{ fontFamily: jakarta, fontWeight: 600, fontSize: 14, color: "#FFF7F0", background: C.orange, padding: "10px 20px", borderRadius: 999 }}>
-              Book a discovery call
+              Book a walkthrough
             </Link>
           </div>
         </div>
       </header>
 
-      {/* ── 1 · THE CLAIM ────────────────────────────────────────────────── */}
+      {/* ── 1 · THE OFFER ────────────────────────────────────────────────── */}
       <section style={{ padding: "clamp(60px, 9vw, 110px) 0 0" }}>
         <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 28px" }}>
-          <h1 style={{ fontFamily: jakarta, fontWeight: 800, fontSize: "clamp(38px, 5.6vw, 68px)", lineHeight: 1.05, letterSpacing: "-0.025em", maxWidth: 880, margin: 0 }}>
-            Stop losing money on calls you already paid for.
-          </h1>
-          <p style={{ fontSize: "clamp(17px, 1.8vw, 20px)", lineHeight: 1.6, color: C.muted, maxWidth: 660, marginTop: 24 }}>
-            You run a residential HVAC company. Four or more technicians, a million-plus a year.
-            Your ads and your reputation already make the phone ring. The problem is what happens
-            when it rings at 9 PM, or while your dispatcher is on the other line.
+          <p style={{ fontFamily: mono, fontSize: 12.5, letterSpacing: "0.1em", color: C.orangeD, marginBottom: 18 }}>
+            FOR FLOORING CONTRACTORS WITH THEIR OWN INSTALL CREWS
           </p>
-          <p style={{ fontFamily: jakarta, fontWeight: 700, fontSize: "clamp(18px, 2vw, 22px)", lineHeight: 1.5, maxWidth: 660, marginTop: 20 }}>
-            We install the operating system that runs your HVAC business 24/7 without you.
+          <h1 style={{ fontFamily: jakarta, fontWeight: 800, fontSize: "clamp(38px, 5.6vw, 68px)", lineHeight: 1.05, letterSpacing: "-0.025em", maxWidth: 900, margin: 0 }}>
+            Guaranteed 20 in-home measures in 60 days.
+          </h1>
+          <p style={{ fontFamily: jakarta, fontWeight: 700, fontSize: "clamp(20px, 2.4vw, 28px)", lineHeight: 1.3, letterSpacing: "-0.01em", maxWidth: 760, marginTop: 16, color: C.orangeD }}>
+            And every quote chased until it signs or says no.
+          </p>
+          <p style={{ fontSize: "clamp(17px, 1.8vw, 20px)", lineHeight: 1.6, color: C.muted, maxWidth: 660, marginTop: 24 }}>
+            You have the crews. What you need is a steady calendar of measures. We run the ads in
+            your service area, answer every homeowner in seconds, qualify them, book the measure,
+            and follow up on every quote until you get an answer.
           </p>
           <div style={{ marginTop: 34, display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
-            <PillCta>Book a 15-minute discovery call</PillCta>
-            <span style={{ fontSize: 14.5, color: C.muted }}>We&apos;ll show you exactly where you&apos;re losing money.</span>
+            <PillCta>Book a 20-minute walkthrough</PillCta>
+            <span style={{ fontSize: 14.5, color: C.muted }}>We&apos;ll map the demand in your service area on the call.</span>
           </div>
         </div>
       </section>
@@ -176,30 +182,28 @@ export default function Home() {
       <section style={{ padding: "clamp(80px, 10vw, 130px) 0 0" }}>
         <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 28px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "48px 72px", alignItems: "start" }}>
           <div>
-            <SectionTitle>The voicemail-and-callback trap is quietly your most expensive employee.</SectionTitle>
+            <SectionTitle>Your crews are ready. Your calendar isn&apos;t.</SectionTitle>
             <p style={{ marginTop: 18, fontSize: 16.5, lineHeight: 1.65, color: C.muted, maxWidth: 520 }}>
-              The call rings out after hours. The callback happens the next morning. By then the
-              customer booked whoever answered first. You paid to make that phone ring, and the
-              job went to a competitor who just picked up.
+              Shared leads get sold to four other flooring companies, and half of them never pick
+              up. The ones who do are booking whoever calls back first. Then the measure happens,
+              the quote goes out, and nobody follows up.
             </p>
             <p style={{ marginTop: 16, fontSize: 16.5, lineHeight: 1.65, color: C.ink, fontWeight: 600, maxWidth: 520 }}>
-              Most HVAC companies your size are losing $66K-$231K per year to missed calls and bad
-              bookings. Before you spend another dollar on lead generation, fix the operation
-              that&apos;s losing the leads you already paid for. More leads won&apos;t fix a broken
-              booking process.
+              More leads don&apos;t fix that. A system that books the measure and chases the
+              quote does. That&apos;s the only thing we build.
             </p>
           </div>
           <div style={{ background: C.white, border: `1px solid ${C.line}`, borderRadius: 16, padding: "22px 26px" }}>
-            <p style={{ fontFamily: mono, fontSize: 12.5, letterSpacing: "0.08em", color: C.muted, marginBottom: 4 }}>LAST NIGHT, AT EVERY SHOP WITHOUT COVERAGE</p>
+            <p style={{ fontFamily: mono, fontSize: 12.5, letterSpacing: "0.08em", color: C.muted, marginBottom: 4 }}>A TYPICAL WEEK, WITHOUT A SYSTEM</p>
             {[
-              ["9:04 PM", "Incoming call. Office closed two hours ago."],
-              ["9:04 PM", "Rings out. Voicemail. No message left."],
-              ["9:07 PM", "The customer calls the next company on Google."],
-              ["8:12 AM", "Your office calls back the number."],
-              ["8:13 AM", "“We went with someone else. They answered.”"],
+              ["MON 8:40 PM", "Homeowner asks three flooring companies for a quote."],
+              ["TUE 9:15 AM", "You call back. They booked a measure with whoever answered."],
+              ["THU 5:00 PM", "45-minute drive to a measure. The husband isn't home."],
+              ["FRI", "Quote sent on the one measure that went ahead."],
+              ["3 WEEKS LATER", "No reply. Nobody followed up. The job is gone."],
             ].map(([t, txt], i, arr) => (
-              <div key={t + txt} style={{ display: "flex", gap: 18, alignItems: "baseline", borderTop: `1px solid ${C.parch}`, padding: "12px 0" }}>
-                <span style={{ fontFamily: mono, fontSize: 13, color: i === arr.length - 1 ? C.orangeD : C.muted, minWidth: 66, fontVariantNumeric: "tabular-nums" }}>{t}</span>
+              <div key={t} style={{ display: "flex", gap: 18, alignItems: "baseline", borderTop: `1px solid ${C.parch}`, padding: "12px 0" }}>
+                <span style={{ fontFamily: mono, fontSize: 12.5, color: i === arr.length - 1 ? C.orangeD : C.muted, minWidth: 104, fontVariantNumeric: "tabular-nums" }}>{t}</span>
                 <span style={{ fontSize: 15, lineHeight: 1.5, fontWeight: i === arr.length - 1 ? 600 : 400 }}>{txt}</span>
               </div>
             ))}
@@ -207,39 +211,41 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── 3 · WHAT HAPPENS (the six lines, each with its outcome) ─────── */}
+      {/* ── 3 · HOW IT WORKS (five steps, each with its outcome) ─────────── */}
       <section style={{ padding: "clamp(90px, 11vw, 140px) 0 0" }}>
         <div style={{ maxWidth: 860, margin: "0 auto", padding: "0 28px" }}>
-          <SectionTitle>Here&apos;s what happens once it&apos;s installed.</SectionTitle>
+          <SectionTitle>From the first ad click to a signed quote.</SectionTitle>
           <div style={{ marginTop: 30 }}>
-            {WHAT_HAPPENS.map((w) => (
-              <LedgerRow key={w.line} label={w.line} sub={w.outcome} />
+            {HOW_IT_WORKS.map((w, i) => (
+              <LedgerRow key={w.line} index={i + 1} label={w.line} sub={w.outcome} />
             ))}
             <div style={{ borderTop: `1px solid ${C.line}` }} />
           </div>
         </div>
       </section>
 
-      {/* ── 4 · PROOF: the thread ────────────────────────────────────────── */}
+      {/* ── 4 · EXAMPLE THREAD ───────────────────────────────────────────── */}
       <section style={{ padding: "clamp(90px, 11vw, 140px) 0 0" }}>
         <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 28px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "48px 72px", alignItems: "start" }}>
           <div>
-            <SectionTitle>A lead came in at 7:07 PM. Booked, routed, and confirmed by 7:17.</SectionTitle>
+            <SectionTitle>A homeowner messages at 8:42 PM. The measure is booked by 8:48.</SectionTitle>
             <p style={{ marginTop: 18, fontSize: 16.5, lineHeight: 1.65, color: C.muted, maxWidth: 500 }}>
-              This is the real shape of a real conversation from a live HVAC account. Office closed,
-              nobody on the phone. Ten minutes from first message to a job on the calendar.
+              Here&apos;s an example of how a conversation runs. Office closed, nobody on the phone.
+              The homeowner is qualified, every decision maker is confirmed, and the measure is on
+              your calendar six minutes after the first message.
             </p>
             <div style={{ marginTop: 30, background: C.white, border: `1px solid ${C.line}`, borderRadius: 16, overflow: "hidden" }}>
               <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.line}`, display: "flex", justifyContent: "space-between", alignItems: "baseline", flexWrap: "wrap", gap: 8 }}>
-                <span style={{ fontFamily: jakarta, fontWeight: 800, fontSize: 15 }}>Booked job · written to the CRM</span>
-                <span style={{ fontFamily: mono, fontSize: 12.5, color: C.orangeD, fontVariantNumeric: "tabular-nums" }}>7:17 PM</span>
+                <span style={{ fontFamily: jakarta, fontWeight: 800, fontSize: 15 }}>Measure booked · on your calendar</span>
+                <span style={{ fontFamily: mono, fontSize: 12.5, color: C.orangeD, fontVariantNumeric: "tabular-nums" }}>8:48 PM</span>
               </div>
               <div style={{ padding: "4px 20px 14px" }}>
                 {[
-                  ["Qualified by the company's rules", "ZIP in area · job type · urgency"],
-                  ["Routed to the right technician", "the one who covers 60007"],
-                  ["Booked against real availability", "Saturday · arrival 3 to 6 PM"],
-                  ["Confirmation and reminders scheduled", "day before · 30 minutes out"],
+                  ["Qualified by your rules", "LVP · ~600 sq ft · before holidays"],
+                  ["Service area checked", "ZIP 46032 · covered"],
+                  ["Decision makers confirmed", "both home for the measure"],
+                  ["Reminders scheduled", "day before · on the way"],
+                  ["Quote follow-up armed", "starts after the measure"],
                 ].map(([a, b]) => (
                   <div key={a} style={{ display: "flex", justifyContent: "space-between", gap: 16, alignItems: "baseline", padding: "10px 0", borderTop: `1px solid ${C.parch}` }}>
                     <span style={{ fontSize: 14.5, fontWeight: 600 }}>{a}</span>
@@ -251,14 +257,15 @@ export default function Home() {
           </div>
 
           <div>
+            <p style={{ fontFamily: mono, fontSize: 11.5, letterSpacing: "0.08em", color: C.muted, marginBottom: 14 }}>EXAMPLE CONVERSATION</p>
             {THREAD.map((m) => (
               <div key={m.t + m.text.slice(0, 12)} style={{ marginBottom: 18, display: "flex", flexDirection: "column", alignItems: m.who === "lead" ? "flex-start" : "flex-end" }}>
-                <span style={{ fontFamily: mono, fontSize: 11.5, color: m.t === "7:17 PM" ? C.orangeD : C.muted, letterSpacing: "0.05em", fontVariantNumeric: "tabular-nums" }}>{m.t}</span>
+                <span style={{ fontFamily: mono, fontSize: 11.5, color: m.t === "8:48 PM" ? C.orangeD : C.muted, letterSpacing: "0.05em", fontVariantNumeric: "tabular-nums" }}>{m.t}</span>
                 <div style={{
                   marginTop: 5, maxWidth: 440, padding: "12px 16px", fontSize: 14.5, lineHeight: 1.5,
-                  background: m.who === "lead" ? C.white : C.ink,
-                  color: m.who === "lead" ? C.ink : "#F5F2EE",
-                  border: m.who === "lead" ? `1px solid ${C.line}` : "1px solid transparent",
+                  background: m.who === "lead" ? C.white : C.soft,
+                  color: C.ink,
+                  border: m.who === "lead" ? `1px solid ${C.line}` : "1px solid rgba(249,115,22,0.22)",
                   borderRadius: m.who === "lead" ? "4px 16px 16px 16px" : "16px 4px 16px 16px",
                 }}>
                   {m.text}
@@ -269,38 +276,41 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── 5 · PROOF: the receipts ──────────────────────────────────────── */}
+      {/* ── 5 · RECEIPTS ─────────────────────────────────────────────────── */}
+      {/* Top Air numbers: label as a home-services account, never as flooring. */}
       <section style={{ padding: "clamp(90px, 11vw, 140px) 28px 0" }}>
         <div style={{ maxWidth: 1140, margin: "0 auto", background: C.parch, border: `1px solid ${C.line}`, borderRadius: 24, padding: "clamp(30px, 4.5vw, 56px)", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(300px, 1fr))", gap: "44px 72px", alignItems: "start" }}>
           <div>
-            <SectionTitle max={440}>Numbers from a live account, not a brochure.</SectionTitle>
+            <SectionTitle max={440}>The same booking engine, live today.</SectionTitle>
             <p style={{ marginTop: 16, fontSize: 16, lineHeight: 1.65, color: C.muted, maxWidth: 440 }}>
-              Every number below is a row in that company&apos;s own CRM with a timestamp on it.
-              This is what &quot;capturing the demand you already have&quot; looks like in practice.
+              These numbers come from a live home-services account running the same booking and
+              follow-up engine. Every one is a timestamped row in that company&apos;s CRM. Our
+              flooring program is new, and we&apos;ll show flooring numbers here as soon as
+              they&apos;re in.
             </p>
           </div>
           <div>
-            <p style={{ fontFamily: mono, fontSize: 12.5, letterSpacing: "0.08em", color: C.muted, marginBottom: 4 }}>NINE DAYS · ONE ACCOUNT</p>
+            <p style={{ fontFamily: mono, fontSize: 12.5, letterSpacing: "0.08em", color: C.muted, marginBottom: 4 }}>NINE DAYS · ONE HOME-SERVICES ACCOUNT</p>
             <LedgerRow label="Leads in" value="130" />
             <LedgerRow label="Cold leads worked" value="77" />
-            <LedgerRow label="Booked jobs on the calendar" value="13" strong />
+            <LedgerRow label="Appointments booked" value="13" strong />
             <p style={{ fontFamily: mono, fontSize: 12.5, letterSpacing: "0.08em", color: C.muted, margin: "36px 0 4px" }}>THE FIRST 24 HOURS</p>
             <LedgerRow label="Leads answered" value="27" />
             <LedgerRow label="Conversations held" value="14" />
-            <LedgerRow label="Jobs on the calendar" value="3" strong />
+            <LedgerRow label="Appointments booked" value="3" strong />
             <div style={{ borderTop: `1px solid ${C.line}` }} />
           </div>
         </div>
       </section>
 
-      {/* ── 6 · WHAT YOU GET (the install scope) ─────────────────────────── */}
+      {/* ── 6 · WHAT GETS INSTALLED ──────────────────────────────────────── */}
       <section style={{ padding: "clamp(90px, 11vw, 140px) 0 0" }}>
         <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 28px" }}>
-          <SectionTitle>One installation. Everything configured to how your company runs.</SectionTitle>
+          <SectionTitle>Ads, booking and follow-up, installed as one system.</SectionTitle>
           <p style={{ marginTop: 18, fontSize: 16.5, lineHeight: 1.65, color: C.muted, maxWidth: 640 }}>
-            This is not software you log into and figure out. We build your rules into a tested
-            system, prove it against real scenarios, hand it to your team, and release it.
-            You own it.
+            You don&apos;t log into anything or figure anything out. We build your service area,
+            your rules and your calendar into it, test it, and run it. You get measures on the
+            calendar and an answer on every quote.
           </p>
           <div style={{ marginTop: 34, columnWidth: 330, columnGap: 56 }}>
             {INSTALL_SCOPE.map((s) => (
@@ -319,12 +329,12 @@ export default function Home() {
           <SectionTitle>It follows your rules. It doesn&apos;t make decisions for you.</SectionTitle>
           <div style={{ marginTop: 28 }}>
             {[
-              ["It never diagnoses.", "What's wrong with the equipment is your technician's call, on site."],
-              ["It never invents a price.", "It quotes only the prices you set, exactly as you set them."],
-              ["It never books outside your rules.", "Out of area, wrong job type, no availability: it doesn't force it, it flags it."],
-              ["It never handles an emergency.", "Gas, smoke, or carbon monoxide: the caller is told to hang up and call 911."],
-              ["It never pretends to be a person.", "It identifies itself honestly, every time."],
-              ["It never leaves you out of the loop.", "Exceptions escalate to a human, by your rules, with the whole thread attached."],
+              ["It never quotes your price.", "The quote comes from you, after the measure. It only books the visit."],
+              ["It never books outside your rules.", "Out of area, wrong project, decision maker missing: it doesn't force it, it flags it."],
+              ["It never pretends to be a person.", "It tells every homeowner it's an AI assistant, every time."],
+              ["It never keeps chasing after a no.", "The moment a homeowner says no or stop, the follow-up ends."],
+              ["It never sells your leads to anyone else.", "Every homeowner from your ads is yours alone."],
+              ["It never leaves you out of the loop.", "You see every message, and anything unusual comes to you with the whole thread."],
             ].map(([a, b]) => <LedgerRow key={a} label={a} sub={b} />)}
             <div style={{ borderTop: `1px solid ${C.line}` }} />
           </div>
@@ -336,70 +346,71 @@ export default function Home() {
         <div style={{ maxWidth: 1140, margin: "0 auto", padding: "0 28px", display: "grid", gridTemplateColumns: "repeat(auto-fit, minmax(320px, 1fr))", gap: "48px 72px", alignItems: "start" }}>
           <div>
             <p style={{ fontFamily: jakarta, fontWeight: 600, fontSize: 17, lineHeight: 1.6, color: C.muted }}>
-              Not an AI receptionist. Not a lead gen agency. Not another dispatch software.
+              Not shared leads. Not an answering service. Not an agency that hands you a list.
             </p>
             <p style={{ marginTop: 12, fontFamily: jakarta, fontWeight: 800, fontSize: "clamp(26px, 3.4vw, 40px)", lineHeight: 1.15, letterSpacing: "-0.02em" }}>
-              The operating system between an inquiry and <span style={{ color: C.orangeD }}>a booked job.</span>
+              The system between an ad click and <span style={{ color: C.orangeD }}>a signed quote.</span>
             </p>
             <p style={{ marginTop: 18, fontSize: 16, lineHeight: 1.65, color: C.muted, maxWidth: 480 }}>
-              A receptionist answers the phone. A lead gen agency makes it ring more. Dispatch
-              software manages the job after it&apos;s booked. None of them control what happens
-              between the first call and the scheduled job. That gap is where the money leaks,
-              and that gap is the only thing we do.
+              Lead sellers hand you names. Answering services take messages. Agencies send you a
+              report. None of them book the measure and chase the quote. That&apos;s where the
+              jobs get lost, and that&apos;s the whole job here.
             </p>
           </div>
           <div>
             <p style={{ fontFamily: jakarta, fontWeight: 800, fontSize: 17, marginBottom: 4 }}>Built for you if:</p>
-            <LedgerRow label="You run a residential HVAC company with 4+ technicians" />
-            <LedgerRow label="You're doing roughly $1M+ a year" />
-            <LedgerRow label="The phone already rings, and you know calls are slipping" />
-            <LedgerRow label="You run Housecall Pro, ServiceTitan, or a CRM you actually use" />
+            <LedgerRow label="You run a flooring company in the USA with your own install crews" />
+            <LedgerRow label="Your crews can take on more installs than the calendar feeds them" />
+            <LedgerRow label="You do in-home measures before you quote" />
+            <LedgerRow label="You're tired of shared leads and quotes that go quiet" />
             <div style={{ borderTop: `1px solid ${C.line}` }} />
             <p style={{ fontFamily: jakarta, fontWeight: 800, fontSize: 17, margin: "34px 0 4px", color: C.muted }}>Not for you if:</p>
-            <LedgerRow label="You're only looking for more leads" sub="Fix capture first. Then buying leads starts paying." />
-            <LedgerRow label="The phone doesn't ring yet" sub="There's no demand to capture. We'd be selling you a bucket for a dry well." />
+            <LedgerRow label="You don't have an install crew yet" sub="We fill calendars. Without a crew there's nothing to fill." />
+            <LedgerRow label="You only sub for stores" sub="The homeowner has to be your customer, not someone else's." />
             <div style={{ borderTop: `1px solid ${C.line}` }} />
           </div>
         </div>
       </section>
 
-      {/* ── 9 · RESULT + PRICING + ASK ───────────────────────────────────── */}
-      <section style={{ marginTop: "clamp(90px, 11vw, 140px)", background: C.night, color: "#F3EFEA" }}>
-        <div style={{ maxWidth: 860, margin: "0 auto", padding: "clamp(70px, 8vw, 110px) 28px 90px" }}>
-          <h2 style={{ fontFamily: jakarta, fontWeight: 800, fontSize: "clamp(30px, 4.2vw, 50px)", letterSpacing: "-0.022em", lineHeight: 1.1 }}>
-            The result:
-          </h2>
-          <div style={{ marginTop: 24, maxWidth: 680 }}>
-            <LedgerRow dark label="You stop losing $66K-$231K per year to missed calls and bad bookings." />
-            <LedgerRow dark label="You free up 10-15 hours per week of owner and admin time." />
-            <LedgerRow dark label="You can leave the business without it falling apart." />
-            <LedgerRow dark label="You can scale safely." sub="When capture is fixed, every ad dollar you add converts instead of leaking." />
-            <div style={{ borderTop: "1px solid rgba(243,239,234,0.14)" }} />
-          </div>
+      {/* ── 9 · RESULT + ASK ─────────────────────────────────────────────── */}
+      <section style={{ padding: "clamp(90px, 11vw, 140px) 28px 0" }}>
+        <div style={{ maxWidth: 1140, margin: "0 auto", background: C.white, border: `1px solid ${C.line}`, borderRadius: 24, padding: "clamp(40px, 6vw, 80px) clamp(24px, 5vw, 72px)" }}>
+          <div style={{ maxWidth: 760 }}>
+            <h2 style={{ fontFamily: jakarta, fontWeight: 800, fontSize: "clamp(30px, 4.2vw, 50px)", letterSpacing: "-0.022em", lineHeight: 1.1 }}>
+              What you get:
+            </h2>
+            <div style={{ marginTop: 24 }}>
+              <LedgerRow label="20 in-home measures on your calendar in 60 days, guaranteed." strong />
+              <LedgerRow label="Every quote followed up until it signs or says no." />
+              <LedgerRow label="Qualified homeowners only, with the decision makers home." />
+              <LedgerRow label="No sales hire, no shared leads, nobody on your team chasing." />
+              <div style={{ borderTop: `1px solid ${C.line}` }} />
+            </div>
 
-          <div style={{ marginTop: 60 }}>
-            <p style={{ fontSize: 18, lineHeight: 1.6, color: "rgba(243,239,234,0.85)", marginBottom: 24 }}>
-              Ready to see if it works for your business?
-            </p>
-            <PillCta>Book a 15-minute discovery call</PillCta>
-            <p style={{ marginTop: 16, fontSize: 15, color: "rgba(243,239,234,0.65)" }}>
-              We&apos;ll show you exactly where you&apos;re losing money.
-            </p>
-          </div>
-        </div>
-
-        {/* footer */}
-        <div style={{ borderTop: "1px solid rgba(243,239,234,0.1)" }}>
-          <div style={{ maxWidth: 1140, margin: "0 auto", padding: "26px 28px", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
-            <span style={{ fontFamily: jakarta, fontWeight: 800, fontSize: 15, color: "rgba(243,239,234,0.85)" }}>FIELDBUILT</span>
-            <div style={{ display: "flex", gap: 26 }}>
-              <Link href="/privacy" style={{ fontSize: 13.5, color: "rgba(243,239,234,0.6)" }}>Privacy</Link>
-              <Link href="/terms" style={{ fontSize: 13.5, color: "rgba(243,239,234,0.6)" }}>Terms</Link>
-              <Link href="/login" style={{ fontSize: 13.5, color: "rgba(243,239,234,0.6)" }}>Log in</Link>
+            <div style={{ marginTop: 52 }}>
+              <p style={{ fontSize: 18, lineHeight: 1.6, color: C.muted, marginBottom: 24 }}>
+                Want to see if your service area is a fit?
+              </p>
+              <PillCta>Book a 20-minute walkthrough</PillCta>
+              <p style={{ marginTop: 16, fontSize: 15, color: C.muted }}>
+                We&apos;ll show you the demand in your area and exactly how the 20 measures get booked.
+              </p>
             </div>
           </div>
         </div>
       </section>
+
+      {/* ── FOOTER ───────────────────────────────────────────────────────── */}
+      <footer style={{ marginTop: "clamp(70px, 8vw, 100px)", borderTop: `1px solid ${C.line}` }}>
+        <div style={{ maxWidth: 1140, margin: "0 auto", padding: "26px 28px", display: "flex", justifyContent: "space-between", flexWrap: "wrap", gap: 14 }}>
+          <span style={{ fontFamily: jakarta, fontWeight: 800, fontSize: 15, color: C.ink }}>FIELDBUILT</span>
+          <div style={{ display: "flex", gap: 26 }}>
+            <Link href="/privacy" style={{ fontSize: 13.5, color: C.muted }}>Privacy</Link>
+            <Link href="/terms" style={{ fontSize: 13.5, color: C.muted }}>Terms</Link>
+            <Link href="/login" style={{ fontSize: 13.5, color: C.muted }}>Log in</Link>
+          </div>
+        </div>
+      </footer>
     </main>
   )
 }

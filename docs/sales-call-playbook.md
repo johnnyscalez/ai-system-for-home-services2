@@ -1,45 +1,57 @@
-# FieldBuilt AI — Complete Sales Call Playbook
-### For Warm Inbound Leads (Replied Positively to DM/Email)
+# FieldBuilt AI — Sales Call Playbook (Flooring)
+### For Warm Inbound Flooring Contractors (Booked a Call From the Funnel, or Replied to a DM/Email)
 
-> **Context:** These leads already expressed interest. They are NOT cold. The job of this call is not to sell — it's to confirm pain, make the outcome vivid, show the system, and remove all risk so saying yes is the obvious move. By the time you ask for the $200, it should feel weird for them NOT to do it.
+> **Context:** Internal doc. These owners already raised their hand. The job of this call is not to pitch. It is to get them to say, in their own numbers, how much install capacity is sitting idle and how many quotes are dying quietly, show them the five steps that fix it, and make the offer the obvious next move.
+>
+> **Source of truth:** `docs/flooring-pivot.md` wins over this file. Rewritten for flooring on 2026-10-20; the previous version lives in git history. `docs/sales-call-playbook.pdf` is stale (old pilot offer) and must be regenerated from the .html before anyone uses it.
 
 ---
 
 ## THE OFFER (commit this to memory)
 
-**What you're presenting:**
-- **30 days FREE** — full system running on their real leads
-- **$200 refundable deposit** — held to confirm both sides are serious
-- **After trial:** $297/month ongoing
-- **Anchor always first:** "Normally this is a $2,250 install plus $597/month. For the pilot, I'm covering the install entirely and waiving the first 30 days."
+**Exact wording, never paraphrase it:**
+> **Guaranteed 20 in-home measures in 60 days, and every quote chased until it signs or says no.**
 
-**The five AI employees they're getting:**
-- **Alex** — texts every lead in 47 seconds, 24/7 (no matter what time a form fills out)
-- **Jordan** — qualifies with 3-4 questions, handles objections, books the estimate
-- **Sam** — smart dispatch: right tech, right zip, right skills, auto-assigned
-- **Riley** — 7-day follow-up sequences so no lead ever goes cold
-- **Morgan** — CRM dashboard, confirmations, push alerts to owner's phone
+- **Guarantee terms:** [guarantee terms: TBD by Jonathan]. Never improvise what happens if the 20 aren't hit. No "refund", no "you don't pay", no "we work free" until Jonathan confirms.
+- **Our fee:** [price: to confirm for flooring]. Price is said out loud on the call only. Never in an email, DM or one-pager before the call.
+- **Ad spend:** the contractor pays Meta directly, on their own card. It never passes through us and it is separate from our fee. Recommended budget: [recommended ad budget: TBD by Jonathan].
+- **Installed, not logged into:** Jonathan installs every account himself and plugs it into the CRM or calendar they already use.
 
-**Human cost equivalent:** $13,500–$19,000/month to hire this team. They get it for $297.
+**How it works (always in this order):**
+1. **We run the ads.** Meta ads to homeowners in their service area. They pay the ad spend straight to Meta.
+2. **Every lead answered in seconds**, 24/7, by text and phone.
+3. **Qualified before it touches the calendar:** project type (LVP, hardwood, carpet, tile, laminate), rough size or rooms, timeline, ZIP in their area, and every decision maker home for the measure.
+4. **Booked as an in-home measure** on real estimator and crew availability, with a confirmation, a day-before reminder and an easy reschedule path.
+5. **Every quote chased** after the measure, by text, call and email, until it signs or says no.
+
+**Never on a call:**
+- Never call it "software", "platform", "SaaS", "tool", "app" or "solution". It is an AI front office we install.
+- Never invent flooring results, testimonials or client names. There is no flooring client result yet.
+- The only live numbers you can quote come from **"a live home-services account"**, said exactly like that, never implied as flooring.
+- Never promise "one company per area" exclusivity. It is not confirmed.
+- The AI never quotes a flooring price and always says it is an AI. Say so before they ask.
 
 ---
 
 ## BEFORE THE CALL (5 minutes)
 
 **Look up the company:**
-1. Find their Facebook page — note any ads currently running (use Meta Ad Library)
-2. Check their Google reviews — note their rating and any patterns in feedback
-3. Check their website — how professional is it? Do they show pricing?
-4. Check how many techs they appear to have (number of trucks in photos, team page)
-5. Note their service area and city
+1. Meta Ad Library: are they running ads now? Note the creative and the offer.
+2. Google reviews: rating, and whether reviewers name installers or estimators (tells you who runs measures).
+3. Website: shop-at-home, showroom that installs, or installer-led contractor? Do they mention financing, brands, free measures?
+4. Crew signals: team page, install photos, job posts for installers. Own crews or subs?
+5. Angi / HomeAdvisor profile: if they have one, they are buying shared leads.
+6. Service area: cities and ZIPs they cover.
+
+**Fit check before you dial:** own install crews, USA, and room on the calendar. One-person installers with no crew, or installers who only sub for stores, are not a fit. Be polite and end early.
 
 **Open your browser tabs:**
-- FieldBuilt AI demo (your live app or Loom walkthrough)
-- Stripe payment link (ready to send in chat during call)
-- Your Calendly (for onboarding call if needed)
+- Flooring demo walkthrough [demo: use a flooring-configured demo account if one exists; otherwise walk the example conversation and label it out loud as an example]
+- Agreement and payment link (ready to drop in the chat)
+- Calendar link for the onboarding call
 
 **Your mental frame going in:**
-> *"This person is paying $50-150 per Facebook lead. If they're running $3K/month in ads, they're generating 20-60 leads/month. My system will follow up on all of them within 47 seconds. Even if it books just 2-3 extra jobs per month that would have gone cold, that's $10K-$30K in revenue at a $5K average ticket. The $297/month is noise. My job is just to make that math real and visible."*
+> *"This owner has crews who can install more than the calendar feeds them. Every slow week is payroll already spent. Every quote nobody chased is a job that was already half won. My job is to get him to say three numbers: how many installs a week the crews could handle, how many measures he runs now, and how many quotes are sitting open. Then the 20 measures in 60 days sells itself."*
 
 ---
 
@@ -49,133 +61,189 @@
 
 | Phase | Time | Goal |
 |---|---|---|
-| 1. Open + Rapport | 2-3 min | Get them talking, set safe tone |
-| 2. Diagnose Pain | 8-10 min | Uncover real money being lost |
-| 3. Show the System | 7-8 min | Make the outcome vivid |
-| 4. Stack the Value | 3-4 min | Anchor against alternatives |
-| 5. Make the Offer | 2-3 min | 30-day free, $200 deposit |
+| 1. Open + Rapport | 2-3 min | Get them talking, set a safe tone |
+| 2. Diagnose Pain | 10-12 min | Idle crew capacity and dead quotes, in their numbers |
+| 3. Show the System | 7-8 min | Walk the five steps, ad to signed quote |
+| 4. Stack the Value | 3-4 min | What it takes to do all five in-house |
+| 5. Make the Offer | 2-3 min | The guarantee line, then the fee |
 | 6. Handle Objections | As needed | Remove risk |
-| 7. Close + Next Steps | 2-3 min | Get $200, send link |
+| 7. Close + Next Steps | 2-3 min | Agreement sent in the chat, onboarding booked |
 
 ---
 
 ## PHASE 1: OPEN + RAPPORT (2–3 min)
 
-**Goal:** Make them comfortable. They said yes to this call — they're already interested. Don't over-sell the opener. Just be a normal person.
+**Goal:** Make them comfortable. They booked this call, so they are already interested. Be a normal person, not a vendor.
 
 **Opening:**
-> "Hey [Name], thanks for jumping on — I'm [your name]. I saw you're running ads in [city], which is actually why I reached out. Before I show you anything, I just want to make sure this actually makes sense for your situation. Cool if I ask you a couple quick questions first?"
+> "Hey [Name], thanks for jumping on. I'm [your name]. I looked at [company] before the call, you're doing [LVP / hardwood / carpet] installs around [city]. Before I show you anything, I want to make sure this actually makes sense for your shop. Cool if I ask you a few quick questions first?"
 
-**Why this works:** You're not pitching yet. You're being diagnostic. This immediately separates you from every other vendor who opens with a feature list. It also gives you permission to go deep on pain.
+**Why this works:** You are diagnosing, not pitching. Every lead gen agency that ever called him opened with what they do. You open with what he has.
 
 **Quick rapport question (pick one based on research):**
-- "How long have you been running the [company name] show?"
-- "I saw your Google reviews — a lot of customers mention [specific thing]. Is that something you focus on intentionally?"
-- "You're in [city] — peak season must be intense right now, how's the volume been?"
+- "How long have you been doing floors in [city]?"
+- "I saw a lot of your reviews mention [installer or estimator name] by name. Is that on purpose?"
+- "Fall's usually the busy stretch for flooring. How's the calendar looking going into November?"
 
 **Transition:**
-> "Awesome. So let me understand your situation a bit — then I'll show you exactly what I built and you can tell me if it makes sense."
+> "Good. Let me understand how the shop runs, then I'll show you exactly what we install and you tell me if it fits."
 
 ---
 
-## PHASE 2: DIAGNOSE PAIN (8–10 min)
+## PHASE 2: DIAGNOSE PAIN (10–12 min)
 
-**Goal:** Get them to articulate the revenue they're losing in their own words. Hormozi principle: *"Don't tell them their problem. Let them tell you. Then repeat it back."* If they feel the pain, your solution becomes the relief.
+**Goal:** Get them to say, in their own numbers, the gap between what the crews could install and what the calendar feeds them, and what happens to quotes that go quiet. Don't tell them their problem. Let them tell you, then repeat it back.
 
-**The discovery questions — in order:**
+**The discovery questions, in order:**
 
-### Q1 — Establish the bleeding
-> "When someone fills out your Facebook form right now — what actually happens? Like, who follows up and how fast?"
+### Q1 — Crews and capacity
+> "How many install crews do you have running, your own guys, not subs? If the calendar was completely full, how many installs a week could they handle?"
+>
+> "And how many weeks out are you booked right now?"
 
-*Listen for:* "I call them," "My receptionist," "We try to get back same day," "Honestly it's a mess." Whatever they say — there's a gap. Find it.
+*Write the number down. This is the ceiling.*
 
-**Follow-up if they say "we follow up pretty fast":**
-> "Nice. What about at 10pm on a Wednesday? Or Saturday morning?"
+### Q2 — Measures per week right now
+> "And how many in-home measures are you running a week right now? What did it look like this time last month?"
 
-### Q2 — Quantify the loss
-> "How many leads do you think slip through — ones where you called but they went cold before you could get them on the phone?"
+*The gap between Q1 and Q2 is the whole call. Say it back:* "So the crews could take [X] a week and you're feeding them [Y]."
 
-*Most will say 30-50%. Guide the math gently:*
+### Q3 — How you sell, who runs the measures, and how far
+> "How do you sell mostly: shop-at-home with samples, people coming into the showroom, or you and your installers quoting jobs directly?"
+>
+> "What's the area you'll actually drive to for a measure? Which towns or ZIPs?"
+>
+> "Who goes out on the measures, you, an estimator, a salesperson? How far are they driving on a typical one? How often do you get there and nobody's home, or it's 'my husband needs to see this before we decide'?"
 
-> "So if you're doing maybe [X] leads a month, and even 20-30% go cold before you connect... what's an average job worth for you — like, estimate installation ticket?"
+*Listen for:* shop-at-home vs showroom vs installer-led (decides whose calendar we book into), the service area ZIPs, the owner doing measures himself, long drives, no-shows and wasted trips. Every one of those is the decision-maker question we ask before booking.
 
-*Wait for their number. Let's say they say $7,000.*
+### Q4 — Where the measures come from
+> "Where do the measures come from today? Referrals, showroom walk-ins, Google, Angi or HomeAdvisor, your own ads?"
 
-> "So conservatively — 5 leads go cold a month, that's $35,000 in potential revenue walking out the door. Every month. Does that feel about right?"
+**If they buy Angi / HomeAdvisor leads:**
+> "How many other companies get that same lead? Out of ten, how many actually pick up when you call?"
 
-**This is the most important moment in the call.** Let them feel that number. Don't rush past it.
+**Then the speed question:**
+> "When a homeowner fills out a form at 8pm on a Wednesday, who answers, and how fast?"
 
-### Q3 — Establish the bottleneck
-> "Are you the one doing most of the follow-up, or do you have someone on it?"
+*Listen for:* "next morning", "when I get to it", "my office calls them". Homeowners contact several flooring companies at once and book whoever answers first.
 
-*Most will say themselves. That's your opening:*
+### Q5 — Close rate on quotes
+> "Out of ten measures, how many sign?"
 
-> "So you're running the business AND chasing leads. What happens when you're on a job and someone fills out the form?"
+*Don't react to the number. Write it down.*
 
-### Q4 — Surface the real fear
-> "Has this ever cost you a big job? Like, a lead that turned into someone else's customer because you just couldn't get to them in time?"
+### Q6 — Quotes that go quiet (THE CRITICAL MOMENT)
+> "What happens to the quote that goes out and the homeowner says 'let me think about it'? Who follows up, how many times, and when do you stop?"
 
-*This is personal. They'll have a story. Let them tell it.*
+Then:
+> "How many quotes from the last 90 days are still sitting open right now, no yes, no no?"
 
-### Q5 — Confirm the trigger (why now)
-> "Why did you respond to my message? Like, is this a timing thing, or has it been a problem for a while?"
+*Let them count. Then:*
+> "What's your average job worth? [Their number.] So [open quotes] times [their average job]... that's sitting in a 'let me think about it' pile right now. Does that feel about right?"
+
+**This is the most important moment in the call.** Let them feel that number. Don't rush past it. Use their numbers only, never yours.
+
+### Q7 — Seasonality and the winter dip
+> "What does your January look like next to October? What do the crews do in the slow weeks, sit, take short jobs, go work for someone else?"
+
+*Listen for:* the November to February slowdown, crews they are scared to lose, payroll with no installs behind it.
+
+### Q8 — Why now
+> "Why take this call now? Is this a timing thing, or has it been bugging you for a while?"
 
 *This tells you what they actually want from the call.*
 
 ---
 
-**The pain summary — always do this before moving to the solution:**
+**The pain summary — always do this before moving to the demo:**
 
-> "Okay so let me make sure I'm hearing this right. You're spending [X]/month on ads, you're generating [X] leads, but a big chunk of them — especially after hours or when you're on the job — are going cold before you can follow up. And the ones that do slip through, at [their ticket size], that's real money. Is that a fair summary?"
+> "Okay, let me make sure I've got this right. You've got [crews] crews that could install [X] a week, and you're feeding them [Y] measures. A chunk of your leads come from [Angi / HomeAdvisor / wherever], shared with other companies, and the ones that come in after hours wait till morning. Out of ten measures, [close rate] sign, and there are [open quotes] quotes sitting open with nobody chasing them. And January's coming. Fair summary?"
 
-*When they say yes — PAUSE. Then:*
+*When they say yes, PAUSE. Then:*
 
-> "Okay. Let me show you what I built."
+> "Okay. Let me show you what we install."
 
 ---
 
 ## PHASE 3: SHOW THE SYSTEM (7–8 min)
 
-**Goal:** Make it vivid. This is not a feature tour. This is a "what happens to your leads starting tonight" walk-through.
+**Goal:** Make it vivid. Not a feature tour. "Here is what happens to a homeowner in [city] who wants new floors, from the ad to the signed quote."
 
 **Frame before you share screen:**
-> "I'm going to walk you through exactly what happens from the moment someone fills out your form. I'm going to make this specific to HVAC. Takes about 7 minutes."
+> "I'm going to walk you through exactly what happens from the moment a homeowner in your area sees the ad until that quote signs or says no. Five steps, about seven minutes."
 
-**The demo narrative — what you say as you show each piece:**
+> **Demo honesty rule:** if a flooring-configured demo account isn't ready, walk the example conversation and say "this is an example" out loud. Never pass off another trade's screens or a live home-services account's conversations as flooring.
 
-### 1. The 47-Second Response
-> "So lead fills out your Facebook form at 11:47pm Tuesday. This is Alex — your AI receptionist. Watch what happens."
-> 
-> *[Show the SMS sending within seconds]*
-> 
-> "47 seconds. Every time. Midnight, Sunday morning, Christmas Day. Doesn't matter. Alex never calls in sick."
+**The demo narrative, step by step:**
 
-### 2. The Qualification Flow
-> "Now this is where Jordan — the AI appointment setter — takes over. Watch what Jordan does when the lead replies."
-> 
-> *[Show 3-4 qualification messages: service needed, approximate issue, zip code, time preference]*
-> 
-> "Jordan asks the same 4 questions every time. Never diagnoses. Never quotes prices. Just collects what your tech needs to know and moves toward booking. This is important for HVAC — I specifically built it so it NEVER says anything about what the problem might be or what it might cost. It only books."
+### 1. The ads
+> "Step one, we run the ads. Meta ads, Facebook and Instagram, to homeowners in your ZIPs, for the floors you actually install. The ad spend goes from your card straight to Meta, separate from our fee. You see every dollar in your own billing."
+>
+> *[Show an example ad creative, labelled Example]*
 
-### 3. The Booking Confirmation
-> "Lead picks a time. Jordan confirms. Your phone gets a push notification — [Name] booked a service estimate for Thursday 2pm. You see the full intake in the dashboard."
-> 
-> *[Show the CRM dashboard — lead card with all info filled in]*
-> 
-> "You didn't touch that. Morgan logged it all."
+### 2. Answered in seconds
+> "Homeowner fills out the form at 8:47pm on a Tuesday. Watch."
+>
+> *[Show the text going out within seconds]*
+>
+> "In seconds. Every time. Nights, Sundays, the day after Thanksgiving. And the first thing it says is that it's an AI assistant for [company]. Nobody gets tricked."
 
-### 4. The Follow-Up Sequence
-> "Now here's what I'm most proud of — the leads that DON'T book immediately. Riley handles those."
-> 
-> *[Show follow-up sequence: 1hr, 24hr, 72hr, 7-day]*
-> 
-> "Riley sends 4 follow-up messages over 7 days. Stays warm, never pushy. Most leads that eventually book do it on message 2 or 3. The ones that never respond get marked Cold automatically — no manual cleanup."
+### 3. Qualified before it hits the calendar
+> "Now it qualifies. What floors, roughly how many rooms or square feet, when they want it done, what ZIP. And this is the one that saves your estimator the wasted drive:"
+>
+> *[Show the decision-maker question in the example thread]*
+>
+> "'Will everyone who's deciding on the floors be home for the measure?' If not, it books a time when they both are. And it never quotes a price. The price comes from you, after the measure."
 
-### 5. The Smart Dispatch
-> "And Sam handles dispatch. Lead in zip code 77084, needs AC repair, Thursday 2pm — Sam assigns the closest available tech with HVAC certs. You see it in the dashboard, your tech gets a notification."
+**Example conversation (illustrative, not a real homeowner).** Agent lines follow the house rules: says it's an AI, no dashes, no asterisks, relaxed tone, ranges like "9 to 11am", asks about decision makers, never quotes a price.
+
+> Homeowner: Hi, I want a quote for LVP in 3 bedrooms
+>
+> AI: Hey Sarah, thanks for reaching out to [Company]. Just so you know, I'm the AI assistant that helps their team with scheduling. Is it carpet coming out in those 3 bedrooms, or something else?
+>
+> Homeowner: Carpet. Rooms are maybe 12 by 12 each
+>
+> AI: Got it, that helps. When are you hoping to have it installed, and what's the ZIP for the house?
+>
+> Homeowner: Before Thanksgiving if possible. 60540
+>
+> AI: Perfect, that's in their area. The estimator comes out to measure and bring samples. Will everyone who's deciding on the floor be home for that?
+>
+> Homeowner: My husband works late, he'd need to be there
+>
+> AI: No problem, let's pick a time that works for both of you. Thursday 5 to 7pm or Saturday 9 to 11am?
+>
+> Homeowner: Saturday. How much is it going to be?
+>
+> AI: Totally fair question. The exact number comes from the estimator after they measure, since it depends on the rooms and the product you pick. You're booked for Saturday 9 to 11am. You'll get a reminder Friday, and if anything changes just reply here and we'll move it.
+
+**Example: hardwood refinish vs replace (illustrative).**
+
+> Homeowner: Not sure if my hardwood needs refinishing or replacing
+>
+> AI: That's a really common one, and it's exactly what the estimator figures out in person, so I won't guess from here. Roughly which rooms are we talking about, and will anyone else be weighing in on the decision?
+
+### 4. Booked as an in-home measure
+> "Homeowner picks a time from your estimator's real availability. It goes on the calendar or CRM you already use. They get a confirmation, a reminder the day before, and an easy way to reschedule instead of just not answering the door."
+>
+> *[Show the booked measure on the calendar and the reminder text]*
+
+### 5. Every quote chased
+> "Here's the part most owners care about. You do the measure, you send the quote. Then it chases. Text, call, email, until that homeowner signs or says no. Nothing dies in the 'let me think about it' pile. And a 'no' is fine, it means your estimator stops wondering."
+>
+> *[Show the quote follow-up timeline, labelled Example if it's not live]*
+
+**Example: quote chase after the measure (illustrative).**
+
+> AI: Hi Mike, it's [Company]'s AI assistant. Just checking you got the quote for the basement, the carpet to LVP job. Any questions I can pass to the team?
+>
+> Homeowner: Still deciding
+>
+> AI: Totally get it. Is it the product, the timing, or something else? I can have [Owner] call you if that's easier.
 
 **Close the demo:**
-> "That's the whole system. Five people doing five jobs, 24/7. That's what I built. What questions do you have right now?"
+> "That's the whole thing. We run the ads, every lead answered in seconds, qualified with the decision makers home, booked as a measure, and every quote chased. What questions do you have right now?"
 
 *Let them react. Don't fill the silence.*
 
@@ -183,49 +251,45 @@
 
 ## PHASE 4: STACK THE VALUE (3–4 min)
 
-**Goal:** Hormozi's Grand Slam Offer — list every component, assign dream value, then reveal price as the obvious bargain.
+**Goal:** List every job they'd need to cover to do this in-house, let them price it, then put the guarantee on top. No made-up salary figures. Their numbers.
 
-> "Let me just put numbers on what you'd be paying to hire these people:
-> 
-> A real receptionist available 24/7? You're looking at $4,000-5,000 a month minimum, and they're not going to text leads at 2am.
-> 
-> An appointment setter who qualifies and handles objections? Another $3,500-4,500 — if you can find a good one.
-> 
-> A dispatcher who can do smart routing? $3,000-4,000 with any kind of system knowledge.
-> 
-> A follow-up agent running sequences? Another $3,000-3,500.
-> 
-> And an office manager managing the CRM and alerts? $2,500-3,000.
-> 
-> That's $13,500 to $19,000 a month. To hire all five. And they take breaks. And they quit.
-> 
-> That's what I'm replacing. For $297 a month after your free trial."
+> "Let's say you wanted to do all of this yourself. You'd need:
+>
+> Somebody building and running Meta ads for your area, and actually watching them.
+>
+> Somebody answering every lead in seconds, including 9pm and Saturday morning.
+>
+> Somebody qualifying every one of them and confirming both decision makers will be home.
+>
+> Somebody booking the measures, sending confirmations and reminders, and handling reschedules.
+>
+> And somebody calling, texting and emailing every open quote until it's a yes or a no.
+>
+> Who's doing those today? What would it cost you to hire for them?"
 
-*Pause.*
+*Let them answer. Usually it's "me" or "nobody".*
 
-> "And that doesn't even count the ROI side. If this system books you 3 extra jobs a month that would have gone cold — at [their ticket size] — what's that worth?"
-
-*Let them do the math.*
+> "And on top of all five, there's a number on it: 20 in-home measures in 60 days."
 
 ---
 
 ## PHASE 5: MAKE THE OFFER (2–3 min)
 
-**Critical rule: anchor to full price FIRST, every single time.**
+**Critical rule: say the offer line word for word. Then the fee. Then stop talking.**
 
-> "So here's what I'm doing for the first 5 founding partners.
-> 
-> Normally this is a $2,250 setup plus $597 a month. That's what we'll be at in a few months.
-> 
-> For you — I'm waiving the entire install. $0. And I'm giving you the first 30 days completely free.
-> 
-> The only thing I ask is a $200 deposit. Not a fee — it comes back to you or gets applied to your first month. It's just my way of making sure we're both serious. I'm putting in real time setting this up for your specific business — I need to know you're not going to ghost me after day one.
-> 
-> So: 30 days free, $200 holds your spot, and after 30 days if you want to keep it — which you will — it's $297 a month."
+> "So here's what we do.
+>
+> I install the whole thing for you personally, plugged into the calendar you already use.
+>
+> **Guaranteed 20 in-home measures in 60 days, and every quote chased until it signs or says no.**
+>
+> [guarantee terms: TBD by Jonathan]
+>
+> The ad spend goes from your card straight to Meta, that's separate. Our fee is [price: to confirm for flooring]."
 
 **Pause. Don't say another word.**
 
-Wait for their response. The next person who speaks loses. This is not a negotiating position — this is giving them space to say yes.
+Wait for their response. This is not a negotiating position. It is giving them room to say yes.
 
 ---
 
@@ -240,81 +304,139 @@ Identify the bucket. Then fix that one thing.
 
 ---
 
+### "I've been burned by lead gen agencies before"
+*Bucket: Trust in you*
+
+> "Fair, most flooring guys have. Here's usually what happened: they sold you leads and walked away. The leads weren't really the problem. Nobody answered them fast, nobody checked if both homeowners would be home, nobody chased the quote.
+>
+> We own it from the ad all the way to signed or no. And we don't put a number on leads, we put it on measures: 20 in-home measures in 60 days. [guarantee terms: TBD by Jonathan]. And you pay Meta directly, so you see every dollar of ad spend yourself. Nothing's hidden in a markup."
+
+---
+
+### "Angi / HomeAdvisor leads are garbage"
+*Bucket: Outcome belief (agree with them)*
+
+> "Agreed. That lead got sold to four other flooring companies, and half of them never picked up. Neither did the homeowner.
+>
+> These come from your own ads, to homeowners in your ZIPs, and that lead goes to you, nobody else. Then it's answered in seconds, before they've had a chance to call anyone else, and qualified before your estimator gets in the van."
+
+---
+
+### "My installers are booked in fall but dead in winter"
+*Bucket: Outcome belief (it's actually the reason to start now)*
+
+> "That's exactly why the timing matters. Ads and measures take a few weeks to get going. If we start before November, the measures we book through November and December become the installs that fill the November to February dip. If we start in January, you're already in the hole. When do your crews usually start running out of work?"
+
+---
+
+### "Who pays for the ads?"
+*Bucket: Cost clarity*
+
+> "You do, straight to Meta, on your own card. It never goes through us and it's separate from our fee. That way you see exactly what's being spent and nobody's marking it up. [recommended ad budget: TBD by Jonathan]"
+
+---
+
+### "I don't want a robot talking to my customers"
+*Bucket: Outcome belief + Fear*
+
+> "I hear that. Here's what it does and doesn't do. It tells every homeowner up front it's an AI assistant for [company]. It never quotes a price, the price comes from you after the measure. It doesn't tell them what floor they should pick. It asks the questions you'd ask, makes sure both decision makers will be home, and books the measure.
+>
+> It sounds like a normal person texting, relaxed, not salesy. And the moment a homeowner asks for a person, or asks something it shouldn't answer, it hands off to you or your office. You see every message. You can jump in any time. And honestly, a homeowner who texts at 9pm cares about one thing: somebody answered. A quick, polite answer tonight beats a voicemail tomorrow morning after they've booked with someone else."
+
+---
+
+### "We already follow up on quotes"
+*Bucket: They think the pain is solved*
+
+> "Good, then this should be easy to check. How many quotes from the last 90 days are still open? Who called each of those, how many times, and when was the last one?
+>
+> [Let them answer.]
+>
+> Usually the follow-up happens when someone has a slow afternoon. When your estimator's out on measures all day, it doesn't. We're not replacing your people. We make sure every quote gets chased every time, until it signs or says no, so your people spend their time on the homeowners who are ready."
+
+---
+
+### "My market is different"
+*Bucket: Outcome belief*
+
+> "Tell me how. [Listen. Actually listen.]
+>
+> That's exactly why nothing here is generic. The ads are built for your ZIPs and the floors you install. The questions are set to your service area, your measure windows and your rules. And the offer doesn't change by market: 20 in-home measures in 60 days. [guarantee terms: TBD by Jonathan]"
+
+---
+
+### "Is this exclusive in my area?" / "Do you work with my competitor?"
+*Bucket: Trust in you*
+
+> **Internal rule:** "one company per area" exclusivity is **NOT confirmed**. Don't promise it, don't deny it, don't hint at it. Flag the question to Jonathan after the call.
+
+> "Fair question, and I'd rather give you a straight answer than a quick one. Let me check that with Jonathan and get you a clear answer before you sign anything." [exclusivity: not offered unless Jonathan confirms it. Never promise it. Note it, and get Jonathan's answer before the agreement goes out.]
+
+---
+
+### "What if you don't hit 20?"
+*Bucket: Outcome belief*
+
+> "Fair question. Jonathan walks you through the exact guarantee terms before anything is signed." [guarantee terms: TBD by Jonathan]
+
+**Internal rule:** do not answer with terms. Never say refund, money back, "you don't pay" or "we work for free" until Jonathan confirms the wording.
+
+---
+
 ### "How do I know this will actually work?"
 *Bucket: Outcome belief*
 
-> "That's exactly why I'm giving you 30 days for free. You're not buying a promise — you're running it on your actual leads. By day 7 you'll have seen it work or you won't. You risk nothing except 30 days of having your leads followed up on instantly.
+> "Two things. First, there's a number on it: 20 in-home measures in 60 days. [guarantee terms: TBD by Jonathan]
 >
-> Here's what I know: leads that get contacted within 5 minutes convert at 100x the rate of leads contacted after an hour. That's not my stat — that's industry research. The system does that for every single lead. It works."
-
----
-
-### "I already have someone doing follow-up"
-*Bucket: They think the pain is solved*
-
-> "Does she work at 2am? Does she send a follow-up at exactly 1 hour, 24 hours, 72 hours, and 7 days? Does she qualify every lead with the same 4 questions and log it in a CRM automatically?
+> Second, speed. 78% of homeowners hire the first company that responds. Responding within a minute lifts conversion by 391%. The system answers every lead in seconds.
 >
-> I'm not replacing her — I'm handling the overflow and the after-hours so she can focus on the jobs that actually need a human. What would it mean for her if every lead that came in after 5pm was already qualified and booked by the time she got in?"
+> On a live home-services account, it worked 130 leads in 9 days, had real conversations with 77 of them, and booked 13. That's not flooring, it's a different trade, but it's the same engine doing the same job."
+
+**Never** imply those numbers are flooring. There is no flooring result yet.
 
 ---
 
-### "I don't trust AI talking to my customers"
-*Bucket: Outcome belief + Fear*
-
-> "I hear that — and honestly, I built the system with this exact concern from HVAC owners in mind. The AI does one thing: it collects four pieces of information and books a time slot. It cannot diagnose. It cannot quote. It cannot make any technical statement about the problem. If someone asks 'what's wrong with my AC?' — it says 'great question, let's get a tech out to take a look and give you the full picture.'
->
-> You see every single message in the dashboard. You can step in at any point. And every customer who does book — they don't feel like they're talking to a robot. They feel like they got a quick, professional response. That's what they care about."
-
----
-
-### "What if it books jobs I can't service?"
-*Bucket: Fear of disruption*
-
-> "Jordan only offers time slots you've pre-approved. You set the available windows — mornings only, no Sundays, whatever fits your schedule. Nothing gets booked outside those windows. And Sam only dispatches techs who are available. The system works around your capacity, not against it."
-
----
-
-### "$297 is a lot every month"
+### "That's a lot of money" (after the fee)
 *Bucket: Cost*
 
-> "What's your average job ticket?
-> 
-> [They say $6,000.]
-> 
-> So one extra job a month that would have gone cold pays for 20 months of the system. You're doing — what did you say, 40 leads a month? If this system rescues even 2 of those, that's $12,000. The $297 is literally rounding error.
+> "Let's run it on your numbers, not mine. You said [close rate] out of ten measures sign, and your average job is [their number]. Out of 20 measures, that's [their math] signed jobs. How many of those need to sign to cover it?
 >
-> The real question isn't whether $297 is worth it. It's: are you losing more than $297 worth of jobs to slow follow-up right now? And I think we both know the answer to that."
+> [Let them do the math out loud.]
+>
+> And that's before the open quotes that get chased, and before January."
+
+*Never drop the price. Increase the belief.*
 
 ---
 
 ### "I need to think about it"
 *Bucket: Trust (usually)*
 
-> "Totally fair. What's the part that needs more thought? Is it the tech side, is it whether this will actually work for HVAC specifically, or is it something else?
+> "Totally fair. What's the part that needs more thought? The ads side, whether it'll work for flooring in [city], or something else?
 >
-> [Let them answer. Usually it's one of the objections above in disguise. Solve that.]
+> [Let them answer. Usually it's one of the objections above in disguise. Fix that.]
 >
-> Here's what I'd suggest: the 30 days free eliminates the financial risk entirely. The worst case is you spend 30 days having your leads followed up on automatically and it doesn't add any jobs. Then you walk away and owe nothing. The $200 just holds your spot. Does it make more sense to think about it before trying it for free, or to just try it and see?"
+> One thing to keep in mind: the slowdown usually runs November through February. Ads and measures take time to get going, so every week we wait is a week less of measures before it hits."
 
 ---
 
 ### "Can you send me more information?"
-*Bucket: They need social proof / trust*
+*Bucket: Trust / Stall*
 
-> "Absolutely — I'll send you a one-pager after the call. But let me ask you something: if the information I sent you confirmed everything I've just told you, would you be ready to try the 30-day pilot?
+> "Sure, I'll send you a one-pager after the call. Let me ask you one thing: if it confirmed everything I've just told you, would you be ready to move forward?
 >
-> [If yes:] Then let's save you a step. What would it take for you to be comfortable moving forward today?
+> [If yes:] Then let's save you a step. What would it take for you to be comfortable deciding today?
 >
-> [If no:] What's the question that the information needs to answer?"
+> [If no:] What's the question the one-pager needs to answer?"
 
 ---
 
-### "I want to talk to my partner/wife/accountant"
-*Bucket: Stakeholder / trust*
+### "I need to talk to my partner / wife first"
+*Bucket: Stakeholder*
 
-> "Makes sense — is she involved in the business decisions usually? Would it be helpful to do a quick 10-minute call with both of you so she can ask questions directly? I can do that this week.
+> "Makes total sense. Funny enough, that's the exact question our AI asks before every measure: will everyone who's deciding be home? Let's do the same thing here. Can we grab 15 minutes with both of you this week so they can ask questions directly?
 >
-> In the meantime — can I ask what YOU think? If it was just your call, does this make sense?"
+> In the meantime, what do YOU think? If it was just your call, does this make sense?"
 
 *(Get the champion committed first. Then loop in the other person.)*
 
@@ -322,88 +444,91 @@ Identify the bucket. Then fix that one thing.
 
 ## PHASE 7: CLOSE + NEXT STEPS
 
-**The close — direct, no wiggle:**
-> "Alright — here's what I want to do. I'll get you set up for the 30-day pilot, walk you through the 20-minute onboarding where we configure the system for your specific service and area. To hold your spot, I need the $200 — I'm going to send you a link in the chat right now. Once that goes through, I'll book the onboarding call and you'll have the system live on your leads within 48 hours.
+**The close, direct, no wiggle:**
+> "Alright, here's what I want to do. I'll get you set up. First step is a 30-minute onboarding call where we set your service area, the floors you install, your measure windows and your rules, connect your calendar, and get your Meta ad account ready. I'm putting the agreement in the chat right now. [price: to confirm for flooring] [guarantee terms: TBD by Jonathan]
 >
 > Sound good?"
 
-**Send the Stripe link immediately while on the call.** Don't say "I'll send it after." Send it right now and say "it's in the chat." This removes all friction between yes and payment.
+**Send the agreement and payment link in the chat while you're still on the call.** Don't say "I'll send it after." The gap between "yes" and "done" is where deals die.
 
 ---
 
 **If they say "let me do it later":**
-> "I hear you — my concern is I only have 5 pilot spots and two others are interested. I can't hold the spot without the deposit. If you want to do this, let's do it now while we're both here — takes 30 seconds."
+> "I hear you. What would need to be true to do it today? [Listen.] The reason I push is the calendar: we're heading into the slow months, and the sooner the ads are running, the sooner the measures land."
+
+*No fake scarcity. Don't invent "spots left" or "two others interested".*
 
 ---
 
-**After deposit received:**
-> "Perfect. You're in. I'll send you a calendar link in the next 5 minutes for the onboarding — it's about 20-25 minutes. During that call we'll set your service type, your booking hours, your coverage area, and get your Facebook lead webhook connected. By the time that call ends, every lead that fills out your form is getting a text in 47 seconds.
+**Next steps after yes (the setup list):**
+1. **Meta ad account and billing, set up by the client.** They create or share their Meta ad account with their own card on file for ad spend and give FieldBuilt access. We never pay their spend.
+2. **Service area ZIPs.** The exact towns or ZIPs they'll drive to for a measure.
+3. **Crew and estimator calendar.** Who runs measures, which days and hours, how long a measure takes, how far they'll drive.
+4. **The CRM or calendar they already use.** So measures land where their team already looks.
+5. **Quote follow-up cadence approval.** They approve the text, call and email sequence and its wording before anything goes to a homeowner.
+6. **Project types.** LVP, hardwood, carpet, tile, laminate, and anything they don't do.
+
+**After they commit:**
+> "Perfect. You're in. I'm sending you a calendar link in the next five minutes for the onboarding call. On that call we set your service area and ZIPs, the floors you install, your estimators' measure windows, connect the calendar or CRM you already use, and get your Meta ad account ready for the ads.
 >
-> One thing I want to say — I'm personally going to be checking in with you in week 1 and week 2. If anything looks weird or you want to adjust how the system talks, just WhatsApp me. I want to make sure this works for you."
+> And I'm personally checking in with you in week one and week two. If anything looks off or you want to change how it talks to homeowners, text me directly."
 
 ---
 
-## THE PITCH DECK / SHARE SCREEN SLIDES
+## THE SHARE-SCREEN SLIDES
 
-Use this when you share your screen during Phase 3. 8 slides maximum. Less is more.
+Use these when you share your screen in Phase 3. 8 slides maximum. Less is more.
 
 ### Slide 1 — The Problem (make it their problem)
-**Headline:** "Your lead filled out the form at 11:47pm Tuesday."
-**Visual:** Timeline showing: Form filled → 8 hours → No response → Lead called competitor
-**Stat:** "78% of customers choose the company that responds first"
+**Headline:** "You have the crews, not the measures."
+**Visual:** Crew capacity per week vs measures per week, the gap shaded
+**Stat:** "78% of homeowners hire the first company that responds" (small source line: pipelineon.com)
 
 ---
 
-### Slide 2 — The Math They're Not Seeing
-**Headline:** "You're burning $[X] every month and don't know it."
-**Visual:** Simple calculator: [leads/month] × [% going cold] × [avg ticket] = $$$ lost
-**Blank fields:** Fill in their numbers live during the call
+### Slide 2 — Their Numbers (LIVE)
+**Headline:** "What's sitting idle right now."
+**Visual:** Blank fields filled in on the call: crews × installs a week they could handle, measures a week now, close rate, open quotes from the last 90 days × their average job
+**Rule:** their numbers only, typed in live. Never pre-filled.
 
 ---
 
-### Slide 3 — Meet Your AI Office
-**Headline:** "Five people. Working 24/7. Installed today."
-**Visual:** 5 name cards side by side (Alex / Jordan / Sam / Riley / Morgan) with one-line job descriptions
-**No feature bullets. Just their names and jobs.**
+### Slide 3 — The Offer Line
+**Headline:** "Guaranteed 20 in-home measures in 60 days, and every quote chased until it signs or says no."
+**Visual:** The line, big. Nothing else.
 
 ---
 
-### Slide 4 — What Happens From Minute 1
-**Headline:** "Lead fills out form → 47 seconds → Your AI Office takes over"
-**Visual:** Flow diagram: Form → Alex (texts) → Jordan (qualifies) → Appointment booked → Sam (dispatches) → Riley (follows up if no reply)
-**No text heavy. Let the flow tell the story.**
+### Slide 4 — How It Works
+**Headline:** "From the ad to signed or no."
+**Visual:** Five steps in a row: We run the ads → Answered in seconds → Qualified (decision makers home) → Booked as an in-home measure → Every quote chased
+**Small print:** "You pay the ad spend straight to Meta, separate from our fee."
 
 ---
 
-### Slide 5 — The Conversation (screenshot)
-**Headline:** "This is what your leads see."
-**Visual:** Actual SMS conversation screenshot — lead texts back, Jordan qualifies, books estimate
-**Caption:** "Never diagnoses. Never quotes. Only books."
+### Slide 5 — The Conversation
+**Headline:** "This is what your homeowners see."
+**Visual:** SMS thread, labelled **Example**: AI discloses it's an AI, asks floor type, rooms, timeline, ZIP, "will everyone deciding be home?", books the measure
+**Caption:** "Never quotes a price. The price comes from you, after the measure."
 
 ---
 
-### Slide 6 — The Dashboard
-**Headline:** "Every lead. Every message. Every appointment. In one place."
-**Visual:** Screenshot of the CRM dashboard — pipeline, lead cards, conversation thread
-**Caption:** "You see everything in real time. Override anytime."
+### Slide 6 — The Quote Chase
+**Headline:** "The measure happened. The quote went out. Then it kept getting followed up."
+**Visual:** Timeline after the quote is sent: text, call, email, until signed or no, labelled **Example** unless it's a live screen
 
 ---
 
-### Slide 7 — The Math (ROI)
-**Headline:** "One extra job pays for 20 months."
-**Visual:** Two columns:
-- Left: "$297/month"  
-- Right: "Average ticket: $6,000 → 1 rescued lead = 20 months ROI"
-**Bold, simple, clear.**
+### Slide 7 — Proof (labelled honestly)
+**Headline:** "Answered in seconds, every time."
+**Visual:** Speed stats (78% hire first responder; 391% lift within 60 seconds; 21x more likely to qualify at 5 min vs 30 min), plus "A live home-services account: 130 leads, 77 worked, 13 booked in 9 days"
+**Rule:** never imply these numbers are flooring.
 
 ---
 
 ### Slide 8 — The Offer
-**Headline:** "30 days free. $200 to hold your spot."
-**Visual:** Two boxes:
-- Box 1: ~~"$2,250 install + $597/month"~~ (strikethrough)
-- Box 2: "$0 install. 30 days free. $200 deposit. $297/month after."
-**CTA at bottom:** "5 founding partner spots available"
+**Headline:** "20 in-home measures in 60 days."
+**Visual:** Offer line, then "[guarantee terms: TBD by Jonathan]", then "Installed by Jonathan. Ad spend paid straight to Meta." Fee said out loud, not on the slide: [price: to confirm for flooring]
 
 ---
 
@@ -413,16 +538,16 @@ After every call, score these before moving to next action:
 
 | Dimension | Score (1-5) | What you learned |
 |---|---|---|
-| **P**ain | | What specific revenue are they losing? |
-| **O**pportunity cost | | Did they quantify the monthly loss? |
-| **W**ants | | What does success look like to them? |
-| **E**xecutive influence | | Owner only, or partner involved? |
-| **R**esources/budget | | Do they run FB ads? Monthly spend? |
-| **F**ear of failure | | What's their biggest concern? |
-| **U**nequivocal trust | | Did they open up? Did they feel safe? |
-| **L**ittle things | | Any personal details, timing, preferences? |
+| **P**ain | | Idle crew capacity, wasted measure drives, quotes gone quiet? |
+| **O**pportunity cost | | Did they put a number on open quotes and the winter dip, in their own words? |
+| **W**ants | | More measures, fuller winter, fewer drives, owner off the phone? |
+| **E**xecutive influence | | Owner only, or partner / spouse / GM involved? |
+| **R**esources/budget | | Crew capacity for 20 more measures in 60 days? Ready to fund Meta ad spend directly? |
+| **F**ear of failure | | Burned by agencies? AI talking to homeowners? Setup hassle? |
+| **U**nequivocal trust | | Did they open up? Did they give real numbers? |
+| **L**ittle things | | Personal details, season timing, preferred way to talk? |
 
-**Score 35-40:** Close on this call. Send link now.
+**Score 35-40:** Close on this call. Send the agreement now.
 **Score 25-34:** Close on this call. One more objection to clear.
 **Score below 25:** Schedule a second call. Something important is missing.
 
@@ -430,14 +555,16 @@ After every call, score these before moving to next action:
 
 ## FOLLOW-UP IF THEY DIDN'T CLOSE ON THE CALL
 
-**Within 2 hours — WhatsApp message:**
-> "Hey [Name] — really enjoyed the conversation. Sending over the one-pager I mentioned. The spot is still open today. If you want to try the 30 days, just hit reply and I'll send the link — takes 60 seconds. [Your name]"
+**Within 2 hours — text:**
+> "Hey [Name], good talking with you. Sending over the one-pager I mentioned. If you want to get the ads running and the measures coming, just reply here and I'll send the agreement. [Your name]"
 
 **48 hours later — if no response:**
-> "Hey [Name] — just wanted to check in. Did you get a chance to look over what I sent? I have one founding partner spot left before I open to general waitlist. Wanted to give you first right of refusal since we already talked. [Your name]"
+> "Hey [Name], checking in. Did you get a chance to look at what I sent? Happy to jump on 10 minutes with you and [partner] if that helps. [Your name]"
 
 **5 days later — if still no response:**
-> "Hey [Name] — I'm going to assume the timing isn't right. I'll check back in a few weeks. If something changes in the meantime — we had a pilot customer in [similar city] book 4 extra jobs in their first 2 weeks. I'll send you their numbers when they're ready for a case study. [Your name]"
+> "Hey [Name], I'll assume the timing isn't right. Most flooring owners want measures lined up before the November to February slowdown, so if that changes, reply here and we'll pick it up. [Your name]"
+
+*No invented results, no fake "last spot".*
 
 ---
 
@@ -445,31 +572,46 @@ After every call, score these before moving to next action:
 
 | Metric | Number |
 |---|---|
-| Average lead response time (industry) | 47 hours |
-| FieldBuilt AI response time | 47 seconds |
-| Lead conversion boost: <5min vs >60min response | 100x |
-| % of leads that go cold without follow-up | 65-78% |
-| Human team equivalent cost | $13,500–$19,000/month |
-| Your price (pilot) | $297/month |
-| Deposit | $200 refundable |
-| Free trial | 30 days |
-| Full price anchor | $2,250 install + $597/month |
-| Avg HVAC ticket (residential) | $3,500–$8,000 |
-| ROI breakeven (at $5K ticket) | 1 extra job per 16 months |
+| The offer | Guaranteed 20 in-home measures in 60 days, and every quote chased until it signs or says no |
+| Guarantee terms | [guarantee terms: TBD by Jonathan] |
+| Our fee | [price: to confirm for flooring] (on the call only) |
+| Ad spend | Paid by the contractor straight to Meta, separate from our fee. [recommended ad budget: TBD by Jonathan] |
+| FieldBuilt response time | In seconds, 24/7 |
+| Homeowners who hire the first company to respond | 78% (pipelineon.com) |
+| Conversion lift responding within 60 seconds | 391% (Velocify, via leadwinner.ai) |
+| More likely to qualify at 5 min vs 30 min | 21x (MIT, via getnextphone.com) |
+| A live home-services account, first 24h | 27 leads / 14 conversations / 3 booked |
+| A live home-services account, 9 days | 130 leads / 77 worked / 13 booked |
+| Flooring slow season | November to February, after the early-fall peak |
+| Flooring client results | None yet. Don't invent any. |
+| Exclusivity | Not confirmed. Don't promise it. |
 
 ---
 
 ## THE ONE-PAGER (send after the call)
 
-**Title:** FieldBuilt AI — Your AI Office for HVAC
+**Title:** FieldBuilt AI — You Have the Crews, Not the Measures
 **Sections:**
-1. The Problem (47-hour average response time kills your ad ROI)
-2. The Five AI Employees (Alex, Jordan, Sam, Riley, Morgan — one-liner each)
-3. The Math (your leads × % cold × avg ticket = monthly loss)
-4. The Founding Partner Offer (30 days free + $200 deposit)
-5. What happens after you say yes (onboarding call → live in 48 hours)
-6. One testimonial / early result when available
+1. The problem (shared leads, slow answers, wasted measure drives, quotes that go quiet, the winter dip)
+2. The offer line, word for word
+3. How it works (the five steps, in order; ad spend paid straight to Meta)
+4. What happens after you say yes (onboarding call, ads built for your ZIPs, measures on your calendar)
+5. Proof: speed stats with sources, and "a live home-services account" numbers, labelled exactly like that
+
+**Never in the one-pager:** the fee, guarantee failure terms, flooring results, exclusivity.
 
 ---
 
-*Last updated: June 2026 | FieldBuilt AI Founding Partner Program — 5 spots*
+## OPEN DECISIONS FOR JONATHAN
+
+- Guarantee terms: what happens if 20 measures aren't hit. [guarantee terms: TBD by Jonathan]
+- Our fee for flooring. [price: to confirm for flooring]
+- Any pilot, deposit or launch discount for the first flooring accounts.
+- Area exclusivity: yes or no, and the wording.
+- Recommended Meta ad budget to support 20 measures in 60 days.
+- Flooring-configured demo account for Phase 3.
+- Regenerate `docs/sales-call-playbook.pdf` from the .html (still the old offer).
+
+---
+
+*Last updated: October 2026 | FieldBuilt AI, flooring contractors*

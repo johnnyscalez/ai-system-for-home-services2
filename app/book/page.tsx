@@ -1,24 +1,25 @@
 "use client"
 
 // ─── BOOKING PAGE — /book ────────────────────────────────────────────────────
-// Warm-traffic booking page. Page order follows the buyer's question stack:
-//   what is this → why believe you → what's it worth to ME → book it
-// so the calendar sits AFTER the proof and the revenue math, not before it.
-// A hero CTA anchor-scrolls straight to #book for anyone already sold.
-//
-// Messaging spine (ICP: HVAC owners, 4–15 techs, ~$1M+):
-//   Surface desire: more booked jobs.
-//   Real desire: predictable capacity without the owner holding it together.
-// We sell "an AI front office that gets installed", never software/platform.
+// Paid-traffic landing page for flooring contractors. Positioning source of
+// truth: docs/flooring-pivot.md. Rules that bind this page:
+//   - Offer wording is exact: "Guaranteed 20 in-home measures in 60 days, and
+//     every quote chased until it signs or says no."
+//   - Never state guarantee failure terms. Never show price.
+//   - No flooring proof exists yet. Top Air numbers appear ONLY labelled as
+//     "a live home-services account", never implied to be flooring.
+//   - Light mode throughout. No dark hero, proof band or footer.
+// Page order: offer → VSL → calendar → what the call covers → proof →
+// mechanism → fit → FAQ → founder → final CTA.
+// We sell an installed system, never software/platform/SaaS/tool/app.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { createElement, useRef } from "react"
 import Script from "next/script"
 import { motion, useInView } from "framer-motion"
 import {
-  Zap, MessagesSquare, CalendarCheck, Repeat, Check, X, Star, ChevronDown,
-  Route, ClipboardList, BarChart3, Moon, TrendingUp, Bell, ArrowDown, Phone,
-  Settings2, Target, MapPin,
+  Megaphone, Zap, ListChecks, CalendarCheck, Repeat, Check, X, Star, ChevronDown,
+  ArrowDown, MapPin, Settings2, Target,
 } from "lucide-react"
 import { C, FieldFMark, GhlBookingWidget, MinimalFooter } from "@/components/landing/shared"
 
@@ -29,6 +30,8 @@ const FOUNDER_PHOTO_URL = ""
 // Wistia VSL. WISTIA_CSS is Wistia's own placeholder rule: it paints the
 // poster frame (blurred) until the custom element is defined, so the slot
 // never flashes empty while the player script loads.
+// TODO(flooring): this media is still the old HVAC VSL. It needs re-recording
+// for the flooring offer; swap WISTIA_ID (and the aspect below) once it exists.
 const WISTIA_ID = "sayad6x3vm"
 const WISTIA_CSS = `wistia-player[media-id='${WISTIA_ID}']:not(:defined) { background: center / contain no-repeat url('https://fast.wistia.com/embed/medias/${WISTIA_ID}/swatch'); display: block; filter: blur(5px); padding-top: 64.79%; }`
 
@@ -47,24 +50,21 @@ function Reveal({ children, delay = 0, className = "" }: {
 }
 
 // ── The one CTA, repeated ─────────────────────────────────────────────────────
-// Same words every time so the offer never drifts: it names what happens on the
-// call, not what the call is called. "Strategy session" is the language this
-// buyer has been burned by.
-function Cta({ tone = "light", compact = false }: { tone?: "light" | "dark"; compact?: boolean }) {
+// Same words every time so the offer never drifts.
+function Cta({ compact = false }: { compact?: boolean }) {
   return (
     <div className="text-center">
       <a href="#book"
          className="inline-flex items-center justify-center gap-2 rounded-xl font-bold text-white transition-transform hover:scale-[1.03]"
-         style={{ background: C.orange, boxShadow: "0 8px 32px rgba(249,115,22,0.40)",
+         style={{ background: C.orange, boxShadow: "0 8px 28px rgba(249,115,22,0.32)",
                   padding: compact ? "15px 26px" : "17px 30px",
                   fontSize: "clamp(0.95rem, 2.6vw, 1.05rem)", lineHeight: 1.25, maxWidth: "94vw" }}>
-        Watch It Run On Your Own Leads &mdash; 20 Minutes
+        Book your flooring walkthrough &mdash; 20 minutes
         <ArrowDown className="w-4 h-4 shrink-0 hidden sm:block" aria-hidden="true" />
       </a>
-      <p className="text-sm leading-relaxed max-w-md mx-auto mt-4"
-         style={{ color: tone === "dark" ? "rgba(250,250,248,0.52)" : C.muted }}>
-        Screen share, no pitch deck. You&rsquo;ll see the live dashboard and your own
-        leak map. If the numbers don&rsquo;t make the case, you owe nothing.
+      <p className="text-sm leading-relaxed max-w-md mx-auto mt-4" style={{ color: C.muted }}>
+        Screen share with the founder. We look at your service area, how the measures
+        get booked, and where your quotes go quiet today.
       </p>
     </div>
   )
@@ -77,83 +77,81 @@ const PROOF_RED = "#DC2626"
 
 // Screenshots live in /public/proof and are cropped above the jobs list, which
 // contains real homeowners' names, addresses and phone numbers.
+// These are a live HOME-SERVICES account (not flooring). Every headline and
+// caption must say so. See docs/flooring-pivot.md "Proof rules".
 const PROOFS = [
   {
     img: "/proof/proof-24h.png",
     h: 486,
-    alt: "FieldBuilt dashboard, Aug 2 to Aug 3: 27 new leads, 14 AI conversations, 3 jobs booked, $756 of work booked",
-    headline: "14 cold leads → 3 booked jobs. In under 24 hours.",
-    caption: "Day one live. Nobody in the office picked up a phone.",
+    alt: "FieldBuilt dashboard for a live home-services account, Aug 2 to Aug 3: 27 new leads, 14 AI conversations, 3 jobs booked",
+    headline: "27 leads → 14 conversations → 3 booked. Under 24 hours.",
+    caption: "A live home-services account, day one. Nobody in the office picked up a phone.",
   },
   {
     img: "/proof/proof-9days.png",
     h: 588,
-    alt: "FieldBuilt dashboard, Aug 2 to Aug 11: 130 new leads, 77 AI conversations, 13 jobs booked, $2,646 of work booked",
-    headline: "77 cold leads → 13 booked jobs in 9 days.",
-    caption: "Same shop, first 9 days. No new ad spend. No new hires.",
+    alt: "FieldBuilt dashboard for a live home-services account, Aug 2 to Aug 11: 130 new leads, 77 AI conversations, 13 jobs booked",
+    headline: "130 leads → 77 worked → 13 booked. 9 days.",
+    caption: "Same live home-services account, first 9 days. Same engine your homeowners would talk to.",
   },
 ]
 
-// ── The four that separate this from an AI receptionist ──────────────────────
-// What the walkthrough actually covers — straight from the call structure.
+// ── What the walkthrough covers ──────────────────────────────────────────────
 const DISCOVER = [
-  { icon: Settings2, title: "Inside the system",
-    body: "How replacement-focused ads, qualification, follow-up and booking work together." },
-  { icon: Target, title: "Your replacement opportunity audit",
-    body: "Where your service area, preferred work and crew capacity leave room for more qualified estimates." },
-  { icon: MapPin, title: "Geographical gap audit",
-    body: "The demand in your area, which zones run hottest, and who is capturing it today." },
+  { icon: MapPin, title: "Your service-area demand",
+    body: "How many homeowners in your ZIPs are shopping for floors right now, and which areas are worth the ad money." },
+  { icon: Settings2, title: "How the measures get booked",
+    body: "The ads, the AI that answers and qualifies, the measure on your calendar, and the quote chasing after. Start to finish." },
+  { icon: Target, title: "Where your quotes are leaking",
+    body: "Leads answered too late, measures wasted on the wrong homeowner, quotes nobody followed up. We find the holes." },
 ]
 
+// ── The mechanism, in order (docs/flooring-pivot.md "How it works") ──────────
 const CORE = [
-  { icon: Zap, label: "Answered instantly",
-    body: "Every lead gets a real text back in 2 seconds. 2am, Sunday, Christmas morning." },
-  { icon: MessagesSquare, label: "Qualified properly",
-    body: "Asks what your best CSR would ask, and screens out tire-kickers before they cost a truck roll." },
-  { icon: CalendarCheck, label: "Booked, not contacted",
-    body: "Real slots on your real calendar, with the right tech assigned. Not a message taken." },
-  { icon: Repeat, label: "Chased for two weeks",
-    body: "Didn't book today? SMS, Messenger, WhatsApp, then a phone call, until they book or say stop." },
-]
-
-const EXTRAS = [
-  { icon: Route, text: "Smart dispatch — routes by service area, job type and who actually closes it" },
-  { icon: ClipboardList, text: "Every conversation saved to the lead file, street view included" },
-  { icon: Bell, text: "Confirmations, day-before reminders and a reschedule flow that rescues cancellations" },
-  { icon: Phone, text: "Inbound and outbound calls, plus Messenger and WhatsApp on the same brain" },
-  { icon: BarChart3, text: "Close rate and revenue per tech, per job type, per lead source — live" },
-  { icon: TrendingUp, text: "Writes the booked job into Housecall Pro with the technician assigned" },
-  { icon: Moon, text: "Runs nights, weekends and holidays without anyone watching it" },
+  { icon: Megaphone, label: "1. We run the ads",
+    body: "Meta ads built and run for homeowners in your service area. Your crews, your ZIPs, your kind of work." },
+  { icon: Zap, label: "2. Answered in seconds",
+    body: "Every homeowner gets a text back in seconds, 24/7, by text and phone. They book whoever answers first. That's you now." },
+  { icon: ListChecks, label: "3. Qualified before your calendar",
+    body: "Project type, rough size, timeline, ZIP, and whether every decision maker will be home for the measure. No wasted drives." },
+  { icon: CalendarCheck, label: "4. Booked as a measure",
+    body: "Real slots on your estimator's calendar, with a confirmation, a day-before reminder and an easy reschedule so measures don't no-show." },
+  { icon: Repeat, label: "5. Every quote chased",
+    body: "After the measure, text, call and email until the homeowner signs or says no. Nothing dies in the “let me think about it” pile." },
 ]
 
 const FIT_YES = [
-  "You run 4 to 15 technicians",
-  "You already pay for leads (Facebook, Google, Angi)",
-  "Leads go quiet after hours and on weekends",
-  "You want the calendar full without another office hire",
+  "You have your own install crews",
+  "Your crews can take on more installs than the calendar feeds them",
+  "You serve homeowners in the USA",
+  "You want more measures without hiring a sales team",
 ]
 const FIT_NO = [
-  "You run 1 to 3 techs — there isn't enough to dispatch yet",
-  "You want software you configure yourself",
-  "All your work is word of mouth, with no inbound lead flow",
+  "You install alone, with no crew",
+  "You only sub installs for flooring stores",
+  "You want cheap shared leads sold to four other companies",
 ]
 
 const FAQ = [
   {
+    q: "Who pays for the ads?",
+    a: "You do, straight to Meta, on your own card. That keeps the ad money yours and in plain view. It is separate from what you pay us. We build and run the ads; we walk through the budget for your area on the call.",
+  },
+  {
     q: "Does it sound like a robot?",
-    a: "Read the transcripts on the call and decide for yourself. It texts in plain language, handles “I’m just getting quotes” without pushing, and never diagnoses or quotes a job price. If a homeowner asks whether they’re talking to a person, it tells them the truth straight away.",
+    a: "Read the real conversations on the call and decide for yourself. It texts like a person from your office, handles “I’m just getting prices” without pushing, and always tells the homeowner it’s an AI. If they want a person, it hands them to you.",
   },
   {
-    q: "What happens to my CRM?",
-    a: "Nothing. It plugs into what you already run. On Housecall Pro your CRM stays the system of record — every booking is written in with the right technician assigned, so your office keeps working exactly the way it works now. You are not migrating anything.",
+    q: "Will it quote my prices?",
+    a: "Never. It books the measure. The quote comes from you, after you’ve seen the floor. All it does on price is tell the homeowner the quote comes after the measure.",
   },
   {
-    q: "How does it know which tech to send?",
-    a: "It pulls your technician roster, their service areas, skills and availability, then books into a real open slot with the right person on it. A duct job in one metro doesn't get handed to the tech two hours away.",
+    q: "What CRM or calendar do I need?",
+    a: "Whatever you run now. It books into your existing calendar, and you don’t migrate anything. If you don’t have one, we set you up with ours. We check what you use on the call.",
   },
   {
-    q: "How long does setup take?",
-    a: "I install it myself. Most shops are live within a day — you hand over access, I do the rest, and you watch the first conversations come in.",
+    q: "How fast can it launch?",
+    a: "I install it myself. Once you hand over access, the AI and the calendar are usually live within days, and the ads go out as soon as Meta approves them.",
   },
 ]
 
@@ -221,6 +219,15 @@ function TrustBadges() {
   )
 }
 
+// Subtle orange grid texture for light sections. Low opacity so it reads as
+// paper, not decoration; masked so it fades out before the edges.
+const GRID_TEXTURE = {
+  backgroundImage: "linear-gradient(rgba(249,115,22,1) 1px, transparent 1px), linear-gradient(90deg, rgba(249,115,22,1) 1px, transparent 1px)",
+  backgroundSize: "44px 44px", opacity: 0.05,
+  WebkitMaskImage: "radial-gradient(ellipse 90% 80% at 50% 35%, #000 20%, transparent 80%)",
+  maskImage: "radial-gradient(ellipse 90% 80% at 50% 35%, #000 20%, transparent 80%)",
+} as const
+
 export default function BookPage() {
   return (
     <main style={{ fontFamily: "var(--font-inter), Inter, sans-serif", background: C.bg }}>
@@ -229,13 +236,15 @@ export default function BookPage() {
       <Script src={`https://fast.wistia.com/embed/${WISTIA_ID}.js`} type="module" strategy="afterInteractive" />
       {/* ── Slim header — carries a permanent route to the calendar ── */}
       <header className="fixed top-0 left-0 right-0 z-50 flex items-center justify-between px-5 sm:px-6 py-3.5"
-              style={{ background: "rgba(26,22,20,0.92)", backdropFilter: "blur(12px)", borderBottom: "1px solid rgba(249,115,22,0.10)" }}>
+              style={{ background: "rgba(250,250,248,0.88)", backdropFilter: "blur(12px)", WebkitBackdropFilter: "blur(12px)",
+                       borderBottom: `1px solid ${C.border}` }}>
         <div className="flex items-center gap-2.5">
+          {/* The Field F mark is drawn white + orange, so it keeps its dark tile. */}
           <div className="w-8 h-8 rounded-lg flex items-center justify-center" style={{ background: C.dark }}>
             <FieldFMark size={18} />
           </div>
           <span className="font-extrabold text-lg sm:text-xl tracking-tight"
-                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
+                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em" }}>
             FIELDBUILT
             <span className="inline-flex items-center justify-center text-white font-bold rounded ml-1"
                   style={{ fontSize: "0.42em", background: C.orange, padding: "0.22em 0.45em", borderRadius: 5, letterSpacing: "0.04em", verticalAlign: "super" }}>
@@ -245,73 +254,62 @@ export default function BookPage() {
         </div>
         <a href="#book"
            className="inline-flex items-center gap-1.5 rounded-lg text-[13px] sm:text-sm font-bold text-white transition-transform hover:scale-[1.04] px-3.5 sm:px-4 py-2 whitespace-nowrap"
-           style={{ background: C.orange, boxShadow: "0 4px 16px rgba(249,115,22,0.35)" }}>
+           style={{ background: C.orange, boxShadow: "0 4px 14px rgba(249,115,22,0.28)" }}>
           Book a walkthrough
         </a>
       </header>
 
-      {/* ── 1. HERO ── */}
+      {/* ── 1. HERO — the offer, word for word ── */}
       <section className="relative flex flex-col justify-center pt-28 sm:pt-32 pb-4 px-6 overflow-hidden"
-               style={{ background: "linear-gradient(180deg, #141110 0%, #1A1614 100%)" }}>
-        <div className="absolute inset-0 pointer-events-none" aria-hidden="true"
-             style={{
-               backgroundImage: "linear-gradient(rgba(249,115,22,1) 1px, transparent 1px), linear-gradient(90deg, rgba(249,115,22,1) 1px, transparent 1px)",
-               backgroundSize: "44px 44px", opacity: 0.055,
-               WebkitMaskImage: "radial-gradient(ellipse 90% 80% at 50% 40%, #000 20%, transparent 80%)",
-               maskImage: "radial-gradient(ellipse 90% 80% at 50% 40%, #000 20%, transparent 80%)",
-             }} />
-        <motion.div animate={{ y: [0, -22, 0], x: [0, 10, 0] }} transition={{ duration: 9, repeat: Infinity, ease: "easeInOut" }}
-          className="absolute rounded-full blur-3xl pointer-events-none" aria-hidden="true"
-          style={{ width: 620, height: 620, background: "rgba(249,115,22,0.08)", top: "-16%", left: "-8%" }} />
+               style={{ background: C.bg }}>
+        <div className="absolute inset-0 pointer-events-none" aria-hidden="true" style={GRID_TEXTURE} />
 
         <div className="relative max-w-4xl mx-auto w-full text-center">
           <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-            className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full mb-7 text-[11px] sm:text-sm font-extrabold uppercase tracking-widest text-white whitespace-nowrap"
-            style={{ background: C.orange, boxShadow: "0 4px 20px rgba(249,115,22,0.45)", fontFamily: "var(--font-jetbrains)" }}>
-            For Established HVAC Business Owners
+            className="inline-flex items-center gap-2 px-4 sm:px-5 py-2 rounded-full mb-7 text-[10.5px] sm:text-[13px] font-bold uppercase tracking-widest"
+            style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.orangeDk,
+                     boxShadow: "0 2px 10px rgba(28,25,23,0.05)", fontFamily: "var(--font-jetbrains)" }}>
+            For flooring contractors with their own install crews
           </motion.div>
 
           <motion.h1 initial={{ opacity: 0, y: 24 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.12, duration: 0.7 }}
             className="font-extrabold tracking-tight mb-6"
-            style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
-                     fontSize: "clamp(1.55rem, 5.4vw, 3.2rem)", lineHeight: 1.08, textWrap: "balance" }}>
-            Get 25 Extra HVAC Jobs a Month On Autopilot
-            <br /><span style={{ color: C.orange }}>
-              With a New HVAC{" "}
-              <br className="sm:hidden" />
-              Operations Office
+            style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
+                     fontSize: "clamp(1.7rem, 5.6vw, 3.3rem)", lineHeight: 1.08, textWrap: "balance" }}>
+            Guaranteed 20 in-home measures in 60 days
+            <br /><span style={{ color: C.orangeDk }}>
+              and every quote chased until it signs or says no.
             </span>
           </motion.h1>
 
           <motion.p initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.28, duration: 0.6 }}
-            className="text-lg leading-relaxed max-w-2xl mx-auto" style={{ color: "rgba(250,250,248,0.62)" }}>
-            Without wasting money on ad spend, relying on referrals, or having to
-            chase leads after the estimate.
+            className="text-lg leading-relaxed max-w-2xl mx-auto" style={{ color: C.muted }}>
+            We run the Meta ads in your area. Our AI answers every homeowner in seconds,
+            qualifies them, and books the measure on your calendar. Then it chases every
+            quote. You have the crews. We fill the measures.
           </motion.p>
-
         </div>
       </section>
 
       {/* ── 2. STEP 1 — the VSL (Wistia) ── */}
-      <section className="relative pt-6 sm:pt-7 pb-14 sm:pb-16 px-6 overflow-hidden" style={{ background: "#1A1614" }}>
-        <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
-             style={{ backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.10) 1.2px, transparent 1.2px)", backgroundSize: "30px 30px",
-                      WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)",
-                      maskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)" }} />
+      {/* TODO(flooring): the video is still the old HVAC VSL. Re-record for flooring. */}
+      <section className="relative pt-8 sm:pt-9 pb-14 sm:pb-16 px-6 overflow-hidden" style={{ background: C.bg }}>
         <div className="relative max-w-4xl mx-auto">
           <Reveal className="text-center mb-5">
+            <div className="text-xs font-bold uppercase tracking-widest mb-2"
+                 style={{ color: C.muted, fontFamily: "var(--font-jetbrains)" }}>Step 1</div>
             <h2 className="font-bold tracking-tight"
-                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.015em",
+                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.015em",
                          fontSize: "clamp(1.05rem, 2.9vw, 1.45rem)", lineHeight: 1.3, textWrap: "balance" }}>
-              See how the HVAC Appointment Booking System connects
-              replacement-focused demand, qualification, follow-up
-              &amp; calendar booking.
+              Watch how the ads, the AI, the measure booking and the quote chasing
+              work together.
             </h2>
           </Reveal>
 
           <Reveal delay={0.1}>
             <div className="rounded-2xl overflow-hidden"
-                 style={{ border: "1px solid rgba(249,115,22,0.22)", boxShadow: "0 24px 60px rgba(0,0,0,0.45)" }}>
+                 style={{ background: C.surface, border: `1px solid ${C.border}`,
+                          boxShadow: "0 24px 60px rgba(28,25,23,0.10), 0 4px 16px rgba(28,25,23,0.05)" }}>
               {/* Wistia web component. Rendered via createElement so the custom
                   tag needs no JSX intrinsic-element declaration. */}
               {createElement("wistia-player", {
@@ -326,27 +324,27 @@ export default function BookPage() {
       </section>
 
       {/* ── 3. STEP 2 — the calendar ── */}
-      <section id="book" className="relative px-6 overflow-hidden scroll-mt-20" style={{ background: C.bg }}>
-        <div className="absolute top-0 left-0 right-0 h-32 pointer-events-none" aria-hidden="true"
-             style={{ background: "linear-gradient(180deg, #1A1614 0%, rgba(250,250,248,0) 100%)" }} />
+      <section id="book" className="relative px-6 overflow-hidden scroll-mt-20" style={{ background: C.subtle }}>
         <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
-             style={{ backgroundImage: "radial-gradient(rgba(249,115,22,0.12) 1px, transparent 1px)", backgroundSize: "28px 28px",
+             style={{ backgroundImage: "radial-gradient(rgba(249,115,22,0.14) 1px, transparent 1px)", backgroundSize: "28px 28px",
                       WebkitMaskImage: "radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 80%)",
                       maskImage: "radial-gradient(ellipse 80% 70% at 50% 30%, #000 20%, transparent 80%)" }} />
 
         <div className="relative max-w-3xl mx-auto pt-16 pb-16">
           <Reveal className="text-center mb-8">
+            <div className="text-xs font-bold uppercase tracking-widest mb-2"
+                 style={{ color: C.muted, fontFamily: "var(--font-jetbrains)" }}>Step 2</div>
             <h2 className="font-extrabold tracking-tight"
                 style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
                          fontSize: "clamp(1.5rem, 4.8vw, 2.1rem)", lineHeight: 1.18, textWrap: "balance" }}>
-              Choose a time for your HVAC Operations Office Walkthrough.
+              Choose a time for your flooring walkthrough.
             </h2>
           </Reveal>
 
           <Reveal delay={0.05}>
             <div className="rounded-3xl p-2 sm:p-3"
                  style={{ background: C.surface, border: `1px solid ${C.border}`,
-                          boxShadow: "0 24px 60px rgba(249,115,22,0.10), 0 4px 20px rgba(0,0,0,0.05)" }}>
+                          boxShadow: "0 24px 60px rgba(249,115,22,0.08), 0 4px 20px rgba(0,0,0,0.05)" }}>
               <GhlBookingWidget />
             </div>
           </Reveal>
@@ -355,13 +353,14 @@ export default function BookPage() {
           <Reveal delay={0.1}>
             <p className="text-center text-sm sm:text-base font-semibold leading-relaxed mt-6 max-w-lg mx-auto"
                style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-              I take a couple of shops a month. When the calendar&rsquo;s full, it&rsquo;s full.
+              I install every account myself, so I only take a few a month.
+              When the calendar&rsquo;s full, it&rsquo;s full.
             </p>
           </Reveal>
 
           <Reveal delay={0.15}>
             <div className="flex flex-wrap justify-center gap-x-6 gap-y-2 mt-6">
-              {["No pitch deck — the product on screen", "Built and installed by the founder", "20 minutes, on your own numbers"].map(t => (
+              {["No pitch deck, just the real thing on screen", "Installed by the founder", "20 minutes, on your service area"].map(t => (
                 <span key={t} className="inline-flex items-center gap-1.5 text-sm font-medium" style={{ color: C.muted }}>
                   <Check className="w-4 h-4 shrink-0" style={{ color: C.success }} aria-hidden="true" /> {t}
                 </span>
@@ -372,8 +371,8 @@ export default function BookPage() {
         </div>
       </section>
 
-      {/* ── 3. WHAT THE CALL COVERS — sets expectations right after booking ── */}
-      <section className="relative py-14 sm:py-16 px-6" style={{ background: C.subtle }}>
+      {/* ── 4. WHAT THE CALL COVERS — sets expectations right after booking ── */}
+      <section className="relative py-14 sm:py-16 px-6" style={{ background: C.bg }}>
         <div className="relative max-w-3xl mx-auto">
           <Reveal className="text-center mb-8">
             <h2 className="font-extrabold tracking-tight"
@@ -387,7 +386,7 @@ export default function BookPage() {
             {DISCOVER.map((d, i) => (
               <Reveal key={d.title} delay={0.05 + i * 0.07}>
                 <div className="h-full rounded-2xl p-5 sm:p-6"
-                     style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(249,115,22,0.06)" }}>
+                     style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(28,25,23,0.04)" }}>
                   <div className="w-9 h-9 rounded-xl flex items-center justify-center mb-4"
                        style={{ background: "rgba(249,115,22,0.10)" }}>
                     <d.icon className="w-4.5 h-4.5" style={{ color: C.orangeDk }} aria-hidden="true" />
@@ -402,38 +401,36 @@ export default function BookPage() {
         </div>
       </section>
 
-      {/* ── 4. PROOF — kept short: two screenshots, one line each ── */}
-      <section className="relative py-16 sm:py-20 px-6 overflow-hidden" style={{ background: "#201A17" }}>
-        <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
-             style={{ backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.10) 1.2px, transparent 1.2px)", backgroundSize: "30px 30px",
-                      WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)",
-                      maskImage: "radial-gradient(ellipse 70% 60% at 50% 40%, #000 20%, transparent 75%)" }} />
+      {/* ── 5. PROOF — live home-services account, labelled as such ── */}
+      <section className="relative py-16 sm:py-20 px-6 overflow-hidden" style={{ background: C.subtle }}>
         <div className="relative max-w-4xl mx-auto">
           <Reveal className="text-center mb-10">
             <div className="flex items-center justify-center gap-3 mb-5">
               <span className="w-8 h-px" style={{ background: PROOF_RED }} />
-              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: "#FCA5A5", fontFamily: "var(--font-jetbrains)" }}>
-                Proof
+              <span className="text-xs font-bold uppercase tracking-widest" style={{ color: PROOF_RED, fontFamily: "var(--font-jetbrains)" }}>
+                Proof from a live home-services account
               </span>
               <span className="w-8 h-px" style={{ background: PROOF_RED }} />
             </div>
-            <h2 className="font-extrabold tracking-tight"
-                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
-                         fontSize: "clamp(2.1rem, 7.2vw, 3.4rem)", lineHeight: 1.05, textWrap: "balance" }}>
-              Turn your cold{" "}
-              <br className="sm:hidden" />
-              leads{" "}
-              <br className="hidden sm:inline" />
-              <span style={{ color: C.orange }}>into cash.</span>
+            <h2 className="font-extrabold tracking-tight mb-4"
+                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.03em",
+                         fontSize: "clamp(1.9rem, 6.4vw, 3rem)", lineHeight: 1.06, textWrap: "balance" }}>
+              The same AI, already booking{" "}
+              <span style={{ color: C.orangeDk }}>for a live account.</span>
             </h2>
+            <p className="text-base leading-relaxed max-w-xl mx-auto" style={{ color: C.muted }}>
+              Straight talk: the flooring program is new. These numbers come from a live
+              home-services account, not a flooring company. Same engine that answers,
+              qualifies and books.
+            </p>
           </Reveal>
 
           {PROOFS.map((p, i) => (
             <Reveal key={p.img} delay={0.05 + i * 0.08} className="mb-10 last:mb-0">
               <div className="flex justify-center mb-4">
                 <div className="rounded-2xl px-5 sm:px-6 py-3 text-center"
-                     style={{ background: PROOF_RED, border: "3px solid rgba(255,255,255,0.92)",
-                              boxShadow: "0 10px 34px rgba(220,38,38,0.40)" }}>
+                     style={{ background: PROOF_RED, border: "3px solid #FFFFFF",
+                              boxShadow: "0 10px 30px rgba(220,38,38,0.25)" }}>
                   <span className="block font-extrabold text-white leading-tight"
                         style={{ fontFamily: "var(--font-jakarta)", fontSize: "clamp(1.02rem, 3.4vw, 1.5rem)",
                                  letterSpacing: "-0.01em", textWrap: "balance" }}>
@@ -442,10 +439,10 @@ export default function BookPage() {
                 </div>
               </div>
               <div className="rounded-2xl overflow-hidden"
-                   style={{ border: `3px solid ${PROOF_RED}`, boxShadow: "0 24px 60px rgba(0,0,0,0.45)" }}>
+                   style={{ border: `3px solid ${PROOF_RED}`, boxShadow: "0 24px 60px rgba(28,25,23,0.12)" }}>
                 <img src={p.img} alt={p.alt} width={1200} height={p.h} className="w-full block" loading="lazy" />
               </div>
-              <p className="text-center text-sm leading-relaxed mt-4" style={{ color: "rgba(250,250,248,0.58)" }}>
+              <p className="text-center text-sm leading-relaxed mt-4" style={{ color: C.muted }}>
                 {p.caption}
               </p>
             </Reveal>
@@ -453,23 +450,24 @@ export default function BookPage() {
         </div>
       </section>
 
-      {/* ── 5. THE FOUR THINGS THAT MATTER (+ the rest, folded away) ── */}
+      {/* ── 6. THE MECHANISM — five steps, in order ── */}
       <section className="relative py-16 sm:py-20 px-6 overflow-hidden" style={{ background: C.bg }}>
         <div className="relative max-w-4xl mx-auto">
           <Reveal className="text-center mb-10">
             <h2 className="font-extrabold tracking-tight mb-3"
                 style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
                          fontSize: "clamp(1.6rem, 5.2vw, 2.25rem)", lineHeight: 1.15, textWrap: "balance" }}>
-              An answering service takes a message.
-              <br /><span style={{ color: C.orangeDk }}>This one books the job.</span>
+              You have the crews.
+              <br /><span style={{ color: C.orangeDk }}>Here&rsquo;s how we fill the measures.</span>
             </h2>
           </Reveal>
 
-          <div className="grid sm:grid-cols-2 gap-4 mb-8">
+          <div className="grid sm:grid-cols-2 gap-4">
             {CORE.map((b, i) => (
-              <Reveal key={b.label} delay={0.05 + (i % 2) * 0.07}>
+              <Reveal key={b.label} delay={0.05 + (i % 2) * 0.07}
+                      className={i === CORE.length - 1 ? "sm:col-span-2" : ""}>
                 <div className="h-full rounded-2xl p-6 flex items-start gap-4"
-                     style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(249,115,22,0.07)" }}>
+                     style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(28,25,23,0.04)" }}>
                   <div className="w-11 h-11 rounded-xl flex items-center justify-center shrink-0"
                        style={{ background: "rgba(249,115,22,0.10)" }}>
                     <b.icon className="w-5 h-5" style={{ color: C.orangeDk }} aria-hidden="true" />
@@ -486,41 +484,20 @@ export default function BookPage() {
             ))}
           </div>
 
-          <Reveal delay={0.1}>
-            <details className="group rounded-2xl overflow-hidden"
-                     style={{ background: C.subtle, border: `1px solid ${C.border}` }}>
-              <summary className="flex items-center justify-between gap-3 cursor-pointer list-none px-6 py-4">
-                <span className="font-bold text-sm sm:text-base" style={{ color: C.text, fontFamily: "var(--font-jakarta)" }}>
-                  Everything else it does
-                </span>
-                <ChevronDown className="w-5 h-5 shrink-0 transition-transform group-open:rotate-180"
-                             style={{ color: C.orangeDk }} aria-hidden="true" />
-              </summary>
-              <ul className="px-6 pb-6 pt-1 space-y-3">
-                {EXTRAS.map((e) => (
-                  <li key={e.text} className="flex items-start gap-3 text-sm leading-relaxed" style={{ color: C.muted }}>
-                    <e.icon className="w-4 h-4 mt-0.5 shrink-0" style={{ color: C.orangeDk }} aria-hidden="true" />
-                    {e.text}
-                  </li>
-                ))}
-              </ul>
-            </details>
-          </Reveal>
-
           <Reveal delay={0.15} className="mt-12">
             <Cta compact />
           </Reveal>
         </div>
       </section>
 
-      {/* ── 6. FIT CHECK — selectivity that also pre-qualifies the booking ── */}
+      {/* ── 7. FIT CHECK — selectivity that also pre-qualifies the booking ── */}
       <section className="relative py-16 sm:py-20 px-6" style={{ background: C.subtle }}>
         <div className="relative max-w-4xl mx-auto">
           <Reveal className="text-center mb-10">
             <h2 className="font-extrabold tracking-tight"
                 style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
                          fontSize: "clamp(1.6rem, 5.2vw, 2.25rem)", lineHeight: 1.15, textWrap: "balance" }}>
-              This isn&rsquo;t for every shop.
+              This isn&rsquo;t for every flooring company.
             </h2>
           </Reveal>
 
@@ -557,7 +534,8 @@ export default function BookPage() {
         </div>
       </section>
 
-      {/* ── 7. FAQ — the objections that actually stop the booking ── */}
+      {/* ── 8. FAQ — the objections that actually stop the booking ── */}
+      {/* Never add guarantee terms or price here. See docs/flooring-pivot.md. */}
       <section className="relative py-16 sm:py-20 px-6" style={{ background: C.bg }}>
         <div className="relative max-w-2xl mx-auto">
           <Reveal className="text-center mb-9">
@@ -587,12 +565,12 @@ export default function BookPage() {
         </div>
       </section>
 
-      {/* ── 8. FOUNDER — answers "who are you" faster than a paragraph ── */}
+      {/* ── 9. FOUNDER — answers "who are you" faster than a paragraph ── */}
       <section className="relative py-16 px-6" style={{ background: C.subtle }}>
         <div className="relative max-w-2xl mx-auto">
           <Reveal>
             <div className="rounded-2xl p-6 sm:p-8 flex flex-col sm:flex-row items-center sm:items-start gap-6 text-center sm:text-left"
-                 style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(249,115,22,0.07)" }}>
+                 style={{ background: C.surface, border: `1px solid ${C.border}`, boxShadow: "0 4px 24px rgba(28,25,23,0.04)" }}>
               {FOUNDER_PHOTO_URL ? (
                 <img src={FOUNDER_PHOTO_URL} alt="Jonathan, founder of FieldBuilt AI"
                      width={96} height={96}
@@ -600,8 +578,8 @@ export default function BookPage() {
                      style={{ border: `2px solid ${C.border}` }} />
               ) : (
                 <div className="w-24 h-24 rounded-2xl flex items-center justify-center shrink-0"
-                     style={{ background: C.dark }}>
-                  <span className="text-4xl font-extrabold" style={{ color: C.orange, fontFamily: "var(--font-jakarta)" }}>J</span>
+                     style={{ background: "#FFF3EC", border: `1px solid ${C.border}` }}>
+                  <span className="text-4xl font-extrabold" style={{ color: C.orangeDk, fontFamily: "var(--font-jakarta)" }}>J</span>
                 </div>
               )}
               <div>
@@ -609,10 +587,11 @@ export default function BookPage() {
                   Jonathan &middot; founder, FieldBuilt AI
                 </div>
                 <p className="text-sm leading-relaxed" style={{ color: C.muted }}>
-                  You&rsquo;re not meeting a sales rep. I build and install every system myself,
-                  which is why I only take a couple of shops a month. Come with your hardest
-                  questions &mdash; the weird edge cases, the &ldquo;my market is different.&rdquo;
-                  That&rsquo;s the part of the call I&rsquo;m best at.
+                  You&rsquo;re not meeting a sales rep. I set up the ads, the AI and the
+                  quote chasing for every flooring company myself, which is why I only take
+                  a few a month. Bring your hardest questions: your slow months, your
+                  pickiest homeowners, the &ldquo;my area is different.&rdquo; That&rsquo;s
+                  the part of the call I&rsquo;m best at.
                 </p>
               </div>
             </div>
@@ -620,25 +599,20 @@ export default function BookPage() {
         </div>
       </section>
 
-      {/* ── 9. FINAL CTA ── */}
-      <section className="relative py-16 sm:py-20 px-6 overflow-hidden" style={{ background: "#1A1614" }}>
-        <div className="absolute inset-0 pointer-events-none opacity-40" aria-hidden="true"
-             style={{ backgroundImage: "radial-gradient(circle, rgba(249,115,22,0.10) 1.2px, transparent 1.2px)", backgroundSize: "30px 30px",
-                      WebkitMaskImage: "radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 75%)",
-                      maskImage: "radial-gradient(ellipse 70% 60% at 50% 50%, #000 20%, transparent 75%)" }} />
+      {/* ── 10. FINAL CTA ── */}
+      <section className="relative py-16 sm:py-20 px-6 overflow-hidden" style={{ background: C.bg }}>
+        <div className="absolute inset-0 pointer-events-none" aria-hidden="true" style={GRID_TEXTURE} />
         <div className="relative max-w-2xl mx-auto text-center">
           <Reveal>
             <h2 className="font-extrabold tracking-tight mb-6"
-                style={{ color: "#F5F3F0", fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
+                style={{ color: C.text, fontFamily: "var(--font-jakarta)", letterSpacing: "-0.025em",
                          fontSize: "clamp(1.6rem, 5.2vw, 2.4rem)", lineHeight: 1.15, textWrap: "balance" }}>
-              In 20 minutes we&rsquo;ll show you exactly how
-              <br /><span style={{ color: C.orange }}>
-                we book you more{" "}
-                <br className="sm:hidden" />
-                HVAC jobs.
+              Your crews are ready.
+              <br /><span style={{ color: C.orangeDk }}>
+                Let&rsquo;s fill the measures.
               </span>
             </h2>
-            <Cta tone="dark" />
+            <Cta />
           </Reveal>
         </div>
       </section>
