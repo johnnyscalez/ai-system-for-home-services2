@@ -118,3 +118,30 @@ export function IcpCallout({ align = "left", sub = "with their own install crews
     </motion.div>
   )
 }
+
+// Free-text version of the ICP line for /book: no card, no border, no icon.
+// The twist is typographic — a small lowercase mono "for" hung off the front of
+// the uppercase line, and a highlighter swipe of brand orange under the crews
+// line, so it reads like someone marked it up on a jobsite print.
+export function IcpHeadline({ align = "center" }: { align?: "left" | "center" }) {
+  return (
+    <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
+                className={align === "center" ? "text-center" : "text-left"}>
+      <p className="font-heading text-[clamp(21px,3.3vw,33px)] font-extrabold uppercase leading-[1.05] tracking-[-0.02em]"
+         style={{ color: T.ink }}>
+        <span className="mr-2.5 align-middle font-mono text-[0.46em] font-medium lowercase tracking-[0.22em]" style={{ color: T.body }}>
+          for
+        </span>
+        Flooring Contractors
+      </p>
+      <p className="mt-2 text-[clamp(14px,1.6vw,17px)] font-semibold">
+        <span className="inline-block px-1.5 pb-0.5" style={{
+          color: T.orangeD,
+          background: "linear-gradient(180deg, transparent 56%, rgba(249,115,22,0.24) 56%)",
+        }}>
+          with their own install crews
+        </span>
+      </p>
+    </motion.div>
+  )
+}

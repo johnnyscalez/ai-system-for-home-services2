@@ -17,7 +17,7 @@ import { motion } from "framer-motion"
 import { ArrowDown, Check, ShieldCheck, Star } from "lucide-react"
 import { GhlBookingWidget } from "@/components/landing/shared"
 import { Parquet, T } from "@/components/site/live"
-import { Accent, Eyebrow, H2, IcpCallout, Logo, Reveal } from "@/components/site/ui"
+import { Accent, Eyebrow, H2, IcpHeadline, Logo, Reveal } from "@/components/site/ui"
 
 
 // ── Trust badges (claim-only until a real Google rating is set) ─────────────
@@ -88,10 +88,10 @@ export default function BookPage() {
       <section className="relative overflow-hidden px-5 pb-8 pt-28 sm:px-8 sm:pt-36" style={{ background: `linear-gradient(180deg, ${T.white} 0%, ${T.cream} 100%)` }}>
         <Parquet opacity={0.055} className="[mask-image:radial-gradient(ellipse_70%_75%_at_50%_30%,#000_15%,transparent_75%)]" />
         <div className="relative mx-auto max-w-[980px] text-center">
-          <IcpCallout align="center" />
+          <IcpHeadline align="center" />
 
           <motion.h1 initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.65 }}
-                     className="mt-8 font-heading text-[clamp(32px,5.4vw,62px)] font-extrabold leading-[1.05] tracking-[-0.03em]"
+                     className="mt-6 font-heading text-[clamp(32px,5.4vw,62px)] font-extrabold leading-[1.05] tracking-[-0.03em]"
                      style={{ color: T.ink, textWrap: "balance" }}>
             Get <span style={{ color: T.orangeD }}>20+ Shown In-Home Measures</span> in 60 Days, and Every Quote Chased Until It Books.{" "}
             <span className="relative inline-block" style={{ color: T.orangeD }}>
