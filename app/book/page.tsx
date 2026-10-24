@@ -93,7 +93,7 @@ export default function BookPage() {
           <motion.h1 initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.65 }}
                      className="mt-6 font-heading text-[clamp(32px,5.4vw,62px)] font-extrabold leading-[1.05] tracking-[-0.03em]"
                      style={{ color: T.ink, textWrap: "balance" }}>
-            Get <span style={{ color: T.orangeD }}>20+ Shown In-Home Measures</span> in 60 Days, and Every Quote Chased Until It Books.{" "}
+            Get <span style={{ color: T.orangeD }}>20+ Shown In-Home Measures</span> in 60 Days, and <span style={{ color: T.orangeD }}>Own</span> Your <span style={{ color: T.orangeD }}>Own</span> Client Flow.{" "}
             <span className="relative inline-block" style={{ color: T.orangeD }}>
               Guaranteed
               <svg aria-hidden="true" viewBox="0 0 300 12" preserveAspectRatio="none" className="absolute -bottom-1 left-0 h-[0.16em] w-full">
