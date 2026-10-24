@@ -14,7 +14,7 @@
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { motion } from "framer-motion"
-import { ArrowDown, Check, ShieldCheck, Star } from "lucide-react"
+import { ArrowDown, Check, Star } from "lucide-react"
 import { GhlBookingWidget } from "@/components/landing/shared"
 import { Parquet, T } from "@/components/site/live"
 import { Accent, Eyebrow, H2, IcpHeadline, Logo, Reveal } from "@/components/site/ui"
@@ -108,15 +108,6 @@ export default function BookPage() {
             See how you get a consistent flow of qualified flooring leads, contacted, answered and booked
             within 2 seconds, to guarantee you 20+ shown in-home measures on autopilot.
           </motion.p>
-
-          <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ delay: 0.4, duration: 0.6 }}
-                     className="mt-7 flex flex-wrap justify-center gap-x-6 gap-y-2.5 text-[14.5px] font-medium" style={{ color: T.body }}>
-            {["We run the Meta ads for you", "Answered within 2 seconds, 24/7", "Every quote chased until it books"].map((t) => (
-              <li key={t} className="flex items-center gap-2">
-                <ShieldCheck className="h-[18px] w-[18px] shrink-0" style={{ color: T.orange }} aria-hidden="true" />{t}
-              </li>
-            ))}
-          </motion.ul>
 
           <motion.a href="#book" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.5 }}
                     className="group mt-9 inline-flex items-center gap-2.5 rounded-full px-8 py-4 font-heading text-[16px] font-bold text-white transition-all hover:-translate-y-0.5"
