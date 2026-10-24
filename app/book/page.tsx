@@ -105,8 +105,9 @@ export default function BookPage() {
 
           <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.6 }}
                     className="mx-auto mt-7 max-w-[720px] text-[clamp(16.5px,1.7vw,19px)] leading-relaxed" style={{ color: T.body }}>
-            See how you get a consistent flow of qualified flooring leads, contacted, answered and booked
-            within 2 seconds, to guarantee you 20+ shown in-home measures on autopilot.
+            We build everything between a homeowner to a qualified measure on your calendar.
+            The demand, the answering, the qualifying, the follow up, the tracking, the booking.
+            Installed in your business, running every day, and yours.
           </motion.p>
 
           <motion.a href="#book" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.5 }}
