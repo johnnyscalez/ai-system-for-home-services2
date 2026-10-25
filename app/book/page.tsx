@@ -3,9 +3,9 @@
 // ─── BOOKING PAGE — /book ────────────────────────────────────────────────────
 // Paid-traffic landing page for flooring contractors. Same design system as the
 // homepage (components/site/*). Positioning rules: docs/flooring-pivot.md.
-//   - Headline wording on this page was set by Jonathan on 2026-10-20:
-//     "Get 20+ Shown In-Home Measures in 60 Days, and Every Quote Chased
-//      Until It Books. Guaranteed"
+//   - Headline wording on this page is set by Jonathan (last change 2026-10-25):
+//     "Get 20+ Booked Measures in 60 Days, and Own Your Own Client Flow.
+//      Guaranteed" — both "Own"s are orange on purpose.
 //   - Never state guarantee failure terms. Never show price.
 //   - No flooring proof exists yet. Top Air numbers appear ONLY labelled as
 //     "a live home-services account", never implied to be flooring.
@@ -93,7 +93,7 @@ export default function BookPage() {
           <motion.h1 initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.65 }}
                      className="mt-6 font-heading text-[clamp(32px,5.4vw,62px)] font-extrabold leading-[1.05] tracking-[-0.03em]"
                      style={{ color: T.ink, textWrap: "balance" }}>
-            Get <span style={{ color: T.orangeD }}>20+ Shown In-Home Measures</span> in 60 Days, and <span style={{ color: T.orangeD }}>Own</span> Your <span style={{ color: T.orangeD }}>Own</span> Client Flow.{" "}
+            Get <span style={{ color: T.orangeD }}>20+ Booked Measures</span> in 60 Days, and <span style={{ color: T.orangeD }}>Own</span> Your <span style={{ color: T.orangeD }}>Own</span> Client Flow.{" "}
             <span className="relative inline-block" style={{ color: T.orangeD }}>
               Guaranteed
               <svg aria-hidden="true" viewBox="0 0 300 12" preserveAspectRatio="none" className="absolute -bottom-1 left-0 h-[0.16em] w-full">
