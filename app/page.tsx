@@ -17,7 +17,7 @@ import {
   ListChecks, LineChart, ShieldCheck,
 } from "lucide-react"
 import { CountUp, HeroBoard, Marquee, Parquet, PhoneChat, Pipeline, T } from "@/components/site/live"
-import { Accent, Eyebrow, GhostCta, H2, IcpCallout, IconTile, Logo, PrimaryCta, Reveal } from "@/components/site/ui"
+import { Accent, Eyebrow, GhostCta, H2, IcpHeadline, IconTile, Logo, PrimaryCta, Reveal } from "@/components/site/ui"
 
 // ── content ─────────────────────────────────────────────────────────────────
 const PROJECTS = [
@@ -107,7 +107,7 @@ export default function Home() {
                  className="[mask-image:radial-gradient(ellipse_70%_70%_at_75%_30%,#000_20%,transparent_75%)]" />
         <div className="relative mx-auto grid max-w-[1200px] items-center gap-14 px-5 pb-20 pt-14 sm:px-8 lg:grid-cols-[1.05fr_1fr] lg:pb-28 lg:pt-20">
           <div>
-            <IcpCallout />
+            <IcpHeadline align="left" />
 
             <motion.h1 initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, delay: 0.08 }}
                        className="mt-6 font-heading text-[clamp(36px,5.8vw,70px)] font-extrabold leading-[1.02] tracking-[-0.035em]"
