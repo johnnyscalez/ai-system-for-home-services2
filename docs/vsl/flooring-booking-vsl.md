@@ -72,10 +72,8 @@ and your odds of qualifying them are twenty one times better.
 Most contractors take hours. Some never call back.
 We answer in one second.
 
-I'll be straight with you. Flooring is new for us.
-The system isn't.
 Here's what it did for a home services company we built it for.
-[screen: label "A live home services account (not flooring)"]
+[screen: label "A home services account"]
 
 First twenty four hours. Twenty seven leads. Fourteen real conversations. Three booked.
 [screen: counters 27 / 14 / 3]
@@ -190,7 +188,7 @@ Here's how we fill it with twenty plus in-home measures in sixty days. Guarantee
 
 1. **Response time: 1 second** (Jonathan, 2026-10-28). Make sure the live AI actually replies that fast before the video runs.
 2. **Budget question.** The script says the AI asks about budget. The live engine is still the HVAC build; make sure the flooring qualifier asks it before the video says so.
-3. **Top Air numbers.** Those are real but the account was deleted on 2026-10-26. Keep them labelled "a live home services account (not flooring)" on screen. Swap in the first flooring result the day you have one.
+3. **Top Air numbers.** Those are real but the account was deleted on 2026-10-26. Keep them labelled "a home services account" on screen. Never say or imply flooring is new to FieldBuilt (Jonathan, 2026-10-28). Swap in the first flooring result the day you have one.
 4. **Speed stats.** Both are checked against the source and shown with it on screen:
    - Service Direct homeowner survey (559 US homeowners aged 30+, published April 2022): 85% contact 3 or fewer contractors, 60% decide within 72 hours, almost 40% rarely or never work with a contractor who didn't answer their first call, 35% say answering the first call is the most important thing when booking. https://blog.servicedirect.com/survey-what-matters-homeowners-choosing-contractor
    - InsideSales.com / MIT Lead Response Management Study (Oldroyd, 2007; 6 companies, 15,000+ web leads): odds of qualifying a lead drop 21 times when called at 30 minutes instead of 5. Not construction specific, so the script doesn't say it is.

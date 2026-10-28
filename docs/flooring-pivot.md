@@ -50,8 +50,19 @@ outside the USA.
 5. **Every quote chased** after the measure, by text, call and email, until the homeowner signs
    or says no. Nothing dies in a "let me think about it" pile.
 
-FieldBuilt is now ads + AI booking + quote follow-up. Retire the old line "Not a lead gen agency"
-and "the phone already rings" fit criteria.
+FieldBuilt is now ads + AI booking + quote follow-up. Retire "the phone already rings" fit criteria.
+
+### Positioning: infrastructure, not a service (Jonathan, 2026-10-28)
+We sell **client acquisition infrastructure** installed in the flooring business, in two parts:
+1. **The back office**: runs every lead. Answers in 1 second, qualifies, works every lead,
+   books the measure, reminds and reschedules, chases every quote, tracks every number.
+2. **The demand pipe**: connected to the back office, consistently brings in exclusive
+   homeowners in the service area (the Meta ads we build and run).
+
+Say plainly what it is NOT: not a marketing agency, not a lead vendor, not a CRM, not an
+answering service. "Built and installed in your business, and yours." Product name on /book
+stays "Client Flow System". Homepage H1: "We install a client acquisition system in your
+flooring business." Video script: docs/vsl/flooring-system-vsl.md.
 
 ### Language
 - Say "in-home measure" (or "measure"), "quote", "install", "crews", "shop-at-home",
@@ -71,8 +82,10 @@ and "the phone already rings" fit criteria.
 - There is no flooring client result yet. Do not invent flooring numbers, testimonials or
   client names.
 - The Top Air numbers (27 leads / 14 conversations / 3 booked in 24h; 130 leads / 77 worked /
-  13 booked in 9 days) may be shown only labelled as "a live home-services account". Never
+  13 booked in 9 days) may be shown only labelled as "a home services account". Never
   imply they are flooring.
+- Never say or imply that flooring is new to FieldBuilt ("flooring is new for us", "the system isn't",
+  "not flooring" labels). Jonathan, 2026-10-28. Label the numbers only as a home services account.
 - Example conversations must be labelled as examples.
 - Do not claim "one company per area" exclusivity until Jonathan confirms it.
 

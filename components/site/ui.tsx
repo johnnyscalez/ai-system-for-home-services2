@@ -3,7 +3,7 @@
 // Shared building blocks for the marketing pages (homepage and /book), so both
 // pages carry the same type scale, buttons, cards and motion.
 
-import { useRef } from "react"
+import { useRef, useState } from "react"
 import Link from "next/link"
 import { motion, useInView } from "framer-motion"
 import { ArrowRight } from "lucide-react"
@@ -139,5 +139,37 @@ export function IcpHeadline({ align = "center" }: { align?: "left" | "center" })
         </span>
       </p>
     </motion.div>
+  )
+}
+
+// ── The VSL player: poster with one big play button, native controls once playing ──
+export function VslPlayer({ src = "/videos/flooring-system-vsl.mp4", poster = "/videos/flooring-system-vsl-poster.jpg", length = "74 sec" }: { src?: string; poster?: string; length?: string }) {
+  const ref = useRef<HTMLVideoElement>(null)
+  const [playing, setPlaying] = useState(false)
+  const start = () => { setPlaying(true); ref.current?.play().catch(() => {}) }
+  return (
+    <div className="rounded-[26px] border p-2 sm:p-3"
+         style={{ background: T.white, borderColor: T.line, boxShadow: "0 40px 90px -45px rgba(28,25,23,0.45)" }}>
+      <div className="relative overflow-hidden rounded-[20px]" style={{ background: T.cream }}>
+        <video ref={ref} className="block aspect-video w-full" src={src} poster={poster}
+               controls={playing} playsInline preload="metadata" onPlay={() => setPlaying(true)} />
+        {!playing && (
+          <button type="button" onClick={start} aria-label="Play the video"
+                  className="group absolute inset-0 flex items-end justify-center pb-[3%] sm:pb-[7%]">
+            {/* sits in the empty band under the poster's hook line, never over it */}
+            <span className="flex items-center gap-2.5 rounded-full py-1.5 pl-1.5 pr-4 transition-transform group-hover:scale-[1.04] sm:gap-3 sm:py-3 sm:pl-3 sm:pr-6"
+                  style={{ background: T.ink, boxShadow: "0 18px 40px -14px rgba(28,25,23,0.6)" }}>
+              <span className="flex h-8 w-8 items-center justify-center rounded-full sm:h-12 sm:w-12" style={{ background: T.orange }}>
+                <svg viewBox="0 0 24 24" className="ml-0.5 h-4 w-4 sm:h-5 sm:w-5" aria-hidden="true"><path d="M7 4.5v15l12.5-7.5z" fill="#FFFFFF" /></svg>
+              </span>
+              <span className="text-left">
+                <span className="block font-heading text-[13px] font-bold text-white sm:text-[16px]">Watch what we install</span>
+                <span className="hidden font-mono text-[11px] uppercase tracking-[0.12em] sm:block" style={{ color: "rgba(255,255,255,0.65)" }}>{length} · sound on</span>
+              </span>
+            </span>
+          </button>
+        )}
+      </div>
+    </div>
   )
 }

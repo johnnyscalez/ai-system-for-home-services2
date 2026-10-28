@@ -16,11 +16,11 @@ import Link from "next/link"
 import { motion } from "framer-motion"
 import {
   ArrowRight, ArrowUpRight, BadgeCheck, BellRing, CalendarCheck, CalendarX, Car, Check, ChevronDown,
-  Clock, HelpCircle, MessageSquareText, Phone, Repeat, Snowflake, Users, X, Zap,
-  ListChecks, LineChart, ShieldCheck, EyeOff,
+  Clock, HelpCircle, MessageSquareText, Repeat, Snowflake, Users, X, Zap,
+  ListChecks, LineChart, EyeOff,
 } from "lucide-react"
-import { CountUp, HeroBoard, Marquee, Parquet, PhoneChat, Pipeline, SystemMap, T } from "@/components/site/live"
-import { Accent, Eyebrow, GhostCta, H2, IcpHeadline, IconTile, Logo, PrimaryCta, Reveal } from "@/components/site/ui"
+import { CountUp, HeroBoard, Marquee, Parquet, PhoneChat, SystemMap, T } from "@/components/site/live"
+import { Accent, Eyebrow, GhostCta, H2, IcpHeadline, IconTile, Logo, PrimaryCta, Reveal, VslPlayer } from "@/components/site/ui"
 
 // ── content ─────────────────────────────────────────────────────────────────
 const PROJECTS = [
@@ -95,6 +95,7 @@ export default function Home() {
           <nav className="hidden items-center gap-8 text-[14.5px] font-medium md:flex" style={{ color: T.body }}>
             <a href="#system" className="hover:text-[#1C1917]">What we install</a>
             <a href="#how" className="hover:text-[#1C1917]">The back office</a>
+            <a href="#watch" className="hover:text-[#1C1917]">Watch</a>
             <a href="#offer" className="hover:text-[#1C1917]">The offer</a>
             <a href="#faq" className="hover:text-[#1C1917]">FAQ</a>
           </nav>
@@ -169,6 +170,20 @@ export default function Home() {
           Built for every project your crews install
         </p>
         <Marquee items={PROJECTS} />
+      </section>
+
+      {/* ── the video: what we sell and who it's for, in 74 seconds ───────── */}
+      <section id="watch" className="scroll-mt-24 px-5 pt-24 sm:px-8 lg:pt-28">
+        <div className="mx-auto max-w-[1040px]">
+          <Reveal className="mx-auto max-w-[720px] text-center">
+            <Eyebrow>Watch · 74 seconds</Eyebrow>
+            <H2 className="mt-4">What we install, <Accent>and who it&apos;s for.</Accent></H2>
+            <p className="mt-5 text-[17px] leading-relaxed" style={{ color: T.body }}>
+              The back office, the demand pipe, and how they put measures on your calendar.
+            </p>
+          </Reveal>
+          <Reveal delay={0.08} className="mt-10"><VslPlayer /></Reveal>
+        </div>
       </section>
 
       {/* ── pains ────────────────────────────────────────────────────────── */}
@@ -310,41 +325,6 @@ export default function Home() {
               ))}
             </div>
           </div>
-        </div>
-      </section>
-
-      {/* ── pipeline feature ─────────────────────────────────────────────── */}
-      <section className="px-5 py-24 sm:px-8 lg:py-32">
-        <div className="mx-auto grid max-w-[1200px] items-center gap-14 lg:grid-cols-[0.9fr_1.1fr]">
-          <Reveal>
-            <Eyebrow>Every number tracked</Eyebrow>
-            <H2 className="mt-4">See every homeowner <Accent>move from ad to signed.</Accent></H2>
-            <p className="mt-5 text-[17px] leading-relaxed" style={{ color: T.body }}>
-              Your back office keeps score for you. Every homeowner is answered, qualified, booked for a measure,
-              quoted and followed up, and you can see exactly where each one stands.
-            </p>
-            <div className="mt-8 grid gap-x-6 gap-y-4 sm:grid-cols-2">
-              {[
-                [Zap, "Instant first reply"], [ShieldCheck, "Your rules, your service area"],
-                [CalendarCheck, "Reminders so measures show"], [Phone, "Text, call and email follow-up"],
-                [MessageSquareText, "Every message visible to you"], [X, "Stops the moment they say no"],
-              ].map(([Icon, t]) => {
-                const I = Icon as React.ComponentType<{ className?: string; style?: React.CSSProperties }>
-                return (
-                  <div key={t as string} className="flex items-center gap-3">
-                    <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl" style={{ background: T.soft }}>
-                      <I className="h-4 w-4" style={{ color: T.orangeD }} />
-                    </span>
-                    <span className="text-[15px] font-semibold" style={{ color: T.ink }}>{t as string}</span>
-                  </div>
-                )
-              })}
-            </div>
-            <div className="mt-10 flex flex-wrap gap-3">
-              <PrimaryCta />
-            </div>
-          </Reveal>
-          <Reveal delay={0.1}><Pipeline /></Reveal>
         </div>
       </section>
 

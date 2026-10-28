@@ -11,15 +11,15 @@
 //     "a live home-services account", never implied to be flooring.
 // Page is headline → calendar → the VSL (Jonathan, 2026-10-28: the video goes
 // BELOW the calendar, so booking stays the first thing on the page). Video
-// source: ~/Desktop/FieldBuilt Videos/flooring-vsl-v2, script
-// docs/vsl/flooring-vsl-v2.md; web copy in public/videos/.
+// source: ~/Desktop/FieldBuilt Videos/flooring-vsl-system, script
+// docs/vsl/flooring-system-vsl.md; web copy in public/videos/ (also on the homepage).
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { motion } from "framer-motion"
 import { ArrowDown, Check, Star } from "lucide-react"
 import { GhlBookingWidget } from "@/components/landing/shared"
 import { Parquet, SystemMap, T } from "@/components/site/live"
-import { Accent, Eyebrow, H2, IcpHeadline, Logo, Reveal } from "@/components/site/ui"
+import { Accent, Eyebrow, H2, IcpHeadline, Logo, Reveal, VslPlayer } from "@/components/site/ui"
 
 
 // ── Trust badges (claim-only until a real Google rating is set) ─────────────
@@ -166,17 +166,7 @@ export default function BookPage() {
             <H2 className="mt-4 !text-[clamp(26px,3.6vw,40px)]">What we install in <Accent>your flooring business.</Accent></H2>
           </Reveal>
           <Reveal delay={0.05}>
-            <div className="rounded-[26px] border p-2 sm:p-3"
-                 style={{ background: T.white, borderColor: T.line, boxShadow: "0 30px 80px -40px rgba(28,25,23,0.35)" }}>
-              <video
-                className="block aspect-video w-full rounded-[20px] bg-black"
-                src="/videos/flooring-vsl.mp4"
-                poster="/videos/flooring-vsl-poster.jpg"
-                controls
-                playsInline
-                preload="metadata"
-              />
-            </div>
+            <VslPlayer />
           </Reveal>
           <Reveal delay={0.1}>
             <div className="mt-8 text-center">
