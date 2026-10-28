@@ -4,6 +4,9 @@
 // FIELDBUILT — homepage for flooring contractors with install crews.
 // Positioning rules: docs/flooring-pivot.md (exact offer wording, no price,
 // no guarantee failure terms, no invented flooring results, examples labelled).
+// Positioning since 2026-10-28 (Jonathan): FieldBuilt sells client acquisition
+// INFRASTRUCTURE, not an agency or a lead vendor. Two parts: a back office that
+// runs every lead, connected to a demand pipe of exclusive homeowners.
 // Light, warm, white-card design. Signature: a faint parquet texture behind the
 // hero and the closing section. Live panels live in components/site/live.tsx.
 // ─────────────────────────────────────────────────────────────────────────────
@@ -12,11 +15,11 @@ import { useState } from "react"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import {
-  ArrowRight, ArrowUpRight, BadgeCheck, CalendarCheck, CalendarX, Car, Check, ChevronDown,
-  Clock, Megaphone, MessageSquareText, Phone, Repeat, Snowflake, Users, Wrench, X, Zap,
-  ListChecks, LineChart, ShieldCheck,
+  ArrowRight, ArrowUpRight, BadgeCheck, BellRing, CalendarCheck, CalendarX, Car, Check, ChevronDown,
+  Clock, HelpCircle, MessageSquareText, Phone, Repeat, Snowflake, Users, X, Zap,
+  ListChecks, LineChart, ShieldCheck, EyeOff,
 } from "lucide-react"
-import { CountUp, HeroBoard, Marquee, Parquet, PhoneChat, Pipeline, T } from "@/components/site/live"
+import { CountUp, HeroBoard, Marquee, Parquet, PhoneChat, Pipeline, SystemMap, T } from "@/components/site/live"
 import { Accent, Eyebrow, GhostCta, H2, IcpHeadline, IconTile, Logo, PrimaryCta, Reveal } from "@/components/site/ui"
 
 // ── content ─────────────────────────────────────────────────────────────────
@@ -31,26 +34,30 @@ const PAINS = [
   { icon: Car,       title: "Wasted measure drives",   body: "45 minutes out, then: \"my husband needs to be here before we decide.\"" },
   { icon: CalendarX, title: "Quotes that go quiet",    body: "The quote goes out, life gets busy, nobody follows up. The job just disappears." },
   { icon: Snowflake, title: "The winter dip",          body: "Early fall is packed. November to February, the calendar thins out fast." },
-  { icon: Wrench,    title: "Crews waiting on work",   body: "You have the installers. What you don't have is a steady line of measures." },
+  { icon: EyeOff,    title: "No numbers",              body: "Where did that lead go? How many quotes are open? Nobody knows, because nothing is tracked." },
 ]
 
-const SERVICES = [
-  { icon: Megaphone,         title: "Meta ads we run for you",    body: "Ads built for homeowners ready for new floors, aimed only at the ZIP codes your crews cover. You pay the ad spend straight to Meta." },
-  { icon: Zap,               title: "Answered in seconds",        body: "Every homeowner gets a reply by text or phone the moment they reach out. Nights, weekends, holidays." },
-  { icon: ListChecks,        title: "Qualified before the visit", body: "Project type, size, timeline, ZIP code, and every decision maker home. Tire kickers never reach your calendar." },
-  { icon: CalendarCheck,     title: "Measures booked for you",    body: "Real openings on your real calendar, with a confirmation, a day-before reminder and an easy reschedule." },
-  { icon: Repeat,            title: "Every quote chased",         body: "After the measure it follows up by text, call and email until the homeowner signs or says no." },
-  { icon: LineChart,         title: "You see everything",         body: "Every conversation, every measure and every quote in one place. You always know where each job stands." },
+const BACK_OFFICE = [
+  { icon: Zap,               title: "Answers in 1 second",     body: "Text or phone, the moment a homeowner reaches out. Nights, weekends, holidays." },
+  { icon: ListChecks,        title: "Qualifies the project",   body: "Project type, size, timeline, ZIP code, and every decision maker home. Tire kickers never reach your calendar." },
+  { icon: MessageSquareText, title: "Works every lead",        body: "Homeowners who go quiet get followed up by text, call and email until they book or say no." },
+  { icon: CalendarCheck,     title: "Books the measure",       body: "Real openings on your real calendar, with a confirmation the moment it's booked." },
+  { icon: BellRing,          title: "Reminds and reschedules", body: "A reminder the day before. If plans change, the measure gets moved, not lost." },
+  { icon: Repeat,            title: "Chases every quote",      body: "After the measure it follows up until the homeowner signs or says no. Nothing dies in a maybe pile." },
+  { icon: LineChart,         title: "Tracks every number",     body: "Leads, conversations, measures, quotes out, quotes signed. You always know what's working." },
+  { icon: HelpCircle,        title: "Handles the questions",   body: "Service area, timing, what happens at the measure. Anything unusual goes straight to you." },
 ]
 
 const STEPS = [
   { n: "01", title: "Walkthrough call",       body: "20 minutes. We look at your service area, your crews and how your quotes get followed up today." },
-  { n: "02", title: "We build it",            body: "Your ads, your service area, your qualification rules and your calendar, set up and tested by us." },
-  { n: "03", title: "Ads go live",            body: "Homeowners start coming in. Every one is answered, qualified and booked for a measure." },
-  { n: "04", title: "Measures and signed quotes", body: "Your estimator runs the measures. We chase every quote until you get a yes or a no." },
+  { n: "02", title: "We build your back office", body: "Your service area, your qualification rules, your calendar and your follow-up, built and tested inside your business." },
+  { n: "03", title: "We connect the demand pipe", body: "Ads go live in your ZIP codes. Every homeowner flows straight into your back office." },
+  { n: "04", title: "Measures on your calendar", body: "Your estimator runs the measures. The system chases every quote until you get a yes or a no." },
 ]
 
 const FAQ = [
+  { q: "Is this a marketing agency or a lead service?",
+    a: "Neither. An agency sells you its time. A lead vendor sells you the same homeowner it sells to four other companies. We build client acquisition infrastructure inside your business: a back office that runs every lead, connected to a demand pipe that brings in homeowners only you get. It's installed in your business and it's yours." },
   { q: "Who pays for the ads?",
     a: "You do, directly to Meta, on your own card. It never passes through us and it's separate from our fee. You see every dollar and every result." },
   { q: "Does the AI pretend to be a person?",
@@ -75,8 +82,8 @@ export default function Home() {
       {/* ── announcement ─────────────────────────────────────────────────── */}
       <div className="border-b px-4 py-2.5 text-center text-[13px]" style={{ background: T.soft, borderColor: "rgba(249,115,22,0.15)" }}>
         <Link href="/book" className="inline-flex items-center gap-2 font-semibold" style={{ color: T.ink }}>
-          <span className="rounded-full px-2 py-0.5 font-mono text-[10.5px] font-bold uppercase tracking-wider text-white" style={{ background: T.orange }}>New</span>
-          The flooring program is open. See if your service area is a fit
+          <span className="rounded-full px-2 py-0.5 font-mono text-[10.5px] font-bold uppercase tracking-wider text-white" style={{ background: T.orange }}>Flooring</span>
+          Client acquisition infrastructure, installed. See if your area is a fit
           <ArrowRight className="h-3.5 w-3.5" style={{ color: T.orangeD }} aria-hidden="true" />
         </Link>
       </div>
@@ -86,9 +93,9 @@ export default function Home() {
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-5 py-3.5 sm:px-8">
           <Link href="/"><Logo /></Link>
           <nav className="hidden items-center gap-8 text-[14.5px] font-medium md:flex" style={{ color: T.body }}>
-            <a href="#how" className="hover:text-[#1C1917]">How it works</a>
+            <a href="#system" className="hover:text-[#1C1917]">What we install</a>
+            <a href="#how" className="hover:text-[#1C1917]">The back office</a>
             <a href="#offer" className="hover:text-[#1C1917]">The offer</a>
-            <a href="#process" className="hover:text-[#1C1917]">Process</a>
             <a href="#faq" className="hover:text-[#1C1917]">FAQ</a>
           </nav>
           <div className="flex items-center gap-4">
@@ -110,36 +117,38 @@ export default function Home() {
             <IcpHeadline align="left" />
 
             <motion.h1 initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.65, delay: 0.08 }}
-                       className="mt-6 font-heading text-[clamp(36px,5.8vw,70px)] font-extrabold leading-[1.02] tracking-[-0.035em]"
-                       style={{ color: T.ink }}>
-              Guaranteed <span className="relative sm:whitespace-nowrap" style={{ color: T.orangeD }}>
-                20 in-home measures
-                <svg aria-hidden="true" viewBox="0 0 300 12" preserveAspectRatio="none" className="absolute -bottom-1 left-0 hidden h-[0.18em] w-full sm:block">
+                       className="mt-6 font-heading text-[clamp(34px,5.2vw,62px)] font-extrabold leading-[1.04] tracking-[-0.035em]"
+                       style={{ color: T.ink, textWrap: "balance" }}>
+              We install a <span className="relative" style={{ color: T.orangeD }}>
+                client acquisition system
+                <svg aria-hidden="true" viewBox="0 0 300 12" preserveAspectRatio="none" className="absolute -bottom-1 left-0 hidden h-[0.16em] w-full sm:block">
                   <motion.path d="M2 9 C 80 2, 200 2, 298 7" fill="none" stroke={T.orange} strokeWidth="4" strokeLinecap="round"
                                initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.9, delay: 0.6 }} />
                 </svg>
-              </span> in 60 days.
+              </span> in your flooring business.
             </motion.h1>
 
             <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.2 }}
                       className="mt-6 font-heading text-[clamp(19px,2vw,23px)] font-bold leading-snug" style={{ color: T.ink }}>
-              And every quote chased until it signs or says no.
+              A back office that runs every lead, connected to a pipe of exclusive homeowners.
+              Guaranteed 20 in-home measures in 60 days.
             </motion.p>
             <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.28 }}
-                      className="mt-4 max-w-[540px] text-[17px] leading-relaxed" style={{ color: T.body }}>
-              We run the Meta ads in your service area, answer every homeowner in seconds, qualify them,
-              book the measure on your calendar, and follow up on every quote. You keep your crews busy.
+                      className="mt-4 max-w-[560px] text-[17px] leading-relaxed" style={{ color: T.body }}>
+              Not an agency. Not a lead vendor. Infrastructure we build into your business: it brings in homeowners
+              in your service area, answers them in 1 second, qualifies them, books the measure, handles reschedules,
+              chases every quote and tracks every number. And it&apos;s yours.
             </motion.p>
 
             <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.36 }}
                         className="mt-9 flex flex-wrap items-center gap-3">
               <PrimaryCta big>Book a 20-minute walkthrough</PrimaryCta>
-              <GhostCta href="#how">See how it works</GhostCta>
+              <GhostCta href="#system">See what we install</GhostCta>
             </motion.div>
 
             <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, delay: 0.5 }}
                        className="mt-9 grid gap-x-6 gap-y-2.5 text-[14.5px] font-medium sm:grid-cols-2" style={{ color: T.body }}>
-              {["We run the Meta ads for you", "Answered in seconds, 24/7", "Every decision maker home for the measure", "Installed by the founder"].map((t) => (
+              {["A demand pipe in your service area", "A back office that runs every lead, 24/7", "Exclusive homeowners, never shared", "Built and installed in your business"].map((t) => (
                 <li key={t} className="flex items-center gap-2">
                   <BadgeCheck className="h-[18px] w-[18px] shrink-0" style={{ color: T.orange }} aria-hidden="true" />{t}
                 </li>
@@ -167,9 +176,10 @@ export default function Home() {
         <div className="mx-auto max-w-[1200px]">
           <Reveal className="mx-auto max-w-[760px] text-center">
             <Eyebrow>Sound familiar?</Eyebrow>
-            <H2 className="mt-4">Your crews are ready. <Accent>Your calendar isn&apos;t.</Accent></H2>
+            <H2 className="mt-4">You don&apos;t have a lead problem. <Accent>You have no system.</Accent></H2>
             <p className="mt-5 text-[17px] leading-relaxed" style={{ color: T.body }}>
-              More leads don&apos;t fix this. A system that books the measure and chases the quote does.
+              Most flooring companies run on referrals, bought leads and whoever&apos;s free to call back.
+              No steady demand, no back office. So the calendar swings from packed to dead, and more leads only make the leak bigger.
             </p>
           </Reveal>
           <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
@@ -187,29 +197,92 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── services ─────────────────────────────────────────────────────── */}
-      <section id="how" className="scroll-mt-24 px-5 pb-24 sm:px-8 lg:pb-32">
+      {/* ── what we install: the system map ────────────────────────────── */}
+      <section id="system" className="scroll-mt-24 px-5 pb-24 sm:px-8 lg:pb-32">
         <div className="mx-auto max-w-[1200px]">
-          <Reveal className="mx-auto max-w-[780px] text-center">
-            <Eyebrow>How it works</Eyebrow>
-            <H2 className="mt-4">Everything between the ad <Accent>and the signed quote.</Accent></H2>
+          <Reveal className="mx-auto max-w-[820px] text-center">
+            <Eyebrow>What we install</Eyebrow>
+            <H2 className="mt-4">Two parts. <Accent>One system you own.</Accent></H2>
             <p className="mt-5 text-[17px] leading-relaxed" style={{ color: T.body }}>
-              One system, installed and run for you. No shared leads, no answering service, nobody on your team chasing.
+              We build a back office that runs every lead, then connect it to a demand pipe that keeps
+              exclusive homeowners coming in. Demand goes in one end. Measures land on your calendar at the other.
             </p>
           </Reveal>
-          <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {SERVICES.map((s, i) => (
+          <Reveal delay={0.08} className="mt-12"><SystemMap /></Reveal>
+          <Reveal delay={0.12}>
+            <div className="mx-auto mt-8 flex max-w-[900px] flex-wrap items-center justify-center gap-x-6 gap-y-3">
+              {["Not a marketing agency", "Not a lead vendor", "Not a CRM", "Not an answering service"].map((t) => (
+                <span key={t} className="inline-flex items-center gap-1.5 text-[14.5px] font-semibold" style={{ color: T.body }}>
+                  <X className="h-4 w-4 shrink-0" style={{ color: T.muted }} aria-hidden="true" />{t}
+                </span>
+              ))}
+            </div>
+            <p className="mt-4 text-center font-heading text-[16px] font-bold" style={{ color: T.ink }}>
+              Infrastructure, built and installed in your business.
+            </p>
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── the back office ──────────────────────────────────────────────── */}
+      <section id="how" className="scroll-mt-24 px-5 pb-24 sm:px-8 lg:pb-32">
+        <div className="mx-auto max-w-[1200px]">
+          <Reveal className="mx-auto max-w-[800px] text-center">
+            <Eyebrow>Part one · The back office</Eyebrow>
+            <H2 className="mt-4">Every job your office should do, <Accent>done for every lead.</Accent></H2>
+            <p className="mt-5 text-[17px] leading-relaxed" style={{ color: T.body }}>
+              This is the part most flooring companies never build. It runs 24/7, so nobody on your team
+              answers, chases or keeps score by hand.
+            </p>
+          </Reveal>
+          <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            {BACK_OFFICE.map((s, i) => (
               <Reveal key={s.title} delay={0.04 * i}>
-                <div className="group relative h-full overflow-hidden rounded-[20px] border bg-white p-7 transition-all hover:-translate-y-1 hover:shadow-[0_24px_50px_-28px_rgba(249,115,22,0.45)]"
+                <div className="group relative h-full overflow-hidden rounded-[20px] border bg-white p-6 transition-all hover:-translate-y-1 hover:shadow-[0_24px_50px_-28px_rgba(249,115,22,0.45)]"
                      style={{ borderColor: T.line }}>
-                  <span className="absolute right-6 top-6 font-mono text-[12px]" style={{ color: T.muted }}>0{i + 1}</span>
+                  <span className="absolute right-5 top-5 font-mono text-[12px]" style={{ color: T.muted }}>0{i + 1}</span>
                   <IconTile icon={s.icon} />
-                  <h3 className="mt-5 font-heading text-[18px] font-bold" style={{ color: T.ink }}>{s.title}</h3>
-                  <p className="mt-2 text-[15px] leading-relaxed" style={{ color: T.body }}>{s.body}</p>
+                  <h3 className="mt-5 font-heading text-[17px] font-bold" style={{ color: T.ink }}>{s.title}</h3>
+                  <p className="mt-2 text-[14.5px] leading-relaxed" style={{ color: T.body }}>{s.body}</p>
                 </div>
               </Reveal>
             ))}
           </div>
+        </div>
+      </section>
+
+      {/* ── the demand pipe ──────────────────────────────────────────────── */}
+      <section className="px-5 pb-24 sm:px-8 lg:pb-32">
+        <div className="mx-auto grid max-w-[1200px] gap-10 rounded-[28px] border bg-white p-8 sm:p-12 lg:grid-cols-[1fr_1.1fr] lg:items-center"
+             style={{ borderColor: T.line }}>
+          <Reveal>
+            <Eyebrow>Part two · The demand pipe</Eyebrow>
+            <H2 className="mt-4 !text-[clamp(28px,3.4vw,42px)]">Then we connect a pipe <Accent>that never runs dry.</Accent></H2>
+            <p className="mt-4 text-[16.5px] leading-relaxed" style={{ color: T.body }}>
+              A back office is only as busy as what flows into it. So we build and run Meta ads for homeowners
+              ready for new floors, aimed only at the ZIP codes your crews cover, and pipe every one of them
+              straight into your back office.
+            </p>
+          </Reveal>
+          <Reveal delay={0.08}>
+            <ul className="space-y-4">
+              {[
+                ["Exclusive to you", "Every homeowner came from your ads. Nobody else gets the same lead."],
+                ["Steady, not seasonal luck", "Demand you can turn up before the winter dip instead of waiting on referrals."],
+                ["Your ad account, your data", "You pay the ad spend straight to Meta. You see every dollar and every result."],
+              ].map(([t, b]) => (
+                <li key={t} className="flex items-start gap-3.5 rounded-2xl p-4" style={{ background: T.cream }}>
+                  <span className="mt-0.5 flex h-6 w-6 shrink-0 items-center justify-center rounded-full" style={{ background: T.soft }}>
+                    <Check className="h-3.5 w-3.5" style={{ color: T.orangeD }} aria-hidden="true" />
+                  </span>
+                  <span>
+                    <span className="block font-heading text-[16px] font-bold" style={{ color: T.ink }}>{t}</span>
+                    <span className="mt-0.5 block text-[14.5px] leading-relaxed" style={{ color: T.body }}>{b}</span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          </Reveal>
         </div>
       </section>
 
@@ -226,7 +299,7 @@ export default function Home() {
               {[
                 { v: <CountUp to={20} />,      l: "In-home measures",   s: "with qualified homeowners" },
                 { v: <CountUp to={60} />,      l: "Days",               s: "from launch" },
-                { v: <><CountUp to={24} />/7</>, l: "Answered",         s: "nights and weekends too" },
+                { v: <><CountUp to={1} />s</>, l: "First reply",       s: "24/7, nights and weekends" },
                 { v: <CountUp to={100} suffix="%" />, l: "Of quotes chased", s: "to a yes or a no" },
               ].map((x) => (
                 <div key={x.l} className="text-center">
@@ -244,11 +317,11 @@ export default function Home() {
       <section className="px-5 py-24 sm:px-8 lg:py-32">
         <div className="mx-auto grid max-w-[1200px] items-center gap-14 lg:grid-cols-[0.9fr_1.1fr]">
           <Reveal>
-            <Eyebrow>Click to signed</Eyebrow>
-            <H2 className="mt-4">Watch every homeowner <Accent>move to a yes or a no.</Accent></H2>
+            <Eyebrow>Every number tracked</Eyebrow>
+            <H2 className="mt-4">See every homeowner <Accent>move from ad to signed.</Accent></H2>
             <p className="mt-5 text-[17px] leading-relaxed" style={{ color: T.body }}>
-              Nothing sits in a &quot;let me think about it&quot; pile. Every homeowner is answered, qualified,
-              booked for a measure, quoted and followed up, and you can see exactly where each one stands.
+              Your back office keeps score for you. Every homeowner is answered, qualified, booked for a measure,
+              quoted and followed up, and you can see exactly where each one stands.
             </p>
             <div className="mt-8 grid gap-x-6 gap-y-4 sm:grid-cols-2">
               {[
@@ -280,7 +353,7 @@ export default function Home() {
         <div className="mx-auto grid max-w-[1100px] items-center gap-16 lg:grid-cols-2">
           <Reveal className="order-2 lg:order-1"><PhoneChat /></Reveal>
           <Reveal className="order-1 lg:order-2">
-            <Eyebrow>An example conversation</Eyebrow>
+            <Eyebrow>Inside the back office · an example</Eyebrow>
             <H2 className="mt-4">8:42 PM, office closed. <Accent>Measure booked by 8:48.</Accent></H2>
             <p className="mt-5 text-[17px] leading-relaxed" style={{ color: T.body }}>
               This is how a conversation runs. The homeowner is answered right away, the project and
@@ -310,7 +383,7 @@ export default function Home() {
         <div className="mx-auto max-w-[1200px]">
           <Reveal className="mx-auto max-w-[720px] text-center">
             <Eyebrow>The process</Eyebrow>
-            <H2 className="mt-4">From the first call <Accent>to measures on your calendar.</Accent></H2>
+            <H2 className="mt-4">From the first call <Accent>to a system running in your business.</Accent></H2>
           </Reveal>
           <div className="relative mt-16 grid gap-6 md:grid-cols-4">
             <div aria-hidden="true" className="absolute left-0 right-0 top-[27px] hidden h-px md:block"
@@ -336,11 +409,11 @@ export default function Home() {
         <div className="mx-auto grid max-w-[1200px] gap-10 rounded-[28px] border bg-white p-8 sm:p-12 lg:grid-cols-[1fr_1.2fr] lg:items-center"
              style={{ borderColor: T.line }}>
           <Reveal>
-            <Eyebrow>Already running live</Eyebrow>
-            <H2 className="mt-4 !text-[clamp(26px,3.2vw,38px)]">The same engine, booking appointments today.</H2>
+            <Eyebrow>The back office at work</Eyebrow>
+            <H2 className="mt-4 !text-[clamp(26px,3.2vw,38px)]">What happens when every lead gets worked.</H2>
             <p className="mt-4 text-[15.5px] leading-relaxed" style={{ color: T.body }}>
-              These numbers come from a live home-services account running the same answering, booking and
-              follow-up engine. Our flooring program is new, and flooring numbers go here the moment they&apos;re in.
+              These numbers come from a home services company running the same back office: answering,
+              qualifying, booking and follow-up, on every lead, from the first day.
             </p>
           </Reveal>
           <Reveal delay={0.1}>
@@ -362,7 +435,7 @@ export default function Home() {
                 </div>
               ))}
             </div>
-            <p className="mt-3 text-[12.5px]" style={{ color: T.muted }}>A live home-services account. Not a flooring company.</p>
+            <p className="mt-3 text-[12.5px]" style={{ color: T.muted }}>A home services account.</p>
           </Reveal>
         </div>
       </section>
@@ -382,7 +455,7 @@ export default function Home() {
                   {["You run a flooring company in the USA with your own install crews",
                     "Your crews can take on more installs than the calendar feeds them",
                     "You do in-home measures before you quote",
-                    "You're tired of shared leads and quotes that go quiet"].map((t) => (
+                    "You want a system you own, not another list of shared leads"].map((t) => (
                     <li key={t} className="flex items-start gap-3 text-[15.5px]" style={{ color: T.ink }}>
                       <Check className="mt-0.5 h-5 w-5 shrink-0" style={{ color: T.green }} aria-hidden="true" />{t}
                     </li>
@@ -443,7 +516,7 @@ export default function Home() {
                style={{ background: `linear-gradient(180deg, ${T.cream} 0%, ${T.soft} 100%)` }}>
         <Parquet opacity={0.07} className="[mask-image:radial-gradient(ellipse_60%_70%_at_50%_50%,#000_10%,transparent_75%)]" />
         <Reveal className="relative mx-auto max-w-[820px] text-center">
-          <H2 className="!text-[clamp(34px,5vw,60px)]">Your crews are ready. <Accent>Let&apos;s fill the calendar.</Accent></H2>
+          <H2 className="!text-[clamp(34px,5vw,60px)]">Stop renting leads. <Accent>Own the system.</Accent></H2>
           <p className="mx-auto mt-6 max-w-[620px] text-[18px] leading-relaxed" style={{ color: T.body }}>
             &quot;I install every system myself. On the call we&apos;ll look at your service area and I&apos;ll show you
             exactly how the 20 measures get booked.&quot;
@@ -451,7 +524,7 @@ export default function Home() {
           <p className="mt-4 font-heading text-[15px] font-bold" style={{ color: T.ink }}>Jonathan, founder of FieldBuilt AI</p>
           <div className="mt-10 flex flex-wrap items-center justify-center gap-3">
             <PrimaryCta big>Book a 20-minute walkthrough</PrimaryCta>
-            <GhostCta href="#how">How it works</GhostCta>
+            <GhostCta href="#system">What we install</GhostCta>
           </div>
         </Reveal>
       </section>
@@ -462,11 +535,11 @@ export default function Home() {
           <div>
             <Logo />
             <p className="mt-4 max-w-[300px] text-[14.5px] leading-relaxed" style={{ color: T.body }}>
-              In-home measures and chased quotes for flooring contractors with their own install crews.
+              Client acquisition infrastructure for flooring contractors with their own install crews.
             </p>
           </div>
           {[
-            { h: "How it works", l: [["Meta ads", "#how"], ["Answering and qualifying", "#how"], ["Measure booking", "#how"], ["Quote follow-up", "#how"]] },
+            { h: "What we install", l: [["The system", "#system"], ["The back office", "#how"], ["The demand pipe", "#system"], ["Quote follow-up", "#how"]] },
             { h: "Company", l: [["The offer", "#offer"], ["Process", "#process"], ["FAQ", "#faq"]] },
             { h: "Get started", l: [["Book a walkthrough", "/book"], ["Log in", "/login"]] },
           ].map((c) => (

@@ -26,8 +26,8 @@ const jetbrains = JetBrains_Mono({
 })
 
 export const metadata: Metadata = {
-  title: "FieldBuilt AI | In-Home Measures for Flooring Contractors",
-  description: "We run the ads, answer every homeowner in seconds, book the in-home measure, and chase every quote. Guaranteed 20 in-home measures in 60 days, and every quote chased until it signs or says no.",
+  title: "FieldBuilt AI | Client Acquisition Systems for Flooring Contractors",
+  description: "We install a client acquisition system in your flooring business: a back office that runs every lead, connected to a demand pipe of exclusive homeowners. Guaranteed 20 in-home measures in 60 days, and every quote chased until it signs or says no.",
 }
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {

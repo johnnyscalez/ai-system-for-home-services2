@@ -18,7 +18,7 @@
 import { motion } from "framer-motion"
 import { ArrowDown, Check, Star } from "lucide-react"
 import { GhlBookingWidget } from "@/components/landing/shared"
-import { Parquet, T } from "@/components/site/live"
+import { Parquet, SystemMap, T } from "@/components/site/live"
 import { Accent, Eyebrow, H2, IcpHeadline, Logo, Reveal } from "@/components/site/ui"
 
 
@@ -107,9 +107,9 @@ export default function BookPage() {
 
           <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.6 }}
                     className="mx-auto mt-7 max-w-[720px] text-[clamp(16.5px,1.7vw,19px)] leading-relaxed" style={{ color: T.body }}>
-            We build everything between a homeowner to a qualified measure on your calendar.
-            The demand, the answering, the qualifying, the follow up, the tracking, the booking.
-            Installed in your business, running every day, and yours.
+            Not an agency. Not a lead vendor. We install a client acquisition system in your flooring business:
+            a back office that answers, qualifies, books, reschedules, chases and tracks every lead,
+            connected to a demand pipe of exclusive homeowners in your service area. Running every day, and yours.
           </motion.p>
 
           <motion.a href="#book" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.5 }}
@@ -163,7 +163,7 @@ export default function BookPage() {
         <div className="mx-auto max-w-[980px]">
           <Reveal className="mb-8 text-center">
             <Eyebrow>Watch before your walkthrough</Eyebrow>
-            <H2 className="mt-4 !text-[clamp(26px,3.6vw,40px)]">How the <Accent>Client Flow System</Accent> fills your calendar.</H2>
+            <H2 className="mt-4 !text-[clamp(26px,3.6vw,40px)]">What we install in <Accent>your flooring business.</Accent></H2>
           </Reveal>
           <Reveal delay={0.05}>
             <div className="rounded-[26px] border p-2 sm:p-3"
@@ -187,6 +187,20 @@ export default function BookPage() {
               </a>
             </div>
           </Reveal>
+        </div>
+      </section>
+
+      {/* ── 4. THE SYSTEM, in one picture ── */}
+      <section className="border-t px-5 py-16 sm:px-8 sm:py-20" style={{ background: T.white, borderColor: T.line }}>
+        <div className="mx-auto max-w-[1200px]">
+          <Reveal className="mx-auto mb-10 max-w-[760px] text-center">
+            <Eyebrow>Two parts, one system</Eyebrow>
+            <H2 className="mt-4 !text-[clamp(26px,3.6vw,40px)]">A back office that runs every lead, <Accent>plugged into a demand pipe.</Accent></H2>
+            <p className="mx-auto mt-3 max-w-[600px] text-[15.5px] leading-relaxed" style={{ color: T.body }}>
+              Not a marketing agency, not a lead vendor, not a CRM. Infrastructure, built and installed in your business.
+            </p>
+          </Reveal>
+          <Reveal delay={0.05}><SystemMap /></Reveal>
         </div>
       </section>
 

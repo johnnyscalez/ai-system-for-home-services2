@@ -8,7 +8,9 @@
 
 import { useEffect, useRef, useState } from "react"
 import { AnimatePresence, LayoutGroup, motion, useInView, useReducedMotion } from "framer-motion"
-import { CalendarCheck, Check, MessageSquareText, PenLine, Zap } from "lucide-react"
+import {
+  BellRing, CalendarCheck, Check, LineChart, ListChecks, Megaphone, MessageSquareText, PenLine, Repeat, Send, Zap,
+} from "lucide-react"
 
 export const T = {
   cream:   "#FAFAF8",
@@ -400,6 +402,140 @@ export function PhoneChat() {
               <CalendarCheck className="h-3.5 w-3.5" aria-hidden="true" /> Measure booked · 6 minutes
             </motion.div>
           )}
+        </div>
+      </div>
+    </div>
+  )
+}
+
+// ── The system map: demand pipe → back office → your calendar ───────────────
+// The one picture of what FieldBuilt installs. Every name and slot is an EXAMPLE.
+const DEPARTMENTS = [
+  { icon: Zap,               label: "Answers in 1 second" },
+  { icon: ListChecks,        label: "Qualifies the project" },
+  { icon: MessageSquareText, label: "Works every lead" },
+  { icon: CalendarCheck,     label: "Books the measure" },
+  { icon: BellRing,          label: "Reminds and reschedules" },
+  { icon: Repeat,            label: "Chases every quote" },
+  { icon: LineChart,         label: "Tracks every number" },
+  { icon: Send,              label: "Hands you the job" },
+]
+const INCOMING = [
+  { name: "Angela R.", job: "LVP · 3 rooms" },
+  { name: "Rob & Lisa", job: "Hardwood · living room" },
+  { name: "Keisha T.", job: "Tile · 2 bathrooms" },
+]
+const OUTCOMES = [
+  { when: "Thu 5 to 6pm", what: "Measure · Angela R.", signed: false },
+  { when: "Sat 9 to 10am", what: "Measure · Rob & Lisa", signed: false },
+  { when: "Today", what: "Quote signed · Mark P.", signed: true },
+]
+
+function Flow({ vertical = false }: { vertical?: boolean }) {
+  return (
+    <div aria-hidden="true" className={vertical ? "relative mx-auto h-10 w-px lg:hidden" : "relative hidden h-px w-full self-center lg:block"}
+         style={{ background: vertical
+           ? `repeating-linear-gradient(180deg, ${T.line} 0 6px, transparent 6px 11px)`
+           : `repeating-linear-gradient(90deg, ${T.line} 0 6px, transparent 6px 11px)` }}>
+      <span className={vertical ? "fb-flow-v absolute left-1/2 top-0 h-2 w-2 -translate-x-1/2 rounded-full" : "fb-flow-h absolute left-0 top-1/2 h-2 w-2 -translate-y-1/2 rounded-full"}
+            style={{ background: T.orange, boxShadow: "0 0 0 4px rgba(249,115,22,0.15)" }} />
+    </div>
+  )
+}
+
+export function SystemMap() {
+  const reduce = useReducedMotion()
+  const ref = useRef<HTMLDivElement>(null)
+  const inView = useInView(ref, { margin: "-80px" })
+  const seen = useInView(ref, { once: true, margin: "-80px" })
+  const [tick, setTick] = useState(0)
+  useEffect(() => {
+    if (reduce || !inView) return
+    const id = setInterval(() => setTick((t) => t + 1), 1100)
+    return () => clearInterval(id)
+  }, [reduce, inView])
+  const active = reduce ? -1 : tick % DEPARTMENTS.length
+
+  const head = (n: string, title: string, sub: string) => (
+    <div>
+      <p className="font-mono text-[11px] font-medium uppercase tracking-[0.14em]" style={{ color: T.orangeD }}>{n}</p>
+      <p className="mt-1.5 font-heading text-[18px] font-extrabold leading-tight" style={{ color: T.ink }}>{title}</p>
+      <p className="mt-1 text-[13.5px] leading-snug" style={{ color: T.body }}>{sub}</p>
+    </div>
+  )
+
+  return (
+    <div ref={ref} className="rounded-[26px] border bg-white p-4 sm:p-6"
+         style={{ borderColor: T.line, boxShadow: "0 30px 80px -40px rgba(28,25,23,0.3)" }}>
+      <style>{`
+        @keyframes fb-flow-h { from { left: 0 } to { left: calc(100% - 8px) } }
+        @keyframes fb-flow-v { from { top: 0 } to { top: calc(100% - 8px) } }
+        .fb-flow-h { animation: fb-flow-h 1.6s ease-in-out infinite; }
+        .fb-flow-v { animation: fb-flow-v 1.6s ease-in-out infinite; }
+        @media (prefers-reduced-motion: reduce) { .fb-flow-h, .fb-flow-v { animation: none; } }
+      `}</style>
+      <div className="mb-4 flex items-center justify-between px-1">
+        <p className="font-heading text-[13.5px] font-bold" style={{ color: T.ink }}>What we install in your business</p>
+        <ExampleTag />
+      </div>
+
+      <div className="grid gap-0 lg:grid-cols-[1fr_44px_1.55fr_44px_1fr] lg:gap-0">
+        {/* 01 the demand pipe */}
+        <div className="rounded-2xl p-5" style={{ background: T.cream }}>
+          {head("01 · The demand pipe", "Exclusive homeowners", "Ads we build and run in your service area. Never shared.")}
+          <div className="mt-4 space-y-2">
+            {INCOMING.map((l, i) => (
+              <motion.div key={l.name} initial={{ opacity: 0, x: -10 }} animate={seen || reduce ? { opacity: 1, x: 0 } : {}}
+                          transition={{ delay: 0.15 * i, duration: 0.45 }}
+                          className="flex items-center justify-between rounded-xl border bg-white px-3 py-2" style={{ borderColor: T.line }}>
+                <span>
+                  <span className="block text-[12.5px] font-semibold" style={{ color: T.ink }}>{l.name}</span>
+                  <span className="block text-[11px]" style={{ color: T.muted }}>{l.job}</span>
+                </span>
+                <Megaphone className="h-3.5 w-3.5 shrink-0" style={{ color: T.muted }} aria-hidden="true" />
+              </motion.div>
+            ))}
+          </div>
+        </div>
+
+        <Flow /><Flow vertical />
+
+        {/* 02 the back office */}
+        <div className="rounded-2xl border-2 p-5" style={{ borderColor: "rgba(249,115,22,0.35)", background: T.white }}>
+          {head("02 · The back office", "Runs every lead, 24/7", "Everything an office should do after a homeowner reaches out.")}
+          <div className="mt-4 grid grid-cols-1 gap-2 sm:grid-cols-2">
+            {DEPARTMENTS.map((d, i) => {
+              const on = i === active
+              return (
+                <div key={d.label} className="flex items-center gap-2.5 rounded-xl border px-3 py-2.5 transition-colors duration-300"
+                     style={{ borderColor: on ? "rgba(249,115,22,0.45)" : T.line, background: on ? T.soft : T.white }}>
+                  <d.icon className="h-4 w-4 shrink-0" style={{ color: on ? T.orangeD : T.body }} aria-hidden="true" />
+                  <span className="text-[13px] font-semibold" style={{ color: T.ink }}>{d.label}</span>
+                </div>
+              )
+            })}
+          </div>
+        </div>
+
+        <Flow /><Flow vertical />
+
+        {/* 03 your calendar */}
+        <div className="rounded-2xl p-5" style={{ background: T.greenS }}>
+          {head("03 · Your calendar", "Measures, booked", "Qualified, confirmed, every decision maker home.")}
+          <div className="mt-4 space-y-2">
+            {OUTCOMES.map((o, i) => (
+              <motion.div key={o.what} initial={{ opacity: 0, x: 10 }} animate={seen || reduce ? { opacity: 1, x: 0 } : {}}
+                          transition={{ delay: 0.4 + 0.15 * i, duration: 0.45 }}
+                          className="flex items-center gap-2.5 rounded-xl px-3 py-2"
+                          style={{ background: o.signed ? T.green : T.white }}>
+                <Check className="h-3.5 w-3.5 shrink-0" style={{ color: o.signed ? "#FFFFFF" : T.green }} aria-hidden="true" />
+                <span>
+                  <span className="block text-[12.5px] font-semibold" style={{ color: o.signed ? "#FFFFFF" : T.ink }}>{o.what}</span>
+                  <span className="block text-[11px]" style={{ color: o.signed ? "rgba(255,255,255,0.8)" : T.muted }}>{o.when}</span>
+                </span>
+              </motion.div>
+            ))}
+          </div>
         </div>
       </div>
     </div>
