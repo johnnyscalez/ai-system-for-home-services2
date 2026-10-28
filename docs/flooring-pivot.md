@@ -38,7 +38,10 @@ outside the USA.
 ### How it works (the mechanism, in this order)
 1. **We run the ads.** FieldBuilt builds and runs Meta ads for homeowners in the contractor's
    service area. The contractor pays the ad spend directly to Meta; that is separate from our fee.
-2. **Every lead answered in seconds**, 24/7, by text and phone.
+2. **Every lead answered in seconds**, 24/7, by text and phone. Where a number is used, it is "1 second" (Jonathan, 2026-10-28; was "2 seconds" on /book).
+   Speed stats allowed in copy (sources checked): Service Direct 2022 survey of 559 homeowners (85% contact 3 or fewer
+   contractors, 60% decide within 72 hours, almost 40% rarely/never hire one who missed their first call); MIT/InsideSales
+   2007 (21x better odds of qualifying at 5 min vs 30 min). Never use "78% hire the first to respond": no source.
 3. **Qualified before it reaches the calendar**: project type (LVP, hardwood, carpet, tile,
    laminate), rough size/rooms, timeline, ZIP in the service area, and whether every decision
    maker will be home for the measure.
