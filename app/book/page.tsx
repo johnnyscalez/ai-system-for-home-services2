@@ -9,8 +9,10 @@
 //   - Never state guarantee failure terms. Never show price.
 //   - No flooring proof exists yet. Top Air numbers appear ONLY labelled as
 //     "a live home-services account", never implied to be flooring.
-// Page is booking-only (Jonathan, 2026-10-20): headline → calendar. No VSL,
-// no sections below the calendar.
+// Page is headline → calendar → the VSL (Jonathan, 2026-10-28: the video goes
+// BELOW the calendar, so booking stays the first thing on the page). Video
+// source: ~/Desktop/FieldBuilt Videos/flooring-vsl-v2, script
+// docs/vsl/flooring-vsl-v2.md; web copy in public/videos/.
 // ─────────────────────────────────────────────────────────────────────────────
 
 import { motion } from "framer-motion"
@@ -152,6 +154,38 @@ export default function BookPage() {
               ))}
             </div>
             <TrustBadges />
+          </Reveal>
+        </div>
+      </section>
+
+      {/* ── 3. THE VIDEO ── */}
+      <section className="px-5 py-16 sm:px-8 sm:py-20" style={{ background: T.cream }}>
+        <div className="mx-auto max-w-[980px]">
+          <Reveal className="mb-8 text-center">
+            <Eyebrow>Watch before your walkthrough</Eyebrow>
+            <H2 className="mt-4 !text-[clamp(26px,3.6vw,40px)]">How the <Accent>Client Flow System</Accent> fills your calendar.</H2>
+          </Reveal>
+          <Reveal delay={0.05}>
+            <div className="rounded-[26px] border p-2 sm:p-3"
+                 style={{ background: T.white, borderColor: T.line, boxShadow: "0 30px 80px -40px rgba(28,25,23,0.35)" }}>
+              <video
+                className="block aspect-video w-full rounded-[20px] bg-black"
+                src="/videos/flooring-vsl.mp4"
+                poster="/videos/flooring-vsl-poster.jpg"
+                controls
+                playsInline
+                preload="metadata"
+              />
+            </div>
+          </Reveal>
+          <Reveal delay={0.1}>
+            <div className="mt-8 text-center">
+              <a href="#book" className="group inline-flex items-center gap-2.5 rounded-full px-8 py-4 font-heading text-[16px] font-bold text-white transition-all hover:-translate-y-0.5"
+                 style={{ background: T.orange, boxShadow: "0 12px 30px -10px rgba(249,115,22,0.6)" }}>
+                Book your free walkthrough
+                <ArrowDown className="h-4 w-4 rotate-180 transition-transform group-hover:-translate-y-0.5" aria-hidden="true" />
+              </a>
+            </div>
           </Reveal>
         </div>
       </section>
