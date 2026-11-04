@@ -15,26 +15,22 @@ import { useState } from "react"
 import Link from "next/link"
 import { motion } from "framer-motion"
 import {
-  ArrowRight, ArrowUpRight, BadgeCheck, BellRing, CalendarCheck, CalendarX, Car, Check, ChevronDown,
-  Clock, HelpCircle, MessageSquareText, Repeat, Snowflake, Users, X, Zap,
-  ListChecks, LineChart, EyeOff,
+  ArrowRight, ArrowUpRight, BellRing, CalendarCheck, Check, ChevronDown,
+  HelpCircle, MessageSquareText, Repeat, X, Zap,
+  ListChecks, LineChart,
 } from "lucide-react"
-import { CountUp, HeroBoard, Marquee, Parquet, PhoneChat, SystemMap, T } from "@/components/site/live"
+import { CountUp, HeroBoard, Parquet, PhoneChat, SystemMap, T } from "@/components/site/live"
 import { Accent, Eyebrow, GhostCta, H2, IcpHeadline, IconTile, Logo, PrimaryCta, Reveal, VslPlayer } from "@/components/site/ui"
 
 // ── content ─────────────────────────────────────────────────────────────────
-const PROJECTS = [
-  "Luxury vinyl plank", "Hardwood install", "Hardwood refinishing", "Tile and stone", "Carpet",
-  "Laminate", "Stairs and landings", "Basements", "Whole-home flooring", "Shop-at-home", "Showrooms that install",
-]
-
-const PAINS = [
-  { icon: Users,     title: "Shared leads",            body: "The same homeowner gets sold to four other flooring companies. Half never pick up." },
-  { icon: Clock,     title: "Slow callbacks",          body: "Homeowners ask three companies at once and book whoever answers first." },
-  { icon: Car,       title: "Wasted measure drives",   body: "45 minutes out, then: \"my husband needs to be here before we decide.\"" },
-  { icon: CalendarX, title: "Quotes that go quiet",    body: "The quote goes out, life gets busy, nobody follows up. The job just disappears." },
-  { icon: Snowflake, title: "The winter dip",          body: "Early fall is packed. November to February, the calendar thins out fast." },
-  { icon: EyeOff,    title: "No numbers",              body: "Where did that lead go? How many quotes are open? Nobody knows, because nothing is tracked." },
+const RENTED = [
+  { n: "01", title: "Your demand is other people\u2019s goodwill",
+    body: "Referrals and relationships are the best work you get, and the one thing you cannot turn up. When November comes and the phone goes quiet, there is no dial to turn." },
+  { n: "02", title: "The lead you bought was sold three times",
+    body: "A lead vendor takes one homeowner and sells them to you and two more flooring crews. You pay for the name, then race two competitors to the callback. Half never pick up at all.",
+    artifact: true },
+  { n: "03", title: "Either way, the demand is not yours", pivot: true,
+    body: "Referrals belong to the people making them. Bought leads belong to the vendor. You are renting access to homeowners month after month, and the day you stop paying, it stops." },
 ]
 
 const BACK_OFFICE = [
@@ -73,6 +69,37 @@ const FAQ = [
 ]
 
 // ── page ────────────────────────────────────────────────────────────────────
+// One homeowner, three crews. The visual that makes row 02 land.
+function SoldThreeTimes() {
+  return (
+    <div className="mt-6 max-w-[520px] rounded-[18px] border bg-white p-4 sm:p-5" style={{ borderColor: T.line }}>
+      <div className="flex items-center gap-3">
+        <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-full font-heading text-[12.5px] font-bold"
+              style={{ background: T.soft, color: T.orangeD }}>KT</span>
+        <span className="min-w-0">
+          <span className="block font-heading text-[14.5px] font-bold" style={{ color: T.ink }}>Keisha T.</span>
+          <span className="block font-mono text-[11.5px] uppercase tracking-[0.1em]" style={{ color: T.muted }}>
+            Hardwood &middot; living room
+          </span>
+        </span>
+        <span className="ml-auto shrink-0 rounded-full px-2.5 py-1 font-mono text-[11px] font-semibold uppercase tracking-[0.08em]"
+              style={{ background: T.soft, color: T.orangeD }}>Sold 3&times;</span>
+      </div>
+      <div className="mt-4 grid grid-cols-3 gap-2">
+        {[["You", true], ["Crew B", false], ["Crew C", false]].map(([label, mine]) => (
+          <span key={label as string}
+                className="rounded-xl border py-2 text-center font-heading text-[12.5px] font-bold"
+                style={mine
+                  ? { borderColor: T.orange, color: T.orangeD, background: T.soft }
+                  : { borderColor: T.line, color: T.muted, background: T.cream }}>
+            {label as string}
+          </span>
+        ))}
+      </div>
+    </div>
+  )
+}
+
 export default function Home() {
   const [open, setOpen] = useState<number | null>(0)
 
@@ -147,14 +174,6 @@ export default function Home() {
               <GhostCta href="#system">See what we install</GhostCta>
             </motion.div>
 
-            <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.6, delay: 0.5 }}
-                       className="mt-9 grid gap-x-6 gap-y-2.5 text-[14.5px] font-medium sm:grid-cols-2" style={{ color: T.body }}>
-              {["A demand pipe in your service area", "A back office that runs every lead, 24/7", "Exclusive homeowners, never shared", "Built and installed in your business"].map((t) => (
-                <li key={t} className="flex items-center gap-2">
-                  <BadgeCheck className="h-[18px] w-[18px] shrink-0" style={{ color: T.orange }} aria-hidden="true" />{t}
-                </li>
-              ))}
-            </motion.ul>
           </div>
 
           <motion.div initial={{ opacity: 0, y: 30, scale: 0.98 }} animate={{ opacity: 1, y: 0, scale: 1 }}
@@ -164,19 +183,10 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── marquee ──────────────────────────────────────────────────────── */}
-      <section className="border-y py-10" style={{ background: T.white, borderColor: T.line }}>
-        <p className="mb-6 text-center font-mono text-[12px] uppercase tracking-[0.16em]" style={{ color: T.muted }}>
-          Built for every project your crews install
-        </p>
-        <Marquee items={PROJECTS} />
-      </section>
-
       {/* ── the video: what we sell and who it's for, in 74 seconds ───────── */}
       <section id="watch" className="scroll-mt-24 px-5 pt-24 sm:px-8 lg:pt-28">
         <div className="mx-auto max-w-[1040px]">
           <Reveal className="mx-auto max-w-[720px] text-center">
-            <Eyebrow>Watch · 74 seconds</Eyebrow>
             <H2 className="mt-4">What we install, <Accent>and who it&apos;s for.</Accent></H2>
             <p className="mt-5 text-[17px] leading-relaxed" style={{ color: T.body }}>
               The back office, the demand pipe, and how they put measures on your calendar.
@@ -186,25 +196,40 @@ export default function Home() {
         </div>
       </section>
 
-      {/* ── pains ────────────────────────────────────────────────────────── */}
+      {/* ── the real problem: rented demand ────────────────────────────── */}
+      {/* Three beats that build one argument: referrals you cannot turn up,
+          bought leads three crews already own, and the conclusion that the
+          demand was never theirs. Row 03 is the pivot, so it carries the
+          orange. Replaced six grey pain cards on 2026-11-04 (Jonathan). */}
       <section className="px-5 py-24 sm:px-8 lg:py-32">
-        <div className="mx-auto max-w-[1200px]">
-          <Reveal className="mx-auto max-w-[760px] text-center">
+        <div className="mx-auto max-w-[1100px]">
+          <Reveal className="mx-auto max-w-[780px] text-center">
             <Eyebrow>Sound familiar?</Eyebrow>
-            <H2 className="mt-4">You don&apos;t have a lead problem. <Accent>You have no system.</Accent></H2>
+            <H2 className="mt-4">You don&apos;t have a lead problem. <Accent>You rent your demand.</Accent></H2>
             <p className="mt-5 text-[17px] leading-relaxed" style={{ color: T.body }}>
-              Most flooring companies run on referrals, bought leads and whoever&apos;s free to call back.
-              No steady demand, no back office. So the calendar swings from packed to dead, and more leads only make the leak bigger.
+              Referrals and bought leads both put work on the board. Neither one belongs to you,
+              and that is why the calendar swings from packed to dead.
             </p>
           </Reveal>
-          <div className="mt-14 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-            {PAINS.map((p, i) => (
-              <Reveal key={p.title} delay={0.04 * i}>
-                <div className="h-full rounded-[20px] border bg-white p-7 transition-shadow hover:shadow-[0_18px_40px_-24px_rgba(28,25,23,0.3)]"
-                     style={{ borderColor: T.line }}>
-                  <IconTile icon={p.icon} tone="ink" />
-                  <h3 className="mt-5 font-heading text-[18px] font-bold" style={{ color: T.ink }}>{p.title}</h3>
-                  <p className="mt-2 text-[15px] leading-relaxed" style={{ color: T.body }}>{p.body}</p>
+
+          <div className="mt-16">
+            {RENTED.map((r, i) => (
+              <Reveal key={r.n} delay={0.06 * i}>
+                <div className={`grid items-start gap-5 border-t py-10 sm:gap-10 md:grid-cols-[132px_1fr] lg:py-12 ${r.pivot ? "rounded-b-[24px] px-5 sm:px-8" : ""}`}
+                     style={{ borderColor: r.pivot ? T.orange : T.line, background: r.pivot ? T.soft : "transparent" }}>
+                  <span aria-hidden="true"
+                        className="select-none font-mono text-[clamp(46px,7vw,76px)] font-extrabold leading-[0.85] tracking-[-0.04em]"
+                        style={{ color: "transparent", WebkitTextStroke: `2px ${r.pivot ? T.orange : "#D9D2CA"}` }}>
+                    {r.n}
+                  </span>
+                  <div>
+                    <h3 className="font-heading text-[clamp(21px,2.6vw,29px)] font-extrabold leading-[1.12] tracking-[-0.02em]"
+                        style={{ color: r.pivot ? T.orangeD : T.ink }}>
+                      {r.title}
+                    </h3>
+                    <p className="mt-3.5 max-w-[640px] text-[16.5px] leading-relaxed" style={{ color: T.body }}>{r.body}</p>
+                    {r.artifact && <SoldThreeTimes />}
+                  </div>
                 </div>
               </Reveal>
             ))}
