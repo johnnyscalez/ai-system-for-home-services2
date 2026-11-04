@@ -1,5 +1,14 @@
 [phases.setup]
 nixPkgs = ["nodejs_20", "npm-9_x"]
 
+# Cap V8's heap below the build container's memory. Without this the Next 16
+# (Turbopack) build grows past the limit and the kernel SIGKILLs the worker,
+# which Railway reports as a build failure with no error in the log.
+# Local cold build peaks around 2.4GB, so 3072 leaves headroom and still
+# forces V8 to collect instead of climbing. Added 2026-11-04 after c12d6ed
+# failed to build on Railway while building clean locally.
+[variables]
+NODE_OPTIONS = "--max-old-space-size=3072"
+
 [start]
 cmd = "node_modules/.bin/next start -p $PORT"
