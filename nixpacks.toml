@@ -1,5 +1,10 @@
+# Node 22. Next 16 wants >=20.9, but Node 20 went EOL in April 2026 and the
+# Turbopack build behaves pathologically on it: the same build that takes ~30s
+# on Node 22 stalls for many minutes on Node 20, which is what was failing on
+# Railway ("failed to build an image", no error in the log) from c12d6ed
+# onward while building clean locally. Changed 2026-11-04.
 [phases.setup]
-nixPkgs = ["nodejs_20", "npm-9_x"]
+nixPkgs = ["nodejs_22"]
 
 [start]
 cmd = "node_modules/.bin/next start -p $PORT"
