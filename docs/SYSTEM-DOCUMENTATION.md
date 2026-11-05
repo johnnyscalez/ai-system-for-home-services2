@@ -191,6 +191,45 @@ Company `bc9fb131-2af2-4c31-8d79-f46bb9663e60` · V2 (HCP mode) · AI number +1 
 - **Conversations page:** every thread across ALL channels (SMS/Messenger/WhatsApp/voice) with channel labels, message counts, a **"human handling"** badge for AI-paused threads; rows link to the lead detail (reachable in both modes) where the full thread, the sender distinction (`sent_by` ai/human), and the **Resume AI** control live.
 - **Tech portal** (`/tech/*`): per-technician appointment list/calendar, on-my-way, close-out.
 
+## 9.1 Marketing traffic tracking (`site_events`, added 2026-11-05)
+
+First-party pageview and funnel tracking for the public pages. Built because
+neither existing source answers "how many flooring contractors landed and how far
+did they get": the Meta Pixel (`782472336366756`, in `app/layout.tsx`) only counts
+browsers that run Meta's script and keeps the answer inside Events Manager, while
+Railway's edge logs count every crawler — on 2026-11-04 bots and scrapers
+outnumbered real visitors on `/book` about five to one.
+
+- **`public.site_events`** — one row per event. Written only by `/api/track` with
+  the service role; RLS is on with no policies, so the anon key cannot read or
+  write it. Not customer data, so no `company_id`. DDL lives in
+  `supabase/migrations/20261105000000_site_events.sql`.
+- **`/api/track`** (public, unauthenticated by necessity — a prospect's browser
+  calls it before anyone is identified). Hardened by refusing anything off a fixed
+  event list, rejecting paths outside the marketing pages, capping every string,
+  and reading device/country/bot/internal from request headers rather than the
+  body. Always returns 204 so a tracking failure can never surface on a page a
+  prospect is reading.
+- **`components/site/Tracker.tsx`** — mounted once in the root layout, no-ops
+  outside the marketing paths. Fires `page_view` per path, `cta_click` for any
+  element with `data-track="name"`, and `section_view` the first time a
+  `data-track-view` element scrolls into place. UTM parameters, the click id
+  (`fbclid`/`gclid`/`ttclid`) and the outside referrer are captured once per
+  session and replayed on later events, so a quiz submission still carries the
+  campaign that paid for it.
+- **Events:** `page_view`, `cta_click`, `section_view`, `quiz_step`, `quiz_submit`.
+  `/book` names three CTAs (`book-header`, `book-hero`, `book-after-video`) and the
+  calendar section; `/optin` reports every quiz step and the qualification verdict.
+- **Reading it:** `node --env-file=.env.local scripts/traffic-report.mjs [--days=N]
+  [--since=YYYY-MM-DD] [--path=/book] [--include-bots] [--include-internal]`.
+  Bots and internal IPs are excluded by default.
+- **`TRACKING_EXCLUDE_IPS`** (optional, comma-separated) flags our own addresses
+  as internal so deploy checks stay out of the numbers. **`TRACKING_SALT`**
+  (optional) salts the stored IP hash; it falls back to the service role key, so
+  rotating that key resets visitor matching for storage-blocked browsers.
+
+---
+
 ## 10. Known limitations & operational notes
 
 - **HCP webhooks can't be registered via API** — sync freshness = the 15-min reconcile cron. If HCP support enables account webhooks, `/api/webhooks/housecall` is ready.
