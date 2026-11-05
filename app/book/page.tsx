@@ -80,7 +80,7 @@ export default function BookPage() {
       <header className="fixed inset-x-0 top-0 z-50 border-b backdrop-blur-md" style={{ background: "rgba(255,255,255,0.86)", borderColor: T.line }}>
         <div className="mx-auto flex max-w-[1200px] items-center justify-between px-5 py-3 sm:px-8">
           <Logo />
-          <a href="#book" className="rounded-full px-4 py-2.5 font-heading text-[13.5px] font-bold text-white sm:px-5" style={{ background: T.orange }}>
+          <a href="#book" data-track="book-header" className="rounded-full px-4 py-2.5 font-heading text-[13.5px] font-bold text-white sm:px-5" style={{ background: T.orange }}>
             Book a walkthrough
           </a>
         </div>
@@ -112,7 +112,7 @@ export default function BookPage() {
             connected to a demand pipe of exclusive homeowners in your service area. Running every day, and yours.
           </motion.p>
 
-          <motion.a href="#book" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.5 }}
+          <motion.a href="#book" data-track="book-hero" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.5 }}
                     className="group mt-9 inline-flex items-center gap-2.5 rounded-full px-8 py-4 font-heading text-[16px] font-bold text-white transition-all hover:-translate-y-0.5"
                     style={{ background: T.orange, boxShadow: "0 12px 30px -10px rgba(249,115,22,0.6)" }}>
             Pick your time below
@@ -122,7 +122,7 @@ export default function BookPage() {
       </section>
 
       {/* ── 2. THE CALENDAR ── */}
-      <section id="book" className="relative scroll-mt-20 overflow-hidden border-y px-5 py-16 sm:px-8 sm:py-20" style={{ background: T.white, borderColor: T.line }}>
+      <section id="book" data-track-view="calendar" className="relative scroll-mt-20 overflow-hidden border-y px-5 py-16 sm:px-8 sm:py-20" style={{ background: T.white, borderColor: T.line }}>
         <div className="relative mx-auto max-w-[820px]">
           <Reveal className="mb-8 text-center">
             <Eyebrow>Book your walkthrough</Eyebrow>
@@ -170,7 +170,7 @@ export default function BookPage() {
           </Reveal>
           <Reveal delay={0.1}>
             <div className="mt-8 text-center">
-              <a href="#book" className="group inline-flex items-center gap-2.5 rounded-full px-8 py-4 font-heading text-[16px] font-bold text-white transition-all hover:-translate-y-0.5"
+              <a href="#book" data-track="book-after-video" className="group inline-flex items-center gap-2.5 rounded-full px-8 py-4 font-heading text-[16px] font-bold text-white transition-all hover:-translate-y-0.5"
                  style={{ background: T.orange, boxShadow: "0 12px 30px -10px rgba(249,115,22,0.6)" }}>
                 Book your free walkthrough
                 <ArrowDown className="h-4 w-4 rotate-180 transition-transform group-hover:-translate-y-0.5" aria-hidden="true" />

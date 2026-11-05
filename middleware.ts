@@ -44,6 +44,7 @@ export async function middleware(request: NextRequest) {
     path === "/privacy" ||
     path === "/terms" ||
     path === "/api/health" ||
+    path === "/api/track" ||
     path === "/api/lead-intake" ||
     path.startsWith("/api/webhooks") ||
     path.startsWith("/api/voice") ||

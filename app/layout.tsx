@@ -1,6 +1,7 @@
 import type { Metadata } from "next"
 import { Inter, Plus_Jakarta_Sans, JetBrains_Mono } from "next/font/google"
 import Script from "next/script"
+import { Tracker } from "@/components/site/Tracker"
 import "./globals.css"
 
 // Same pixel already connected to the GHL "Book Your AI System Walkthrough!"
@@ -60,6 +61,8 @@ export default function RootLayout({ children }: { children: React.ReactNode }) 
             alt=""
           />
         </noscript>
+        {/* First-party traffic tracking. No-ops outside the marketing pages. */}
+        <Tracker />
         {children}
       </body>
     </html>

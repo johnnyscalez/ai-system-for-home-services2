@@ -24,6 +24,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { ArrowLeft, ArrowRight, Check, Phone } from "lucide-react"
 import { Parquet, T } from "@/components/site/live"
 import { Logo } from "@/components/site/ui"
+import { track } from "@/components/site/Tracker"
 
 declare global {
   interface Window { fbq?: (...args: unknown[]) => void }
@@ -82,7 +83,14 @@ export default function OptinPage() {
   // state register before the step slides away, so the tap feels answered.
   function pick(key: keyof Answers, value: string) {
     setA((prev) => ({ ...prev, [key]: value }))
+    track("quiz_step", { step, step_key: key, value })
     window.setTimeout(() => setStep((s) => Math.min(s + 1, STEP_COUNT - 1)), 180)
+  }
+
+  // The service-area step is typed, not picked, so it reports on its own.
+  function areaNext() {
+    track("quiz_step", { step: 3, step_key: "serviceArea", value: a.serviceArea.trim().slice(0, 120) })
+    setStep(4)
   }
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -108,6 +116,11 @@ export default function OptinPage() {
         angle: `optin-quiz | ${a.businessType} | crews: ${a.crews} | area: ${area} | pain: ${a.bottleneck}`,
       }),
     }).catch(() => {})
+
+    track("quiz_submit", {
+      value: qualified ? "qualified" : "unqualified",
+      meta: { business_type: a.businessType, crews: a.crews, bottleneck: a.bottleneck, has_email: Boolean(email.trim()) },
+    })
 
     if (qualified && typeof window !== "undefined" && typeof window.fbq === "function") {
       window.fbq("track", "Lead", { content_name: "optin-quiz" })
@@ -155,7 +168,7 @@ export default function OptinPage() {
                 onPick={pick}
                 onBack={() => setStep((s) => Math.max(s - 1, 0))}
                 onArea={(v) => setA((prev) => ({ ...prev, serviceArea: v }))}
-                onAreaNext={() => setStep(4)}
+                onAreaNext={areaNext}
                 setFirstName={setFirstName} setPhone={setPhone} setEmail={setEmail}
                 onSubmit={submit}
               />
