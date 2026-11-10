@@ -267,11 +267,7 @@ export default function OptinPage() {
       <section className="border-y px-5 py-14 sm:px-8 sm:py-18" style={{ background: T.white, borderColor: T.line }}>
         <div className="mx-auto max-w-[900px]">
           <Reveal className="mb-7 text-center">
-            <Eyebrow>Before your call</Eyebrow>
-            <H2 className="mt-3 !text-[clamp(25px,3.4vw,38px)]">Watch this {VIDEO_LENGTH} video <Accent>before you book.</Accent></H2>
-            <p className="mx-auto mt-3 max-w-[560px] text-[15.5px] leading-relaxed" style={{ color: T.body }}>
-              How your 10 measures get booked, what counts as a shown measure, and what it costs.
-            </p>
+            <H2 className="!text-[clamp(25px,3.4vw,38px)]">Watch this {VIDEO_LENGTH} video <Accent>before you book.</Accent></H2>
           </Reveal>
           <Reveal delay={0.05}><VslPlayer length={VIDEO_BADGE} /></Reveal>
         </div>
