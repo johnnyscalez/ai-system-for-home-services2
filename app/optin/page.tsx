@@ -1,79 +1,126 @@
 "use client"
 
-// ─── OPT-IN QUIZ — /optin ────────────────────────────────────────────────────
-// Destination for ad and content traffic that should answer questions rather
-// than book straight away. Headline, subheadline, then a one-question-at-a-time
-// quiz. Built 2026-11-04 (Jonathan).
+// ─── OPT-IN PAGE — /optin ────────────────────────────────────────────────────
+// Destination for ad and content traffic. Structure and copy set by Jonathan
+// (2026-11-10): call-out bar → headline → trust strip → STEP 1 video →
+// STEP 2 six-question qualifier → how it works → guarantee → comparison →
+// who it is not for → founder → Founding Five → FAQ → final CTA → footer.
 //
-// Submission contract is the same one LeadFormSection uses, so leads from here
-// land exactly like leads from /start: POST /api/lead-intake, then the SMS
-// agent texts them. See components/landing/shared.tsx for the original.
+// Offer terms are the source of truth for every number on this page:
+//   10 shown in-home measures in the first 30 days, or every measure that
+//   month is free. Founding Five: $497 setup, then $125 per shown measure,
+//   locked 12 months, one shop per metro. Standard after that: $997 and $175.
+//   Ad spend is the shop's own, $1,800 a month minimum. Month to month.
 //
-// Qualification matches the rest of the funnel: at least one install crew.
-// docs/flooring-pivot.md — "Not a fit: one-person installers with no crew".
-// Meta Pixel Lead fires only on a qualified submission, so delivery trains on
-// contractors with crews.
+// Copy rules enforced here: no testimonials, review stars, client counts,
+// revenue figures, logos or case studies (we have no flooring results yet),
+// nothing about HVAC, no "20+", no "Example" labels, no mock calendar, and
+// never the words "pay nothing", "risk free", "no risk" or "free trial".
 //
-// Positioning rules: no price, no guarantee failure terms, no invented
-// flooring results.
+// Submission contract is unchanged: POST /api/lead-intake, then the SMS agent
+// texts them. Meta Pixel Lead fires only on a qualified submission, so Meta
+// trains delivery on shops that fit.
 // ─────────────────────────────────────────────────────────────────────────────
 
-import { useState } from "react"
+import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
-import { ArrowLeft, ArrowRight, Check, Phone } from "lucide-react"
+import { ArrowLeft, ArrowRight, ArrowDown, Check, Plus, X } from "lucide-react"
+import { GhlBookingWidget } from "@/components/landing/shared"
 import { Parquet, T } from "@/components/site/live"
-import { Logo } from "@/components/site/ui"
+import { Accent, Eyebrow, H2, Logo, Reveal, VslPlayer } from "@/components/site/ui"
 import { track } from "@/components/site/Tracker"
 
 declare global {
   interface Window { fbq?: (...args: unknown[]) => void }
 }
 
-// ── the quiz ────────────────────────────────────────────────────────────────
+// The mp4 in public/videos is 74 seconds. This one label drives the heading and
+// the player badge, so swapping in the longer cut means changing it once.
+const VIDEO_LENGTH = "5-minute"
+const VIDEO_BADGE = "5 min"
+
+// ── the six questions ───────────────────────────────────────────────────────
 type Choice = { value: string; label: string; hint?: string }
 
 const BUSINESS_TYPES: Choice[] = [
-  { value: "shop-at-home",      label: "Shop-at-home flooring",   hint: "You bring the samples to the homeowner" },
-  { value: "showroom-installs", label: "Showroom that installs",  hint: "They come to you, your crews install" },
-  { value: "installer-led",     label: "Installer-led contractor", hint: "You came up installing, now you run the company" },
-  { value: "other",             label: "Something else",           hint: "Tell us on the call" },
+  { value: "showroom",     label: "Flooring showroom" },
+  { value: "shop-at-home", label: "Shop-at-home flooring company" },
+  { value: "both",         label: "Showroom and shop-at-home" },
+  { value: "installer",    label: "I'm an installer or subcontractor" },
+  { value: "job-seeker",   label: "I'm looking for work" },
+]
+
+const ROLES: Choice[] = [
+  { value: "owner",   label: "Owner" },
+  { value: "partner", label: "Co-owner / partner" },
+  { value: "gm",      label: "General manager" },
+  { value: "other",   label: "Other" },
+]
+
+const REVENUE: Choice[] = [
+  { value: "under-500k", label: "Under $500K" },
+  { value: "500k-1m",    label: "$500K to $1M" },
+  { value: "1m-3m",      label: "$1M to $3M" },
+  { value: "3m-plus",    label: "$3M+" },
 ]
 
 const CREWS: Choice[] = [
-  { value: "0",   label: "None yet",  hint: "I subcontract or install solo" },
-  { value: "1",   label: "1 crew" },
-  { value: "2-3", label: "2 to 3 crews" },
-  { value: "4+",  label: "4 or more crews" },
+  { value: "1",   label: "1" },
+  { value: "2-4", label: "2 to 4" },
+  { value: "5+",  label: "5+" },
 ]
 
-const BOTTLENECKS: Choice[] = [
-  { value: "not-enough-measures", label: "Not enough measures on the calendar" },
-  { value: "quotes-go-quiet",     label: "Quotes go out and go quiet" },
-  { value: "slow-to-answer",      label: "Leads wait too long for an answer" },
-  { value: "seasonal",            label: "The calendar dies every winter" },
+const AD_BUDGET: Choice[] = [
+  { value: "yes", label: "Yes" },
+  { value: "no",  label: "Not right now" },
+]
+
+const CAPACITY: Choice[] = [
+  { value: "10-20", label: "10 to 20" },
+  { value: "20-40", label: "20 to 40" },
+  { value: "40+",   label: "40+" },
 ]
 
 type Answers = {
   businessType: string
+  role: string
+  revenue: string
   crews: string
-  bottleneck: string
-  serviceArea: string
+  adBudget: string
+  capacity: string
 }
 
-const EMPTY: Answers = { businessType: "", crews: "", bottleneck: "", serviceArea: "" }
+const EMPTY: Answers = { businessType: "", role: "", revenue: "", crews: "", adBudget: "", capacity: "" }
 
-// Same rule as the rest of the funnel: a crew is the dividing line.
-function isQualified(crews: string): boolean {
-  return crews !== "" && crews !== "0"
+const QUESTIONS: { key: keyof Answers; title: string; note?: string; choices: Choice[] }[] = [
+  { key: "businessType", title: "What type of flooring business do you run?", choices: BUSINESS_TYPES },
+  { key: "role",         title: "What's your role?", choices: ROLES },
+  { key: "revenue",      title: "What is your annual revenue?", choices: REVENUE },
+  { key: "crews",        title: "How many install crews do you run?",
+    note: "Crews of your own, not subs you call when something lands.", choices: CREWS },
+  { key: "adBudget",     title: "Can you put at least $1,800 a month into ads in your own ad account?",
+    note: "The spend goes straight to Meta from your account. We never touch it.", choices: AD_BUDGET },
+  { key: "capacity",     title: "How many extra measures a month can your team handle?", choices: CAPACITY },
+]
+
+const STEP_COUNT = QUESTIONS.length
+const CONTACT_STEP = STEP_COUNT
+
+// Sells direct to homeowners, decision maker, $500K+, and can fund the ads.
+function isQualified(a: Answers): boolean {
+  const sellsDirect = a.businessType === "showroom" || a.businessType === "shop-at-home" || a.businessType === "both"
+  const decides = a.role === "owner" || a.role === "partner" || a.role === "gm"
+  const bigEnough = a.revenue === "500k-1m" || a.revenue === "1m-3m" || a.revenue === "3m-plus"
+  return sellsDirect && decides && bigEnough && a.adBudget === "yes"
 }
-
-const STEP_COUNT = 5
 
 export default function OptinPage() {
   const [step, setStep] = useState(0)
   const [a, setA] = useState<Answers>(EMPTY)
-  const [firstName, setFirstName] = useState("")
+  const [fullName, setFullName] = useState("")
+  const [business, setBusiness] = useState("")
+  const [cityState, setCityState] = useState("")
   const [phone, setPhone] = useState("")
   const [email, setEmail] = useState("")
   const [result, setResult] = useState<"none" | "qualified" | "noqual">("none")
@@ -84,13 +131,7 @@ export default function OptinPage() {
   function pick(key: keyof Answers, value: string) {
     setA((prev) => ({ ...prev, [key]: value }))
     track("quiz_step", { step, step_key: key, value })
-    window.setTimeout(() => setStep((s) => Math.min(s + 1, STEP_COUNT - 1)), 180)
-  }
-
-  // The service-area step is typed, not picked, so it reports on its own.
-  function areaNext() {
-    track("quiz_step", { step: 3, step_key: "serviceArea", value: a.serviceArea.trim().slice(0, 120) })
-    setStep(4)
+    window.setTimeout(() => setStep((s) => Math.min(s + 1, CONTACT_STEP)), 180)
   }
 
   function submit(e: React.FormEvent<HTMLFormElement>) {
@@ -98,189 +139,271 @@ export default function OptinPage() {
     if (!e.currentTarget.reportValidity() || sending) return
     setSending(true)
 
-    const qualified = isQualified(a.crews)
-    const area = a.serviceArea.trim()
+    const qualified = isQualified(a)
+    const name = fullName.trim()
 
     fetch("/api/lead-intake", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        first_name: firstName,
+        first_name: name.split(/\s+/)[0] ?? name,
         phone,
         email,
-        business_type: a.businessType,
-        crews: a.crews,
-        service_area: area,
+        revenue: a.revenue,
         qualified,
         vertical: "flooring",
-        angle: `optin-quiz | ${a.businessType} | crews: ${a.crews} | area: ${area} | pain: ${a.bottleneck}`,
+        angle: [
+          "optin-quiz",
+          name,
+          business.trim(),
+          cityState.trim(),
+          `type: ${a.businessType}`,
+          `role: ${a.role}`,
+          `crews: ${a.crews}`,
+          `ad budget: ${a.adBudget}`,
+          `capacity: ${a.capacity}`,
+        ].join(" | "),
       }),
     }).catch(() => {})
 
     track("quiz_submit", {
       value: qualified ? "qualified" : "unqualified",
-      meta: { business_type: a.businessType, crews: a.crews, bottleneck: a.bottleneck, has_email: Boolean(email.trim()) },
+      meta: {
+        business_type: a.businessType, role: a.role, revenue: a.revenue,
+        crews: a.crews, ad_budget: a.adBudget, capacity: a.capacity,
+      },
     })
 
     if (qualified && typeof window !== "undefined" && typeof window.fbq === "function") {
       window.fbq("track", "Lead", { content_name: "optin-quiz" })
-      window.fbq("trackCustom", "QualifiedLead", { business_type: a.businessType, crews: a.crews, source: "optin-quiz" })
+      window.fbq("trackCustom", "QualifiedLead", { business_type: a.businessType, source: "optin-quiz" })
     }
 
     setResult(qualified ? "qualified" : "noqual")
   }
 
-  const showQuiz = result === "none"
-
   return (
-    <main className="min-h-screen overflow-x-clip font-sans" style={{ background: T.cream, color: T.ink }}>
-      {/* Logo only. Nothing else to click, because every other link is an exit. */}
+    <main className="overflow-x-clip font-sans" style={{ background: T.cream, color: T.ink }}>
+
       <header className="border-b" style={{ background: T.white, borderColor: T.line }}>
         <div className="mx-auto flex max-w-[1100px] items-center justify-between px-5 py-4 sm:px-8">
           <Logo />
-          <span className="font-mono text-[11.5px] uppercase tracking-[0.14em]" style={{ color: T.muted }}>
+          <span className="hidden font-mono text-[11.5px] uppercase tracking-[0.14em] sm:inline" style={{ color: T.muted }}>
             Flooring contractors
           </span>
         </div>
       </header>
 
-      <section className="relative px-5 pb-24 pt-14 sm:px-8 sm:pt-20">
-        <Parquet opacity={0.05} className="[mask-image:radial-gradient(ellipse_65%_55%_at_50%_0%,#000_10%,transparent_70%)]" />
+      {/* ── 1-4. CALL-OUT BAR, HEADLINE, SUBHEADLINE, TRUST STRIP ── */}
+      <section className="relative overflow-hidden px-5 pb-12 pt-10 sm:px-8 sm:pb-16 sm:pt-14">
+        <Parquet opacity={0.05} className="[mask-image:radial-gradient(ellipse_70%_60%_at_50%_0%,#000_10%,transparent_72%)]" />
 
-        <div className="relative mx-auto max-w-[720px]">
-          <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6 }}
-                     className="text-center font-heading text-[clamp(30px,5.2vw,52px)] font-extrabold leading-[1.05] tracking-[-0.03em]"
-                     style={{ color: T.ink, textWrap: "balance" }}>
-            See if we can put <span style={{ color: T.orangeD }}>20+ booked measures</span> on your calendar
-          </motion.h1>
-
-          <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.12 }}
-                    className="mx-auto mt-5 max-w-[560px] text-center text-[clamp(16px,1.8vw,18.5px)] leading-relaxed"
-                    style={{ color: T.body }}>
-            Four quick questions about how your business runs today. Takes about thirty seconds,
-            and you will know straight away whether your service area is open.
+        <div className="relative mx-auto max-w-[760px]">
+          <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
+                    className="mx-auto max-w-[620px] rounded-2xl border px-4 py-3 text-center text-[13.5px] font-semibold leading-relaxed sm:text-[14.5px]"
+                    style={{ background: T.soft, borderColor: "rgba(249,115,22,0.28)", color: T.ink }}>
+            For flooring showrooms and shop-at-home companies with their own install crews.{" "}
+            <span style={{ color: T.orangeD }}>Not for installers or subcontractors.</span>
           </motion.p>
 
-          <div className="mt-10 sm:mt-12">
-            {showQuiz ? (
-              <QuizCard
-                step={step} a={a} firstName={firstName} phone={phone} email={email} sending={sending}
-                onPick={pick}
-                onBack={() => setStep((s) => Math.max(s - 1, 0))}
-                onArea={(v) => setA((prev) => ({ ...prev, serviceArea: v }))}
-                onAreaNext={areaNext}
-                setFirstName={setFirstName} setPhone={setPhone} setEmail={setEmail}
-                onSubmit={submit}
-              />
-            ) : (
-              <ResultCard result={result} firstName={firstName} />
-            )}
-          </div>
+          <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.08 }}
+                     className="mt-7 text-center font-heading text-[clamp(30px,5.6vw,56px)] font-extrabold leading-[1.04] tracking-[-0.03em]"
+                     style={{ color: T.ink, textWrap: "balance" }}>
+            10 Shown In-Home Measures In Your First 30 Days.{" "}
+            <span style={{ color: T.orangeD }}>Or Every Measure Is Free.</span>
+          </motion.h1>
 
-          <p className="mx-auto mt-7 max-w-[460px] text-center text-[13px] leading-relaxed" style={{ color: T.muted }}>
+          <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.16 }}
+                    className="mx-auto mt-6 max-w-[600px] text-center text-[clamp(16px,1.9vw,18.5px)] leading-relaxed"
+                    style={{ color: T.body }}>
+            You only pay when your crew actually measures. $497 setup, then $125 per shown measure.
+            Ads run in your own ad account ($1,800/month minimum). Month to month. You keep the whole system.
+          </motion.p>
+
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}
+                      className="mt-8 text-center">
+            <a href="#quiz" data-track="optin-hero"
+               className="group inline-flex w-full items-center justify-center gap-2.5 rounded-full px-8 py-4 font-heading text-[16px] font-bold text-white transition-all hover:-translate-y-0.5 sm:w-auto"
+               style={{ background: T.orange, boxShadow: "0 12px 30px -10px rgba(249,115,22,0.6)" }}>
+              See if your metro is open
+              <ArrowDown className="h-4 w-4 transition-transform group-hover:translate-y-0.5" aria-hidden="true" />
+            </a>
+          </motion.div>
+
+          <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.42 }}
+                     className="mt-9 grid gap-2.5 sm:grid-cols-3">
+            {[
+              "Johnny installs every account himself",
+              "5 founding spots, one shop per metro",
+              "No-shows are never billed",
+            ].map((t) => (
+              <li key={t} className="flex items-start gap-2.5 rounded-2xl border bg-white px-4 py-3 text-[14px] font-semibold leading-snug"
+                  style={{ borderColor: T.line, color: T.ink }}>
+                <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: T.green }} aria-hidden="true" />
+                {t}
+              </li>
+            ))}
+          </motion.ul>
+        </div>
+      </section>
+
+      {/* ── 5. STEP 1 — the video ── */}
+      <section className="border-y px-5 py-14 sm:px-8 sm:py-18" style={{ background: T.white, borderColor: T.line }}>
+        <div className="mx-auto max-w-[900px]">
+          <Reveal className="mb-7 text-center">
+            <Eyebrow>Step 1</Eyebrow>
+            <H2 className="mt-3 !text-[clamp(25px,3.4vw,38px)]">Watch this {VIDEO_LENGTH} video <Accent>before you book.</Accent></H2>
+            <p className="mx-auto mt-3 max-w-[560px] text-[15.5px] leading-relaxed" style={{ color: T.body }}>
+              How your 10 measures get booked, what counts as a shown measure, and what it costs.
+            </p>
+          </Reveal>
+          <Reveal delay={0.05}><VslPlayer length={VIDEO_BADGE} /></Reveal>
+        </div>
+      </section>
+
+      {/* ── 6. STEP 2 — the qualifier ── */}
+      <section id="quiz" data-track-view="quiz" className="relative scroll-mt-6 px-5 py-14 sm:px-8 sm:py-18">
+        <div className="mx-auto max-w-[720px]">
+          <Reveal className="mb-8 text-center">
+            <Eyebrow>Step 2</Eyebrow>
+            <H2 className="mt-3 !text-[clamp(25px,3.4vw,38px)]">See if your metro is <Accent>still open.</Accent></H2>
+            <p className="mx-auto mt-3 max-w-[460px] text-[15.5px] leading-relaxed" style={{ color: T.body }}>
+              60 seconds. 6 questions. Then pick a time.
+            </p>
+          </Reveal>
+
+          {result === "none" ? (
+            <QuizCard
+              step={step} a={a}
+              fullName={fullName} business={business} cityState={cityState} phone={phone} email={email}
+              sending={sending}
+              onPick={pick}
+              onBack={() => setStep((s) => Math.max(s - 1, 0))}
+              setFullName={setFullName} setBusiness={setBusiness} setCityState={setCityState}
+              setPhone={setPhone} setEmail={setEmail}
+              onSubmit={submit}
+            />
+          ) : (
+            <ResultCard result={result} />
+          )}
+
+          <p className="mx-auto mt-6 max-w-[460px] text-center text-[13px] leading-relaxed" style={{ color: T.muted }}>
             Your details go to us and nobody else. We never sell or share them.{" "}
             <Link href="/privacy" className="underline underline-offset-2" style={{ color: T.muted }}>Privacy</Link>
           </p>
         </div>
       </section>
+
+      <HowItWorks />
+      <GuaranteeBox />
+      <Comparison />
+      <NotForYou />
+      <Founder />
+      <FoundingFive />
+      <Faq />
+      <FinalCta />
+
+      <footer className="border-t px-5 py-8 sm:px-8" style={{ background: T.white, borderColor: T.line }}>
+        <div className="mx-auto max-w-[1100px]">
+          <div className="flex flex-wrap items-center justify-between gap-4 text-[13.5px]" style={{ color: T.muted }}>
+            <Logo size="sm" />
+            <span>© {new Date().getFullYear()} FieldBuilt AI</span>
+            <div className="flex gap-6">
+              <Link href="/privacy" className="hover:text-[#1C1917]">Privacy policy</Link>
+              <Link href="/terms" className="hover:text-[#1C1917]">Terms</Link>
+            </div>
+          </div>
+          <p className="mt-5 text-[12.5px] leading-relaxed" style={{ color: T.muted }}>
+            This site is not part of or endorsed by Meta.
+          </p>
+        </div>
+      </footer>
     </main>
   )
 }
 
-// ── the card ────────────────────────────────────────────────────────────────
+// ── the quiz card ───────────────────────────────────────────────────────────
 function QuizCard(p: {
   step: number
   a: Answers
-  firstName: string; phone: string; email: string; sending: boolean
+  fullName: string; business: string; cityState: string; phone: string; email: string
+  sending: boolean
   onPick: (k: keyof Answers, v: string) => void
   onBack: () => void
-  onArea: (v: string) => void
-  onAreaNext: () => void
-  setFirstName: (v: string) => void
+  setFullName: (v: string) => void
+  setBusiness: (v: string) => void
+  setCityState: (v: string) => void
   setPhone: (v: string) => void
   setEmail: (v: string) => void
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
 }) {
-  const pct = Math.round(((p.step + 1) / STEP_COUNT) * 100)
+  const onContact = p.step === CONTACT_STEP
+  const shown = Math.min(p.step + 1, STEP_COUNT)
+  const pct = Math.round((onContact ? 1 : shown / STEP_COUNT) * 100)
+  const q = QUESTIONS[p.step]
+
+  const field = "w-full rounded-xl border px-4 py-3.5 text-[16px] outline-none transition focus:border-orange-500 focus:ring-[3px] focus:ring-orange-500/20"
 
   return (
-    <div className="rounded-[26px] border bg-white p-6 sm:p-9"
+    <div className="rounded-[26px] border bg-white p-5 sm:p-9"
          style={{ borderColor: T.line, boxShadow: "0 30px 70px -40px rgba(28,25,23,0.35)" }}>
 
-      {/* progress */}
       <div className="flex items-center gap-4">
         <div className="h-[6px] flex-1 overflow-hidden rounded-full" style={{ background: T.sand }}>
           <motion.div className="h-full rounded-full" style={{ background: T.orange }}
                       initial={false} animate={{ width: `${pct}%` }} transition={{ duration: 0.45, ease: "easeOut" }} />
         </div>
         <span className="shrink-0 font-mono text-[11.5px] font-semibold uppercase tracking-[0.12em]" style={{ color: T.muted }}>
-          {p.step + 1} / {STEP_COUNT}
+          {onContact ? "Last step" : `Question ${shown} of ${STEP_COUNT}`}
         </span>
       </div>
 
-      <div className="relative mt-7 min-h-[332px]">
+      <div className="relative mt-7 min-h-[360px]">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div key={p.step}
                       initial={{ opacity: 0, x: 22 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -22 }}
                       transition={{ duration: 0.28, ease: "easeOut" }}>
 
-            {p.step === 0 && (
-              <Question title="What best describes your flooring business?">
-                <Options choices={BUSINESS_TYPES} selected={p.a.businessType} onPick={(v) => p.onPick("businessType", v)} />
+            {!onContact && q && (
+              <Question title={q.title} note={q.note}>
+                <Options choices={q.choices} selected={p.a[q.key]} onPick={(v) => p.onPick(q.key, v)} />
               </Question>
             )}
 
-            {p.step === 1 && (
-              <Question title="How many install crews do you run?"
-                        note="Crews of your own, not subs you call when something lands.">
-                <Options choices={CREWS} selected={p.a.crews} onPick={(v) => p.onPick("crews", v)} />
-              </Question>
-            )}
-
-            {p.step === 2 && (
-              <Question title="What is costing you the most right now?">
-                <Options choices={BOTTLENECKS} selected={p.a.bottleneck} onPick={(v) => p.onPick("bottleneck", v)} />
-              </Question>
-            )}
-
-            {p.step === 3 && (
-              <Question title="Where do your crews install?"
-                        note="City or metro is enough. We check whether the area is already taken.">
-                <form onSubmit={(e) => { e.preventDefault(); if (p.a.serviceArea.trim()) p.onAreaNext() }}>
-                  <input autoFocus value={p.a.serviceArea} onChange={(e) => p.onArea(e.target.value)}
-                         placeholder="Columbus, OH" required
-                         className="w-full rounded-xl border px-4 py-3.5 text-[16px] outline-none transition focus:border-orange-500 focus:ring-[3px] focus:ring-orange-500/20"
-                         style={{ borderColor: T.line, color: T.ink }} />
-                  <button type="submit" disabled={!p.a.serviceArea.trim()}
-                          className="group mt-5 inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-3.5 font-heading text-[15.5px] font-bold text-white transition disabled:opacity-40"
-                          style={{ background: T.orange }}>
-                    Continue
-                    <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-                  </button>
-                </form>
-              </Question>
-            )}
-
-            {p.step === 4 && (
+            {onContact && (
               <Question title="Where should we send your answer?"
-                        note="We text you within a minute with whether your area is open.">
+                        note="We text you within a minute with whether your metro is open.">
                 <form onSubmit={p.onSubmit} className="grid gap-3">
-                  <input value={p.firstName} onChange={(e) => p.setFirstName(e.target.value)}
-                         placeholder="First name" required autoComplete="given-name"
-                         className="w-full rounded-xl border px-4 py-3.5 text-[16px] outline-none transition focus:border-orange-500 focus:ring-[3px] focus:ring-orange-500/20"
-                         style={{ borderColor: T.line, color: T.ink }} />
+                  <input value={p.fullName} onChange={(e) => p.setFullName(e.target.value)}
+                         placeholder="Full name" required autoComplete="name"
+                         className={field} style={{ borderColor: T.line, color: T.ink }} />
+                  <input value={p.business} onChange={(e) => p.setBusiness(e.target.value)}
+                         placeholder="Business name" required autoComplete="organization"
+                         className={field} style={{ borderColor: T.line, color: T.ink }} />
+                  <input value={p.cityState} onChange={(e) => p.setCityState(e.target.value)}
+                         placeholder="City and state" required autoComplete="address-level2"
+                         className={field} style={{ borderColor: T.line, color: T.ink }} />
                   <input value={p.phone} onChange={(e) => p.setPhone(e.target.value)} type="tel"
-                         placeholder="Mobile number" required autoComplete="tel"
-                         className="w-full rounded-xl border px-4 py-3.5 text-[16px] outline-none transition focus:border-orange-500 focus:ring-[3px] focus:ring-orange-500/20"
-                         style={{ borderColor: T.line, color: T.ink }} />
+                         placeholder="Mobile phone" required autoComplete="tel"
+                         className={field} style={{ borderColor: T.line, color: T.ink }} />
                   <input value={p.email} onChange={(e) => p.setEmail(e.target.value)} type="email"
                          placeholder="Email" required autoComplete="email"
-                         className="w-full rounded-xl border px-4 py-3.5 text-[16px] outline-none transition focus:border-orange-500 focus:ring-[3px] focus:ring-orange-500/20"
-                         style={{ borderColor: T.line, color: T.ink }} />
+                         className={field} style={{ borderColor: T.line, color: T.ink }} />
+
+                  <label className="mt-1 flex cursor-pointer items-start gap-3 rounded-xl border p-3.5"
+                         style={{ borderColor: T.line, background: T.cream }}>
+                    <input type="checkbox" required
+                           className="mt-0.5 h-5 w-5 shrink-0 cursor-pointer accent-orange-500" />
+                    <span className="text-[12.5px] leading-relaxed" style={{ color: T.body }}>
+                      I agree to receive calls and texts from Fieldbuilt about my request, including
+                      automated reminders. Message and data rates may apply. Reply STOP to opt out.
+                    </span>
+                  </label>
+
                   <button type="submit" disabled={p.sending}
                           className="group mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-4 font-heading text-[16px] font-bold text-white transition disabled:opacity-50"
                           style={{ background: T.orange, boxShadow: "0 14px 32px -12px rgba(249,115,22,0.6)" }}>
-                    {p.sending ? "Sending…" : "Show me my answer"}
+                    {p.sending ? "Checking…" : "Check my metro"}
                     {!p.sending && <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />}
                   </button>
                 </form>
@@ -304,10 +427,10 @@ function QuizCard(p: {
 function Question({ title, note, children }: { title: string; note?: string; children: React.ReactNode }) {
   return (
     <div>
-      <h2 className="font-heading text-[clamp(20px,2.7vw,27px)] font-extrabold leading-[1.15] tracking-[-0.02em]"
+      <h3 className="font-heading text-[clamp(20px,2.7vw,27px)] font-extrabold leading-[1.15] tracking-[-0.02em]"
           style={{ color: T.ink, textWrap: "balance" }}>
         {title}
-      </h2>
+      </h3>
       {note && <p className="mt-2.5 text-[14.5px] leading-relaxed" style={{ color: T.muted }}>{note}</p>}
       <div className="mt-6">{children}</div>
     </div>
@@ -346,49 +469,420 @@ function Options({ choices, selected, onPick }: { choices: Choice[]; selected: s
 }
 
 // ── after submit ────────────────────────────────────────────────────────────
-function ResultCard({ result, firstName }: { result: "qualified" | "noqual"; firstName: string }) {
-  const name = firstName.trim() ? `, ${firstName.trim()}` : ""
+function ResultCard({ result }: { result: "qualified" | "noqual" }) {
+  if (result === "noqual") {
+    return (
+      <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
+                  className="rounded-[26px] border bg-white p-6 sm:p-10"
+                  style={{ borderColor: T.line, boxShadow: "0 30px 70px -40px rgba(28,25,23,0.35)" }}>
+        <h3 className="font-heading text-[clamp(22px,3vw,30px)] font-extrabold leading-[1.1] tracking-[-0.02em]"
+            style={{ color: T.ink }}>
+          Thanks.
+        </h3>
+        <p className="mt-4 text-[16.5px] leading-relaxed" style={{ color: T.body }}>
+          Right now this is built for flooring showrooms and shop-at-home companies doing $500K+ with
+          their own crews and an ad budget of $1,800 a month. We&rsquo;ll keep your details and reach
+          out if that changes.
+        </p>
+      </motion.div>
+    )
+  }
 
   return (
     <motion.div initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-                className="rounded-[26px] border bg-white p-7 sm:p-10"
-                style={{ borderColor: result === "qualified" ? T.orange : T.line,
-                         boxShadow: "0 30px 70px -40px rgba(28,25,23,0.35)" }}>
-      {result === "qualified" ? (
-        <>
-          <span className="flex h-12 w-12 items-center justify-center rounded-2xl" style={{ background: T.soft }}>
-            <Phone className="h-5 w-5" style={{ color: T.orangeD }} aria-hidden="true" />
-          </span>
-          <h2 className="mt-5 font-heading text-[clamp(23px,3.2vw,32px)] font-extrabold leading-[1.1] tracking-[-0.02em]"
-              style={{ color: T.ink }}>
-            You run crews{name}. That is who this is built for.
-          </h2>
-          <p className="mt-4 text-[16.5px] leading-relaxed" style={{ color: T.body }}>
-            <strong style={{ color: T.ink }}>Check your phone.</strong> We are texting you right now about
-            your area, and you can reply there to grab a time. No waiting on a callback.
-          </p>
-          <Link href="/book"
-                className="group mt-7 inline-flex items-center gap-2 rounded-full px-7 py-3.5 font-heading text-[15.5px] font-bold text-white transition hover:-translate-y-0.5"
-                style={{ background: T.orange, boxShadow: "0 14px 32px -12px rgba(249,115,22,0.6)" }}>
-            Or pick your time now
-            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
-          </Link>
-        </>
-      ) : (
-        <>
-          <h2 className="font-heading text-[clamp(22px,3vw,30px)] font-extrabold leading-[1.1] tracking-[-0.02em]"
-              style={{ color: T.ink }}>
-            Straight answer{name}: not yet.
-          </h2>
-          <p className="mt-4 text-[16.5px] leading-relaxed" style={{ color: T.body }}>
-            This is built for flooring companies with their own install crews. Twenty measures in sixty days
-            would bury you before it helped you, and we are not going to sell you something that does that.
-          </p>
-          <p className="mt-4 text-[16.5px] leading-relaxed" style={{ color: T.body }}>
-            Get a crew running steady, then come back. The offer will still be here.
-          </p>
-        </>
-      )}
+                data-track-view="calendar"
+                className="rounded-[26px] border bg-white p-4 sm:p-8"
+                style={{ borderColor: T.orange, boxShadow: "0 30px 80px -40px rgba(249,115,22,0.45)" }}>
+      <h3 className="text-center font-heading text-[clamp(22px,3vw,31px)] font-extrabold leading-[1.1] tracking-[-0.02em]"
+          style={{ color: T.ink, textWrap: "balance" }}>
+        Your metro is open. <Accent>Pick a time for your 20-minute call.</Accent>
+      </h3>
+      <div className="mt-6 overflow-hidden rounded-[20px]">
+        <GhlBookingWidget />
+      </div>
     </motion.div>
+  )
+}
+
+// ── 7. HOW IT WORKS ─────────────────────────────────────────────────────────
+const STEPS = [
+  { h: "We install it",           b: "Ads, homeowner page, back office and confirmations, in your name." },
+  { h: "Ads run in your account", b: "$1,800/month minimum, you own the account and every homeowner." },
+  { h: "We qualify and book",     b: "Homeowners answer qualifying questions, get booked on your calendar and get reminded the night before and the morning of." },
+  { h: "You measure and close",   b: "You only pay $125 for measures where the homeowner was there and your crew measured." },
+]
+
+function HowItWorks() {
+  return (
+    <section className="border-y px-5 py-14 sm:px-8 sm:py-18" style={{ background: T.white, borderColor: T.line }}>
+      <div className="mx-auto max-w-[900px]">
+        <Reveal className="mb-9 text-center">
+          <Eyebrow>How it works</Eyebrow>
+          <H2 className="mt-3 !text-[clamp(25px,3.4vw,38px)]">Four parts, <Accent>installed in your business.</Accent></H2>
+        </Reveal>
+        <div className="grid gap-3 sm:grid-cols-2">
+          {STEPS.map((s, i) => (
+            <Reveal key={s.h} delay={i * 0.05}>
+              <div className="h-full rounded-2xl border p-5" style={{ borderColor: T.line, background: T.cream }}>
+                <span className="flex h-9 w-9 items-center justify-center rounded-xl font-mono text-[14px] font-bold"
+                      style={{ background: T.soft, color: T.orangeD }}>{i + 1}</span>
+                <h3 className="mt-4 font-heading text-[18px] font-extrabold leading-snug" style={{ color: T.ink }}>{s.h}</h3>
+                <p className="mt-2 text-[15px] leading-relaxed" style={{ color: T.body }}>{s.b}</p>
+              </div>
+            </Reveal>
+          ))}
+        </div>
+      </div>
+    </section>
+  )
+}
+
+// ── 8. GUARANTEE ────────────────────────────────────────────────────────────
+const NEVER_BILLED = [
+  "No-shows",
+  "Renters",
+  "Out-of-area homeowners",
+  "The wrong product",
+  "A missing decision maker",
+  "A budget under your minimum",
+]
+
+function GuaranteeBox() {
+  return (
+    <section className="px-5 py-14 sm:px-8 sm:py-18">
+      <div className="mx-auto max-w-[760px]">
+        <Reveal>
+          <div className="rounded-[26px] border p-6 sm:p-9"
+               style={{ background: T.white, borderColor: "rgba(249,115,22,0.35)", boxShadow: "0 30px 70px -45px rgba(249,115,22,0.5)" }}>
+            <h2 className="font-heading text-[clamp(24px,3.3vw,36px)] font-extrabold leading-[1.08] tracking-[-0.025em]"
+                style={{ color: T.ink, textWrap: "balance" }}>
+              If we miss, <Accent>the measures are free.</Accent>
+            </h2>
+            <p className="mt-4 text-[16.5px] leading-relaxed" style={{ color: T.body }}>
+              Fewer than 10 shown measures in your first 30 days? You owe zero measure fees for that
+              month. No-shows are never billed. Setup is kept and ad spend goes straight to Meta from
+              your account.
+            </p>
+
+            <details className="group mt-6 rounded-2xl border" style={{ borderColor: T.line, background: T.cream }}>
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-heading text-[15px] font-bold"
+                       style={{ color: T.ink }}>
+                Read the exact terms
+                <Plus className="h-4 w-4 shrink-0 transition-transform group-open:rotate-45" style={{ color: T.orangeD }} aria-hidden="true" />
+              </summary>
+              <div className="border-t px-5 py-5" style={{ borderColor: T.line }}>
+                <p className="font-heading text-[14px] font-bold uppercase tracking-[0.08em]" style={{ color: T.muted }}>
+                  A shown measure
+                </p>
+                <p className="mt-2.5 text-[15px] leading-relaxed" style={{ color: T.body }}>
+                  The homeowner owns the home, every decision maker is there, the project is in your
+                  service area, it meets your minimum budget and starts within 90 days, and your crew
+                  completes the measure.
+                </p>
+                <p className="mt-6 font-heading text-[14px] font-bold uppercase tracking-[0.08em]" style={{ color: T.muted }}>
+                  Never billed
+                </p>
+                <ul className="mt-2.5 grid gap-2 sm:grid-cols-2">
+                  {NEVER_BILLED.map((t) => (
+                    <li key={t} className="flex items-start gap-2 text-[15px] leading-snug" style={{ color: T.body }}>
+                      <X className="mt-0.5 h-4 w-4 shrink-0" style={{ color: T.orangeD }} aria-hidden="true" />{t}
+                    </li>
+                  ))}
+                </ul>
+                <p className="mt-6 text-[15px] leading-relaxed" style={{ color: T.body }}>
+                  Fewer than 10 shown measures in the first 30 days: zero measure fees for that period.
+                  The setup fee is kept.
+                </p>
+              </div>
+            </details>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  )
+}
+
+// ── 9. COMPARISON ───────────────────────────────────────────────────────────
+const COLUMNS = ["Fieldbuilt", "Shared lead sites", "Agency retainer"]
+const ROWS: { label: string; cells: [string, string, string] }[] = [
+  { label: "Who else gets the homeowner",
+    cells: ["Nobody, one shop per metro", "Sold to several contractors", "Depends"] },
+  { label: "Who owns the ads and the homeowner list",
+    cells: ["You", "The lead site", "Usually the agency"] },
+  { label: "What you pay for",
+    cells: ["Shown measures only", "Every lead, good or bad", "A monthly retainer"] },
+  { label: "Contract",
+    cells: ["Month to month", "Per lead", "Often 6 to 12 months"] },
+]
+
+function Comparison() {
+  return (
+    <section className="border-y px-5 py-14 sm:px-8 sm:py-18" style={{ background: T.white, borderColor: T.line }}>
+      <div className="mx-auto max-w-[980px]">
+        <Reveal className="mb-9 text-center">
+          <Eyebrow>The difference</Eyebrow>
+          <H2 className="mt-3 !text-[clamp(25px,3.4vw,38px)]">Where the homeowner <Accent>actually goes.</Accent></H2>
+        </Reveal>
+
+        {/* mobile: one card per row */}
+        <Reveal className="grid gap-3 sm:hidden">
+          {ROWS.map((r) => (
+            <div key={r.label} className="rounded-2xl border p-4" style={{ borderColor: T.line, background: T.cream }}>
+              <p className="font-heading text-[15px] font-extrabold leading-snug" style={{ color: T.ink }}>{r.label}</p>
+              <dl className="mt-3 grid gap-2">
+                {r.cells.map((c, i) => (
+                  <div key={COLUMNS[i]} className="rounded-xl px-3 py-2.5"
+                       style={{ background: i === 0 ? T.soft : T.white, border: `1px solid ${i === 0 ? "rgba(249,115,22,0.3)" : T.line}` }}>
+                    <dt className="font-mono text-[10.5px] uppercase tracking-[0.12em]" style={{ color: i === 0 ? T.orangeD : T.muted }}>
+                      {COLUMNS[i]}
+                    </dt>
+                    <dd className="mt-1 text-[14.5px] font-semibold leading-snug" style={{ color: T.ink }}>{c}</dd>
+                  </div>
+                ))}
+              </dl>
+            </div>
+          ))}
+        </Reveal>
+
+        {/* sm and up: the real table */}
+        <Reveal className="hidden sm:block">
+          <div className="overflow-hidden rounded-[22px] border" style={{ borderColor: T.line }}>
+            <table className="w-full border-collapse text-left">
+              <thead>
+                <tr style={{ background: T.cream }}>
+                  <th scope="col" className="w-[30%] px-5 py-4" />
+                  {COLUMNS.map((c, i) => (
+                    <th key={c} scope="col" className="px-5 py-4 font-heading text-[15px] font-extrabold"
+                        style={{ color: i === 0 ? T.orangeD : T.muted, background: i === 0 ? T.soft : "transparent" }}>
+                      {c}
+                    </th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody>
+                {ROWS.map((r) => (
+                  <tr key={r.label} className="border-t" style={{ borderColor: T.line }}>
+                    <th scope="row" className="px-5 py-4 align-top font-heading text-[14.5px] font-bold leading-snug"
+                        style={{ color: T.ink }}>{r.label}</th>
+                    {r.cells.map((c, i) => (
+                      <td key={COLUMNS[i]} className="px-5 py-4 align-top text-[14.5px] leading-snug"
+                          style={{ color: i === 0 ? T.ink : T.body, background: i === 0 ? T.soft : "transparent",
+                                   fontWeight: i === 0 ? 600 : 400 }}>
+                        {c}
+                      </td>
+                    ))}
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  )
+}
+
+// ── 10. NOT FOR YOU ─────────────────────────────────────────────────────────
+const NOT_FOR = [
+  "You're an installer or subcontractor looking for work",
+  "You don't sell direct to homeowners",
+  "You can't fund $1,800 a month in ads",
+  "You don't have a crew free to run 10+ measures this month",
+]
+
+function NotForYou() {
+  return (
+    <section className="px-5 py-14 sm:px-8 sm:py-18">
+      <div className="mx-auto max-w-[760px]">
+        <Reveal className="mb-8 text-center">
+          <Eyebrow>Be honest with yourself</Eyebrow>
+          <H2 className="mt-3 !text-[clamp(25px,3.4vw,38px)]">This is <Accent>not</Accent> for you if</H2>
+        </Reveal>
+        <Reveal className="grid gap-2.5">
+          {NOT_FOR.map((t) => (
+            <div key={t} className="flex items-start gap-3 rounded-2xl border bg-white px-4 py-3.5"
+                 style={{ borderColor: T.line }}>
+              <X className="mt-0.5 h-5 w-5 shrink-0" style={{ color: T.orangeD }} aria-hidden="true" />
+              <span className="text-[15.5px] font-semibold leading-snug" style={{ color: T.ink }}>{t}</span>
+            </div>
+          ))}
+        </Reveal>
+      </div>
+    </section>
+  )
+}
+
+// ── 11. FOUNDER ─────────────────────────────────────────────────────────────
+// Photo lives at public/brand/johnny.jpg. Until that file is dropped in, the
+// monogram tile stands in, so the block never renders a broken image.
+function FounderPhoto() {
+  const [failed, setFailed] = useState(false)
+  const ref = useRef<HTMLImageElement>(null)
+
+  // A 404 fires before React attaches onError, so the first render has to ask
+  // the element itself whether the file ever arrived.
+  useEffect(() => {
+    const el = ref.current
+    if (el && el.complete && el.naturalWidth === 0) setFailed(true)
+  }, [])
+
+  if (failed) {
+    return (
+      <span className="flex h-[180px] w-[180px] shrink-0 items-center justify-center rounded-[22px] font-heading text-[56px] font-extrabold text-white sm:h-[200px] sm:w-[200px]"
+            style={{ background: T.ink }} aria-hidden="true">J</span>
+    )
+  }
+  return (
+    // eslint-disable-next-line @next/next/no-img-element
+    <img ref={ref} src="/brand/johnny.jpg" alt="Johnny, who installs every FieldBuilt account"
+         width={200} height={200} onError={() => setFailed(true)}
+         className="h-[180px] w-[180px] shrink-0 rounded-[22px] object-cover sm:h-[200px] sm:w-[200px]"
+         style={{ background: T.sand }} />
+  )
+}
+
+const FOUNDER_POINTS = [
+  "I build and install each system personally.",
+  "I only take one shop per metro.",
+  "You keep everything I build.",
+]
+
+function Founder() {
+  return (
+    <section className="border-y px-5 py-14 sm:px-8 sm:py-18" style={{ background: T.white, borderColor: T.line }}>
+      <div className="mx-auto max-w-[860px]">
+        <Reveal className="flex flex-col items-center gap-7 text-center sm:flex-row sm:items-start sm:gap-10 sm:text-left">
+          <FounderPhoto />
+          <div>
+            <H2 className="!text-[clamp(24px,3.2vw,36px)]">Why I install <Accent>every account myself.</Accent></H2>
+            <ul className="mt-5 grid gap-3">
+              {FOUNDER_POINTS.map((t) => (
+                <li key={t} className="flex items-start justify-center gap-2.5 text-[16.5px] leading-relaxed sm:justify-start"
+                    style={{ color: T.body }}>
+                  <Check className="mt-1 h-4 w-4 shrink-0" style={{ color: T.green }} aria-hidden="true" />
+                  {t}
+                </li>
+              ))}
+            </ul>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  )
+}
+
+// ── 12. FOUNDING FIVE ───────────────────────────────────────────────────────
+function FoundingFive() {
+  return (
+    <section className="px-5 py-14 sm:px-8 sm:py-18">
+      <div className="mx-auto max-w-[860px]">
+        <Reveal>
+          <div className="rounded-[26px] border p-6 sm:p-9" style={{ background: T.white, borderColor: T.line }}>
+            <H2 className="!text-[clamp(24px,3.2vw,36px)]">Founding Five: <Accent>5 of 5 spots left.</Accent></H2>
+
+            <div className="mt-7 grid gap-3 sm:grid-cols-2">
+              <div className="rounded-2xl p-5" style={{ background: T.soft, border: "1px solid rgba(249,115,22,0.3)" }}>
+                <p className="font-mono text-[11px] uppercase tracking-[0.14em]" style={{ color: T.orangeD }}>What you get</p>
+                <p className="mt-3 text-[15.5px] leading-relaxed" style={{ color: T.ink }}>
+                  $497 setup and $125 per shown measure, locked for 12 months, one shop per metro.
+                </p>
+              </div>
+              <div className="rounded-2xl p-5" style={{ background: T.cream, border: `1px solid ${T.line}` }}>
+                <p className="font-mono text-[11px] uppercase tracking-[0.14em]" style={{ color: T.muted }}>What you give</p>
+                <p className="mt-3 text-[15.5px] leading-relaxed" style={{ color: T.ink }}>
+                  A short recorded result at day 30, your shop name and city, and permission to show
+                  your real numbers.
+                </p>
+              </div>
+            </div>
+
+            <p className="mt-6 text-[15.5px] leading-relaxed" style={{ color: T.body }}>
+              After the five fill: $997 setup and $175 per shown measure.
+            </p>
+          </div>
+        </Reveal>
+      </div>
+    </section>
+  )
+}
+
+// ── 13. FAQ ─────────────────────────────────────────────────────────────────
+const FAQ: { q: string; a: string }[] = [
+  { q: "Who owns the ad account and the homeowners?",
+    a: "You do. Ads run in your account and you keep the system." },
+  { q: "What counts as a shown measure?",
+    a: "The homeowner owns the home, every decision maker is there, the project is in your service area, it meets your minimum budget and starts within 90 days, and your crew completes the measure." },
+  { q: "Why is there a $1,800 minimum?",
+    a: "Under that there isn't enough ad volume to book 10 shown measures in 30 days, so the guarantee wouldn't be fair to either side." },
+  { q: "What if I get fewer than 10?",
+    a: "You owe zero measure fees for that month. Setup is kept." },
+  { q: "Is there a contract?",
+    a: "No. Month to month. Cancel any time." },
+  { q: "What happens on the call?",
+    a: "20 minutes on your service area, how the measures get booked, and whether your metro is open." },
+]
+
+function Faq() {
+  return (
+    <section className="border-y px-5 py-14 sm:px-8 sm:py-18" style={{ background: T.white, borderColor: T.line }}>
+      <div className="mx-auto max-w-[760px]">
+        <Reveal className="mb-8 text-center">
+          <Eyebrow>Questions</Eyebrow>
+          <H2 className="mt-3 !text-[clamp(25px,3.4vw,38px)]">Before you <Accent>book a time.</Accent></H2>
+        </Reveal>
+        <Reveal className="grid gap-2.5">
+          {FAQ.map((f) => (
+            <details key={f.q} className="group rounded-2xl border" style={{ borderColor: T.line, background: T.cream }}>
+              <summary className="flex cursor-pointer list-none items-center justify-between gap-4 px-5 py-4 font-heading text-[15.5px] font-bold leading-snug"
+                       style={{ color: T.ink }}>
+                {f.q}
+                <Plus className="h-4 w-4 shrink-0 transition-transform group-open:rotate-45" style={{ color: T.orangeD }} aria-hidden="true" />
+              </summary>
+              <p className="border-t px-5 py-4 text-[15px] leading-relaxed" style={{ borderColor: T.line, color: T.body }}>
+                {f.a}
+              </p>
+            </details>
+          ))}
+        </Reveal>
+      </div>
+    </section>
+  )
+}
+
+// ── 14. FINAL CTA ───────────────────────────────────────────────────────────
+const NEXT = [
+  "Answer 6 questions.",
+  "Pick a time.",
+  "See your system with your company name on it.",
+]
+
+function FinalCta() {
+  return (
+    <section className="relative overflow-hidden px-5 py-16 sm:px-8 sm:py-20">
+      <Parquet opacity={0.05} className="[mask-image:radial-gradient(ellipse_60%_70%_at_50%_50%,#000_10%,transparent_72%)]" />
+      <div className="relative mx-auto max-w-[680px] text-center">
+        <Reveal>
+          <H2 className="!text-[clamp(26px,3.8vw,42px)]">Check if your metro is <Accent>still open.</Accent></H2>
+
+          <ol className="mx-auto mt-8 grid max-w-[520px] gap-2.5 text-left">
+            {NEXT.map((t, i) => (
+              <li key={t} className="flex items-center gap-3 rounded-2xl border bg-white px-4 py-3.5"
+                  style={{ borderColor: T.line }}>
+                <span className="flex h-8 w-8 shrink-0 items-center justify-center rounded-lg font-mono text-[13px] font-bold"
+                      style={{ background: T.soft, color: T.orangeD }}>{i + 1}</span>
+                <span className="text-[15.5px] font-semibold leading-snug" style={{ color: T.ink }}>{t}</span>
+              </li>
+            ))}
+          </ol>
+
+          <a href="#quiz" data-track="optin-final"
+             className="group mt-9 inline-flex w-full items-center justify-center gap-2.5 rounded-full px-8 py-4 font-heading text-[16px] font-bold text-white transition-all hover:-translate-y-0.5 sm:w-auto"
+             style={{ background: T.orange, boxShadow: "0 12px 30px -10px rgba(249,115,22,0.6)" }}>
+            See if your metro is open
+            <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />
+          </a>
+        </Reveal>
+      </div>
+    </section>
   )
 }
