@@ -2,9 +2,10 @@
 
 // ─── OPT-IN PAGE — /optin ────────────────────────────────────────────────────
 // Destination for ad and content traffic. Structure and copy set by Jonathan
-// (2026-11-10): call-out bar → headline → STEP 1 video → STEP 2 six-question
-// qualifier → how it works → guarantee → comparison → who it is not for →
-// founder → Founding Five → FAQ → final CTA → footer.
+// (2026-11-11): call-out bar → headline → the six-question qualifier itself →
+// video → how it works → guarantee → comparison → who it is not for →
+// founder → Founding Five → FAQ → final CTA → footer. The qualifier sits in
+// the hero rather than behind a button, so the first screen is the form.
 //
 // Offer terms are the source of truth for every number on this page:
 //   10 shown in-home measures in the first 30 days, or every measure that
@@ -28,7 +29,7 @@
 import { useEffect, useRef, useState } from "react"
 import Link from "next/link"
 import { motion, AnimatePresence } from "framer-motion"
-import { ArrowLeft, ArrowRight, ArrowDown, Check, Plus, X } from "lucide-react"
+import { ArrowLeft, ArrowRight, Check, Plus, X } from "lucide-react"
 import { GhlBookingWidget } from "@/components/landing/shared"
 import { Parquet, T } from "@/components/site/live"
 import { Accent, Eyebrow, H2, Logo, PlankMark, Reveal, VslPlayer } from "@/components/site/ui"
@@ -198,7 +199,7 @@ export default function OptinPage() {
       </header>
 
       {/* ── 1-3. CALL-OUT BAR, HEADLINE, SUBHEADLINE ── */}
-      <section className="relative overflow-hidden px-5 pb-12 pt-10 sm:px-8 sm:pb-16 sm:pt-14">
+      <section className="relative overflow-hidden px-5 pb-12 pt-6 sm:px-8 sm:pb-16 sm:pt-14">
         <Parquet opacity={0.05} className="[mask-image:radial-gradient(ellipse_70%_60%_at_50%_0%,#000_10%,transparent_72%)]" />
 
         <div className="relative mx-auto max-w-[760px]">
@@ -219,75 +220,60 @@ export default function OptinPage() {
           </motion.div>
 
           <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.08 }}
-                     className="mt-7 text-center font-heading text-[clamp(30px,5.6vw,56px)] font-extrabold leading-[1.04] tracking-[-0.03em]"
+                     className="mt-6 text-center font-heading text-[clamp(30px,5.6vw,56px)] sm:mt-7 font-extrabold leading-[1.04] tracking-[-0.03em]"
                      style={{ color: T.ink, textWrap: "balance" }}>
             Get 10 In-Home Flooring Measures In Your First 30 Days.{" "}
             <span style={{ color: T.orangeD }}>Or You Pay Nothing.</span>
           </motion.h1>
 
           <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.16 }}
-                    className="mx-auto mt-6 max-w-[600px] text-center text-[clamp(16px,1.9vw,18.5px)] leading-relaxed"
+                    className="mx-auto mt-5 max-w-[600px] text-center text-[clamp(16px,1.9vw,18.5px)] leading-relaxed sm:mt-6"
                     style={{ color: T.body }}>
             Pay per appointment. If we don&rsquo;t get you at least 10 flooring jobs booked, you pay nothing.
           </motion.p>
 
-          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}
-                      className="mt-8 text-center">
-            <a href="#quiz" data-track="optin-hero"
-               className="group inline-flex w-full items-center justify-center gap-2.5 rounded-full px-8 py-4 font-heading text-[16px] font-bold text-white transition-all hover:-translate-y-0.5 sm:w-auto"
-               style={{ background: T.orange, boxShadow: "0 12px 30px -10px rgba(249,115,22,0.6)" }}>
-              See if your metro is open
-              <ArrowDown className="h-4 w-4 transition-transform group-hover:translate-y-0.5" aria-hidden="true" />
-            </a>
-          </motion.div>
+          {/* ── 4. the qualifier, straight under the promise ── */}
+          <motion.div id="quiz" data-track-view="quiz"
+                      initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.26 }}
+                      className="mx-auto mt-7 max-w-[640px] scroll-mt-6 sm:mt-9">
+            <p className="mb-4 text-center text-[14.5px] font-semibold" style={{ color: T.orangeD }}>
+              60 seconds. 6 questions. Then pick a time.
+            </p>
 
+            {result === "none" ? (
+              <QuizCard
+                step={step} a={a}
+                fullName={fullName} business={business} cityState={cityState} phone={phone} email={email}
+                sending={sending}
+                onPick={pick}
+                onBack={() => setStep((s) => Math.max(s - 1, 0))}
+                setFullName={setFullName} setBusiness={setBusiness} setCityState={setCityState}
+                setPhone={setPhone} setEmail={setEmail}
+                onSubmit={submit}
+              />
+            ) : (
+              <ResultCard result={result} />
+            )}
+
+            <p className="mx-auto mt-6 max-w-[460px] text-center text-[13px] leading-relaxed" style={{ color: T.muted }}>
+              Your details go to us and nobody else. We never sell or share them.{" "}
+              <Link href="/privacy" className="underline underline-offset-2" style={{ color: T.muted }}>Privacy</Link>
+            </p>
+          </motion.div>
         </div>
       </section>
 
-      {/* ── 5. STEP 1 — the video ── */}
+      {/* ── 5. the video ── */}
       <section className="border-y px-5 py-14 sm:px-8 sm:py-18" style={{ background: T.white, borderColor: T.line }}>
         <div className="mx-auto max-w-[900px]">
           <Reveal className="mb-7 text-center">
-            <Eyebrow>Step 1</Eyebrow>
+            <Eyebrow>Before your call</Eyebrow>
             <H2 className="mt-3 !text-[clamp(25px,3.4vw,38px)]">Watch this {VIDEO_LENGTH} video <Accent>before you book.</Accent></H2>
             <p className="mx-auto mt-3 max-w-[560px] text-[15.5px] leading-relaxed" style={{ color: T.body }}>
               How your 10 measures get booked, what counts as a shown measure, and what it costs.
             </p>
           </Reveal>
           <Reveal delay={0.05}><VslPlayer length={VIDEO_BADGE} /></Reveal>
-        </div>
-      </section>
-
-      {/* ── 6. STEP 2 — the qualifier ── */}
-      <section id="quiz" data-track-view="quiz" className="relative scroll-mt-6 px-5 py-14 sm:px-8 sm:py-18">
-        <div className="mx-auto max-w-[720px]">
-          <Reveal className="mb-8 text-center">
-            <Eyebrow>Step 2</Eyebrow>
-            <H2 className="mt-3 !text-[clamp(25px,3.4vw,38px)]">See if your metro is <Accent>still open.</Accent></H2>
-            <p className="mx-auto mt-3 max-w-[460px] text-[15.5px] leading-relaxed" style={{ color: T.body }}>
-              60 seconds. 6 questions. Then pick a time.
-            </p>
-          </Reveal>
-
-          {result === "none" ? (
-            <QuizCard
-              step={step} a={a}
-              fullName={fullName} business={business} cityState={cityState} phone={phone} email={email}
-              sending={sending}
-              onPick={pick}
-              onBack={() => setStep((s) => Math.max(s - 1, 0))}
-              setFullName={setFullName} setBusiness={setBusiness} setCityState={setCityState}
-              setPhone={setPhone} setEmail={setEmail}
-              onSubmit={submit}
-            />
-          ) : (
-            <ResultCard result={result} />
-          )}
-
-          <p className="mx-auto mt-6 max-w-[460px] text-center text-[13px] leading-relaxed" style={{ color: T.muted }}>
-            Your details go to us and nobody else. We never sell or share them.{" "}
-            <Link href="/privacy" className="underline underline-offset-2" style={{ color: T.muted }}>Privacy</Link>
-          </p>
         </div>
       </section>
 
