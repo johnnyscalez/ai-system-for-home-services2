@@ -85,7 +85,7 @@ export function Logo({ size = "md" }: { size?: "md" | "sm" }) {
 }
 
 // A flooring plank stack, used as the ICP mark next to "For Flooring Contractors".
-function PlankMark() {
+export function PlankMark() {
   return (
     <svg viewBox="0 0 32 32" aria-hidden="true" className="h-full w-full">
       <rect x="3" y="5" width="17" height="6" rx="1.5" fill="#FFFFFF" />

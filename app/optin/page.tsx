@@ -2,9 +2,9 @@
 
 // ─── OPT-IN PAGE — /optin ────────────────────────────────────────────────────
 // Destination for ad and content traffic. Structure and copy set by Jonathan
-// (2026-11-10): call-out bar → headline → trust strip → STEP 1 video →
-// STEP 2 six-question qualifier → how it works → guarantee → comparison →
-// who it is not for → founder → Founding Five → FAQ → final CTA → footer.
+// (2026-11-10): call-out bar → headline → STEP 1 video → STEP 2 six-question
+// qualifier → how it works → guarantee → comparison → who it is not for →
+// founder → Founding Five → FAQ → final CTA → footer.
 //
 // Offer terms are the source of truth for every number on this page:
 //   10 shown in-home measures in the first 30 days, or every measure that
@@ -15,7 +15,10 @@
 // Copy rules enforced here: no testimonials, review stars, client counts,
 // revenue figures, logos or case studies (we have no flooring results yet),
 // nothing about HVAC, no "20+", no "Example" labels, no mock calendar, and
-// never the words "pay nothing", "risk free", "no risk" or "free trial".
+// never "risk free", "no risk" or "free trial". Jonathan put "pay nothing"
+// back in the headline and subheadline on 2026-11-10, so that one phrase is
+// his wording, not a slip. It reads against the guarantee box, which keeps the
+// setup fee when we miss.
 //
 // Submission contract is unchanged: POST /api/lead-intake, then the SMS agent
 // texts them. Meta Pixel Lead fires only on a qualified submission, so Meta
@@ -28,7 +31,7 @@ import { motion, AnimatePresence } from "framer-motion"
 import { ArrowLeft, ArrowRight, ArrowDown, Check, Plus, X } from "lucide-react"
 import { GhlBookingWidget } from "@/components/landing/shared"
 import { Parquet, T } from "@/components/site/live"
-import { Accent, Eyebrow, H2, Logo, Reveal, VslPlayer } from "@/components/site/ui"
+import { Accent, Eyebrow, H2, Logo, PlankMark, Reveal, VslPlayer } from "@/components/site/ui"
 import { track } from "@/components/site/Tracker"
 
 declare global {
@@ -194,30 +197,38 @@ export default function OptinPage() {
         </div>
       </header>
 
-      {/* ── 1-4. CALL-OUT BAR, HEADLINE, SUBHEADLINE, TRUST STRIP ── */}
+      {/* ── 1-3. CALL-OUT BAR, HEADLINE, SUBHEADLINE ── */}
       <section className="relative overflow-hidden px-5 pb-12 pt-10 sm:px-8 sm:pb-16 sm:pt-14">
         <Parquet opacity={0.05} className="[mask-image:radial-gradient(ellipse_70%_60%_at_50%_0%,#000_10%,transparent_72%)]" />
 
         <div className="relative mx-auto max-w-[760px]">
-          <motion.p initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
-                    className="mx-auto max-w-[620px] rounded-2xl border px-4 py-3 text-center text-[13.5px] font-semibold leading-relaxed sm:text-[14.5px]"
-                    style={{ background: T.soft, borderColor: "rgba(249,115,22,0.28)", color: T.ink }}>
-            For flooring showrooms and shop-at-home companies with their own install crews.{" "}
-            <span style={{ color: T.orangeD }}>Not for installers or subcontractors.</span>
-          </motion.p>
+          <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5 }}
+                      className="flex justify-center">
+            <span className="inline-flex max-w-[540px] items-center gap-3.5 sm:max-w-none rounded-2xl border bg-white px-4 py-3 sm:rounded-full sm:py-2.5 sm:pl-2.5 sm:pr-6"
+                  style={{ borderColor: "rgba(249,115,22,0.3)",
+                           boxShadow: "0 18px 40px -22px rgba(249,115,22,0.75), 0 2px 8px -3px rgba(28,25,23,0.08)" }}>
+              <span className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl p-2 sm:h-10 sm:w-10 sm:rounded-full sm:p-2.5"
+                    style={{ background: T.orange }}>
+                <PlankMark />
+              </span>
+              <span className="text-left text-[13.5px] font-semibold leading-snug sm:text-[15px]" style={{ color: T.ink }}>
+                For flooring showrooms and shop-at-home companies{" "}
+                <span style={{ color: T.orangeD }}>with their own install crews</span>.
+              </span>
+            </span>
+          </motion.div>
 
           <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.08 }}
                      className="mt-7 text-center font-heading text-[clamp(30px,5.6vw,56px)] font-extrabold leading-[1.04] tracking-[-0.03em]"
                      style={{ color: T.ink, textWrap: "balance" }}>
-            10 Shown In-Home Measures In Your First 30 Days.{" "}
-            <span style={{ color: T.orangeD }}>Or Every Measure Is Free.</span>
+            Get 10 In-Home Flooring Measures In Your First 30 Days.{" "}
+            <span style={{ color: T.orangeD }}>Or You Pay Nothing.</span>
           </motion.h1>
 
           <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.16 }}
                     className="mx-auto mt-6 max-w-[600px] text-center text-[clamp(16px,1.9vw,18.5px)] leading-relaxed"
                     style={{ color: T.body }}>
-            You only pay when your crew actually measures. $497 setup, then $125 per shown measure.
-            Ads run in your own ad account ($1,800/month minimum). Month to month. You keep the whole system.
+            Pay per appointment. If we don&rsquo;t get you at least 10 flooring jobs booked, you pay nothing.
           </motion.p>
 
           <motion.div initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.5, delay: 0.3 }}
@@ -230,20 +241,6 @@ export default function OptinPage() {
             </a>
           </motion.div>
 
-          <motion.ul initial={{ opacity: 0 }} animate={{ opacity: 1 }} transition={{ duration: 0.5, delay: 0.42 }}
-                     className="mt-9 grid gap-2.5 sm:grid-cols-3">
-            {[
-              "Johnny installs every account himself",
-              "5 founding spots, one shop per metro",
-              "No-shows are never billed",
-            ].map((t) => (
-              <li key={t} className="flex items-start gap-2.5 rounded-2xl border bg-white px-4 py-3 text-[14px] font-semibold leading-snug"
-                  style={{ borderColor: T.line, color: T.ink }}>
-                <Check className="mt-0.5 h-4 w-4 shrink-0" style={{ color: T.green }} aria-hidden="true" />
-                {t}
-              </li>
-            ))}
-          </motion.ul>
         </div>
       </section>
 

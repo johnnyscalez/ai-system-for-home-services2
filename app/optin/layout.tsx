@@ -5,7 +5,7 @@ import type { Metadata } from "next"
 export const metadata: Metadata = {
   title: "Is Your Metro Open? | FieldBuilt AI",
   description:
-    "For flooring showrooms and shop-at-home companies with their own install crews. 10 shown in-home measures in your first 30 days, or every measure is free.",
+    "For flooring showrooms and shop-at-home companies with their own install crews. Get 10 in-home flooring measures in your first 30 days, or you pay nothing.",
 }
 
 export default function OptinLayout({ children }: { children: React.ReactNode }) {
