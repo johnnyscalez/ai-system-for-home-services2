@@ -180,8 +180,8 @@ export default function OptinPage() {
           </motion.h1>
 
           <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.16 }}
-                    className="mx-auto mt-4 max-w-[620px] text-center font-heading text-[clamp(20px,3.4vw,33px)] font-extrabold leading-[1.12] tracking-[-0.025em] sm:mt-5"
-                    style={{ color: T.ink, textWrap: "balance" }}>
+                    className="mx-auto mt-5 max-w-[560px] text-center text-[clamp(15.5px,1.9vw,18px)] leading-relaxed sm:mt-6"
+                    style={{ color: T.body, textWrap: "balance" }}>
             Pay Per Appointment Model. If we don&rsquo;t get 10. you pay nothing.
           </motion.p>
 
