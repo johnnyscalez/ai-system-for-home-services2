@@ -179,16 +179,11 @@ export default function OptinPage() {
             <span style={{ color: T.orangeD }}>Or You Pay Nothing</span>
           </motion.h1>
 
-          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.16 }}
-                      className="mt-6 flex justify-center sm:mt-7">
-            <p className="max-w-[620px] rounded-2xl border px-5 py-4 text-center text-[clamp(16.5px,2.1vw,20px)] font-semibold leading-relaxed sm:px-7 sm:py-5"
-               style={{ background: T.soft, borderColor: "rgba(249,115,22,0.28)", color: T.ink,
-                        boxShadow: "0 16px 38px -24px rgba(28,25,23,0.4), inset 0 1px 0 rgba(255,255,255,0.7)",
-                        textWrap: "balance" }}>
-              Pay per appointment. If we don&rsquo;t get you at least 10 flooring jobs booked,{" "}
-              <span style={{ color: T.orangeD }}>you pay nothing</span>.
-            </p>
-          </motion.div>
+          <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.16 }}
+                    className="mx-auto mt-4 max-w-[620px] text-center font-heading text-[clamp(20px,3.4vw,33px)] font-extrabold leading-[1.12] tracking-[-0.025em] sm:mt-5"
+                    style={{ color: T.ink, textWrap: "balance" }}>
+            Pay Per Appointment Model. If we don&rsquo;t get 10. you pay nothing.
+          </motion.p>
 
           {/* ── 4. the qualifier, straight under the promise ── */}
           <motion.div id="quiz" data-track-view="quiz"
@@ -280,11 +275,10 @@ function QuizCard(p: {
     <div className="rounded-[26px] border bg-white p-5 sm:p-9"
          style={{ borderColor: T.line, boxShadow: "0 30px 70px -40px rgba(28,25,23,0.35)" }}>
 
-      <p className="mb-6 rounded-2xl px-4 py-4 text-center font-heading text-[16.5px] font-extrabold leading-snug tracking-[-0.01em] sm:px-6 sm:py-5 sm:text-[19.5px]"
-         style={{ background: T.ink, color: "#FFFFFF", textWrap: "balance",
-                  boxShadow: "0 18px 40px -22px rgba(28,25,23,0.65)" }}>
+      <p className="mb-6 border-b pb-6 text-center font-heading text-[17px] font-extrabold leading-snug tracking-[-0.015em] sm:text-[20px]"
+         style={{ color: T.ink, borderColor: T.line, textWrap: "balance" }}>
         Fill the quiz and get a personalized demo of the system sent to you,{" "}
-        <span style={{ color: T.orange }}>tailored to your company</span>.
+        <span style={{ color: T.orangeD }}>tailored to your company</span>.
       </p>
 
       <div className="flex items-center gap-4">
