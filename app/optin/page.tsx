@@ -331,9 +331,9 @@ function QuizCard(p: {
                   </label>
 
                   <button type="submit" disabled={p.sending}
-                          className="group mt-2 inline-flex w-full items-center justify-center gap-2 rounded-full px-7 py-4 font-heading text-[16px] font-bold text-white transition disabled:opacity-50"
+                          className="group mt-2 inline-flex w-full items-center justify-center gap-2 whitespace-nowrap rounded-full px-5 py-4 font-heading text-[15px] font-bold text-white transition disabled:opacity-50 sm:px-7 sm:text-[16px]"
                           style={{ background: T.orange, boxShadow: "0 14px 32px -12px rgba(249,115,22,0.6)" }}>
-                    {p.sending ? "Checking…" : "Check my metro"}
+                    {p.sending ? "Sending…" : "Send me the personalized demo"}
                     {!p.sending && <ArrowRight className="h-4 w-4 transition-transform group-hover:translate-x-0.5" aria-hidden="true" />}
                   </button>
                 </form>
