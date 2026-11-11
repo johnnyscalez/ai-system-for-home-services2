@@ -2,7 +2,7 @@
 
 // ─── OPT-IN PAGE — /optin ────────────────────────────────────────────────────
 // Destination for ad and content traffic. Structure and copy set by Jonathan
-// (2026-11-11): call-out bar → headline → the six-question qualifier itself →
+// (2026-11-11): call-out bar → headline → the two-question qualifier itself →
 // video → how it works → guarantee → comparison → who it is not for →
 // founder → Founding Five → FAQ → final CTA → footer. The qualifier sits in
 // the hero rather than behind a button, so the first screen is the form.
@@ -44,79 +44,41 @@ declare global {
 const VIDEO_LENGTH = "5-minute"
 const VIDEO_BADGE = "5 min"
 
-// ── the six questions ───────────────────────────────────────────────────────
+// ── the two questions ───────────────────────────────────────────────────────
 type Choice = { value: string; label: string; hint?: string }
 
 const BUSINESS_TYPES: Choice[] = [
   { value: "showroom",     label: "Flooring showroom" },
-  { value: "shop-at-home", label: "Shop-at-home flooring company" },
-  { value: "both",         label: "Showroom and shop-at-home" },
-  { value: "installer",    label: "I'm an installer or subcontractor" },
-  { value: "job-seeker",   label: "I'm looking for work" },
+  { value: "shop-at-home", label: "Shop at home" },
+  { value: "contractor",   label: "Contractor" },
 ]
 
-const ROLES: Choice[] = [
-  { value: "owner",   label: "Owner" },
-  { value: "partner", label: "Co-owner / partner" },
-  { value: "gm",      label: "General manager" },
-  { value: "other",   label: "Other" },
-]
-
-const REVENUE: Choice[] = [
-  { value: "under-500k", label: "Under $500K" },
-  { value: "500k-1m",    label: "$500K to $1M" },
-  { value: "1m-3m",      label: "$1M to $3M" },
-  { value: "3m-plus",    label: "$3M+" },
-]
-
-const CREWS: Choice[] = [
-  { value: "1",   label: "1" },
-  { value: "2-4", label: "2 to 4" },
-  { value: "5+",  label: "5+" },
-]
-
-const AD_BUDGET: Choice[] = [
-  { value: "yes", label: "Yes" },
-  { value: "no",  label: "Not right now" },
-]
-
-const CAPACITY: Choice[] = [
-  { value: "10-20", label: "10 to 20" },
-  { value: "20-40", label: "20 to 40" },
-  { value: "40+",   label: "40+" },
+const CREW_SIZE: Choice[] = [
+  { value: "0-2", label: "0 to 2" },
+  { value: "3-5", label: "3 to 5" },
+  { value: "6+",  label: "6+" },
 ]
 
 type Answers = {
   businessType: string
-  role: string
-  revenue: string
-  crews: string
-  adBudget: string
-  capacity: string
+  crewSize: string
 }
 
-const EMPTY: Answers = { businessType: "", role: "", revenue: "", crews: "", adBudget: "", capacity: "" }
+const EMPTY: Answers = { businessType: "", crewSize: "" }
 
 const QUESTIONS: { key: keyof Answers; title: string; note?: string; choices: Choice[] }[] = [
   { key: "businessType", title: "What type of flooring business do you run?", choices: BUSINESS_TYPES },
-  { key: "role",         title: "What's your role?", choices: ROLES },
-  { key: "revenue",      title: "What is your annual revenue?", choices: REVENUE },
-  { key: "crews",        title: "How many install crews do you run?",
-    note: "Crews of your own, not subs you call when something lands.", choices: CREWS },
-  { key: "adBudget",     title: "Can you put at least $1,800 a month into ads in your own ad account?",
-    note: "The spend goes straight to Meta from your account. We never touch it.", choices: AD_BUDGET },
-  { key: "capacity",     title: "How many extra measures a month can your team handle?", choices: CAPACITY },
+  { key: "crewSize",     title: "What's your install crew size?",
+    note: "Crews of your own, not subs you call when something lands.", choices: CREW_SIZE },
 ]
 
 const STEP_COUNT = QUESTIONS.length
 const CONTACT_STEP = STEP_COUNT
 
-// Sells direct to homeowners, decision maker, $500K+, and can fund the ads.
+// The quiz no longer screens anyone out, it tailors the demo. This stays as a
+// completeness guard so a half-filled state can never reach the calendar.
 function isQualified(a: Answers): boolean {
-  const sellsDirect = a.businessType === "showroom" || a.businessType === "shop-at-home" || a.businessType === "both"
-  const decides = a.role === "owner" || a.role === "partner" || a.role === "gm"
-  const bigEnough = a.revenue === "500k-1m" || a.revenue === "1m-3m" || a.revenue === "3m-plus"
-  return sellsDirect && decides && bigEnough && a.adBudget === "yes"
+  return a.businessType !== "" && a.crewSize !== ""
 }
 
 export default function OptinPage() {
@@ -124,7 +86,6 @@ export default function OptinPage() {
   const [a, setA] = useState<Answers>(EMPTY)
   const [fullName, setFullName] = useState("")
   const [business, setBusiness] = useState("")
-  const [cityState, setCityState] = useState("")
   const [phone, setPhone] = useState("")
   const [email, setEmail] = useState("")
   const [result, setResult] = useState<"none" | "qualified" | "noqual">("none")
@@ -153,29 +114,21 @@ export default function OptinPage() {
         first_name: name.split(/\s+/)[0] ?? name,
         phone,
         email,
-        revenue: a.revenue,
         qualified,
         vertical: "flooring",
         angle: [
           "optin-quiz",
           name,
           business.trim(),
-          cityState.trim(),
           `type: ${a.businessType}`,
-          `role: ${a.role}`,
-          `crews: ${a.crews}`,
-          `ad budget: ${a.adBudget}`,
-          `capacity: ${a.capacity}`,
+          `crew size: ${a.crewSize}`,
         ].join(" | "),
       }),
     }).catch(() => {})
 
     track("quiz_submit", {
       value: qualified ? "qualified" : "unqualified",
-      meta: {
-        business_type: a.businessType, role: a.role, revenue: a.revenue,
-        crews: a.crews, ad_budget: a.adBudget, capacity: a.capacity,
-      },
+      meta: { business_type: a.businessType, crew_size: a.crewSize },
     })
 
     if (qualified && typeof window !== "undefined" && typeof window.fbq === "function") {
@@ -222,13 +175,13 @@ export default function OptinPage() {
           <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.08 }}
                      className="mt-6 text-center font-heading text-[clamp(30px,5.6vw,56px)] sm:mt-7 font-extrabold leading-[1.04] tracking-[-0.03em]"
                      style={{ color: T.ink, textWrap: "balance" }}>
-            Get 10 In-Home Flooring Measures In Your First 30 Days.{" "}
-            <span style={{ color: T.orangeD }}>Or You Pay Nothing.</span>
+            Get +10 Qualified Shown Booked Flooring Measures In The Next 30 Days.{" "}
+            <span style={{ color: T.orangeD }}>Or You Pay Nothing</span>
           </motion.h1>
 
           <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.16 }}
-                    className="mx-auto mt-5 max-w-[600px] text-center text-[clamp(16px,1.9vw,18.5px)] leading-relaxed sm:mt-6"
-                    style={{ color: T.body }}>
+                    className="mx-auto mt-5 max-w-[620px] text-center text-[clamp(17px,2.1vw,20px)] font-medium leading-relaxed sm:mt-6"
+                    style={{ color: T.ink }}>
             Pay per appointment. If we don&rsquo;t get you at least 10 flooring jobs booked, you pay nothing.
           </motion.p>
 
@@ -236,18 +189,14 @@ export default function OptinPage() {
           <motion.div id="quiz" data-track-view="quiz"
                       initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.26 }}
                       className="mx-auto mt-7 max-w-[640px] scroll-mt-6 sm:mt-9">
-            <p className="mb-4 text-center text-[14.5px] font-semibold" style={{ color: T.orangeD }}>
-              60 seconds. 6 questions. Then pick a time.
-            </p>
-
             {result === "none" ? (
               <QuizCard
                 step={step} a={a}
-                fullName={fullName} business={business} cityState={cityState} phone={phone} email={email}
+                fullName={fullName} business={business} phone={phone} email={email}
                 sending={sending}
                 onPick={pick}
                 onBack={() => setStep((s) => Math.max(s - 1, 0))}
-                setFullName={setFullName} setBusiness={setBusiness} setCityState={setCityState}
+                setFullName={setFullName} setBusiness={setBusiness}
                 setPhone={setPhone} setEmail={setEmail}
                 onSubmit={submit}
               />
@@ -305,13 +254,12 @@ export default function OptinPage() {
 function QuizCard(p: {
   step: number
   a: Answers
-  fullName: string; business: string; cityState: string; phone: string; email: string
+  fullName: string; business: string; phone: string; email: string
   sending: boolean
   onPick: (k: keyof Answers, v: string) => void
   onBack: () => void
   setFullName: (v: string) => void
   setBusiness: (v: string) => void
-  setCityState: (v: string) => void
   setPhone: (v: string) => void
   setEmail: (v: string) => void
   onSubmit: (e: React.FormEvent<HTMLFormElement>) => void
@@ -327,6 +275,12 @@ function QuizCard(p: {
     <div className="rounded-[26px] border bg-white p-5 sm:p-9"
          style={{ borderColor: T.line, boxShadow: "0 30px 70px -40px rgba(28,25,23,0.35)" }}>
 
+      <p className="mb-5 text-center font-heading text-[15px] font-bold leading-snug sm:text-[16.5px]"
+         style={{ color: T.ink, textWrap: "balance" }}>
+        Fill the quiz and get a personalized demo of the system sent to you,{" "}
+        <span style={{ color: T.orangeD }}>tailored to your company</span>.
+      </p>
+
       <div className="flex items-center gap-4">
         <div className="h-[6px] flex-1 overflow-hidden rounded-full" style={{ background: T.sand }}>
           <motion.div className="h-full rounded-full" style={{ background: T.orange }}
@@ -337,7 +291,7 @@ function QuizCard(p: {
         </span>
       </div>
 
-      <div className="relative mt-7 min-h-[360px]">
+      <div className="relative mt-7 min-h-[300px]">
         <AnimatePresence mode="wait" initial={false}>
           <motion.div key={p.step}
                       initial={{ opacity: 0, x: 22 }} animate={{ opacity: 1, x: 0 }} exit={{ opacity: 0, x: -22 }}
@@ -358,9 +312,6 @@ function QuizCard(p: {
                          className={field} style={{ borderColor: T.line, color: T.ink }} />
                   <input value={p.business} onChange={(e) => p.setBusiness(e.target.value)}
                          placeholder="Business name" required autoComplete="organization"
-                         className={field} style={{ borderColor: T.line, color: T.ink }} />
-                  <input value={p.cityState} onChange={(e) => p.setCityState(e.target.value)}
-                         placeholder="City and state" required autoComplete="address-level2"
                          className={field} style={{ borderColor: T.line, color: T.ink }} />
                   <input value={p.phone} onChange={(e) => p.setPhone(e.target.value)} type="tel"
                          placeholder="Mobile phone" required autoComplete="tel"
@@ -830,7 +781,7 @@ function Faq() {
 
 // ── 14. FINAL CTA ───────────────────────────────────────────────────────────
 const NEXT = [
-  "Answer 6 questions.",
+  "Answer 2 questions.",
   "Pick a time.",
   "See your system with your company name on it.",
 ]
