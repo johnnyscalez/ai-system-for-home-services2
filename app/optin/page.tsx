@@ -175,15 +175,20 @@ export default function OptinPage() {
           <motion.h1 initial={{ opacity: 0, y: 16 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.08 }}
                      className="mt-6 text-center font-heading text-[clamp(30px,5.6vw,56px)] sm:mt-7 font-extrabold leading-[1.04] tracking-[-0.03em]"
                      style={{ color: T.ink, textWrap: "balance" }}>
-            Get +10 Qualified Shown Booked Flooring Measures In The Next 30 Days.{" "}
+            Get +10 Qualified Flooring Measures Booked In The Next 30 Days.{" "}
             <span style={{ color: T.orangeD }}>Or You Pay Nothing</span>
           </motion.h1>
 
-          <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.16 }}
-                    className="mx-auto mt-5 max-w-[620px] text-center text-[clamp(17px,2.1vw,20px)] font-medium leading-relaxed sm:mt-6"
-                    style={{ color: T.ink }}>
-            Pay per appointment. If we don&rsquo;t get you at least 10 flooring jobs booked, you pay nothing.
-          </motion.p>
+          <motion.div initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.6, delay: 0.16 }}
+                      className="mt-6 flex justify-center sm:mt-7">
+            <p className="max-w-[620px] rounded-2xl border px-5 py-4 text-center text-[clamp(16.5px,2.1vw,20px)] font-semibold leading-relaxed sm:px-7 sm:py-5"
+               style={{ background: T.soft, borderColor: "rgba(249,115,22,0.28)", color: T.ink,
+                        boxShadow: "0 16px 38px -24px rgba(28,25,23,0.4), inset 0 1px 0 rgba(255,255,255,0.7)",
+                        textWrap: "balance" }}>
+              Pay per appointment. If we don&rsquo;t get you at least 10 flooring jobs booked,{" "}
+              <span style={{ color: T.orangeD }}>you pay nothing</span>.
+            </p>
+          </motion.div>
 
           {/* ── 4. the qualifier, straight under the promise ── */}
           <motion.div id="quiz" data-track-view="quiz"
@@ -275,10 +280,11 @@ function QuizCard(p: {
     <div className="rounded-[26px] border bg-white p-5 sm:p-9"
          style={{ borderColor: T.line, boxShadow: "0 30px 70px -40px rgba(28,25,23,0.35)" }}>
 
-      <p className="mb-5 text-center font-heading text-[15px] font-bold leading-snug sm:text-[16.5px]"
-         style={{ color: T.ink, textWrap: "balance" }}>
+      <p className="mb-6 rounded-2xl px-4 py-4 text-center font-heading text-[16.5px] font-extrabold leading-snug tracking-[-0.01em] sm:px-6 sm:py-5 sm:text-[19.5px]"
+         style={{ background: T.ink, color: "#FFFFFF", textWrap: "balance",
+                  boxShadow: "0 18px 40px -22px rgba(28,25,23,0.65)" }}>
         Fill the quiz and get a personalized demo of the system sent to you,{" "}
-        <span style={{ color: T.orangeD }}>tailored to your company</span>.
+        <span style={{ color: T.orange }}>tailored to your company</span>.
       </p>
 
       <div className="flex items-center gap-4">
