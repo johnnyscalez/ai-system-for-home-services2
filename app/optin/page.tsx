@@ -304,7 +304,7 @@ function QuizCard(p: {
             )}
 
             {onContact && (
-              <Question title="Where should we send your answer?"
+              <Question title="Where should we send your personalized demo?"
                         note="We text you within a minute with whether your metro is open.">
                 <form onSubmit={p.onSubmit} className="grid gap-3">
                   <input value={p.fullName} onChange={(e) => p.setFullName(e.target.value)}
