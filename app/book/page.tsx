@@ -3,9 +3,10 @@
 // ─── BOOKING PAGE — /book ────────────────────────────────────────────────────
 // Paid-traffic landing page for flooring contractors. Same design system as the
 // homepage (components/site/*). Positioning rules: docs/flooring-pivot.md.
-//   - Headline wording on this page is set by Jonathan (last change 2026-10-25):
-//     "Get 20+ Booked Measures in 60 Days, and Own Your Client Flow System.
-//      Guaranteed" — "Own" is orange on purpose.
+//   - Headline wording on this page is set by Jonathan (last change 2026-11-15):
+//     "Get +10 Qualified Flooring Measures Booked In The Next 30 Days. Or You
+//     Pay Nothing", with the pay-per-appointment line under it, matching
+//     /optin. No other subheadline.
 //   - Never state guarantee failure terms. Never show price.
 //   - No flooring proof exists yet. Top Air numbers appear ONLY labelled as
 //     "a live home-services account", never implied to be flooring.
@@ -95,21 +96,14 @@ export default function BookPage() {
           <motion.h1 initial={{ opacity: 0, y: 18 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.1, duration: 0.65 }}
                      className="mt-6 font-heading text-[clamp(32px,5.4vw,62px)] font-extrabold leading-[1.05] tracking-[-0.03em]"
                      style={{ color: T.ink, textWrap: "balance" }}>
-            Get <span style={{ color: T.orangeD }}>20+ Booked Measures</span> in 60 Days, and <span style={{ color: T.orangeD }}>Own</span> Your Client Flow System.{" "}
-            <span className="relative inline-block" style={{ color: T.orangeD }}>
-              Guaranteed
-              <svg aria-hidden="true" viewBox="0 0 300 12" preserveAspectRatio="none" className="absolute -bottom-1 left-0 h-[0.16em] w-full">
-                <motion.path d="M2 9 C 80 2, 200 2, 298 7" fill="none" stroke={T.orange} strokeWidth="4" strokeLinecap="round"
-                             initial={{ pathLength: 0 }} animate={{ pathLength: 1 }} transition={{ duration: 0.9, delay: 0.7 }} />
-              </svg>
-            </span>
+            Get +10 Qualified Flooring Measures Booked In The Next 30 Days.{" "}
+            <span style={{ color: T.orangeD }}>Or You Pay Nothing</span>
           </motion.h1>
 
           <motion.p initial={{ opacity: 0, y: 14 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.25, duration: 0.6 }}
-                    className="mx-auto mt-7 max-w-[720px] text-[clamp(16.5px,1.7vw,19px)] leading-relaxed" style={{ color: T.body }}>
-            Not an agency. Not a lead vendor. We install a client acquisition system in your flooring business:
-            a back office that answers, qualifies, books, reschedules, chases and tracks every lead,
-            connected to a demand pipe of exclusive homeowners in your service area. Running every day, and yours.
+                    className="mx-auto mt-5 max-w-[560px] text-[clamp(15.5px,1.9vw,18px)] leading-relaxed sm:mt-6"
+                    style={{ color: T.body, textWrap: "balance" }}>
+            Pay Per Appointment Model. If we don&rsquo;t get 10. you pay nothing.
           </motion.p>
 
           <motion.a href="#book" data-track="book-hero" initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.5, duration: 0.5 }}
@@ -126,9 +120,12 @@ export default function BookPage() {
         <div className="relative mx-auto max-w-[820px]">
           <Reveal className="mb-8 text-center">
             <Eyebrow>Book your walkthrough</Eyebrow>
-            <H2 className="mt-4 !text-[clamp(26px,3.6vw,40px)]">Pick a time to see your <Accent>20+ measures plan.</Accent></H2>
+            <H2 className="mt-4 !text-[clamp(24px,3.2vw,36px)]">
+              Pick Your Time To See How Your Flooring Company Will Get{" "}
+              <Accent>10+ Booked Flooring Jobs In The Next 30 Days.</Accent>
+            </H2>
             <p className="mx-auto mt-3 max-w-[560px] text-[15.5px] leading-relaxed" style={{ color: T.body }}>
-              20 minutes on your service area and exactly how your 20+ shown measures get booked.
+              20 minutes on your service area and exactly how your measures get booked.
             </p>
           </Reveal>
 
