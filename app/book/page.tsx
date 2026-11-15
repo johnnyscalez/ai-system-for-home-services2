@@ -119,10 +119,9 @@ export default function BookPage() {
       <section id="book" data-track-view="calendar" className="relative scroll-mt-20 overflow-hidden border-y px-5 py-16 sm:px-8 sm:py-20" style={{ background: T.white, borderColor: T.line }}>
         <div className="relative mx-auto max-w-[820px]">
           <Reveal className="mb-8 text-center">
-            <Eyebrow>Book your walkthrough</Eyebrow>
-            <H2 className="mt-4 !text-[clamp(24px,3.2vw,36px)]">
-              Pick Your Time To See How Your Flooring Company Will Get{" "}
-              <Accent>10+ Booked Flooring Jobs In The Next 30 Days.</Accent>
+            <H2 className="!text-[clamp(24px,3.2vw,36px)]">
+              Book Your Personalized Demo Of The Flooring Client Flow System{" "}
+              <Accent>Tailored To Your Company &amp; See How It Works.</Accent>
             </H2>
             <p className="mx-auto mt-3 max-w-[560px] text-[15.5px] leading-relaxed" style={{ color: T.body }}>
               20 minutes on your service area and exactly how your measures get booked.
