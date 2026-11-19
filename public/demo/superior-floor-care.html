@@ -668,7 +668,7 @@ async function sendLead(payload) {
       cap.textContent = "Your room with " + s.label.toLowerCase() + ". Drag to compare. Like it? We'll measure for free.";
       status.textContent = "Here it is, " + name + ". Pick another floor to compare, or book your free estimate.";
       go.textContent = "Try another floor"; go.disabled = false;
-      $("#v-dl").href = out.imageUrl; $("#v-next").hidden = false;
+      $("#v-dl").href = out.imageUrl.startsWith("data:") ? URL.createObjectURL(await (await fetch(out.imageUrl)).blob()) : out.imageUrl; $("#v-next").hidden = false;
     } catch (code) {
       box.classList.remove("busy");
       status.textContent = code === "rate_limited"

@@ -3,20 +3,23 @@ import { clientIp } from "@/lib/tracking"
 
 // "See your new floor" visualizer on contractor landing pages: a homeowner
 // uploads a room photo, picks a floor, and gets the same photo back with only
-// the floor replaced (Flux Kontext Pro on Replicate, a few cents per render).
+// the floor replaced. Gemini's image model goes first (free tier, small daily
+// quota); Flux Kontext Pro on Replicate (a few cents per render) takes over
+// when Gemini is missing, over quota or fails.
 //
 // Public and unauthenticated by necessity (the page is a cold-traffic landing
 // page on another origin), so it is locked down instead: the prompt is built
 // here from a fixed style list (the client never sends prompt text), the image
 // must be a JPEG/PNG data URL under 4 MB, and each IP gets a handful of renders
-// an hour. Returns 503 until REPLICATE_API_TOKEN is set.
+// an hour. Returns 503 until GEMINI_API_KEY or REPLICATE_API_TOKEN is set.
 //
 // Written 2026-11-18.
 
 export const runtime = "nodejs"
 export const maxDuration = 120
 
-const MODEL = "black-forest-labs/flux-kontext-pro"
+const REPLICATE_MODEL = "black-forest-labs/flux-kontext-pro"
+const GEMINI_MODEL = process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image"
 
 const STYLES: Record<string, string> = {
   "white-oak": "a newly installed wide-plank natural white oak hardwood floor with a matte finish",
@@ -58,9 +61,78 @@ export function OPTIONS() {
   return new NextResponse(null, { status: 204, headers: CORS })
 }
 
+async function renderGemini(key: string, image: string, prompt: string): Promise<string | null> {
+  const [, mime, data] = image.match(/^data:(image\/(?:jpeg|png));base64,([^]*)$/) ?? []
+  const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/${GEMINI_MODEL}:generateContent`, {
+    method: "POST",
+    headers: { "x-goog-api-key": key, "Content-Type": "application/json" },
+    body: JSON.stringify({
+      contents: [{ parts: [{ text: prompt }, { inline_data: { mime_type: mime, data } }] }],
+      generationConfig: { responseModalities: ["IMAGE"] },
+    }),
+  })
+  const out = await res.json().catch(() => ({}))
+  if (!res.ok) {
+    console.error("[floor-render] gemini", res.status, out?.error?.message)
+    return null
+  }
+  const parts: { inlineData?: { mimeType: string; data: string } }[] = out?.candidates?.[0]?.content?.parts ?? []
+  const img = parts.find((p) => p.inlineData?.data)?.inlineData
+  if (!img) {
+    console.error("[floor-render] gemini returned no image", out?.candidates?.[0]?.finishReason)
+    return null
+  }
+  return `data:${img.mimeType};base64,${img.data}`
+}
+
+async function renderReplicate(token: string, image: string, prompt: string): Promise<string | null> {
+  const create = () =>
+    fetch(`https://api.replicate.com/v1/models/${REPLICATE_MODEL}/predictions`, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Prefer: "wait=60" },
+      body: JSON.stringify({
+        input: {
+          prompt,
+          input_image: image,
+          aspect_ratio: "match_input_image",
+          output_format: "jpg",
+          safety_tolerance: 2,
+        },
+      }),
+    })
+  let res = await create()
+  // Replicate throttles bursts (429 with a retry_after in seconds); one wait-and-retry covers it.
+  if (res.status === 429) {
+    const wait = Math.min(Number((await res.json().catch(() => ({})))?.retry_after) || 5, 15)
+    await new Promise((r) => setTimeout(r, wait * 1000))
+    res = await create()
+  }
+  let pred = await res.json()
+  if (!res.ok) {
+    console.error("[floor-render] replicate create failed", res.status, pred?.detail)
+    return null
+  }
+
+  // Prefer: wait usually returns the finished prediction; poll if it didn't.
+  const deadline = Date.now() + 90_000
+  while (pred.status !== "succeeded" && pred.status !== "failed" && pred.status !== "canceled" && Date.now() < deadline) {
+    await new Promise((r) => setTimeout(r, 1500))
+    const poll = await fetch(pred.urls.get, { headers: { Authorization: `Bearer ${token}` } })
+    pred = await poll.json()
+  }
+
+  const out = Array.isArray(pred.output) ? pred.output[0] : pred.output
+  if (pred.status !== "succeeded" || typeof out !== "string") {
+    console.error("[floor-render] replicate prediction", pred.status, pred.error)
+    return null
+  }
+  return out
+}
+
 export async function POST(req: NextRequest) {
-  const token = process.env.REPLICATE_API_TOKEN
-  if (!token) return reply({ error: "not_configured" }, 503)
+  const geminiKey = process.env.GEMINI_API_KEY
+  const replicateToken = process.env.REPLICATE_API_TOKEN
+  if (!geminiKey && !replicateToken) return reply({ error: "not_configured" }, 503)
 
   let body: { image?: unknown; style?: unknown }
   try {
@@ -84,47 +156,10 @@ export async function POST(req: NextRequest) {
     "The new floor follows the room's perspective and runs under the furniture. Sharp, photorealistic interior photo."
 
   try {
-    const create = () =>
-      fetch(`https://api.replicate.com/v1/models/${MODEL}/predictions`, {
-        method: "POST",
-        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Prefer: "wait=60" },
-        body: JSON.stringify({
-          input: {
-            prompt,
-            input_image: image,
-            aspect_ratio: "match_input_image",
-            output_format: "jpg",
-            safety_tolerance: 2,
-          },
-        }),
-      })
-    let res = await create()
-    // Replicate throttles bursts (429 with a retry_after in seconds); one wait-and-retry covers it.
-    if (res.status === 429) {
-      const wait = Math.min(Number((await res.json().catch(() => ({})))?.retry_after) || 5, 15)
-      await new Promise((r) => setTimeout(r, wait * 1000))
-      res = await create()
-    }
-    let pred = await res.json()
-    if (!res.ok) {
-      console.error("[floor-render] create failed", res.status, pred?.detail)
-      return reply({ error: "render_failed" }, 502)
-    }
-
-    // Prefer: wait usually returns the finished prediction; poll if it didn't.
-    const deadline = Date.now() + 90_000
-    while (pred.status !== "succeeded" && pred.status !== "failed" && pred.status !== "canceled" && Date.now() < deadline) {
-      await new Promise((r) => setTimeout(r, 1500))
-      const poll = await fetch(pred.urls.get, { headers: { Authorization: `Bearer ${token}` } })
-      pred = await poll.json()
-    }
-
-    const out = Array.isArray(pred.output) ? pred.output[0] : pred.output
-    if (pred.status !== "succeeded" || typeof out !== "string") {
-      console.error("[floor-render] prediction", pred.status, pred.error)
-      return reply({ error: "render_failed" }, 502)
-    }
-    return reply({ imageUrl: out })
+    const url =
+      (geminiKey ? await renderGemini(geminiKey, image, prompt) : null) ??
+      (replicateToken ? await renderReplicate(replicateToken, image, prompt) : null)
+    return url ? reply({ imageUrl: url }) : reply({ error: "render_failed" }, 502)
   } catch (err) {
     console.error("[floor-render] error", err)
     return reply({ error: "render_failed" }, 502)
