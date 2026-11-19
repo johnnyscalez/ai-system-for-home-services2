@@ -118,7 +118,8 @@ a { color: inherit; }
 .field input:focus { border-color: var(--go); outline: none; box-shadow: 0 0 0 3px var(--go-soft); }
 .field input[aria-invalid="true"] { border-color: #B3261E; }
 .err { color: #B3261E; font-size: 14px; font-weight: 600; min-height: 0; }
-.row2 { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.row2 { display: grid; grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); gap: 10px; }
+.field input { width: 100%; min-width: 0; }
 .q-actions { display: flex; gap: 10px; margin-top: 6px; }
 .q-actions .btn.ghost { flex: 0 0 auto; }
 .q-actions .btn:not(.ghost) { flex: 1; }
@@ -140,7 +141,8 @@ section.band { padding-block: 72px; }
 
 /* visualizer */
 .viz { display: grid; grid-template-columns: minmax(0, 1.25fr) minmax(0, 1fr); gap: 32px; align-items: start; }
-@media (max-width: 900px) { .viz { grid-template-columns: 1fr; } }
+@media (max-width: 900px) { .viz { grid-template-columns: minmax(0, 1fr); } }
+.viz > * { min-width: 0; }
 .compare { position: relative; aspect-ratio: 1 / 1; max-width: 100%; border-radius: 14px; overflow: hidden; background: var(--line); user-select: none; touch-action: pan-y; }
 .compare img { position: absolute; inset: 0; width: 100%; height: 100%; object-fit: cover; }
 .compare .after { clip-path: inset(0 0 0 var(--pos, 50%)); }
@@ -168,7 +170,9 @@ section.band { padding-block: 72px; }
 @keyframes fill { to { width: 92%; } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: spin 2.4s linear infinite !important; } }
 
-.panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; display: grid; gap: 20px; }
+.panel { background: var(--card); border: 1px solid var(--line); border-radius: 14px; padding: 24px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 20px; }
+.panel fieldset { min-width: 0; min-inline-size: 0; }
+@media (max-width: 420px) { .panel { padding: 18px; } .swatches { gap: 6px; } }
 .panel h3 { font-size: 22px; font-weight: 800; }
 .stepline { display: flex; gap: 10px; align-items: center; font-weight: 700; }
 .stepline i { font-style: normal; font: 600 12px var(--mono); width: 24px; height: 24px; border-radius: 50%; background: var(--ink); color: #fff; display: grid; place-items: center; flex: none; }
@@ -178,7 +182,8 @@ section.band { padding-block: 72px; }
 .drop strong { font-size: 16px; }
 .drop span { font-size: 13.5px; color: var(--muted); }
 .drop.has { padding: 0; border-style: solid; overflow: hidden; min-height: 0; }
-.drop.has img { width: 100%; max-height: 220px; object-fit: cover; }
+.drop.has { grid-template-columns: minmax(0, 1fr); }
+.drop.has img { display: block; width: 100%; max-width: 100%; max-height: 220px; object-fit: cover; }
 .swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; border: 0; margin: 0; padding: 0; }
 .sw { position: relative; }
 .sw input { position: absolute; opacity: 0; inset: 0; }
@@ -684,11 +689,17 @@ async function sendLead(payload) {
   }));
 })();
 
-/* ---------- mobile dock hides while the quote form is on screen ---------- */
+/* ---------- mobile dock hides while a form is on screen ---------- */
 (() => {
   const dock = $("#dock"), q = $("#quote");
   if (!("IntersectionObserver" in window)) return;
-  new IntersectionObserver(([e]) => dock.classList.toggle("hide", e.isIntersecting), { threshold: 0.25 }).observe(q);
+  // hide while either form is on screen, so the bar never covers the fields
+  const seen = new Set();
+  const io = new IntersectionObserver(es => {
+    es.forEach(e => e.isIntersecting ? seen.add(e.target) : seen.delete(e.target));
+    dock.classList.toggle("hide", seen.size > 0);
+  }, { threshold: 0.15 });
+  io.observe(q); io.observe($("#viz-form"));
 })();
 </script>
 
