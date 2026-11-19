@@ -84,19 +84,27 @@ export async function POST(req: NextRequest) {
     "The new floor follows the room's perspective and runs under the furniture. Sharp, photorealistic interior photo."
 
   try {
-    const res = await fetch(`https://api.replicate.com/v1/models/${MODEL}/predictions`, {
-      method: "POST",
-      headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Prefer: "wait=60" },
-      body: JSON.stringify({
-        input: {
-          prompt,
-          input_image: image,
-          aspect_ratio: "match_input_image",
-          output_format: "jpg",
-          safety_tolerance: 2,
-        },
-      }),
-    })
+    const create = () =>
+      fetch(`https://api.replicate.com/v1/models/${MODEL}/predictions`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json", Prefer: "wait=60" },
+        body: JSON.stringify({
+          input: {
+            prompt,
+            input_image: image,
+            aspect_ratio: "match_input_image",
+            output_format: "jpg",
+            safety_tolerance: 2,
+          },
+        }),
+      })
+    let res = await create()
+    // Replicate throttles bursts (429 with a retry_after in seconds); one wait-and-retry covers it.
+    if (res.status === 429) {
+      const wait = Math.min(Number((await res.json().catch(() => ({})))?.retry_after) || 5, 15)
+      await new Promise((r) => setTimeout(r, wait * 1000))
+      res = await create()
+    }
     let pred = await res.json()
     if (!res.ok) {
       console.error("[floor-render] create failed", res.status, pred?.detail)
