@@ -3,15 +3,16 @@ import { clientIp } from "@/lib/tracking"
 
 // "See your new floor" visualizer on contractor landing pages: a homeowner
 // uploads a room photo, picks a floor, and gets the same photo back with only
-// the floor replaced. Gemini's image model goes first (free tier, small daily
-// quota); Flux Kontext Pro on Replicate (a few cents per render) takes over
-// when Gemini is missing, over quota or fails.
+// the floor replaced. Providers are tried in order, each only when its key is
+// set: Gemini, then Flux Kontext Pro on Replicate (best at leaving the rest of
+// the room untouched), then OpenAI's image edit as the last fallback.
 //
 // Public and unauthenticated by necessity (the page is a cold-traffic landing
 // page on another origin), so it is locked down instead: the prompt is built
 // here from a fixed style list (the client never sends prompt text), the image
 // must be a JPEG/PNG data URL under 4 MB, and each IP gets a handful of renders
-// an hour. Returns 503 until GEMINI_API_KEY or REPLICATE_API_TOKEN is set.
+// an hour. Returns 503 until one of GEMINI_API_KEY, REPLICATE_API_TOKEN or
+// OPENAI_API_KEY is set.
 //
 // Written 2026-11-18.
 
@@ -20,6 +21,7 @@ export const maxDuration = 120
 
 const REPLICATE_MODEL = "black-forest-labs/flux-kontext-pro"
 const GEMINI_MODEL = process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image"
+const OPENAI_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1"
 
 const STYLES: Record<string, string> = {
   "white-oak": "a newly installed wide-plank natural white oak hardwood floor with a matte finish",
@@ -129,10 +131,34 @@ async function renderReplicate(token: string, image: string, prompt: string): Pr
   return out
 }
 
+async function renderOpenAI(key: string, image: string, prompt: string): Promise<string | null> {
+  const [, mime, data] = image.match(/^data:(image\/(?:jpeg|png));base64,([^]*)$/) ?? []
+  const form = new FormData()
+  form.append("model", OPENAI_MODEL)
+  form.append("image", new Blob([Buffer.from(data, "base64")], { type: mime }), mime === "image/png" ? "room.png" : "room.jpg")
+  form.append("prompt", prompt)
+  form.append("input_fidelity", "high") // keep walls, furniture and framing as close to the photo as it can
+  form.append("quality", "medium")
+  form.append("size", "auto")
+  const res = await fetch("https://api.openai.com/v1/images/edits", {
+    method: "POST",
+    headers: { Authorization: `Bearer ${key}` },
+    body: form,
+  })
+  const out = await res.json().catch(() => ({}))
+  const b64 = out?.data?.[0]?.b64_json
+  if (!res.ok || typeof b64 !== "string") {
+    console.error("[floor-render] openai", res.status, out?.error?.message)
+    return null
+  }
+  return `data:image/png;base64,${b64}`
+}
+
 export async function POST(req: NextRequest) {
   const geminiKey = process.env.GEMINI_API_KEY
   const replicateToken = process.env.REPLICATE_API_TOKEN
-  if (!geminiKey && !replicateToken) return reply({ error: "not_configured" }, 503)
+  const openaiKey = process.env.OPENAI_API_KEY
+  if (!geminiKey && !replicateToken && !openaiKey) return reply({ error: "not_configured" }, 503)
 
   let body: { image?: unknown; style?: unknown }
   try {
@@ -158,7 +184,8 @@ export async function POST(req: NextRequest) {
   try {
     const url =
       (geminiKey ? await renderGemini(geminiKey, image, prompt) : null) ??
-      (replicateToken ? await renderReplicate(replicateToken, image, prompt) : null)
+      (replicateToken ? await renderReplicate(replicateToken, image, prompt) : null) ??
+      (openaiKey ? await renderOpenAI(openaiKey, image, prompt) : null)
     return url ? reply({ imageUrl: url }) : reply({ error: "render_failed" }, 502)
   } catch (err) {
     console.error("[floor-render] error", err)
