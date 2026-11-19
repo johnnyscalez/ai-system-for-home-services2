@@ -4,8 +4,8 @@ import { clientIp } from "@/lib/tracking"
 // "See your new floor" visualizer on contractor landing pages: a homeowner
 // uploads a room photo, picks a floor, and gets the same photo back with only
 // the floor replaced. Providers are tried in order, each only when its key is
-// set: Gemini, then Flux Kontext Pro on Replicate (best at leaving the rest of
-// the room untouched), then OpenAI's image edit as the last fallback.
+// set: Gemini, then OpenAI's image edit (gpt-image-1.5 at high input fidelity,
+// about 12 s), then Flux Kontext Pro on Replicate.
 //
 // Public and unauthenticated by necessity (the page is a cold-traffic landing
 // page on another origin), so it is locked down instead: the prompt is built
@@ -21,7 +21,7 @@ export const maxDuration = 120
 
 const REPLICATE_MODEL = "black-forest-labs/flux-kontext-pro"
 const GEMINI_MODEL = process.env.GEMINI_IMAGE_MODEL || "gemini-2.5-flash-image"
-const OPENAI_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1"
+const OPENAI_MODEL = process.env.OPENAI_IMAGE_MODEL || "gpt-image-1.5"
 
 const STYLES: Record<string, string> = {
   "white-oak": "a newly installed wide-plank natural white oak hardwood floor with a matte finish",
@@ -184,8 +184,8 @@ export async function POST(req: NextRequest) {
   try {
     const url =
       (geminiKey ? await renderGemini(geminiKey, image, prompt) : null) ??
-      (replicateToken ? await renderReplicate(replicateToken, image, prompt) : null) ??
-      (openaiKey ? await renderOpenAI(openaiKey, image, prompt) : null)
+      (openaiKey ? await renderOpenAI(openaiKey, image, prompt) : null) ??
+      (replicateToken ? await renderReplicate(replicateToken, image, prompt) : null)
     return url ? reply({ imageUrl: url }) : reply({ error: "render_failed" }, 502)
   } catch (err) {
     console.error("[floor-render] error", err)

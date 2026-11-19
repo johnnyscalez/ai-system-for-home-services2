@@ -163,7 +163,7 @@ section.band { padding-block: 72px; }
 .spin { width: 44px; height: 44px; border-radius: 50%; border: 4px solid rgba(255,255,255,.25); border-top-color: #fff; animation: spin .9s linear infinite; }
 .bar { width: min(260px, 70%); height: 6px; border-radius: 3px; background: rgba(255,255,255,.2); overflow: hidden; }
 .bar i { display: block; height: 100%; width: 0; background: #fff; border-radius: 3px; }
-.compare.busy .bar i { animation: fill 10s cubic-bezier(.1,.6,.3,1) forwards; }
+.compare.busy .bar i { animation: fill 15s cubic-bezier(.1,.6,.3,1) forwards; }
 @keyframes spin { to { transform: rotate(360deg); } }
 @keyframes fill { to { width: 92%; } }
 @media (prefers-reduced-motion: reduce) { .spin { animation: spin 2.4s linear infinite !important; } }
@@ -368,7 +368,7 @@ footer b { color: #fff; }
           <div class="loading" id="cmp-loading" role="status" aria-live="polite">
             <div class="spin" aria-hidden="true"></div>
             <strong id="load-title">Laying your new floor</strong>
-            <span id="load-note">This takes about 10 seconds</span>
+            <span id="load-note">This takes about 15 seconds</span>
             <div class="bar" aria-hidden="true"><i></i></div>
           </div>
         </div>
@@ -403,7 +403,7 @@ footer b { color: #fff; }
         <p class="err" id="v-err" role="alert"></p>
         <button type="submit" class="btn block" id="v-go">Design my new floor</button>
         <p class="viz-status" id="v-status" aria-live="polite"></p>
-        <p class="fine" style="margin:0">Free, takes about 10 seconds. Your photo is only used for your design and estimate.</p>
+        <p class="fine" style="margin:0">Free, takes about 15 seconds. Your photo is only used for your design and estimate.</p>
         <div class="after-cta" id="v-next" hidden><a class="btn block" href="#quote" id="v-book">Book my free estimate</a><a class="dl" id="v-dl" href="#" target="_blank" rel="noopener">Open full size</a></div>
       </form>
     </div>
