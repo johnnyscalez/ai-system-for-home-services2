@@ -18,7 +18,7 @@
 
 import { motion } from "framer-motion"
 import { ArrowDown, Check, Star } from "lucide-react"
-import { GhlBookingWidget } from "@/components/landing/shared"
+import { BookingWidget } from "@/components/site/BookingWidget"
 import { Parquet, SystemMap, T } from "@/components/site/live"
 import { Accent, Eyebrow, H2, IcpHeadline, Logo, Reveal, VslPlayer } from "@/components/site/ui"
 
@@ -132,7 +132,7 @@ export default function BookPage() {
             <div className="rounded-[26px] border p-2 sm:p-3"
                  style={{ background: T.cream, borderColor: T.line, boxShadow: "0 30px 80px -40px rgba(249,115,22,0.45)" }}>
               <div className="overflow-hidden rounded-[20px] bg-white">
-                <GhlBookingWidget />
+                <BookingWidget />
               </div>
             </div>
           </Reveal>
