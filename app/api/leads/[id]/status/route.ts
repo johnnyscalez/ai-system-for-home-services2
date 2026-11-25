@@ -61,9 +61,8 @@ async function setStatus(req: NextRequest, { params }: { params: Promise<{ id: s
     meta.measure_done_at = now
     patch.metadata = meta
   } else if (status === "needs_attention") {
-    // Flagged by a person: no owner text about their own click, and the
-    // assistant never restarts follow-ups on it by itself (lib/attention.ts).
-    meta.attention = { since: now, alerted_at: now, resumable: false, reason: "flagged by hand" }
+    // Flagged by a person: no owner text about their own click.
+    meta.attention = { since: now, alerted_at: now, reason: "flagged by hand" }
     patch.metadata = meta
   } else if (status === "closed_won") {
     const amount = Number(body.dealValue ?? lead.deal_value)

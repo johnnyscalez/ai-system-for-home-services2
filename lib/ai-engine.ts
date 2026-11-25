@@ -1320,12 +1320,11 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       action = slotsResult.found === false && slotsResult.reason === "job_not_offered"
         ? { type: "update_status", status: "closed_lost" }
         : { type: "update_status", status: "needs_attention" }
-      // A home outside the service area stays with a person: restarting the
-      // follow-ups later (lib/attention.ts) would only hit the same wall.
+      // The owner's needs-attention text says why: the home is outside the area.
       if (slotsResult.found === false && slotsResult.reason === "no_zip_match") {
         try {
           const { markAttention } = await import("@/lib/attention")
-          await markAttention(supabase, leadId, { reason: "out_of_area", resumable: false })
+          await markAttention(supabase, leadId, { reason: "out_of_area" })
         } catch (err) {
           console.error("[ai-engine] could not mark the out-of-area hand-off:", err)
         }

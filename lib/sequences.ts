@@ -111,13 +111,6 @@ export async function reseedRepliedNotBooked(
     !skip.includes(postStatus)
 
   if (!shouldSchedule) {
-    // A hand-off to a person pauses the follow-ups instead of ending them: the
-    // steps that were still to come are written down first, so lib/attention.ts
-    // can continue them if nobody books or takes the lead over.
-    if (postStatus === "needs_attention" && !postTurn?.ai_paused) {
-      await pauseForAttention(supabase, leadId).catch((err) =>
-        console.error(`[sequences] could not record the paused follow-ups for lead ${leadId}:`, err))
-    }
     await supabase.from("sequences")
       .update({ status: "cancelled" })
       .eq("lead_id", leadId).eq("status", "pending")
@@ -362,37 +355,6 @@ export async function startQuoteChase(
       status: "pending",
     }))
   )
-}
-
-/** The follow-up steps a hand-off interrupted, kept on the lead so they can continue. */
-export type PausedStep = { sequence_type: string; step: number; scheduled_at: string }
-
-/**
- * Record the start of a "needs attention" episode and the follow-ups it
- * interrupts, BEFORE they are cancelled. A later turn inside the same episode
- * finds nothing pending and leaves the recorded steps alone.
- */
-export async function pauseForAttention(supabase: SequencesDb, leadId: string): Promise<void> {
-  const { data: pending } = await supabase
-    .from("sequences").select("sequence_type, step, scheduled_at")
-    .eq("lead_id", leadId).eq("status", "pending")
-  const { data: lead } = await supabase.from("leads").select("metadata").eq("id", leadId).maybeSingle()
-  const meta = { ...((lead?.metadata as Record<string, unknown> | null) ?? {}) }
-  const attention = { ...((meta.attention as Record<string, unknown> | undefined) ?? {}) }
-  if (!attention.since) attention.since = new Date().toISOString()
-  // sms_retry re-sends one failed text; replaying it days later would be stale.
-  const steps = ((pending ?? []) as PausedStep[]).filter((s) => s.sequence_type !== "sms_retry")
-  if (steps.length > 0) {
-    const latest = new Map<string, PausedStep>()
-    for (const s of steps) {
-      const key = `${s.sequence_type}:${s.step}`
-      const seen = latest.get(key)
-      if (!seen || s.scheduled_at > seen.scheduled_at) latest.set(key, s)
-    }
-    attention.paused_steps = [...latest.values()]
-  }
-  meta.attention = attention
-  await supabase.from("leads").update({ metadata: meta }).eq("id", leadId)
 }
 
 /** Stop every automated touch for a lead (signed, lost, or handed to a person). */
