@@ -1,9 +1,11 @@
 "use client"
 
-import { useState, useEffect, useCallback, useMemo } from "react"
+import { useState, useEffect, useCallback, type CSSProperties } from "react"
 import { Button } from "@/components/ui/button"
-import { ChevronLeft, ChevronRight, CalendarDays, ExternalLink, MapPin, Phone, Wrench, Clock } from "lucide-react"
+import { ChevronLeft, ChevronRight, CalendarDays, ExternalLink, MapPin, Phone, Clock } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { holidayOn } from "@/lib/holidays"
+import { useVisiblePoll } from "@/components/leads/live"
 
 const START_HOUR = 7
 const END_HOUR = 20
@@ -12,29 +14,18 @@ const HOUR_PX = 96        // taller rows — more breathing room
 const APT_MIN_H = 80      // our appointments: minimum block height
 const GCAL_MIN_H = 38     // Google events: minimum block height (respect short durations)
 
-const TECH_PALETTE = [
-  { bg: "#1D4ED8", light: "rgba(29,78,216,0.09)",   border: "#3B82F6" },
-  { bg: "#7C3AED", light: "rgba(124,58,237,0.09)",  border: "#8B5CF6" },
-  { bg: "#059669", light: "rgba(5,150,105,0.09)",   border: "#10B981" },
-  { bg: "#B45309", light: "rgba(180,83,9,0.09)",    border: "#F59E0B" },
-  { bg: "#DC2626", light: "rgba(220,38,38,0.09)",   border: "#EF4444" },
-  { bg: "#0891B2", light: "rgba(8,145,178,0.09)",   border: "#06B6D4" },
-  { bg: "#EA580C", light: "rgba(234,88,12,0.09)",   border: "#F97316" },
-  { bg: "#9333EA", light: "rgba(147,51,234,0.09)",  border: "#A855F7" },
-]
-
 type TechColor = { bg: string; light: string; border: string }
-const UNASSIGNED_COLOR: TechColor = { bg: "#64748B", light: "rgba(100,116,139,0.09)", border: "#94A3B8" }
+// One neutral color for every measure block.
+const APT_COLOR: TechColor = { bg: "#57534E", light: "rgba(87,83,78,0.09)", border: "#A8A29E" }
 
 type Appointment = {
   id: string
+  lead_id?: string | null
   scheduled_at: string
   status: string
   address?: string | null
   notes?: string | null
   google_event_id?: string | null
-  technician_id?: string | null
-  technician_name?: string | null
   leads?: { first_name: string | null; last_name: string | null; phone: string; status: string } | null
 }
 
@@ -92,6 +83,11 @@ function layoutColumns(events: LayoutEvent[]): LayoutResult {
 
 // ─── Helpers ──────────────────────────────────────────────────────────────────
 
+/** Closed-day hatching for US holidays (lib/holidays.ts): nothing is booked there. */
+const HOLIDAY_FILL: CSSProperties = {
+  backgroundImage: "repeating-linear-gradient(135deg, rgba(120,113,108,0.07) 0 6px, transparent 6px 12px)",
+}
+
 // All calendar math runs on the COMPANY's clock, never the viewer's browser —
 // a 3:00 PM Chicago job must sit on the 3 PM row (and the right day) whether
 // the office views it from Illinois or the owner from a UTC+3 browser.
@@ -146,49 +142,29 @@ export function WeekCalendar({ timezone }: { timezone?: string }) {
   const weekStart = weekDates[0]
   const weekEnd = weekDates[6]
 
-  const load = useCallback(async () => {
-    setLoading(true)
+  // `silent` = background refresh: no spinner, and a failed fetch keeps what is on screen.
+  const load = useCallback(async (silent = false) => {
+    if (!silent) setLoading(true)
     const timeMin = new Date(weekStart.getTime() - 24 * 3600e3).toISOString()
     const timeMax = new Date(weekEnd.getTime() + 24 * 3600e3).toISOString()
     try {
       const res = await fetch(`/api/calendar/events?timeMin=${timeMin}&timeMax=${timeMax}`)
+      if (!res.ok) return
       const data = await res.json()
-      setAppointments(data.appointments ?? [])
+      // Cancelled measures are not on the calendar (the API filters them too).
+      setAppointments(((data.appointments ?? []) as Appointment[]).filter(a => a.status !== "cancelled"))
       setGoogleEvents(data.googleEvents ?? [])
+    } catch {
+      /* keep the last good view */
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }, [weekStart.toISOString()]) // eslint-disable-line react-hooks/exhaustive-deps
 
   useEffect(() => { load() }, [load])
 
-  const techColorMap = useMemo(() => {
-    const map = new Map<string, TechColor>()
-    let idx = 0
-    for (const apt of appointments) {
-      if (apt.technician_id && !map.has(apt.technician_id)) {
-        map.set(apt.technician_id, TECH_PALETTE[idx % TECH_PALETTE.length])
-        idx++
-      }
-    }
-    return map
-  }, [appointments])
-
-  function getColor(techId?: string | null): TechColor {
-    if (!techId) return UNASSIGNED_COLOR
-    return techColorMap.get(techId) ?? UNASSIGNED_COLOR
-  }
-
-  const techLegend = useMemo(() => {
-    const seen = new Set<string>()
-    return appointments.reduce<{ id: string; name: string }[]>((acc, apt) => {
-      if (apt.technician_id && !seen.has(apt.technician_id)) {
-        seen.add(apt.technician_id)
-        acc.push({ id: apt.technician_id, name: apt.technician_name ?? "Unknown" })
-      }
-      return acc
-    }, [])
-  }, [appointments])
+  // Measures the assistant books or moves show within 20 seconds, no reload.
+  useVisiblePoll(() => { void load(true) }, 20_000)
 
   const todayKey = dayKeyTz(new Date(), tz)
 
@@ -223,21 +199,6 @@ export function WeekCalendar({ timezone }: { timezone?: string }) {
         </div>
 
         <div className="flex items-center flex-wrap gap-3">
-          {techLegend.map(t => {
-            const c = getColor(t.id)
-            return (
-              <div key={t.id} className="flex items-center gap-1.5 text-xs text-muted-foreground">
-                <div className="w-2.5 h-2.5 rounded-sm" style={{ background: c.bg }} />
-                {t.name}
-              </div>
-            )
-          })}
-          {appointments.some(a => !a.technician_id) && (
-            <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
-              <div className="w-2.5 h-2.5 rounded-sm bg-slate-400" />
-              Unassigned
-            </div>
-          )}
           {googleEvents.length > 0 && (
             <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
               <div className="w-2.5 h-2.5 rounded-sm" style={{ background: "#F97316" }} />
@@ -253,14 +214,20 @@ export function WeekCalendar({ timezone }: { timezone?: string }) {
         {weekDates.map((day, i) => {
           const isToday = dayKeyTz(day, tz) === todayKey
           const dayApts = aptsForDay(day)
+          const holiday = holidayOn(dayKeyTz(day, tz))
           return (
             <div key={i} className={cn("px-2 py-2.5 text-center border-r border-border last:border-r-0", isToday ? "bg-primary/5" : "bg-muted/10")}>
               <p className={cn("text-xs font-medium", isToday ? "text-primary" : "text-muted-foreground")}>{DAY_NAMES[i]}</p>
               <p className={cn("text-xl font-bold mt-0.5 leading-none", isToday ? "text-primary" : "text-foreground")}>{day.getDate()}</p>
+              {holiday && (
+                <p className="mt-1 text-[10px] font-semibold leading-tight text-[#EA580C]" title={`${holiday.name}: closed, no measures are booked`}>
+                  {holiday.name} · Closed
+                </p>
+              )}
               {dayApts.length > 0 && (
                 <div className="flex justify-center gap-0.5 mt-1.5">
                   {dayApts.slice(0, 4).map(a => (
-                    <div key={a.id} className="w-1.5 h-1.5 rounded-full" style={{ background: getColor(a.technician_id).bg }} />
+                    <div key={a.id} className="w-1.5 h-1.5 rounded-full" style={{ background: APT_COLOR.bg }} />
                   ))}
                 </div>
               )}
@@ -312,6 +279,7 @@ export function WeekCalendar({ timezone }: { timezone?: string }) {
               <div
                 key={dayIdx}
                 className={cn("border-r border-border last:border-r-0 relative", isToday && "bg-primary/[0.018]")}
+                style={holidayOn(dayKeyTz(day, tz)) ? HOLIDAY_FILL : undefined}
               >
                 {/* Hour lines */}
                 {Array.from({ length: HOURS }, (_, i) => (
@@ -376,11 +344,11 @@ export function WeekCalendar({ timezone }: { timezone?: string }) {
                   )
                 })}
 
-                {/* Our appointments */}
+                {/* Our measures */}
                 {dayApts.map((apt) => {
                   const top = timeToY(apt.scheduled_at, tz)
                   const height = Math.max(APT_MIN_H, durationPx(apt.scheduled_at, ""))
-                  const c = getColor(apt.technician_id)
+                  const c = APT_COLOR
                   const layout = allLayouts[apt.id] ?? { col: 0, numCols: 1 }
                   const leftPct = (layout.col / layout.numCols) * 100
                   const widthPct = (1 / layout.numCols) * 100
@@ -417,11 +385,6 @@ export function WeekCalendar({ timezone }: { timezone?: string }) {
                         {apt.notes && height > 100 && (
                           <p className="text-[9px] text-slate-400 truncate">{apt.notes}</p>
                         )}
-                        {apt.technician_name && (
-                          <p className="text-[9px] font-semibold mt-auto flex items-center gap-0.5" style={{ color: c.bg }}>
-                            <Wrench className="w-2 h-2 shrink-0" />{apt.technician_name}
-                          </p>
-                        )}
                       </div>
                     </button>
                   )
@@ -432,7 +395,7 @@ export function WeekCalendar({ timezone }: { timezone?: string }) {
         </div>
       </div>
 
-      {/* ── Appointment detail modal ── */}
+      {/* ── Measure detail modal ── */}
       {selectedEvent && (
         <div
           className="fixed inset-0 z-50 flex items-end sm:items-center justify-center bg-black/60 backdrop-blur-sm"
@@ -442,7 +405,7 @@ export function WeekCalendar({ timezone }: { timezone?: string }) {
             className="bg-card border border-border rounded-t-2xl sm:rounded-2xl w-full max-w-sm mx-4 overflow-hidden shadow-2xl"
             onClick={(e) => e.stopPropagation()}
           >
-            <div className="h-1.5" style={{ background: getColor(selectedEvent.technician_id).bg }} />
+            <div className="h-1.5" style={{ background: APT_COLOR.bg }} />
             <div className="p-6 space-y-4">
               <div>
                 <h3 className="font-semibold text-lg">
@@ -454,11 +417,6 @@ export function WeekCalendar({ timezone }: { timezone?: string }) {
                   {new Date(selectedEvent.scheduled_at).toLocaleTimeString("en-US", { timeZone: tz, hour: "numeric", minute: "2-digit" })}
                 </p>
               </div>
-              {selectedEvent.technician_name && (
-                <div className="flex items-center gap-2 text-sm text-muted-foreground">
-                  <Wrench className="w-3.5 h-3.5" /> {selectedEvent.technician_name}
-                </div>
-              )}
               {selectedEvent.leads?.phone && (
                 <div className="flex items-center gap-2 text-sm text-muted-foreground">
                   <Phone className="w-3.5 h-3.5" /> {selectedEvent.leads.phone}
@@ -474,9 +432,9 @@ export function WeekCalendar({ timezone }: { timezone?: string }) {
               )}
               <div className="flex gap-2 pt-1">
                 <a
-                  href={`/leads/${selectedEvent.id}`}
+                  href={`/leads/${selectedEvent.lead_id ?? selectedEvent.id}`}
                   className="flex-1 flex items-center justify-center gap-1.5 h-9 rounded-lg text-white text-sm font-medium hover:opacity-90 transition-opacity"
-                  style={{ background: getColor(selectedEvent.technician_id).bg }}
+                  style={{ background: APT_COLOR.bg }}
                 >
                   View lead <ExternalLink className="w-3.5 h-3.5" />
                 </a>

@@ -115,7 +115,7 @@ export async function POST(req: NextRequest) {
 
     if (phone?.trim()) {
       const smsBody =
-        `Hi ${name.trim().split(" ")[0]}! 👷 You've been added to the ${companyName} field team on FieldBuilt AI.\n\n` +
+        `Hi ${name.trim().split(" ")[0]}! 👷 You've been added to the ${companyName} install crew on FieldBuilt AI.\n\n` +
         `Login at: ${loginUrl}\n` +
         `${loginMethod}: ${loginIdentifier}\n` +
         `Password: ${password!.trim()}`
@@ -169,13 +169,13 @@ function buildInviteEmail(opts: {
   <div style="max-width:520px;margin:40px auto;background:#fff;border-radius:16px;border:1px solid #E7E5E4;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.06);">
     <div style="background:linear-gradient(135deg,#F97316,#ea6d04);padding:32px 36px;">
       <p style="margin:0;font-size:28px;font-weight:800;color:#fff;letter-spacing:-0.5px;">FieldBuilt AI</p>
-      <p style="margin:6px 0 0;font-size:14px;color:rgba(255,255,255,0.85);">Field technician portal</p>
+      <p style="margin:6px 0 0;font-size:14px;color:rgba(255,255,255,0.85);">Install crew portal</p>
     </div>
     <div style="padding:36px;">
       <p style="margin:0 0 8px;font-size:22px;font-weight:700;color:#1C1917;">Hi ${opts.name}! 👷</p>
       <p style="margin:0 0 28px;font-size:15px;color:#78716C;line-height:1.6;">
-        You've been added to the <strong style="color:#1C1917;">${opts.companyName}</strong> field team on FieldBuilt AI.
-        Use the credentials below to access your appointments.
+        You've been added to the <strong style="color:#1C1917;">${opts.companyName}</strong> install crew on FieldBuilt AI.
+        Use the login below to see your jobs.
       </p>
 
       <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F4F2;border-radius:12px;padding:20px;margin-bottom:28px;">
@@ -205,7 +205,7 @@ function buildInviteEmail(opts: {
       </table>
 
       <a href="${opts.loginUrl}" style="display:block;text-align:center;background:#F97316;color:#fff;font-weight:700;font-size:15px;padding:14px 24px;border-radius:10px;text-decoration:none;">
-        Log in to see your appointments →
+        Log in to see your jobs →
       </a>
 
       <p style="margin:24px 0 0;font-size:12px;color:#A8A29E;text-align:center;">

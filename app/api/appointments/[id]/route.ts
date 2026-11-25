@@ -46,9 +46,33 @@ export async function PATCH(
     return NextResponse.json({ error: "Invalid confirmation_status" }, { status: 400 })
   }
 
+  const db = createServiceRoleClient()
+
+  // The row as it stands: completion and un-completion both depend on it.
+  const { data: current } = await db
+    .from("appointments")
+    .select("id, status, confirmation_status")
+    .eq("id", id)
+    .eq("company_id", profile.company_id)
+    .maybeSingle()
+  if (!current) return NextResponse.json({ error: "Measure not found" }, { status: 404 })
+
+  // "Mark as completed" arrives as confirmation_status only. A completed measure
+  // must also stop being a scheduled one (reminders, the calendar and the
+  // "Completed" filter all read status), and un-completing it puts it back.
+  const completing = status === "completed" || confirmation_status === "completed"
+  const uncompleting =
+    confirmation_status !== undefined && confirmation_status !== "completed" &&
+    status === undefined && current.status === "completed"
+
   const update: Record<string, unknown> = { updated_at: new Date().toISOString() }
   if (status !== undefined)              update.status = status
-  if (confirmation_status !== undefined) update.confirmation_status = confirmation_status
+  if (completing) {
+    update.status = "completed"
+    update.confirmation_status = "completed"
+  }
+  if (uncompleting)                      update.status = "scheduled"
+  if (confirmation_status !== undefined && !completing) update.confirmation_status = confirmation_status
   if (address !== undefined)             update.address = address
   if (notes !== undefined)               update.notes = notes
   if (technician_id !== undefined)       update.technician_id = technician_id
@@ -70,7 +94,6 @@ export async function PATCH(
     if (confirmation_status === undefined) update.confirmation_status = "pending_confirmation"
   }
 
-  const db = createServiceRoleClient()
   const { data, error } = await db
     .from("appointments")
     .update(update)
@@ -81,15 +104,41 @@ export async function PATCH(
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
-  // When an appointment is cancelled, revert the lead's status from appointment_booked
-  // so it re-appears in the pipeline at the right stage. Keep the appointment record
-  // in the DB so the AI agent has full conversation history context.
+  const now = new Date().toISOString()
+
+  // A cancelled measure puts the lead back into the conversation stage, so it
+  // shows on the board again and the assistant can rebook it. The appointment
+  // row stays for history.
   if (status === "cancelled" && data?.lead_id) {
     await db
       .from("leads")
-      .update({ status: "qualified", updated_at: new Date().toISOString() })
+      .update({ status: "active_conversation", updated_at: now })
       .eq("id", data.lead_id)
-      .eq("status", "appointment_booked") // only revert if still in appointment_booked
+      .eq("status", "appointment_booked") // only if nothing else moved the lead since
+  }
+
+  // A cancelled or no-show measure that is put back on the calendar is a booked
+  // measure again, unless the lead has already moved past it.
+  if (status === "scheduled" && current.status !== "scheduled" && data?.lead_id) {
+    await db
+      .from("leads")
+      .update({ status: "appointment_booked", updated_at: now })
+      .eq("id", data.lead_id)
+      .not("status", "in", '("measure_done","quote_sent","closed","closed_won")')
+  }
+
+  // A completed measure means the quote is owed: move the lead to the quote
+  // stage, unless a quote already went out or the deal is signed.
+  if (completing && data?.lead_id) {
+    const { data: lead } = await db
+      .from("leads").select("status, metadata").eq("id", data.lead_id).maybeSingle()
+    if (lead && !["measure_done", "quote_sent", "closed", "closed_won"].includes(lead.status as string)) {
+      const meta = { ...((lead.metadata as Record<string, unknown> | null) ?? {}), measure_done_at: now }
+      await db
+        .from("leads")
+        .update({ status: "measure_done", metadata: meta, updated_at: now })
+        .eq("id", data.lead_id)
+    }
   }
 
   return NextResponse.json({ appointment: data })

@@ -20,22 +20,27 @@ interface Integration {
   created_at: string
 }
 
-interface WhatsAppConnection {
-  status: string
-  status_detail: string | null
-  phone_number: string
-  display_name: string
-  sender_type?: string | null
+/** What the Facebook card shows about the live connection. Names and counts only. */
+export interface FacebookSummary {
+  adAccountName: string | null
+  /** "Active", "Disabled", ... or null when no ad account is selected */
+  adAccountStatus: string | null
+  /** Empty = every lead form on the Page */
+  forms: Array<{ id: string; name: string }>
+  /** Facebook leads in the CRM (lead forms and Messenger) */
+  leadCount: number
+  lastLeadAt: string | null
+  /** Leads waiting on a reconnect because Facebook would not release their details */
+  pendingLeads: number
 }
 
 interface Props {
   integrations: Integration[]
+  facebook: FacebookSummary | null
   webhookSecret: string
   appUrl: string
   toast: string | null
   toastType: "success" | "error" | null
-  whatsapp: WhatsAppConnection | null
-  companyName: string
   hcpConnected: boolean
   integrationMode: string
 }
@@ -146,32 +151,36 @@ function DisconnectButton({ label = "Cancel", requireConfirm = false }: { label?
   )
 }
 
-function FacebookCard({ integration, errorCode }: { integration: Integration | undefined; errorCode: string | null }) {
+function FacebookCard({
+  integration, summary, errorCode,
+}: {
+  integration: Integration | undefined
+  summary: FacebookSummary | null
+  errorCode: string | null
+}) {
   const connected = !!integration?.is_active && !!integration?.setup_complete
-  const needsSetup = !!integration && !integration.setup_complete
+  const needsSetup = !!integration && !connected
   const noPages = errorCode === "no_pages"
+  const forms = summary?.forms ?? []
+  const wizardUrl = "/connect/facebook?return_to=integrations"
 
   return (
     <motion.div
       initial={{ opacity: 0, y: 24 }}
       animate={{ opacity: 1, y: 0 }}
-      transition={{ delay: 0.1 }}
-      whileHover={{ y: -3, transition: { type: "spring", stiffness: 300 } }}
+      transition={{ delay: 0.05 }}
       className="bg-white rounded-2xl border border-[#E7E5E4] overflow-hidden"
       style={{ boxShadow: "0 4px 24px rgba(249,115,22,0.06), 0 1px 3px rgba(0,0,0,0.04)" }}
     >
       {/* Header */}
-      <div className="p-6 pb-4 flex items-start justify-between">
-        <div className="flex items-center gap-4">
-          <div
-            className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0"
-            style={{ background: "linear-gradient(135deg, #1877F2, #0C5AC4)" }}
-          >
-            <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white">
+      <div className="p-6 pb-4 flex items-start justify-between gap-3">
+        <div className="flex items-center gap-4 min-w-0">
+          <div className="w-12 h-12 rounded-xl flex items-center justify-center shrink-0 bg-[#1A1614]">
+            <svg viewBox="0 0 24 24" className="w-6 h-6 fill-white" aria-hidden="true">
               <path d="M24 12.073c0-6.627-5.373-12-12-12s-12 5.373-12 12c0 5.99 4.388 10.954 10.125 11.854v-8.385H7.078v-3.47h3.047V9.43c0-3.007 1.792-4.669 4.533-4.669 1.312 0 2.686.235 2.686.235v2.953H15.83c-1.491 0-1.956.925-1.956 1.874v2.25h3.328l-.532 3.47h-2.796v8.385C19.612 23.027 24 18.062 24 12.073z" />
             </svg>
           </div>
-          <div>
+          <div className="min-w-0">
             <h3
               className="font-bold text-[#1C1917] text-lg"
               style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}
@@ -180,10 +189,10 @@ function FacebookCard({ integration, errorCode }: { integration: Integration | u
             </h3>
             <p className="text-sm text-[#78716C] mt-0.5">
               {connected
-                ? `Connected to: ${integration?.fb_page_name}`
+                ? "Leads, Messenger and ad results from your Facebook Page and ad account"
                 : needsSetup
-                ? "Account connected — choose your page and lead form to activate"
-                : "Connect your Facebook Business page to receive leads automatically"}
+                ? "Signed in. Choose your Page, ad account and lead forms to turn it on"
+                : "Sign in with Facebook, then pick your Page, ad account and lead forms"}
             </p>
           </div>
         </div>
@@ -202,53 +211,83 @@ function FacebookCard({ integration, errorCode }: { integration: Integration | u
         <div className="mx-6 mb-4 bg-amber-50 rounded-xl p-4 border border-amber-100">
           <p className="text-sm font-semibold text-amber-800 mb-1">One more step</p>
           <p className="text-sm text-amber-700">
-            Your Facebook account is connected. Now choose which page and lead form to track so we can start texting your leads.
+            Facebook is signed in, but no leads are coming through yet. Choose the Page, ad account and lead forms to turn it on.
           </p>
         </div>
       )}
 
-      {/* Stats row (when connected) */}
+      {/* What is connected */}
       {connected && (
-        <div className="mx-6 mb-4 grid grid-cols-2 gap-3">
-          <div className="bg-[#FAFAF8] rounded-xl p-3 border border-[#E7E5E4]">
-            <p className="text-2xl font-bold text-[#1C1917]"
-              style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
-              {integration?.lead_count ?? 0}
-            </p>
-            <p className="text-xs text-[#78716C] mt-0.5">Leads received</p>
+        <div className="mx-6 mb-4 rounded-xl border border-[#E7E5E4] bg-[#FAFAF8] divide-y divide-[#E7E5E4] text-sm">
+          <div className="flex items-start justify-between gap-4 px-4 py-3">
+            <span className="text-[#78716C] shrink-0">Page</span>
+            <span className="font-semibold text-[#1C1917] text-right break-words min-w-0">{integration?.fb_page_name ?? "Unknown Page"}</span>
           </div>
-          <div className="bg-[#FAFAF8] rounded-xl p-3 border border-[#E7E5E4]">
-            <p className="text-sm font-semibold text-[#1C1917] mt-1">
-              {integration?.last_lead_at
-                ? new Date(integration.last_lead_at).toLocaleDateString("en-US", { month: "short", day: "numeric" })
+          <div className="flex items-start justify-between gap-4 px-4 py-3">
+            <span className="text-[#78716C] shrink-0">Ad account</span>
+            {summary?.adAccountName ? (
+              <span className="text-right min-w-0">
+                <span className="font-semibold text-[#1C1917] break-words">{summary.adAccountName}</span>
+                {summary.adAccountStatus && summary.adAccountStatus !== "Active" && (
+                  <span className="block text-xs text-amber-700">{summary.adAccountStatus}</span>
+                )}
+              </span>
+            ) : (
+              <a href={wizardUrl} className="font-medium text-[#EA580C] hover:underline text-right">
+                Not selected. Add it to see ad spend
+              </a>
+            )}
+          </div>
+          <div className="flex items-start justify-between gap-4 px-4 py-3">
+            <span className="text-[#78716C] shrink-0">Lead forms</span>
+            <span className="font-semibold text-[#1C1917] text-right break-words min-w-0">
+              {forms.length === 0 ? "Every form on this Page" : forms.map((f) => f.name).join(", ")}
+            </span>
+          </div>
+          <div className="flex items-start justify-between gap-4 px-4 py-3">
+            <span className="text-[#78716C] shrink-0">Leads received</span>
+            <span className="font-semibold text-[#1C1917] text-right" style={{ fontFamily: "var(--font-mono), 'JetBrains Mono', monospace" }}>
+              {(summary?.leadCount ?? 0).toLocaleString()}
+            </span>
+          </div>
+          <div className="flex items-start justify-between gap-4 px-4 py-3">
+            <span className="text-[#78716C] shrink-0">Last lead</span>
+            <span className="font-semibold text-[#1C1917] text-right">
+              {summary?.lastLeadAt
+                ? new Date(summary.lastLeadAt).toLocaleString("en-US", { month: "short", day: "numeric", hour: "numeric", minute: "2-digit" })
                 : "No leads yet"}
-            </p>
-            <p className="text-xs text-[#78716C] mt-0.5">Last lead</p>
+            </span>
           </div>
         </div>
       )}
 
-      {/* Selected forms (when connected) */}
-      {connected && integration?.fb_selected_form_ids && integration.fb_selected_form_ids.length > 0 && (
-        <div className="mx-6 mb-4 bg-[#FAFAF8] rounded-xl p-3 border border-[#E7E5E4]">
-          <p className="text-xs text-[#78716C]">
-            Tracking {integration.fb_selected_form_ids.length} lead form{integration.fb_selected_form_ids.length !== 1 ? "s" : ""}
+      {/* Leads Facebook would not release */}
+      {connected && (summary?.pendingLeads ?? 0) > 0 && (
+        <div className="mx-6 mb-4 bg-red-50 rounded-xl p-4 border border-red-100">
+          <p className="text-sm font-semibold text-red-700 mb-1">
+            {summary!.pendingLeads} lead{summary!.pendingLeads === 1 ? "" : "s"} waiting on Facebook
           </p>
+          <p className="text-sm text-red-600">
+            Facebook would not release the details for {summary!.pendingLeads === 1 ? "this lead" : "these leads"}, which usually means the Facebook login expired. Sign in again and they fill in automatically.
+          </p>
+          <a href="/api/auth/facebook?return_to=integrations" className="mt-2 inline-flex items-center gap-1.5 text-sm font-semibold text-red-700 underline underline-offset-2">
+            <RefreshCw className="w-3.5 h-3.5" /> Sign in to Facebook again
+          </a>
         </div>
       )}
 
       {/* No pages found — persistent troubleshooter */}
       {!connected && !needsSetup && noPages && (
         <div className="mx-6 mb-4 bg-red-50 rounded-xl p-4 border border-red-100">
-          <p className="text-sm font-semibold text-red-700 mb-1">No Facebook Pages found on your account</p>
+          <p className="text-sm font-semibold text-red-700 mb-1">No Facebook Pages came back from that login</p>
           <p className="text-sm text-red-600 mb-3">
-            Facebook only shows pages where you&apos;re a <strong>direct admin</strong> of the page (not just a Business Manager user). Try one of these:
+            Facebook only shares the Pages you tick in its window. Try this:
           </p>
           <ol className="space-y-2">
             {[
-              "Go to your Facebook Page → Settings → Page roles → confirm you're listed as Admin",
-              "If managed via Business Manager: go to Business Settings → Pages → add yourself as a direct admin",
-              "Then click Connect Facebook below to try again",
+              "Click Connect Facebook below and sign in with the profile that manages your business Page",
+              "In the Facebook window choose Edit settings, then tick your Page and the business that owns it",
+              "Keep every permission switched on and finish",
             ].map((step, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-red-700">
                 <span className="w-4 h-4 rounded-full bg-red-100 text-red-700 text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
@@ -267,9 +306,9 @@ function FacebookCard({ integration, errorCode }: { integration: Integration | u
           <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wider mb-2">How it works</p>
           <ol className="space-y-1.5">
             {[
-              "Click Connect below and authorize with your Facebook account",
-              "Choose which page and lead form to track",
-              "Every new Facebook Lead Ad lead gets an AI SMS within 3.7 seconds",
+              "Click Connect Facebook and sign in",
+              "Pick the Page, the ad account and the lead forms",
+              "Every new lead lands in your CRM with all its answers and gets a text within seconds",
             ].map((step, i) => (
               <li key={i} className="flex items-start gap-2 text-sm text-[#78716C]">
                 <span className="w-4 h-4 rounded-full bg-[#F97316]/10 text-[#F97316] text-[10px] font-bold flex items-center justify-center shrink-0 mt-0.5">
@@ -283,15 +322,15 @@ function FacebookCard({ integration, errorCode }: { integration: Integration | u
       )}
 
       {/* Action */}
-      <div className="px-6 pb-6 flex items-center gap-3">
+      <div className="px-6 pb-6 flex flex-wrap items-center gap-3">
         {connected ? (
           <>
             <a
-              href="/integrations/facebook-setup"
-              className="flex items-center gap-2 text-sm font-medium text-[#78716C] px-4 py-2 rounded-xl border border-[#E7E5E4] hover:bg-[#F5F4F2] transition-colors"
+              href={wizardUrl}
+              className="flex items-center gap-2 text-sm font-medium text-[#57534E] px-4 py-2 rounded-xl border border-[#E7E5E4] hover:bg-[#F5F4F2] transition-colors"
             >
               <RefreshCw className="w-3.5 h-3.5" />
-              Change page / forms
+              Change Page, ad account or forms
             </a>
             <DisconnectButton label="Disconnect" requireConfirm />
             <p className="text-xs text-[#78716C] ml-auto">
@@ -301,26 +340,18 @@ function FacebookCard({ integration, errorCode }: { integration: Integration | u
         ) : needsSetup ? (
           <>
             <a
-              href="/integrations/facebook-setup"
-              className="flex items-center gap-2 text-sm font-semibold text-white px-6 py-2.5 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
-              style={{
-                background: "linear-gradient(135deg, #D97706, #B45309)",
-                boxShadow: "0 4px 14px rgba(217,119,6,0.3)",
-              }}
+              href={wizardUrl}
+              className="flex items-center gap-2 text-sm font-semibold text-white px-6 py-2.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] transition-colors"
             >
-              Complete setup
+              Finish setup
               <ChevronRight className="w-4 h-4" />
             </a>
             <DisconnectButton />
           </>
         ) : (
           <a
-            href="/api/auth/facebook"
-            className="flex items-center gap-2 text-sm font-semibold text-white px-6 py-2.5 rounded-xl transition-all hover:scale-[1.02] active:scale-[0.98]"
-            style={{
-              background: "linear-gradient(135deg, #1877F2, #0C5AC4)",
-              boxShadow: "0 4px 14px rgba(24,119,242,0.3)",
-            }}
+            href="/api/auth/facebook?return_to=integrations"
+            className="flex items-center gap-2 text-sm font-semibold text-white px-6 py-2.5 rounded-xl bg-[#F97316] hover:bg-[#EA580C] transition-colors"
           >
             Connect Facebook
             <ChevronRight className="w-4 h-4" />
@@ -488,7 +519,7 @@ function HousecallProCard({ connected, integrationMode }: { connected: boolean; 
               )}
             </h3>
             <p className="text-sm text-[#78716C] mt-0.5">
-              The AI books into your real calendar and reads your techs from Housecall Pro.
+              The AI books into your real calendar and reads your schedule from Housecall Pro.
             </p>
           </div>
         </div>
@@ -498,7 +529,7 @@ function HousecallProCard({ connected, integrationMode }: { connected: boolean; 
         {connected && isV2 ? (
           <p className="text-sm text-[#57534E] bg-[#FAFAF8] border border-[#E7E5E4] rounded-xl px-4 py-3">
             Connected. Every booking the AI makes is pushed into Housecall Pro with the
-            conversation summary in the job notes, and technicians and schedules sync automatically.
+            conversation summary in the job notes, and schedules sync automatically.
           </p>
         ) : (
           <>
@@ -509,7 +540,7 @@ function HousecallProCard({ connected, integrationMode }: { connected: boolean; 
             )}
             <p className="text-xs text-[#78716C] mb-3">
               Connecting switches this account to <strong>AI employee mode</strong>: bookings go
-              straight into Housecall Pro, tech schedules come from HCP, and the dashboard becomes
+              straight into Housecall Pro, schedules come from HCP, and the dashboard becomes
               the AI performance view. Find the key in Housecall Pro → Settings → API (MAX or XL plans only).
             </p>
             <div className="flex flex-col sm:flex-row gap-2">
@@ -564,7 +595,7 @@ function WebsiteFormCard({ webhookUrl, secret }: { webhookUrl: string; secret: s
     "last_name": "Doe",
     "phone": "5551234567",
     "email": "john@example.com",
-    "service_type": "roofing"
+    "service_type": "flooring"
   }'`
 
   const tabs = [
@@ -687,365 +718,18 @@ const TOAST_MESSAGES: Record<string, string> = {
   session_lost: "Your login session couldn't be verified when Facebook redirected back — you're still logged in, just click Connect again",
   state_mismatch: "This connection was started from a different login — click Connect again from this account",
   token_failed: "Could not get Facebook access token — check your app credentials",
-  no_pages: "No Facebook Pages found — make sure you manage at least one Business Page",
+  no_pages: "No Facebook Pages found. Make sure this Facebook login manages your business Page, then connect again",
   save_failed: "Failed to save integration — please try again",
+  no_company: "Finish setting up your account first, then connect Facebook",
 }
 
-
-// ─── WhatsApp card ────────────────────────────────────────────────────────────
-
-function WhatsAppIcon({ className }: { className?: string }) {
-  return (
-    <svg viewBox="0 0 24 24" fill="currentColor" className={className} aria-hidden="true">
-      <path d="M17.472 14.382c-.297-.149-1.758-.867-2.03-.967-.273-.099-.471-.148-.67.15-.197.297-.767.966-.94 1.164-.173.199-.347.223-.644.075-.297-.15-1.255-.463-2.39-1.475-.883-.788-1.48-1.761-1.653-2.059-.173-.297-.018-.458.13-.606.134-.133.297-.347.446-.52.149-.174.198-.298.297-.497.1-.198.05-.371-.025-.52-.074-.149-.668-1.612-.916-2.207-.242-.579-.487-.5-.669-.51-.173-.008-.371-.01-.57-.01-.198 0-.52.074-.792.372-.272.297-1.04 1.016-1.04 2.479 0 1.462 1.065 2.875 1.213 3.074.149.198 2.096 3.2 5.077 4.487.709.306 1.262.489 1.694.625.712.227 1.36.195 1.871.118.571-.085 1.758-.719 2.006-1.413.248-.694.248-1.289.173-1.413-.074-.124-.272-.198-.57-.347m-5.421 7.403h-.004a9.87 9.87 0 01-5.031-1.378l-.361-.214-3.741.982.998-3.648-.235-.374a9.86 9.86 0 01-1.51-5.26c.001-5.45 4.436-9.884 9.888-9.884 2.64 0 5.122 1.03 6.988 2.898a9.825 9.825 0 012.893 6.994c-.003 5.45-4.437 9.884-9.885 9.884m8.413-18.297A11.815 11.815 0 0012.05 0C5.495 0 .16 5.335.157 11.892c0 2.096.547 4.142 1.588 5.945L.057 24l6.305-1.654a11.882 11.882 0 005.683 1.448h.005c6.554 0 11.89-5.335 11.893-11.893a11.821 11.821 0 00-3.48-8.413z"/>
-    </svg>
-  )
-}
-
-function WhatsAppCard({ connection, companyName }: { connection: WhatsAppConnection | null; companyName: string }) {
-  const router = useRouter()
-  // The display name customers see on WhatsApp — their company name, not ours
-  const [displayName, setDisplayName] = useState(connection?.display_name ?? companyName ?? "")
-  const [mode, setMode] = useState<"fieldbuilt" | "byon" | "own_waba">(
-    (connection?.sender_type as "fieldbuilt" | "byon" | "own_waba") ?? "fieldbuilt"
-  )
-  const [ownNumber, setOwnNumber] = useState("")
-  const [otpCode, setOtpCode] = useState("")
-  const [busy, setBusy] = useState(false)
-  const [error, setError] = useState<string | null>(
-    connection?.status === "action_required" ? connection.status_detail : null
-  )
-
-  const status = connection?.status ?? "none"
-  const connected = status === "online"
-  const pending = status === "pending"
-  const verifyOtp = status === "verify_otp"
-
-  async function connect() {
-    setBusy(true); setError(null)
-    const res = await fetch("/api/integrations/whatsapp/connect", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({
-        display_name: displayName,
-        sender_type: mode,
-        own_number: mode === "byon" ? ownNumber : undefined,
-      }),
-    })
-    const data = await res.json().catch(() => ({}))
-    setBusy(false)
-    if (!res.ok) { setError(data.error ?? "Connection failed"); return }
-    router.refresh()
-  }
-
-  // Level 3: Meta embedded signup — connect their existing WABA (coexistence).
-  // Requires NEXT_PUBLIC_FACEBOOK_APP_ID + NEXT_PUBLIC_META_ES_CONFIG_ID.
-  const fbAppId = process.env.NEXT_PUBLIC_FACEBOOK_APP_ID
-  const esConfigId = process.env.NEXT_PUBLIC_META_ES_CONFIG_ID
-
-  async function connectOwnWaba() {
-    if (!fbAppId || !esConfigId) {
-      setError("Embedded signup isn't configured yet (missing Meta app config). Use one of the other two options, or contact support.")
-      return
-    }
-    setBusy(true); setError(null)
-
-    // Load the Facebook JS SDK once
-    if (!(window as unknown as { FB?: unknown }).FB) {
-      await new Promise<void>((resolve, reject) => {
-        const js = document.createElement("script")
-        js.src = "https://connect.facebook.net/en_US/sdk.js"
-        js.onload = () => resolve()
-        js.onerror = () => reject(new Error("Failed to load Facebook SDK"))
-        document.body.appendChild(js)
-      }).catch(() => null)
-      const FB = (window as unknown as { FB?: { init: (o: object) => void } }).FB
-      FB?.init({ appId: fbAppId, autoLogAppEvents: true, xfbml: false, version: "v21.0" })
-    }
-
-    // Session info (waba_id + phone_number_id) arrives via postMessage
-    const sessionInfo: { waba_id?: string; phone_number_id?: string } = {}
-    const listener = (event: MessageEvent) => {
-      if (!String(event.origin).endsWith("facebook.com")) return
-      try {
-        const data = typeof event.data === "string" ? JSON.parse(event.data) : event.data
-        if (data?.type === "WA_EMBEDDED_SIGNUP" && data?.data) {
-          sessionInfo.waba_id = data.data.waba_id ?? sessionInfo.waba_id
-          sessionInfo.phone_number_id = data.data.phone_number_id ?? sessionInfo.phone_number_id
-        }
-      } catch { /* not our message */ }
-    }
-    window.addEventListener("message", listener)
-
-    const FB = (window as unknown as {
-      FB?: { login: (cb: (r: { authResponse?: { code?: string } }) => void, opts: object) => void }
-    }).FB
-
-    FB?.login(
-      async (response) => {
-        window.removeEventListener("message", listener)
-        const code = response?.authResponse?.code
-        if (!code || !sessionInfo.waba_id || !sessionInfo.phone_number_id) {
-          setBusy(false)
-          setError("The Meta popup didn't complete — make sure you finish all steps including selecting your WhatsApp number.")
-          return
-        }
-        const res = await fetch("/api/integrations/whatsapp/cloud-connect", {
-          method: "POST",
-          headers: { "Content-Type": "application/json" },
-          body: JSON.stringify({ code, waba_id: sessionInfo.waba_id, phone_number_id: sessionInfo.phone_number_id }),
-        })
-        const data = await res.json().catch(() => ({}))
-        setBusy(false)
-        if (!res.ok) { setError(data.error ?? "Connection failed"); return }
-        router.refresh()
-      },
-      {
-        config_id: esConfigId,
-        response_type: "code",
-        override_default_response_type: true,
-        extras: { setup: {}, featureType: "whatsapp_business_app_onboarding", sessionInfoVersion: "3" },
-      }
-    )
-  }
-
-  async function submitOtp() {
-    setBusy(true); setError(null)
-    const res = await fetch("/api/integrations/whatsapp/verify", {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ code: otpCode }),
-    })
-    const data = await res.json().catch(() => ({}))
-    setBusy(false)
-    if (!res.ok) { setError(data.error ?? "Verification failed"); return }
-    router.refresh()
-  }
-
-  async function refreshStatus() {
-    setBusy(true)
-    await fetch("/api/integrations/whatsapp/status").catch(() => null)
-    setBusy(false)
-    router.refresh()
-  }
-
-  async function disconnect() {
-    if (!confirm("Disconnect WhatsApp? Leads will no longer be able to reach you there.")) return
-    setBusy(true)
-    await fetch("/api/integrations/whatsapp/disconnect", { method: "POST" }).catch(() => null)
-    setBusy(false)
-    router.refresh()
-  }
-
-  return (
-    <motion.div
-      initial={{ opacity: 0, y: 16 }}
-      animate={{ opacity: 1, y: 0 }}
-      transition={{ duration: 0.5, delay: 0.15 }}
-      className="bg-white rounded-2xl border border-[#E7E5E4] p-6"
-      style={{ boxShadow: "0 4px 24px rgba(37,211,102,0.08)" }}
-    >
-      <div className="flex items-start justify-between gap-4 flex-wrap">
-        <div className="flex items-center gap-3">
-          <div className="w-11 h-11 rounded-xl flex items-center justify-center" style={{ background: "#DCFCE7" }}>
-            <WhatsAppIcon className="w-6 h-6 text-[#16A34A]" />
-          </div>
-          <div>
-            <h2 className="text-lg font-bold text-[#1C1917]" style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
-              WhatsApp Business
-            </h2>
-            <p className="text-sm text-[#78716C]">
-              {connected
-                ? `Live on ${connection!.phone_number} as "${connection!.display_name}"`
-                : pending
-                ? "Registration submitted — Meta is reviewing your display name"
-                : verifyOtp
-                ? `Verification code sent to ${connection!.phone_number}`
-                : "Let leads message you on WhatsApp — the AI answers there too"}
-            </p>
-          </div>
-        </div>
-        <StatusBadge connected={connected} />
-      </div>
-
-      {/* Pending state */}
-      {pending && (
-        <div className="mt-5 rounded-xl border border-amber-200 bg-amber-50 p-4">
-          <p className="text-sm text-amber-800">
-            <strong>In review at Meta.</strong> Display name approval usually takes minutes to a day.
-            Your number ({connection!.phone_number}) will start receiving WhatsApp messages the moment it clears.
-          </p>
-          <button onClick={refreshStatus} disabled={busy}
-            className="mt-3 inline-flex items-center gap-2 text-sm font-semibold text-amber-800 hover:text-amber-900">
-            {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <RefreshCw className="w-4 h-4" />}
-            Check status
-          </button>
-        </div>
-      )}
-
-
-      {/* OTP verification state (own-number connections) */}
-      {verifyOtp && (
-        <div className="mt-5 rounded-xl border border-[#E7E5E4] bg-[#FAFAF8] p-4">
-          <p className="text-sm text-[#1C1917] mb-3">
-            <strong>Enter the code</strong> Meta just sent by SMS to {connection!.phone_number} to prove you own the number.
-          </p>
-          <div className="flex gap-2 flex-wrap">
-            <input
-              value={otpCode}
-              onChange={(e) => setOtpCode(e.target.value)}
-              placeholder="6-digit code"
-              inputMode="numeric"
-              className="w-40 rounded-xl border border-[#E7E5E4] bg-white px-4 py-2.5 text-sm tracking-widest text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#25D366]/40"
-            />
-            <button onClick={submitOtp} disabled={busy || otpCode.replace(/\D/g, "").length < 4}
-              className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white disabled:opacity-50"
-              style={{ background: "#16A34A" }}>
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <Check className="w-4 h-4" />}
-              Verify
-            </button>
-          </div>
-          {error && <p className="mt-2 text-xs text-red-700">{error}</p>}
-        </div>
-      )}
-      {/* Connected state */}
-      {connected && (
-        <div className="mt-5 flex items-center justify-between gap-3 flex-wrap">
-          <div className="flex items-center gap-2 text-sm font-medium text-green-700 bg-green-50 border border-green-100 rounded-xl px-4 py-2.5">
-            <Check className="w-4 h-4" />
-            WhatsApp messages flow into the same AI conversations as SMS
-          </div>
-          <button onClick={disconnect} disabled={busy}
-            className="text-sm font-semibold text-red-600 hover:text-red-700">
-            Disconnect
-          </button>
-        </div>
-      )}
-
-      {/* Setup state */}
-      {!connected && !pending && !verifyOtp && (
-        <div className="mt-5">
-          {/* Which number becomes the WhatsApp line */}
-          <div className="grid sm:grid-cols-3 gap-2 mb-4">
-            <button onClick={() => setMode("fieldbuilt")}
-              className="text-left rounded-xl border p-3.5 transition-colors"
-              style={{
-                borderColor: mode === "fieldbuilt" ? "#16A34A" : "#E7E5E4",
-                background: mode === "fieldbuilt" ? "#F0FDF4" : "white",
-              }}>
-              <p className="text-sm font-bold text-[#1C1917]">Use your FieldBuilt number <span className="text-[10px] font-bold text-[#16A34A] uppercase ml-1">Recommended</span></p>
-              <p className="text-xs text-[#78716C] mt-1">Instant. Your existing WhatsApp app keeps working untouched — this adds WhatsApp to the number that already texts your leads.</p>
-            </button>
-            <button onClick={() => setMode("own_waba")}
-              className="text-left rounded-xl border p-3.5 transition-colors"
-              style={{
-                borderColor: mode === "own_waba" ? "#16A34A" : "#E7E5E4",
-                background: mode === "own_waba" ? "#F0FDF4" : "white",
-              }}>
-              <p className="text-sm font-bold text-[#1C1917]">Connect your existing WhatsApp Business</p>
-              <p className="text-xs text-[#78716C] mt-1">Keep your number AND keep using WhatsApp on your phones — the AI joins the same account.</p>
-            </button>
-            <button onClick={() => setMode("byon")}
-              className="text-left rounded-xl border p-3.5 transition-colors"
-              style={{
-                borderColor: mode === "byon" ? "#16A34A" : "#E7E5E4",
-                background: mode === "byon" ? "#F0FDF4" : "white",
-              }}>
-              <p className="text-sm font-bold text-[#1C1917]">Move your number to FieldBuilt</p>
-              <p className="text-xs text-[#78716C] mt-1">Your number, fully AI-operated. The phone app stops working for it. Verified by SMS code.</p>
-            </button>
-          </div>
-
-          {mode === "own_waba" && (
-            <div className="mb-3">
-              <div className="mb-3 flex items-start gap-2 rounded-xl border border-green-200 bg-green-50 p-3">
-                <Info className="w-4 h-4 text-green-700 shrink-0 mt-0.5" />
-                <p className="text-xs text-green-800">
-                  You&apos;ll sign in with the Facebook account that manages your WhatsApp Business.
-                  Your team keeps using WhatsApp on their phones exactly as today — the AI answers
-                  new leads, and the moment a human replies from the app, the AI steps back on that conversation.
-                </p>
-              </div>
-              <button onClick={connectOwnWaba} disabled={busy}
-                className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 disabled:opacity-50"
-                style={{ background: "#1877F2", boxShadow: "0 4px 16px rgba(24,119,242,0.3)" }}>
-                {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <ExternalLink className="w-4 h-4" />}
-                Continue with Facebook
-              </button>
-              {error && (
-                <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3">
-                  <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-                  <p className="text-xs text-red-700">{error}</p>
-                </div>
-              )}
-            </div>
-          )}
-
-          {mode === "byon" && (
-            <>
-              <div className="mb-3 flex items-start gap-2 rounded-xl border border-amber-200 bg-amber-50 p-3">
-                <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-                <p className="text-xs text-amber-800">
-                  <strong>Important:</strong> if this number currently runs the WhatsApp Business app on a phone,
-                  it will STOP working in that app once connected here — all WhatsApp messages will flow to your
-                  AI and the FieldBuilt inbox instead. Your regular calls and SMS on the number are not affected.
-                </p>
-              </div>
-              <label className="block text-xs font-semibold uppercase tracking-wider text-[#78716C] mb-1.5">
-                Your WhatsApp Business number
-              </label>
-              <input
-                value={ownNumber}
-                onChange={(e) => setOwnNumber(e.target.value)}
-                placeholder="+1 555 123 4567"
-                className="w-full mb-3 rounded-xl border border-[#E7E5E4] bg-white px-4 py-2.5 text-sm text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#25D366]/40"
-              />
-            </>
-          )}
-
-          {mode !== "own_waba" && (<>
-          <label className="block text-xs font-semibold uppercase tracking-wider text-[#78716C] mb-1.5">
-            Business display name (what customers see on WhatsApp)
-          </label>
-          <div className="flex gap-2 flex-wrap">
-            <input
-              value={displayName}
-              onChange={(e) => setDisplayName(e.target.value)}
-              placeholder={companyName || "Your company name"}
-              className="flex-1 min-w-[220px] rounded-xl border border-[#E7E5E4] bg-white px-4 py-2.5 text-sm text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#25D366]/40"
-            />
-            <button
-              onClick={connect}
-              disabled={busy || displayName.trim().length < 3 || (mode === "byon" && ownNumber.replace(/\D/g, "").length < 8)}
-              className="inline-flex items-center gap-2 rounded-xl px-5 py-2.5 text-sm font-semibold text-white transition-all hover:-translate-y-0.5 disabled:opacity-50 disabled:hover:translate-y-0"
-              style={{ background: "#16A34A", boxShadow: "0 4px 16px rgba(22,163,74,0.3)" }}
-            >
-              {busy ? <Loader2 className="w-4 h-4 animate-spin" /> : <WhatsAppIcon className="w-4 h-4" />}
-              Connect WhatsApp
-            </button>
-          </div>
-          <p className="mt-2 text-xs text-[#78716C]">
-            {mode === "fieldbuilt"
-              ? "Uses your existing FieldBuilt number — no new number needed. Approval by Meta usually takes minutes to a day."
-              : "Meta texts a verification code to your number, then reviews the display name — usually minutes to a day."}
-          </p>
-          </>)}
-          {error && (
-            <div className="mt-3 flex items-start gap-2 rounded-xl border border-red-100 bg-red-50 p-3">
-              <AlertCircle className="w-4 h-4 text-red-500 shrink-0 mt-0.5" />
-              <p className="text-xs text-red-700">{error}</p>
-            </div>
-          )}
-        </div>
-      )}
-    </motion.div>
-  )
-}
 
 // ─── Main ─────────────────────────────────────────────────────────────────────
 
-export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast, toastType, whatsapp, companyName, hcpConnected, integrationMode }: Props) {
+export function IntegrationsClient({ integrations, facebook, webhookSecret, appUrl, toast, toastType, hcpConnected, integrationMode }: Props) {
   const [showToast, setShowToast] = useState(!!toast)
+  // Housecall Pro is an HVAC-era system: tucked away unless this account uses it.
+  const [showOther, setShowOther] = useState(hcpConnected || integrationMode === "housecall_pro")
 
   useEffect(() => {
     if (toast) {
@@ -1112,7 +796,7 @@ export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast,
             </h1>
           </div>
           <p className="text-[#78716C] mt-2 ml-12">
-            Connect your lead sources. Every lead gets an AI SMS within 3.7 seconds.
+            Connect where your leads come from. Every new lead lands in your CRM and gets a text within seconds.
           </p>
 
           {connectedCount > 0 && (
@@ -1129,25 +813,33 @@ export function IntegrationsClient({ integrations, webhookSecret, appUrl, toast,
 
         {/* Cards */}
         <div className="space-y-5">
-          <HousecallProCard connected={hcpConnected} integrationMode={integrationMode} />
-          <FacebookCard integration={byType("facebook")} errorCode={toast === "no_pages" ? "no_pages" : null} />
-          <WhatsAppCard connection={whatsapp} companyName={companyName} />
-          <GoogleAdsCard webhookUrl={googleWebhookUrl} />
+          <FacebookCard integration={byType("facebook")} summary={facebook} errorCode={toast === "no_pages" ? "no_pages" : null} />
           <WebsiteFormCard
             webhookUrl={genericWebhookUrl}
             secret={webhookSecret}
           />
+          <GoogleAdsCard webhookUrl={googleWebhookUrl} />
         </div>
 
-        {/* Footer note */}
-        <motion.p
-          initial={{ opacity: 0 }}
-          animate={{ opacity: 1 }}
-          transition={{ delay: 0.5 }}
-          className="mt-8 text-xs text-[#78716C] text-center"
-        >
-          More integrations coming soon — Angi, HomeAdvisor, Thumbtack, and more
-        </motion.p>
+        {/* Other systems: collapsed unless this account uses one */}
+        <div className="mt-8">
+          <button
+            type="button"
+            onClick={() => setShowOther((v) => !v)}
+            aria-expanded={showOther}
+            aria-controls="other-systems"
+            className="flex w-full items-center gap-2 text-sm font-semibold text-[#57534E] hover:text-[#1C1917] transition-colors"
+          >
+            <ChevronRight className={`w-4 h-4 transition-transform ${showOther ? "rotate-90" : ""}`} />
+            Other systems
+            <span className="font-normal text-[#A8A29E]">Housecall Pro</span>
+          </button>
+          {showOther && (
+            <div id="other-systems" className="mt-4">
+              <HousecallProCard connected={hcpConnected} integrationMode={integrationMode} />
+            </div>
+          )}
+        </div>
       </div>
     </div>
   )

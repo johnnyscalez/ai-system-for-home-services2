@@ -9,33 +9,32 @@ import { Textarea } from "@/components/ui/textarea"
 import { Globe, Camera, Share2, RefreshCw, Scan, CheckCircle2, AlertCircle, Save, Sparkles, Plus } from "lucide-react"
 
 const KNOWLEDGE_CHIPS: { label: string; text: string }[] = [
-  { label: "Equipment brands",    text: "We carry and install Carrier, Lennox, and Trane equipment." },
-  { label: "Factory Authorized",  text: "We are a Carrier Factory Authorized Dealer." },
-  { label: "All brands serviced", text: "We service all major HVAC brands regardless of who installed them." },
-  { label: "Financing",           text: "We offer 0% financing for 12 months through GreenSky Financing." },
-  { label: "Maintenance plans",   text: "We offer annual maintenance plans starting at $149/year covering one tune-up and priority service." },
-  { label: "Parts warranty",      text: "All parts and labor come with a 1-year warranty." },
-  { label: "Emergency service",   text: "We offer emergency same-day service 24 hours a day, 7 days a week." },
-  { label: "Residential only",    text: "We only service residential properties — we do not work on commercial buildings." },
-  { label: "No oil/propane",      text: "We do not service oil or propane heating systems — gas and electric only." },
-  { label: "Spanish speaking",    text: "Spanish-speaking technicians are available upon request." },
-  { label: "No phone quotes",     text: "We never give price quotes over the phone — all estimates are done on-site and are completely free." },
-  { label: "No hidden fees",      text: "We have a strict no-hidden-fees policy — the price quoted on-site is the price charged." },
-  { label: "Free 2nd opinion",    text: "We offer free second opinions on any competitor quote." },
-  { label: "Price match",         text: "We match any written quote from a licensed competitor for the same scope of work." },
+  { label: "Brands we carry",     text: "We carry and install Shaw, Mohawk, and COREtec flooring." },
+  { label: "Free in-home measure", text: "Every measure is free and done in your home, and we bring samples with us." },
+  { label: "Financing",           text: "We offer 0% financing for 12 months on approved credit." },
+  { label: "Labor warranty",      text: "Every install comes with a lifetime warranty on our workmanship." },
+  { label: "Own crews",           text: "All installs are done by our own crews, never subcontractors." },
+  { label: "Furniture moving",    text: "We move the furniture for you and put it back when the job is done." },
+  { label: "Old floor removal",   text: "We tear out and haul away the old flooring as part of the job." },
+  { label: "Subfloor check",      text: "We check the subfloor at every measure and fix any problems before we install." },
+  { label: "Install timeline",    text: "Most installs start within 2 to 3 weeks of signing." },
+  { label: "Residential only",    text: "We only work on residential homes, not commercial buildings." },
+  { label: "Spanish speaking",    text: "Spanish-speaking staff are available on request." },
+  { label: "No phone quotes",     text: "We never quote prices over the phone. Every quote comes after a free in-home measure." },
+  { label: "Price match",         text: "We match any written quote from a licensed competitor for the same product and scope of work." },
   { label: "Licensed & insured",  text: "We are fully licensed and insured in [your state]." },
   { label: "Service area zips",   text: "We serve the following zip codes: [list zip codes here]." },
 ]
 
 const FIELDS: { key: string; label: string; placeholder: string; long?: boolean }[] = [
   { key: "business_description", label: "Business overview", placeholder: "What your company does, who you serve...", long: true },
-  { key: "services_offered", label: "Services offered", placeholder: "Full roof replacement, storm damage repair...", long: true },
+  { key: "services_offered", label: "Services offered", placeholder: "Hardwood, LVP, carpet, tile, stairs, refinishing...", long: true },
   { key: "service_areas", label: "Service areas", placeholder: "Dallas, Plano, Frisco TX..." },
-  { key: "unique_selling_points", label: "Why customers choose you", placeholder: "Lifetime warranty, GAF Master Elite...", long: true },
-  { key: "pricing_info", label: "Pricing & offers", placeholder: "Free inspections, financing available..." },
+  { key: "unique_selling_points", label: "Why customers choose you", placeholder: "Our own install crews, lifetime labor warranty...", long: true },
+  { key: "pricing_info", label: "Pricing & offers", placeholder: "Free in-home measure, financing available..." },
   { key: "team_info", label: "Team & owner", placeholder: "Family-owned, owner Mike Smith..." },
   { key: "years_in_business", label: "Years in business", placeholder: "15 years, founded 2009..." },
-  { key: "certifications", label: "Certifications", placeholder: "GAF Master Elite, licensed & insured..." },
+  { key: "certifications", label: "Certifications", placeholder: "NWFA member, CFI certified installers, licensed & insured..." },
   { key: "testimonials", label: "Customer testimonials", placeholder: "\"Best in Dallas\" — John S. ★★★★★" },
   { key: "custom_facts", label: "Custom facts", placeholder: "Anything else your AI should know...", long: true },
 ]
@@ -206,7 +205,7 @@ export default function KnowledgeBasePage() {
             <h3 className="font-semibold text-sm">What your AI should always know</h3>
             <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">
               These facts are injected into <strong>every call and text</strong> your AI makes — voice agent and SMS agent.
-              Add anything specific to your business: equipment brands you carry, financing terms, warranty policy,
+              Add anything specific to your business: flooring brands you carry, financing terms, warranty policy,
               what you don&apos;t service, special offers. Your AI treats everything here as ground truth.
             </p>
           </div>
@@ -236,11 +235,11 @@ export default function KnowledgeBasePage() {
         <div className="space-y-1.5">
           <textarea
             placeholder={
-              "We carry Carrier, Lennox, and Trane equipment.\n" +
-              "We offer 0% financing for 12 months through GreenSky.\n" +
-              "All parts and labor come with a 1-year warranty.\n" +
-              "We do not service commercial properties.\n" +
-              "Emergency same-day service available 24/7."
+              "We carry Shaw, Mohawk, and COREtec flooring.\n" +
+              "Every measure is free and done in your home.\n" +
+              "We offer 0% financing for 12 months on approved credit.\n" +
+              "All installs are done by our own crews.\n" +
+              "We do not work on commercial buildings."
             }
             value={customAiKnowledge}
             onChange={(e) => { setCustomAiKnowledge(e.target.value); setSaved(false) }}

@@ -9,7 +9,11 @@ import {
   DollarSign, BarChart3, Clock, Sparkles, Flame, RefreshCw, Settings,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { getLeadStatus, hasRealPhone } from "@/lib/lead-status"
+import { createClient } from "@/lib/supabase"
+import { useVisiblePoll } from "@/components/leads/live"
 import { DateRangePicker, type DateRange, PRESETS } from "@/components/ui/DateRangePicker"
+import { AdPerformanceCard } from "@/components/dashboard/AdPerformanceCard"
 
 // ── Count-up hook ──────────────────────────────────────────────────────────────
 function useCountUp(target: number, duration = 1400, delay = 0) {
@@ -114,25 +118,6 @@ function StatCard({
   )
 }
 
-// ── Status badge ───────────────────────────────────────────────────────────────
-const STATUS: Record<string, { label: string; cls: string }> = {
-  just_came_in:        { label: "Just came in", cls: "bg-sky-50 text-sky-700 border border-sky-100" },
-  new:                 { label: "Just came in", cls: "bg-sky-50 text-sky-700 border border-sky-100" },
-  contacted:           { label: "Just came in", cls: "bg-sky-50 text-sky-700 border border-sky-100" },
-  active_conversation: { label: "Active",       cls: "bg-[#FFF3EC] text-[#EA580C] border border-[#F97316]/20" },
-  followed_up:         { label: "Active",       cls: "bg-[#FFF3EC] text-[#EA580C] border border-[#F97316]/20" },
-  nurturing:           { label: "Active",       cls: "bg-[#FFF3EC] text-[#EA580C] border border-[#F97316]/20" },
-  qualified:           { label: "Qualified",    cls: "bg-amber-50 text-amber-700 border border-amber-100" },
-  unqualified:         { label: "Unqualified",  cls: "bg-red-50 text-red-600 border border-red-100" },
-  appointment_booked:  { label: "Booked",       cls: "bg-green-50 text-green-700 border border-green-100" },
-  closed:              { label: "Closed",       cls: "bg-green-50 text-green-700 border border-green-100" },
-  closed_won:          { label: "Closed",       cls: "bg-green-50 text-green-700 border border-green-100" },
-  lost:                { label: "Lost",         cls: "bg-slate-50 text-slate-500 border border-slate-200" },
-  cold:                { label: "Lost",         cls: "bg-slate-50 text-slate-500 border border-slate-200" },
-  closed_lost:         { label: "Lost",         cls: "bg-slate-50 text-slate-500 border border-slate-200" },
-  needs_attention:     { label: "Attention",    cls: "bg-red-50 text-red-600 border border-red-100" },
-}
-
 // Default range: last 30 days
 function defaultRange(): DateRange {
   const today = new Date().toISOString().slice(0, 10)
@@ -156,6 +141,7 @@ type Props = {
   }[]
   upcomingApts: {
     id: string; scheduled_at: string; address: string | null
+    confirmation_status?: string | null
     leads: { first_name: string | null; last_name: string | null; phone: string } | null
   }[]
   timezone?: string
@@ -167,23 +153,52 @@ const stagger = {
 }
 
 // ── Main ───────────────────────────────────────────────────────────────────────
-export function DashboardClient({ greeting, firstName, companyName, initialStats, recentLeads, upcomingApts, timezone }: Props) {
+export function DashboardClient({ greeting, firstName, companyName, initialStats, recentLeads: initialRecentLeads, upcomingApts: initialUpcomingApts, timezone }: Props) {
   // Office-facing times render in the COMPANY's timezone, never the viewer's
   // browser clock — a 3:00 PM Chicago job read as "11 PM" from a UTC+3 browser.
   const tz = timezone ?? "America/New_York"
   const [range, setRange]   = useState<DateRange>(defaultRange())
   const [stats, setStats]   = useState<DashboardStats>(initialStats)
   const [fetching, setFetching] = useState(false)
+  const [recentLeads, setRecentLeads] = useState(initialRecentLeads)
+  const [upcomingApts, setUpcomingApts] = useState(initialUpcomingApts)
 
-  const fetchStats = useCallback(async (r: DateRange) => {
-    setFetching(true)
+  // `silent` = background refresh: the numbers update without the loading state.
+  const fetchStats = useCallback(async (r: DateRange, silent = false) => {
+    if (!silent) setFetching(true)
     try {
       const params = new URLSearchParams({ since: r.from, until: r.until })
       const res = await fetch(`/api/dashboard/stats?${params}`)
       if (res.ok) setStats(await res.json())
     } catch { /* non-fatal */ }
-    finally { setFetching(false) }
+    finally { if (!silent) setFetching(false) }
   }, [])
+
+  // Keep the page current while it is open: new leads, booked measures and the
+  // numbers refresh every 20 seconds (paused while the tab is hidden).
+  const refreshLists = useCallback(async () => {
+    const supabase = createClient()
+    const [leadsRes, aptsRes] = await Promise.all([
+      supabase.from("leads")
+        .select("id, first_name, last_name, phone, status, source, created_at")
+        .eq("excluded_from_stats", false)
+        .order("created_at", { ascending: false })
+        .limit(5),
+      supabase.from("appointments")
+        .select("id, scheduled_at, address, confirmation_status, leads(first_name, last_name, phone)")
+        .eq("status", "scheduled")
+        .gte("scheduled_at", new Date().toISOString())
+        .order("scheduled_at")
+        .limit(4),
+    ])
+    if (leadsRes.data) setRecentLeads(leadsRes.data as Props["recentLeads"])
+    if (aptsRes.data) setUpcomingApts(aptsRes.data as unknown as Props["upcomingApts"])
+  }, [])
+
+  useVisiblePoll(() => {
+    void fetchStats(range, true)
+    void refreshLists()
+  }, 20_000)
 
   // Skip the initial fetch since server already loaded Last 30 days
   const mounted = useRef(false)
@@ -301,7 +316,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                   <DollarSign className="w-4 h-4 text-white" />
                 </div>
                 <p className="text-green-200 text-xs font-semibold uppercase tracking-widest">
-                  Revenue Closed
+                  Revenue Signed
                 </p>
               </div>
               <motion.p
@@ -315,11 +330,11 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                 ${stats.revenueClosed.toLocaleString()}
               </motion.p>
               <p className="text-green-200 text-sm mt-1.5">
-                {stats.closedCount} deal{stats.closedCount !== 1 ? "s" : ""} closed · {range.label}
+                {stats.closedCount} deal{stats.closedCount !== 1 ? "s" : ""} signed · {range.label}
               </p>
               {stats.closedCount === 0 && (
                 <p className="text-green-300/60 text-xs mt-2">
-                  Drag a lead to the Closed column to log revenue
+                  Drag a lead to the Signed column to log revenue
                 </p>
               )}
             </div>
@@ -346,7 +361,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                     <TrendingUp className="w-4 h-4 text-white" />
                   </div>
                   <p className="text-orange-200 text-xs font-semibold uppercase tracking-widest">
-                    Pipeline Value
+                    Projected pipeline revenue
                   </p>
                 </div>
                 <motion.p
@@ -360,7 +375,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                   ${stats.revenueProjected.toLocaleString()}
                 </motion.p>
                 <p className="text-orange-200 text-sm mt-1.5">
-                  {stats.booked} apt{stats.booked !== 1 ? "s" : ""} × ${stats.avgJobValue.toLocaleString()} avg
+                  {stats.booked} measure{stats.booked !== 1 ? "s" : ""} × ${stats.avgJobValue.toLocaleString()} avg
                 </p>
               </div>
             </motion.div>
@@ -394,14 +409,14 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
               value={stats.newLeads} icon={Users} iconBg="bg-blue-50" iconColor="text-blue-600" delay={0}
             />
             <StatCard
-              label="Appointments booked"
+              label="Measures booked"
               subLabel={range.label}
               value={stats.booked} icon={CalendarCheck} iconBg="bg-green-50" iconColor="text-green-600"
               valueColor="text-[#4D7C0F]" shadowColor="rgba(77,124,15,0.12)" delay={80}
             />
             <StatCard
               label="Booking rate"
-              subLabel="Leads → appointments"
+              subLabel="Leads → measures"
               value={stats.bookingRate} icon={BarChart3} iconBg="bg-amber-50" iconColor="text-amber-600"
               suffix="%" delay={160}
             />
@@ -425,6 +440,9 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
             />
           </motion.div>
         </div>
+
+        {/* Facebook ad spend next to CRM results (self-fetching) */}
+        <AdPerformanceCard />
 
         {/* Bottom row */}
         <motion.div
@@ -461,7 +479,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                 </div>
               ) : (
                 recentLeads.map((lead, i) => {
-                  const s = STATUS[lead.status] ?? { label: lead.status, cls: "bg-slate-50 text-slate-500 border border-slate-200" }
+                  const s = getLeadStatus(lead.status)
                   return (
                     <motion.div
                       key={lead.id}
@@ -477,15 +495,15 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                           </div>
                           <div>
                             <p className="text-sm font-medium text-[#1C1917] group-hover:text-[#F97316] transition-colors">
-                              {lead.first_name ?? "Unknown"} {lead.last_name ?? ""}
+                              {`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "No name yet"}
                             </p>
                             <p className="text-xs text-[#78716C]"
                               style={{ fontFamily: "var(--font-jetbrains), 'JetBrains Mono', monospace" }}>
-                              {lead.phone}
+                              {hasRealPhone(lead.phone) ? lead.phone : "No phone on file"}
                             </p>
                           </div>
                         </div>
-                        <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full", s.cls)}>
+                        <span className={cn("text-xs font-medium px-2.5 py-1 rounded-full border", s.badge)}>
                           {s.label}
                         </span>
                       </Link>
@@ -505,7 +523,7 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
             <div className="px-6 py-4 border-b border-[#F5F4F2] flex items-center justify-between">
               <h2 className="font-semibold text-[#1C1917]"
                 style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
-                Upcoming Appointments
+                Upcoming Measures
               </h2>
               <Link href="/appointments"
                 className="text-xs text-[#F97316] font-medium hover:underline flex items-center gap-1 transition-colors">
@@ -519,8 +537,8 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                   <div className="w-12 h-12 rounded-2xl bg-[#F5F4F2] flex items-center justify-center mx-auto mb-3">
                     <CalendarCheck className="w-6 h-6 text-[#E7E5E4]" />
                   </div>
-                  <p className="text-sm font-medium text-[#78716C]">No upcoming appointments</p>
-                  <p className="text-xs text-[#78716C] mt-1 opacity-70">Your AI will book them automatically</p>
+                  <p className="text-sm font-medium text-[#78716C]">No upcoming measures</p>
+                  <p className="text-xs text-[#78716C] mt-1 opacity-70">Your AI will book in-home measures automatically</p>
                 </div>
               ) : (
                 upcomingApts.map((apt, i) => {
@@ -553,10 +571,17 @@ export function DashboardClient({ greeting, firstName, companyName, initialStats
                           {apt.address && <span className="truncate">· {apt.address}</span>}
                         </p>
                       </div>
-                      <div className="flex items-center gap-1.5">
-                        <div className="w-2 h-2 rounded-full bg-[#4D7C0F]" />
-                        <span className="text-xs text-[#4D7C0F] font-medium">Confirmed</span>
-                      </div>
+                      {apt.confirmation_status === "confirmed" ? (
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-[#16A34A]" />
+                          <span className="text-xs text-[#16A34A] font-medium">Confirmed</span>
+                        </div>
+                      ) : (
+                        <div className="flex items-center gap-1.5">
+                          <div className="w-2 h-2 rounded-full bg-[#A8A29E]" />
+                          <span className="text-xs text-[#78716C] font-medium">Booked</span>
+                        </div>
+                      )}
                     </motion.div>
                   )
                 })

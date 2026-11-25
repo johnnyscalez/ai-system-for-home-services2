@@ -59,8 +59,7 @@ function useCountUp(target: number, duration = 1200, delay = 0) {
 const SOURCE_META: Record<string, { label: string; cls: string; icon?: React.ElementType }> = {
   facebook:            { label: "FB Lead Ad", cls: "bg-blue-50 text-blue-700 border-blue-100", icon: Megaphone },
   facebook_lead_ads:   { label: "FB Lead Ad", cls: "bg-blue-50 text-blue-700 border-blue-100", icon: Megaphone },
-  messenger:           { label: "Messenger", cls: "bg-violet-50 text-violet-700 border-violet-100", icon: MessageCircle },
-  whatsapp:            { label: "WhatsApp", cls: "bg-emerald-50 text-emerald-700 border-emerald-100", icon: MessageSquare },
+  messenger:           { label: "Messenger", cls: "bg-sky-50 text-sky-700 border-sky-100", icon: MessageCircle },
   website:             { label: "Website form", cls: "bg-stone-100 text-stone-700 border-stone-200", icon: Globe },
   "hvac-lead-capture": { label: "Website form", cls: "bg-stone-100 text-stone-700 border-stone-200", icon: Globe },
   typeform:            { label: "Typeform", cls: "bg-stone-100 text-stone-700 border-stone-200", icon: Globe },
@@ -72,7 +71,9 @@ const SOURCE_META: Record<string, { label: string; cls: string; icon?: React.Ele
 }
 
 function sourceMeta(source: string | null) {
-  return SOURCE_META[source ?? ""] ?? { label: source ?? "Direct", cls: "bg-stone-100 text-stone-600 border-stone-200" }
+  // Leads from the retired WhatsApp channel are text-in leads.
+  const key = source === "whatsapp" ? "sms_inbound" : source ?? ""
+  return SOURCE_META[key] ?? { label: source ?? "Direct", cls: "bg-stone-100 text-stone-600 border-stone-200" }
 }
 
 function SourceBadge({ source }: { source: string | null }) {
@@ -446,7 +447,7 @@ export function AgentDashboard({
       if (!s) return "direct"
       if (s === "facebook_lead_ads") return "facebook"
       if (s === "hvac-lead-capture") return "website"
-      if (s === "sms") return "sms_inbound"
+      if (s === "sms" || s === "whatsapp") return "sms_inbound"
       return s
     }
     const matchesSource = (s: string | null) => !sourceFilter || norm(s) === sourceFilter

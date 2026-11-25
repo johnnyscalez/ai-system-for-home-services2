@@ -1,16 +1,23 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase-server"
+import {
+  GRAPH, fetchAdAccounts, fbReturnUrl, parseFbReturnTarget, readFbCache, saveFacebookConnection,
+  type FbCache, type FbCachedPage,
+} from "@/lib/meta-ads"
 
 export async function GET(req: NextRequest) {
   const { searchParams } = new URL(req.url)
   const code = searchParams.get("code")
-  const state = searchParams.get("state")
   const error = searchParams.get("error")
   const appUrl = process.env.NEXT_PUBLIC_APP_URL!
 
-  if (error || !code) {
-    return NextResponse.redirect(`${appUrl}/integrations?error=facebook_denied`)
-  }
+  // state = "<user id>:<return target>" (older links sent the bare user id).
+  const rawState = searchParams.get("state") ?? ""
+  const [stateUserId, stateTarget] = rawState.split(":")
+  const returnTo = parseFbReturnTarget(stateTarget)
+  const fail = (reason: string) => NextResponse.redirect(`${appUrl}${fbReturnUrl(returnTo, "error", reason)}`)
+
+  if (error || !code) return fail("facebook_denied")
 
   const supabase = await createServerSupabaseClient()
   // getUser() validates against Supabase over the network — a transient
@@ -22,12 +29,12 @@ export async function GET(req: NextRequest) {
     user = retry.data.user
   }
   if (!user) {
-    console.error("[fb-callback] no session at callback (after retry). state:", state)
-    return NextResponse.redirect(`${appUrl}/integrations?error=session_lost`)
+    console.error("[fb-callback] no session at callback (after retry). state:", rawState)
+    return fail("session_lost")
   }
-  if (user.id !== state) {
-    console.error("[fb-callback] state mismatch. user:", user.id, "state:", state)
-    return NextResponse.redirect(`${appUrl}/integrations?error=state_mismatch`)
+  if (user.id !== stateUserId) {
+    console.error("[fb-callback] state mismatch. user:", user.id, "state:", rawState)
+    return fail("state_mismatch")
   }
 
   const { data: profile } = await supabase
@@ -36,9 +43,8 @@ export async function GET(req: NextRequest) {
     .eq("id", user.id)
     .single()
 
-  if (!profile?.company_id) {
-    return NextResponse.redirect(`${appUrl}/integrations?error=no_company`)
-  }
+  if (!profile?.company_id) return fail("no_company")
+  const companyId = profile.company_id as string
 
   const redirectUri = `${appUrl}/api/auth/facebook/callback`
   const appId = process.env.FACEBOOK_APP_ID!
@@ -46,19 +52,20 @@ export async function GET(req: NextRequest) {
 
   // Exchange code for short-lived token
   const tokenRes = await fetch(
-    `https://graph.facebook.com/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${code}`
+    `${GRAPH}/oauth/access_token?client_id=${appId}&client_secret=${appSecret}&redirect_uri=${encodeURIComponent(redirectUri)}&code=${encodeURIComponent(code)}`
   )
-  const tokenData = await tokenRes.json()
+  const tokenData = await tokenRes.json().catch(() => ({}))
   if (!tokenData.access_token) {
-    return NextResponse.redirect(`${appUrl}/integrations?error=token_failed`)
+    console.error("[fb-callback] code exchange failed:", tokenData?.error?.message ?? tokenData)
+    return fail("token_failed")
   }
 
   // Exchange for long-lived user token (60 days)
   const llRes = await fetch(
-    `https://graph.facebook.com/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${tokenData.access_token}`
+    `${GRAPH}/oauth/access_token?grant_type=fb_exchange_token&client_id=${appId}&client_secret=${appSecret}&fb_exchange_token=${tokenData.access_token}`
   )
-  const llData = await llRes.json()
-  const userToken = llData.access_token || tokenData.access_token
+  const llData = await llRes.json().catch(() => ({}))
+  const userToken: string = llData.access_token || tokenData.access_token
 
   // Collect pages from EVERY source and merge — a client's page reaches us
   // three different ways depending on how it's shared, and checking only one
@@ -68,17 +75,16 @@ export async function GET(req: NextRequest) {
   //   3. {biz}/client_pages  — pages PARTNER-SHARED into the BM by a client
   //                            (the runbook's "share your page with our BM"
   //                            step lands a page HERE, not in owned_pages)
-  type FbPage = { id: string; name: string; access_token: string; fan_count?: number }
-  const collected: FbPage[] = []
+  const collected: FbCachedPage[] = []
 
   const meRes = await fetch(
-    `https://graph.facebook.com/me/accounts?access_token=${userToken}&fields=id,name,access_token,fan_count&limit=100`
+    `${GRAPH}/me/accounts?access_token=${userToken}&fields=id,name,access_token,fan_count&limit=100`
   ).then((r) => r.json()).catch(() => ({}))
-  collected.push(...((meRes.data as FbPage[]) ?? []))
+  collected.push(...((meRes.data as FbCachedPage[]) ?? []))
 
   try {
     const bizRes = await fetch(
-      `https://graph.facebook.com/me/businesses?access_token=${userToken}&fields=id,name&limit=25`
+      `${GRAPH}/me/businesses?access_token=${userToken}&fields=id,name&limit=25`
     ).then((r) => r.json())
     const businesses: Array<{ id: string }> = bizRes.data ?? []
 
@@ -86,8 +92,8 @@ export async function GET(req: NextRequest) {
       businesses.flatMap((biz) =>
         ["owned_pages", "client_pages"].map((edge) =>
           fetch(
-            `https://graph.facebook.com/${biz.id}/${edge}?access_token=${userToken}&fields=id,name,access_token,fan_count&limit=100`
-          ).then((r) => r.json()).then((d) => (d.data as FbPage[]) ?? []).catch(() => [])
+            `${GRAPH}/${biz.id}/${edge}?access_token=${userToken}&fields=id,name,access_token,fan_count&limit=100`
+          ).then((r) => r.json()).then((d) => (d.data as FbCachedPage[]) ?? []).catch(() => [])
         )
       )
     )
@@ -96,14 +102,17 @@ export async function GET(req: NextRequest) {
     // ignore — the me/accounts result may still have pages
   }
 
-  // Dedupe by page id (a page can appear in more than one source)
-  const allPages: FbPage[] = Object.values(
-    Object.fromEntries(collected.filter((p) => p?.id).map((p) => [p.id, p]))
-  )
-
-  if (!allPages.length) {
-    return NextResponse.redirect(`${appUrl}/integrations?error=no_pages`)
+  // Dedupe by page id (a page can appear in more than one source). A copy that
+  // carries a token wins over a tokenless copy of the same Page.
+  const byId = new Map<string, FbCachedPage>()
+  for (const p of collected) {
+    if (!p?.id) continue
+    const have = byId.get(p.id)
+    if (!have || (!have.access_token && p.access_token)) byId.set(p.id, p)
   }
+  const allPages = [...byId.values()]
+
+  if (!allPages.length) return fail("no_pages")
 
   // Backfill page access tokens: client_pages sometimes returns a page with no
   // token, and a page token is what we actually message and subscribe with.
@@ -111,26 +120,58 @@ export async function GET(req: NextRequest) {
     allPages.map(async (p) => {
       if (p.access_token) return
       try {
-        const t = await fetch(
-          `https://graph.facebook.com/${p.id}?fields=access_token&access_token=${userToken}`
-        ).then((r) => r.json())
+        const t = await fetch(`${GRAPH}/${p.id}?fields=access_token&access_token=${userToken}`).then((r) => r.json())
         if (t?.access_token) p.access_token = t.access_token
-      } catch { /* leave tokenless — surfaced in setup, still selectable */ }
+      } catch { /* left tokenless: the wizard explains how to grant the Page */ }
     })
   )
 
-  // Store pages + user token in integrations table, mark setup as incomplete
-  const serviceSupabase = createServiceRoleClient()
-  const { error: upsertError } = await serviceSupabase
+  // Ad accounts this login can see. Needs ads_read; until Meta grants it for
+  // everyone this can come back refused, and the wizard then offers "skip for now".
+  const ads = await fetchAdAccounts(userToken)
+  if (ads.error) console.warn(`[fb-callback] ad accounts not readable for company ${companyId}: ${ads.error}`)
+
+  const db = createServiceRoleClient()
+  const { data: current } = await db
     .from("integrations")
-    .upsert(
-      {
-        company_id: profile.company_id,
+    .select("fb_page_id, fb_access_token, fb_pages_cache, is_active, setup_complete")
+    .eq("company_id", companyId)
+    .eq("type", "facebook")
+    .maybeSingle()
+
+  const previous = readFbCache(current?.fb_pages_cache)
+  const cache: FbCache = {
+    pages: allPages,
+    adAccounts: ads.accounts,
+    adAccountsError: ads.error ?? null,
+    selectedForms: previous.selectedForms ?? [],
+    fetchedAt: new Date().toISOString(),
+  }
+
+  // A LIVE integration stays live while the owner re-runs the login: leads keep
+  // flowing on the saved Page and forms until a new selection is saved in the
+  // wizard. (It used to be deactivated right here, dropping every lead that
+  // arrived before the wizard was finished.) Only the tokens are refreshed.
+  const isLive = !!current?.is_active && !!current?.setup_complete && !!current?.fb_page_id
+  const livePage = isLive ? allPages.find((p) => p.id === current!.fb_page_id) : undefined
+
+  const row = isLive
+    ? {
+        company_id: companyId,
         type: "facebook",
         fb_user_id: user.id,
         fb_user_access_token: userToken,
-        fb_pages_cache: allPages,
-        // Clear old page selection so setup wizard runs fresh
+        fb_pages_cache: cache,
+        // Fresh page token when the new login still covers the live Page; otherwise keep the old one.
+        ...(livePage?.access_token ? { fb_access_token: livePage.access_token } : {}),
+        updated_at: new Date().toISOString(),
+      }
+    : {
+        company_id: companyId,
+        type: "facebook",
+        fb_user_id: user.id,
+        fb_user_access_token: userToken,
+        fb_pages_cache: cache,
         fb_page_id: null,
         fb_page_name: null,
         fb_access_token: null,
@@ -138,15 +179,25 @@ export async function GET(req: NextRequest) {
         setup_complete: false,
         is_active: false,
         updated_at: new Date().toISOString(),
-      },
-      { onConflict: "company_id,type" }
-    )
+      }
 
+  const { error: upsertError } = await db.from("integrations").upsert(row, { onConflict: "company_id,type" })
   if (upsertError) {
     console.error("Failed to save Facebook integration:", upsertError)
-    return NextResponse.redirect(`${appUrl}/integrations?error=save_failed`)
+    return fail("save_failed")
   }
 
-  // Redirect to setup wizard to pick page + lead form
-  return NextResponse.redirect(`${appUrl}/integrations/facebook-setup`)
+  // The ad account reads use the USER token: keep it current on the connection row.
+  await saveFacebookConnection(db, companyId, { access_token: userToken }).catch((e) =>
+    console.error("[fb-callback] could not store the user token on facebook_connections:", e))
+
+  // A reconnect is exactly when leads Facebook refused earlier become readable again.
+  if (isLive) {
+    import("@/lib/meta-leadgen")
+      .then(({ retryPendingLeadgen }) => retryPendingLeadgen(companyId))
+      .catch((e) => console.error("[fb-callback] pending lead retry failed:", e))
+  }
+
+  // On to the wizard: Page, ad account, lead forms.
+  return NextResponse.redirect(`${appUrl}/connect/facebook?return_to=${returnTo}`)
 }

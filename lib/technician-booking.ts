@@ -16,6 +16,7 @@ import type { AppointmentWindow } from "@/lib/availability"
 import type { Technician } from "@/types/database"
 import { zipToPoint, addressToPoint, insertionCostMin, returnOvertimeMin, sameLocalDay, ROUTE_SLACK_MIN, type LocatedJob, type GeoPoint } from "@/lib/routing"
 import { zipToTimeZone } from "@/lib/timezones"
+import { holidayOn, holidayAt } from "@/lib/holidays"
 
 /**
  * Convert a local slot time (e.g. "08:00" on "2026-06-17" in "America/New_York")
@@ -89,7 +90,11 @@ export async function findSlotsForLead(
   // agent booked Friday, a re-check 6s later counted that very booking as
   // filling the window, and told the lead "Friday isn't available"). Their
   // job still ANCHORS its day — it is real routed work.
-  excludeLeadId?: string | null
+  excludeLeadId?: string | null,
+  // How many openings to return, earliest first. The default (8) is enough to
+  // offer "the next two"; a lead who asks for a specific day needs the search to
+  // reach that day, so the caller asks for more and picks from them.
+  limit: number = 8
 ): Promise<FindSlotsResult> {
   const db = createServiceRoleClient()
 
@@ -99,7 +104,7 @@ export async function findSlotsForLead(
       .select("available_days, appointment_windows, booking_horizon_days, timezone, min_booking_lead_days, job_duration_min, requires_travel")
       .eq("company_id", companyId)
       .single(),
-    db.from("companies").select("service_area_zips, integration_mode").eq("id", companyId).single(),
+    db.from("companies").select("service_area_zips, integration_mode, service_type").eq("id", companyId).single(),
   ])
 
   // Company-level service radius gate (set at onboarding: office + radius →
@@ -137,12 +142,22 @@ export async function findSlotsForLead(
   // yields nothing do we fall back to open days — and those are pushed at
   // least a week out (never "in 2-3 days"), so the office has time to build a
   // route around the first job of a fresh day.
+  //
+  // ROUTE BATCHING IS AN HVAC POLICY. It exists to pack service calls onto days a
+  // technician is already driving. A flooring company's "technicians" are measure
+  // capacity, and a homeowner who wants new floors books with whoever can come
+  // out first: applied to flooring, this policy told every lead of a brand-new
+  // account that the earliest measure was a week away. So it only runs for
+  // service_type "hvac". Everyone else gets the earliest open windows, honoring
+  // the company's own minimum lead time and booking horizon.
+  const routeBatching = requiresTravel &&
+    (companyAreaRes.data as { service_type?: string | null } | null)?.service_type === "hvac"
   const ANCHOR_HORIZON_DAYS = 21
   // A call joins no route, so it never waits for an "anchor day" and is
   // bookable as soon as tomorrow.
   const FALLBACK_MIN_LEAD_DAYS = requiresTravel ? 7 : 0
   const MAX_ANCHOR_INSERT_MIN = 45 // route-fit ceiling for joining an existing day
-  const scanHorizon = Math.max(horizonDays, ANCHOR_HORIZON_DAYS)
+  const scanHorizon = routeBatching ? Math.max(horizonDays, ANCHOR_HORIZON_DAYS) : Math.max(horizonDays, 7)
   const availDays    = (config?.available_days as string[] | null) ?? DEFAULT_DAYS
   const windows      = ((config?.appointment_windows as AppointmentWindow[] | null) ?? DEFAULT_WINDOWS)
                          .filter(w => w.enabled)
@@ -337,7 +352,7 @@ export async function findSlotsForLead(
     // A fine grid (30-min calls) needs spreading: keep the first, middle and
     // last opening of each day rather than three back-to-back morning slots.
     const fineGrained = windows.length > 6
-    for (let offset = 0; offset <= scanHorizon && scored.length < (fineGrained ? 24 : 16); offset++) {
+    for (let offset = 0; offset <= scanHorizon && scored.length < Math.max(fineGrained ? 24 : 16, limit); offset++) {
       const day     = new Date(now.getTime() + offset * 24 * 60 * 60 * 1000)
       // Weekday MUST come from the company timezone, same as dateStr. Using the
       // server's weekday (UTC on Railway) shifted every evening (7 PM–midnight
@@ -347,6 +362,8 @@ export async function findSlotsForLead(
 
       const dateStr = day.toLocaleDateString("en-CA", { timeZone: tz }) // YYYY-MM-DD
       if (dateStr < earliestDateStr) continue
+      // Closed on US holidays (lib/holidays.ts): never offered, never booked.
+      if (holidayOn(dateStr)) continue
 
       const dayCandidates: Array<{ slot: SlotWithTech; cost: number }> = []
       for (const win of windows) {
@@ -418,10 +435,12 @@ export async function findSlotsForLead(
   const fallbackEarliest = new Date(now.getTime() + Math.max(FALLBACK_MIN_LEAD_DAYS, minLeadDays) * 24 * 60 * 60 * 1000)
     .toLocaleDateString("en-CA", { timeZone: tz })
 
-  let scored = requiresTravel ? runPass(true, anchoredEarliest) : []
+  let scored = routeBatching ? runPass(true, anchoredEarliest) : []
   if (scored.length === 0) {
-    console.log(`[slots] no anchored slots in ${scanHorizon}d for company ${companyId} — open-day fallback (≥${Math.max(FALLBACK_MIN_LEAD_DAYS, minLeadDays)}d out)`)
-    scored = runPass(false, fallbackEarliest)
+    if (routeBatching) {
+      console.log(`[slots] no anchored slots in ${scanHorizon}d for company ${companyId} — open-day fallback (≥${Math.max(FALLBACK_MIN_LEAD_DAYS, minLeadDays)}d out)`)
+    }
+    scored = runPass(false, routeBatching ? fallbackEarliest : anchoredEarliest)
   }
 
   if (scored.length === 0) return { found: false, reason: "no_slots" }
@@ -432,7 +451,7 @@ export async function findSlotsForLead(
   const minCost = Math.min(...scored.map((c) => c.cost))
   const slots = scored
     .filter((c) => c.cost <= minCost + ROUTE_SLACK_MIN)
-    .slice(0, 8)
+    .slice(0, limit)
     .map((c) => c.slot)
 
   return { found: true, slots }
@@ -544,6 +563,13 @@ export async function techCanTakeBooking(
           .toLocaleDateString("en-CA", { timeZone: tz })
         const bookingDate = new Date(startMs).toLocaleDateString("en-CA", { timeZone: tz })
         if (bookingDate < earliest) return false
+      }
+      // Holiday gate at booking time too: a time the model wrote itself for
+      // "Thursday" must bounce on Thanksgiving even though no list offered it.
+      const holiday = holidayAt(startMs, tz)
+      if (holiday) {
+        console.warn(`[booking] ${new Date(startMs).toISOString()} rejected: ${holiday.name}, the business is closed`)
+        return false
       }
       const { DEFAULT_WINDOWS } = await import("@/lib/availability")
       const windows = ((cfg?.appointment_windows as Array<{ id: string; start: string; end: string; enabled: boolean }> | null) ?? DEFAULT_WINDOWS)

@@ -5,9 +5,9 @@ import { usePathname, useRouter } from "next/navigation"
 import { useEffect, useState } from "react"
 import { createClient } from "@/lib/supabase"
 import {
-  LayoutDashboard, Users, CalendarDays, Calendar,
+  LayoutDashboard, Users, CalendarDays,
   Settings, LogOut, MessageSquare, TrendingUp,
-  Plug, Mail, HardHat, Menu, X, HomeIcon,
+  Plug, Mail, Ruler, Menu, X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
 
@@ -16,10 +16,8 @@ const CRM_NAV = [
   { href: "/dashboard",      icon: LayoutDashboard, label: "Dashboard" },
   { href: "/leads",          icon: Users,           label: "Leads" },
   { href: "/conversations",  icon: MessageSquare,   label: "Conversations" },
-  { href: "/appointments",   icon: Calendar,        label: "Appointments" },
+  { href: "/appointments",   icon: Ruler,           label: "Measures" },
   { href: "/calendar",       icon: CalendarDays,    label: "Calendar" },
-  { href: "/technicians",    icon: HardHat,         label: "Technicians" },
-  { href: "/property-image", icon: HomeIcon,        label: "Property Image" },
   { href: "/email",          icon: Mail,            label: "Email & SMS" },
   { href: "/integrations",   icon: Plug,            label: "Integrations" },
   { href: "/reports",        icon: TrendingUp,      label: "Reports" },
@@ -33,7 +31,6 @@ const CRM_NAV = [
 const AGENT_NAV = [
   { href: "/dashboard",     icon: LayoutDashboard, label: "AI Performance" },
   { href: "/conversations", icon: MessageSquare,   label: "Conversations" },
-  { href: "/technicians",   icon: HardHat,         label: "Dispatch Setup" },
   { href: "/email",         icon: Mail,            label: "Email & SMS" },
   { href: "/integrations",  icon: Plug,            label: "Integrations" },
 ]

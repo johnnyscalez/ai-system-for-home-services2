@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
+import { buildFunnel, groupRevenueByJobType, normalizeLeadSource } from "@/lib/report-helpers"
 
 function parseDate(p: string | null): string | null {
   if (!p) return null
@@ -36,9 +37,6 @@ export async function GET(req: NextRequest) {
     allAppointmentsRes,
     dailyLeadsRes,
     closedDealsRes,
-    technicianApptsRes,
-    closedByTechRes,
-    techniciansRes,
     allTimeClosedRes,
   ] = await Promise.all([
     // Leads in the selected period
@@ -50,7 +48,7 @@ export async function GET(req: NextRequest) {
       if (until) q = q.lte("created_at", until)
       return q
     })(),
-    // All leads (for funnel, source breakdown)
+    // All leads (for the status breakdown)
     supabase.from("leads").select("id, status, source, created_at").eq("company_id", companyId)
       .eq("excluded_from_stats", false)
       .is("deleted_at", null),
@@ -74,7 +72,7 @@ export async function GET(req: NextRequest) {
     })(),
     // Closed deals in period — include refund_amount for net calculation
     (() => {
-      let q = supabase.from("leads").select("deal_value, refund_amount, closed_job_type, closed_technician_id, closed_technician_name, closed_at")
+      let q = supabase.from("leads").select("deal_value, refund_amount, closed_job_type, closed_at")
         .eq("company_id", companyId)
       .eq("excluded_from_stats", false)
       .is("deleted_at", null).in("status", ["closed", "closed_won"]).not("deal_value", "is", null)
@@ -82,25 +80,6 @@ export async function GET(req: NextRequest) {
       if (until) q = q.lte("closed_at", until)
       return q
     })(),
-    // Appointments per tech (in period)
-    (() => {
-      let q = supabase.from("appointments").select("technician_id, technician_name").eq("company_id", companyId).not("technician_id", "is", null)
-      if (since) q = q.gte("created_at", since)
-      if (until) q = q.lte("created_at", until)
-      return q
-    })(),
-    // Closed jobs per tech (in period) — include refund_amount
-    (() => {
-      let q = supabase.from("leads").select("closed_technician_id, closed_technician_name, deal_value, refund_amount")
-        .eq("company_id", companyId)
-      .eq("excluded_from_stats", false)
-      .is("deleted_at", null).in("status", ["closed", "closed_won"]).not("closed_technician_id", "is", null)
-      if (since) q = q.gte("closed_at", since)
-      if (until) q = q.lte("closed_at", until)
-      return q
-    })(),
-    // Technicians
-    supabase.from("technicians").select("id, name, status").eq("company_id", companyId).order("name"),
     // All-time closed deals — for computing real avg job value
     supabase.from("leads").select("deal_value").eq("company_id", companyId)
       .eq("excluded_from_stats", false)
@@ -113,9 +92,6 @@ export async function GET(req: NextRequest) {
   const allAppointments = allAppointmentsRes.data ?? []
   const dailyLeadsRaw = dailyLeadsRes.data ?? []
   const closedDeals = closedDealsRes.data ?? []
-  const technicianApts = technicianApptsRes.data ?? []
-  const closedByTech = closedByTechRes.data ?? []
-  const allTechnicians = techniciansRes.data ?? []
   const allTimeClosed = allTimeClosedRes.data ?? []
 
   // Build daily sparkline — dynamic range based on period length
@@ -143,16 +119,12 @@ export async function GET(req: NextRequest) {
   // Source breakdown (period)
   const sourceCounts: Record<string, number> = {}
   for (const l of leadsInPeriod) {
-    const src = l.source ?? "unknown"
+    const src = normalizeLeadSource(l.source)
     sourceCounts[src] = (sourceCounts[src] ?? 0) + 1
   }
 
-  // Funnel (period)
-  const funnelStages = ["new", "contacted", "qualified", "appointment_booked", "closed_lost"]
-  const funnel = funnelStages.map(stage => ({
-    stage,
-    count: leadsInPeriod.filter(l => l.status === stage).length,
-  }))
+  // Funnel (period), from current lead statuses
+  const funnel = buildFunnel(leadsInPeriod)
 
   const bookingRate = leadsInPeriod.length > 0
     ? Math.round((appointmentsInPeriod.length / leadsInPeriod.length) * 100)
@@ -176,46 +148,8 @@ export async function GET(req: NextRequest) {
   const totalRefunded = closedDeals.reduce((sum, d) => sum + (Number(d.refund_amount) || 0), 0)
   const closedCount = closedDeals.length
 
-  // Technician performance
-  const aptsByTech: Record<string, number> = {}
-  for (const a of technicianApts) {
-    if (a.technician_id) aptsByTech[a.technician_id] = (aptsByTech[a.technician_id] ?? 0) + 1
-  }
-  const closedByTechMap: Record<string, { count: number; revenue: number; name: string }> = {}
-  for (const c of closedByTech) {
-    const id = c.closed_technician_id ?? "unknown"
-    if (!closedByTechMap[id]) closedByTechMap[id] = { count: 0, revenue: 0, name: c.closed_technician_name ?? "Unknown" }
-    closedByTechMap[id].count++
-    const net = Math.max(0, (Number(c.deal_value) || 0) - (Number(c.refund_amount) || 0))
-    closedByTechMap[id].revenue += net
-  }
-  const techIds = new Set([...allTechnicians.map(t => t.id), ...Object.keys(closedByTechMap)])
-  const techPerformance = Array.from(techIds).map(id => {
-    const tech = allTechnicians.find(t => t.id === id)
-    const closed = closedByTechMap[id] ?? { count: 0, revenue: 0, name: tech?.name ?? "Unknown" }
-    return {
-      id, name: tech?.name ?? closed.name, status: tech?.status ?? "active",
-      appointments: aptsByTech[id] ?? 0,
-      closedJobs: closed.count,
-      revenue: closed.revenue,
-    }
-  }).sort((a, b) => b.revenue - a.revenue)
-
-  // Revenue by job type — closed_job_type is free text set when a deal is
-  // closed, so group case-insensitively on the trimmed value ("AC Install"
-  // and "ac install" are the same job) and bucket blanks as Unspecified.
-  // Revenue is net of refunds, same as everywhere else on this page.
-  const jobTypeMap: Record<string, { name: string; jobs: number; revenue: number }> = {}
-  for (const d of closedDeals) {
-    const raw = (d.closed_job_type ?? "").trim()
-    const key = raw ? raw.toLowerCase() : "__unspecified__"
-    if (!jobTypeMap[key]) jobTypeMap[key] = { name: raw || "Unspecified", jobs: 0, revenue: 0 }
-    jobTypeMap[key].jobs++
-    jobTypeMap[key].revenue += Math.max(0, (Number(d.deal_value) || 0) - (Number(d.refund_amount) || 0))
-  }
-  const jobTypePerformance = Object.values(jobTypeMap)
-    .map(j => ({ ...j, avgJob: j.jobs > 0 ? Math.round(j.revenue / j.jobs) : 0 }))
-    .sort((a, b) => b.revenue - a.revenue)
+  // Revenue by job type: enum values and labels collapse to one label
+  const jobTypePerformance = groupRevenueByJobType(closedDeals)
 
   return NextResponse.json({
     leadsInPeriod: leadsInPeriod.length,
@@ -232,7 +166,6 @@ export async function GET(req: NextRequest) {
     statusCounts,
     sourceCounts,
     funnel,
-    techPerformance,
     jobTypePerformance,
   })
 }

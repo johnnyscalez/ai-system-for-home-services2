@@ -1,186 +1,63 @@
-import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase-server"
-import { generateSystemPrompt } from "@/lib/claude"
-import type { KnowledgeBaseData, AgentConfigData } from "@/lib/claude"
-import { zipFromAddress, zipsWithinRadius } from "@/lib/routing"
+import { NextResponse } from "next/server"
+import { loadIntake, saveIntake } from "@/lib/intake"
+import { applyIntakeToRuntime } from "@/lib/intake-apply"
+import { missingForLaunch } from "@/components/onboarding/logic"
+import { getSession } from "../_lib"
 
-export async function POST(req: NextRequest) {
+export const runtime = "nodejs"
+
+/**
+ * Finishes onboarding: compiles the intake into the running config (service
+ * area zips, knowledge base, assistant settings, measure capacity, the
+ * assistant's base prompt) and opens the dashboard. On an account that is
+ * already live it re-runs the same compile, which is how Settings > Account
+ * setup retrains the assistant.
+ *
+ * Facebook, photos and the carrier registration are NOT required here:
+ * FieldBuilt installs the account and chases those.
+ */
+export async function POST() {
+  const session = await getSession()
+  if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
+  const { db, companyId } = session
+  if (!companyId) return NextResponse.json({ error: "Start with your business details." }, { status: 400 })
+
   try {
-    // Auth check using the user's session
-    const userSupabase = await createServerSupabaseClient()
-    const { data: { user } } = await userSupabase.auth.getUser()
-    if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
-
-    const body = await req.json()
-    const { business, intelligence, aiAgent, provisionedNumber, provisionedTwilioSid, sources } = body
-
-    // Use service role to bypass RLS for all onboarding inserts
-    const supabase = createServiceRoleClient()
-
-    // Service area = every zip within the radius of the office. Resolved once
-    // here from the embedded ZCTA centroid dataset; the slot engine gates
-    // out-of-area leads on this list, and the office point anchors routing.
-    const officeAddress = String(business.officeAddress ?? "").trim()
-    const radiusMiles = Math.min(200, Math.max(0, parseInt(business.serviceRadius, 10) || 0))
-    const officeZip = zipFromAddress(officeAddress)
-    const areaZips = radiusMiles > 0 ? zipsWithinRadius(officeZip, radiusMiles) : []
-    const serviceAreaText = radiusMiles > 0
-      ? `Within ${radiusMiles} miles of ${officeAddress}`
-      : officeAddress
-
-    // Generate system prompt (non-fatal if fails)
-    let systemPrompt = ""
-    try {
-      const kb: KnowledgeBaseData = {
-        companyName: business.companyName,
-        serviceType: business.serviceType,
-        serviceArea: serviceAreaText,
-        businessDescription: intelligence.businessDescription,
-        servicesOffered: intelligence.servicesOffered,
-        pricingInfo: intelligence.pricingInfo,
-        financingOptions: intelligence.financingOptions,
-        teamInfo: intelligence.teamInfo,
-        uniqueSellingPoints: intelligence.uniqueSellingPoints,
-        yearsInBusiness: intelligence.yearsInBusiness,
-        certifications: intelligence.certifications,
-        testimonials: intelligence.testimonials,
-        customFacts: intelligence.customFacts,
-        websiteUrl: intelligence.websiteUrl,
-      }
-      const config: AgentConfigData = {
-        agentName: aiAgent.agentName,
-        tone: aiAgent.tone,
-        primaryGoal: "book_estimate",
-        customInstructions: aiAgent.customInstructions,
-        qualifyingQuestions: [],
-        disqualifiers: aiAgent.disqualifiers || "",
-        objectionResponses: aiAgent.objectionResponses,
-        workingHoursStart: aiAgent.workingHoursStart,
-        workingHoursEnd: aiAgent.workingHoursEnd,
-        timezone: aiAgent.timezone,
-      }
-      systemPrompt = await generateSystemPrompt(kb, config)
-    } catch {
-      // Non-fatal — AI works without a generated prompt
-    }
-
-    const webhookSecret = Array.from(crypto.getRandomValues(new Uint8Array(24)))
-      .map((b) => b.toString(16).padStart(2, "0"))
-      .join("")
-
-    // Normalize notification phone to E.164 format
-    function normalizePhone(raw: string): string {
-      const digits = raw.replace(/\D/g, "")
-      if (digits.startsWith("972") && digits.length === 12) return `+${digits}`
-      if (digits.startsWith("1") && digits.length === 11) return `+${digits}`
-      if (digits.length === 10) return `+1${digits}`
-      if (digits.length > 7) return `+${digits}`
-      return raw // return as-is if we can't normalize
-    }
-
-    // 1. Create company
-    const { data: company, error: companyError } = await supabase
-      .from("companies")
-      .insert({
-        name: business.companyName,
-        owner_id: user.id,
-        service_type: business.serviceType,
-        service_area: serviceAreaText,
-        office_address: officeAddress || null,
-        service_radius_miles: radiusMiles || null,
-        service_area_zips: areaZips.length > 0 ? areaZips : null,
-        notification_phone: business.notificationPhone ? normalizePhone(business.notificationPhone) : null,
-        onboarding_completed: true,
-        webhook_secret: webhookSecret,
-      })
-      .select()
-      .single()
-
-    if (companyError || !company) {
-      console.error("Company insert error:", companyError)
-      return NextResponse.json({ error: "Failed to create company" }, { status: 500 })
-    }
-
-    const companyId = company.id
-
-    // Run remaining inserts in parallel — service role bypasses all RLS
-    await Promise.all([
-      // 2. Link user to company
-      supabase.from("users").update({ company_id: companyId }).eq("id", user.id),
-
-      // 3. Knowledge base
-      supabase.from("knowledge_base").insert({
-        company_id: companyId,
-        website_url: intelligence.websiteUrl || null,
-        business_description: intelligence.businessDescription || null,
-        services_offered: intelligence.servicesOffered || null,
-        service_areas: intelligence.serviceAreas || null,
-        pricing_info: intelligence.pricingInfo || null,
-        financing_options: intelligence.financingOptions || null,
-        team_info: intelligence.teamInfo || null,
-        unique_selling_points: intelligence.uniqueSellingPoints || null,
-        years_in_business: intelligence.yearsInBusiness || null,
-        certifications: intelligence.certifications || null,
-        testimonials: intelligence.testimonials || null,
-        custom_facts: intelligence.customFacts || null,
-        custom_ai_knowledge: intelligence.customAiKnowledge || null,
-        social_facebook: intelligence.socialFacebook || null,
-        social_instagram: intelligence.socialInstagram || null,
-      }),
-
-      // 4. AI agent config
-      supabase.from("ai_agent_config").insert({
-        company_id: companyId,
-        agent_name: aiAgent.agentName,
-        agent_persona: aiAgent.tone,
-        primary_goal: "book_estimate",
-        tone: aiAgent.tone,
-        custom_instructions: aiAgent.customInstructions || null,
-        qualifying_questions: aiAgent.qualifyingQuestions,
-        objection_responses: aiAgent.objectionResponses,
-        follow_up_enabled: true,
-        working_hours_start: aiAgent.workingHoursStart,
-        working_hours_end: aiAgent.workingHoursEnd,
-        timezone: aiAgent.timezone,
-        generated_system_prompt: systemPrompt || null,
-        prompt_generated_at: systemPrompt ? new Date().toISOString() : null,
-        disqualifiers: aiAgent.disqualifiers || null,
-      }),
-
-      // 5. Legacy settings record
-      supabase.from("settings").insert({
-        company_id: companyId,
-        ai_name: aiAgent.agentName,
-        qualifying_questions: aiAgent.qualifyingQuestions,
-        objection_responses: aiAgent.objectionResponses,
-        follow_up_enabled: true,
-        working_hours_start: aiAgent.workingHoursStart,
-        working_hours_end: aiAgent.workingHoursEnd,
-        timezone: aiAgent.timezone,
-      }),
-
-      // 6. Phone number (if provisioned)
-      ...(provisionedNumber ? [
-        supabase.from("phone_numbers").insert({
-          company_id: companyId,
-          phone_number: provisionedNumber,
-          twilio_sid: provisionedTwilioSid || null,
-          is_active: true,
-        }),
-      ] : []),
-
-      // 7. Facebook connection (if selected)
-      ...(sources?.facebook ? [
-        supabase.from("facebook_connections").insert({
-          company_id: companyId,
-          is_active: true,
-        }),
-      ] : []),
+    const [{ data: company }, intake] = await Promise.all([
+      db.from("companies").select("name, onboarding_completed, notification_phone").eq("id", companyId).maybeSingle(),
+      loadIntake(db, companyId),
     ])
+    if (!company) return NextResponse.json({ error: "Company not found." }, { status: 404 })
 
-    return NextResponse.json({ success: true, companyId })
+    const missing = missingForLaunch({
+      companyName: (company.name as string | null) ?? "",
+      ownerMobile: (company.notification_phone as string | null) ?? "",
+      intake,
+    })
+    if (missing.length > 0) {
+      return NextResponse.json(
+        { error: `Still needed: ${missing.map((m) => m.message).join(", ")}.`, missing },
+        { status: 400 }
+      )
+    }
+
+    const result = await applyIntakeToRuntime(companyId, { prompt: "always" })
+
+    if (!company.onboarding_completed) {
+      const { error } = await db.from("companies").update({ onboarding_completed: true }).eq("id", companyId)
+      if (error) throw new Error(error.message)
+      await saveIntake(db, companyId, {
+        progress: {
+          step: 10,
+          completedSteps: [1, 2, 3, 4, 5, 6, 7, 8, 9, 10],
+          finishedAt: new Date().toISOString(),
+        },
+      })
+    }
+
+    return NextResponse.json({ success: true, companyId, ...result })
   } catch (err) {
-    console.error("Onboarding complete error:", err)
-    return NextResponse.json({ error: "Onboarding failed" }, { status: 500 })
+    console.error("[onboarding/complete] failed:", err)
+    return NextResponse.json({ error: "Setup did not finish. Please try again." }, { status: 500 })
   }
 }

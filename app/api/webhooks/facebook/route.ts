@@ -1,11 +1,10 @@
 import { NextRequest, NextResponse } from "next/server"
-import { qualifyFromFormFields } from "@/lib/fieldbuilt-qualify"
 import { createServiceRoleClient } from "@/lib/supabase-server"
-import { processAndSave, inferJobType } from "@/lib/ai-engine"
-import { sendSMS, formatPhone, parseLeadPhone } from "@/lib/twilio"
+import { processAndSave } from "@/lib/ai-engine"
+import { parseLeadPhone } from "@/lib/twilio"
 import { notifyNewLead, notifyAppointmentBooked, notifyNeedsAttention } from "@/lib/notifications"
-import { buildNoReplySchedule } from "@/lib/sequences"
 import { sendMessengerMessage, getMessengerProfile, messengerPlaceholderPhone } from "@/lib/messenger"
+import { handleLeadgenChange } from "@/lib/meta-leadgen"
 import crypto from "crypto"
 
 // ─── Messenger events (entry[].messaging[]) ───────────────────────────────────
@@ -15,8 +14,26 @@ import crypto from "crypto"
 type MessagingEvent = {
   sender: { id: string }
   recipient: { id: string }
+  timestamp?: number
   message?: { mid: string; text?: string; is_echo?: boolean; app_id?: number; attachments?: unknown[] }
-  postback?: { title?: string; payload?: string }
+  postback?: { mid?: string; title?: string; payload?: string }
+}
+
+// ── Message id dedupe ────────────────────────────────────────────────────────
+// Meta redelivers a messaging event whenever our reply takes longer than its
+// timeout, and a multi-second AI turn regularly does. Without this the same
+// inbound was answered twice. Two layers: an in-process LRU (catches the retry
+// that lands while the first run is still generating) and a database check on
+// conversations.twilio_sid = mid (catches a retry served by another instance or
+// after a restart; the inbound row carries the mid from the first run).
+const seenMids = new Map<string, number>()
+const MID_LRU_MAX = 2000
+
+function midAlreadyHandled(mid: string): boolean {
+  if (seenMids.has(mid)) return true
+  seenMids.set(mid, Date.now())
+  if (seenMids.size > MID_LRU_MAX) seenMids.delete(seenMids.keys().next().value as string)
+  return false
 }
 
 async function handleMessagingEvent(pageId: string, event: MessagingEvent): Promise<void> {
@@ -34,23 +51,42 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     has_postback: Boolean(event.postback),
   }))
 
-  const { data: integration } = await supabase
+  // limit(1), not single(): one Page active under two companies used to make
+  // single() fail for BOTH, silencing the Page everywhere. Most recently saved wins.
+  const { data: integrationRows } = await supabase
     .from("integrations")
     .select("company_id, fb_access_token")
     .eq("fb_page_id", pageId)
     .eq("is_active", true)
-    .single()
+    .order("updated_at", { ascending: false })
+    .limit(1)
+  const integration = integrationRows?.[0]
   if (!integration?.fb_access_token) {
     console.log("[webhook/facebook] msgEvent: NO active integration for page", pageId)
     return
+  }
+
+  const mid = event.message?.mid ?? event.postback?.mid ?? null
+  if (mid) {
+    if (midAlreadyHandled(mid)) {
+      console.log(`[webhook/facebook] duplicate delivery of ${mid} ignored (in-process)`)
+      return
+    }
+    const { data: dup } = await supabase
+      .from("conversations").select("id")
+      .eq("company_id", integration.company_id).eq("twilio_sid", mid).limit(1)
+    if (dup?.length) {
+      console.log(`[webhook/facebook] duplicate delivery of ${mid} ignored (already stored)`)
+      return
+    }
   }
 
   // ── Echo = the PAGE sent a message. Two sources: our own AI sends (via the
   // Graph API — they carry OUR app_id) and MANUAL replies a team member typed
   // in Meta's inbox / Business Suite (different or no app_id). A manual reply
   // means a human took over the conversation → pause the AI so it stops
-  // auto-replying and doesn't talk over the employee. (WhatsApp/SMS already do
-  // this; this brings Messenger to parity.)
+  // auto-replying and doesn't talk over the employee. (SMS already does this;
+  // this brings Messenger to parity.)
   if (event.message?.is_echo) {
     const customerPsid = event.recipient?.id            // echo recipient = the lead
     if (!customerPsid) return
@@ -60,7 +96,7 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
 
     const { data: lead } = await supabase
       .from("leads")
-      .select("id")
+      .select("id, last_inbound_at")
       .eq("company_id", integration.company_id)
       .eq("messenger_psid", customerPsid)
       .is("deleted_at", null)
@@ -82,11 +118,34 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
       if (ours) return
     }
 
+    // The Page's own automation (instant replies, questionnaire prompts) echoes
+    // exactly like a person's reply. Pausing on it would switch the agent off for
+    // every lead of a Page that runs a greeting flow. Record it, do not pause.
+    if (echoText) {
+      const { isAutomationEcho, getPageAutomationTexts } = await import("@/lib/messenger")
+      const pageTexts = await getPageAutomationTexts(integration.fb_access_token, pageId)
+      const automation = isAutomationEcho({
+        text: echoText,
+        echoMs: typeof event.timestamp === "number" ? event.timestamp : null,
+        lastInboundMs: lead.last_inbound_at ? new Date(lead.last_inbound_at as string).getTime() : null,
+        pageTexts,
+      })
+      if (automation) {
+        await supabase.from("conversations").insert({
+          lead_id: lead.id, company_id: integration.company_id,
+          direction: "outbound", sent_by: "human", body: echoText, channel: "messenger", twilio_sid: mid,
+        })
+        console.log(`[webhook/facebook] page automation echo recorded for lead ${lead.id}, AI stays on`)
+        return
+      }
+    }
+
     await supabase.from("leads").update({ ai_paused: true }).eq("id", lead.id)
     await supabase.from("conversations").insert({
       lead_id: lead.id, company_id: integration.company_id,
       direction: "outbound", sent_by: "human",
       body: echoText || "(manual reply sent from Messenger)", channel: "messenger",
+      twilio_sid: mid,
     })
     console.log(`[webhook/facebook] human takeover — AI paused for lead ${lead.id}`)
     return
@@ -113,7 +172,7 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     leadId = existing.id
     // Messenger-only leads have a placeholder phone. The moment they type a
     // real number ("561-555-0123"), capture it — reminders, confirmations,
-    // and the tech's call-ahead all need it.
+    // and the call-ahead before the visit all need it.
     // BOTH placeholder kinds must be replaceable. It used to check only
     // "msgr:", so a lead created from a lead form WITHOUT a phone (placeholder
     // "fbform:<id>") who then typed their number in Messenger kept the
@@ -129,7 +188,7 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
       if (phoneMatch) {
         const realPhone = parseLeadPhone(phoneMatch[1].replace(/\s/g, ""))
         if (realPhone) await supabase.from("leads").update({ phone: realPhone }).eq("id", leadId)
-        // invalid → Linda keeps asking
+        // invalid: the agent keeps asking
       }
     }
     // Same for email — capture the moment it's shared in conversation
@@ -161,7 +220,7 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
     leadId = newLead.id
 
     const leadName = `${profile.firstName ?? ""} ${profile.lastName ?? ""}`.trim() || "Messenger lead"
-    notifyNewLead(integration.company_id, leadName, "via Messenger", "facebook").catch(() => {})
+    notifyNewLead(integration.company_id, leadName, "", "messenger", leadId).catch(() => {})
 
     // FIRST CONTACT with this PSID — the thread may have a life we never saw
     // (Meta inbox automations, office reps, pre-connect history). Import it so
@@ -194,7 +253,9 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
           if (real) patch.phone = real
         }
         if (facts.email) patch.email = facts.email
-        if (facts.zip) patch.address = facts.zip
+        // A zip is a zip, never an address (a bare zip in the address field counted
+        // as "street address on file" in the agent's booking checklist).
+        if (facts.zip) patch.zip = facts.zip
         if (Object.keys(patch).length > 0) {
           await supabase.from("leads").update(patch).eq("id", leadId)
           console.log(`[webhook/facebook] mined contact facts for lead ${leadId}: ${Object.keys(patch).join(", ")}`)
@@ -212,7 +273,7 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
       if (humanOwned) {
         await supabase.from("conversations").insert({
           lead_id: leadId, company_id: integration.company_id,
-          direction: "inbound", sent_by: "human", body: text, channel: "messenger",
+          direction: "inbound", sent_by: "human", body: text, channel: "messenger", twilio_sid: mid,
         })
         // Pause, but never demote a lead with an upcoming visit (Viloren class)
         const { data: upcomingApt } = await supabase.from("appointments")
@@ -227,7 +288,8 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
         notifyNeedsAttention(
           integration.company_id,
           `${leadName} (existing Messenger thread — a team member or page automation already engaged; AI is holding back. Review the imported history and Resume AI if wanted.)`,
-          "via Messenger"
+          "via Messenger",
+          leadId
         ).catch(() => {})
         console.log(`[webhook/facebook] lead ${leadId}: ${imported} msgs imported, HUMAN-OWNED thread — AI paused, office notified`)
         return
@@ -245,7 +307,7 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
   if (MSGR_OPT_OUT_RE.test(text)) {
     await supabase.from("conversations").insert({
       lead_id: leadId, company_id: integration.company_id,
-      direction: "inbound", sent_by: "human", body: text, channel: "messenger",
+      direction: "inbound", sent_by: "human", body: text, channel: "messenger", twilio_sid: mid,
     })
     await supabase.from("leads")
       .update({ status: "closed_lost", ai_paused: true, last_message_at: new Date().toISOString() })
@@ -274,7 +336,7 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
   if (existing?.ai_paused) {
     await supabase.from("conversations").insert({
       lead_id: leadId, company_id: integration.company_id,
-      direction: "inbound", sent_by: "human", body: text, channel: "messenger",
+      direction: "inbound", sent_by: "human", body: text, channel: "messenger", twilio_sid: mid,
     })
     await supabase.from("leads").update({ last_message_at: new Date().toISOString() }).eq("id", leadId)
     console.log(`[webhook/facebook] lead ${leadId} is AI-paused (human handling) — no AI reply`)
@@ -307,7 +369,7 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
       if ((haveIt ?? 0) === 0) {
         await supabase.from("conversations").insert({
           lead_id: leadId, company_id: integration.company_id,
-          direction: "inbound", sent_by: "human", body: text, channel: "messenger",
+          direction: "inbound", sent_by: "human", body: text, channel: "messenger", twilio_sid: mid,
         })
       }
       await supabase.from("leads").update({ last_message_at: new Date().toISOString() }).eq("id", leadId)
@@ -332,7 +394,7 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
       if ((haveIt ?? 0) === 0) {
         await supabase.from("conversations").insert({
           lead_id: leadId, company_id: integration.company_id,
-          direction: "inbound", sent_by: "human", body: text, channel: "messenger",
+          direction: "inbound", sent_by: "human", body: text, channel: "messenger", twilio_sid: mid,
         })
       }
       await supabase.from("leads").update({ last_message_at: new Date().toISOString() }).eq("id", leadId)
@@ -343,7 +405,7 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
 
   // Run the same AI engine as SMS; saves inbound + outbound with channel=messenger
   try {
-    const result = await processAndSave(leadId, integration.company_id, text, undefined, undefined, "messenger")
+    const result = await processAndSave(leadId, integration.company_id, text, mid ?? undefined, undefined, "messenger")
     if (result.response) {
       // Re-check ai_paused RIGHT before sending (finding C19): a human can take
       // over in the dashboard during the multi-second AI generation above — the
@@ -385,7 +447,9 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
           .from("leads").select("first_name, last_name, phone").eq("id", leadId).single()
         if (leadData) {
           const name = `${leadData.first_name ?? ""} ${leadData.last_name ?? ""}`.trim() || leadData.phone
-          notifyAppointmentBooked(integration.company_id, name, bookedApt.scheduled_at, bookedApt.address ?? "")
+          const moved = result.action?.type === "reschedule_appointment" ||
+            (result.action?.type === "book_appointment" && result.action.outcome === "moved")
+          notifyAppointmentBooked(integration.company_id, name, bookedApt.scheduled_at, bookedApt.address ?? "", moved, leadId)
             .catch(() => {})
         }
       }
@@ -396,7 +460,8 @@ async function handleMessagingEvent(pageId: string, event: MessagingEvent): Prom
         .from("leads").select("first_name, last_name, phone").eq("id", leadId).single()
       if (leadData) {
         const name = `${leadData.first_name ?? ""} ${leadData.last_name ?? ""}`.trim() || leadData.phone
-        notifyNeedsAttention(integration.company_id, name, leadData.phone).catch(() => {})
+        // Awaited: it stamps the lead, and the follow-up pause below writes the same field.
+        await notifyNeedsAttention(integration.company_id, name, leadData.phone, leadId).catch(() => {})
       }
     }
 
@@ -434,7 +499,7 @@ export async function GET(req: NextRequest) {
   return NextResponse.json({ error: "Forbidden" }, { status: 403 })
 }
 
-// POST — Receive leadgen events
+// POST — Lead Ads submissions and Messenger events
 export async function POST(req: NextRequest) {
   const rawBody = await req.text()
 
@@ -493,506 +558,31 @@ export async function POST(req: NextRequest) {
   for (const entry of body.entry) {
     // Messenger conversation events — entry.id is the page ID
     for (const msgEvent of entry.messaging ?? []) {
-      await handleMessagingEvent(entry.id, msgEvent)
+      try {
+        await handleMessagingEvent(entry.id, msgEvent)
+      } catch (err) {
+        console.error("[webhook/facebook] messaging event crashed:", err)
+        // Let Meta's retry through: nothing was stored for this message.
+        const failedMid = msgEvent.message?.mid ?? msgEvent.postback?.mid
+        if (failedMid) seenMids.delete(failedMid)
+      }
     }
 
+    // Lead Ads submissions. All the work lives in lib/meta-leadgen.ts (it is also
+    // re-run from the setup wizard to recover leads Facebook refused to release
+    // while the connection was broken). One bad event never stops the batch, and
+    // Meta always gets its 200: a non-200 makes Meta redeliver the WHOLE batch and,
+    // if it keeps happening, disable the subscription for every company.
     for (const change of entry.changes ?? []) {
       if (change.field !== "leadgen") continue
-
       const { leadgen_id, page_id, form_id } = change.value
-
-      // Look up company by Facebook page ID
-      const { data: integration } = await supabase
-        .from("integrations")
-        .select("company_id, fb_access_token, companies(service_type)")
-        .eq("fb_page_id", page_id)
-        .eq("is_active", true)
-        .single()
-
-      if (!integration) continue
-
-      // Fetch lead field data from Facebook Graph API
-      const leadRes = await fetch(
-        `https://graph.facebook.com/${leadgen_id}?fields=field_data&access_token=${integration.fb_access_token}`
-      )
-      const leadData = await leadRes.json()
-      if (!leadData.field_data) continue
-
-      // Normalize field_data array into a flat object. Keys are whatever the
-      // contractor typed as the form question — strip ALL punctuation, not
-      // just spaces ("What is your phone number?" → what_is_your_phone_number)
-      const fields: Record<string, string> = {}
-      for (const f of leadData.field_data as Array<{ name: string; values: string[] }>) {
-        const key = f.name.toLowerCase().replace(/[^\w]+/g, "_").replace(/^_+|_+$/g, "")
-        fields[key] = f.values?.[0] ?? ""
-      }
-
-      // ── Phone extraction: exact keys → key contains phone/mobile/cell →
-      // any field whose VALUE looks like a phone number. Ad forms name this
-      // field freely ("what_is_your_phone_number") — an unrecognized key must
-      // NEVER cost the contractor a paid lead.
-      const looksLikePhone = (v: string) => {
-        const digits = v.replace(/\D/g, "")
-        return digits.length >= 10 && digits.length <= 15 && /^[+\d(]/.test(v.trim())
-      }
-      let rawPhone =
-        fields["phone_number"] || fields["phone"] || fields["mobile_phone"] || fields["mobile"] || ""
-      if (!rawPhone) {
-        for (const [k, v] of Object.entries(fields)) {
-          if (v && /phone|mobile|cell/.test(k) && looksLikePhone(v)) { rawPhone = v; break }
-        }
-      }
-      if (!rawPhone) {
-        for (const v of Object.values(fields)) {
-          if (v && looksLikePhone(v)) { rawPhone = v; break }
-        }
-      }
-
-      // STRICT parse: returns valid E.164 or null. The lenient formatPhone
-      // turned "no phone" into "+" (an invisible, undeliverable lead that also
-      // dedupe-swallowed every later bad-phone lead) and "…ext 2" into a
-      // Dutch number (adversarial-verify finding 8).
-      const phone: string | null = parseLeadPhone(rawPhone)
-
-      // Email: exact keys, then any key containing "email", then value match
-      let leadEmail = fields["email"] || fields["email_address"] || ""
-      if (!leadEmail) {
-        for (const [k, v] of Object.entries(fields)) {
-          if (v && (/email/.test(k) || /^[^\s@]+@[^\s@]+\.[a-z]{2,}$/i.test(v))) { leadEmail = v; break }
-        }
-      }
-
-      const fullName = fields["full_name"] || fields["name"] || fields["your_name"] || fields["what_is_your_name"] || ""
-      const firstName = fields["first_name"] || fullName.split(" ")[0] || null
-      const lastName =
-        fields["last_name"] ||
-        (fullName.includes(" ") ? fullName.split(" ").slice(1).join(" ") : null)
-
-      // MESSENGER LEAD FORMS: a click-to-Messenger lead ad runs its questions
-      // INSIDE a Messenger thread, and the form payload carries that thread's
-      // PSID in `inbox_url`. Without it we started a cold SMS to someone who
-      // was mid-conversation with us on Messenger — and every one of those SMS
-      // was carrier-blocked, so the lead heard nothing at all. With it we
-      // answer in the thread they are already in. (Verified live: the id in
-      // inbox_url resolves to the lead's real Messenger conversation.)
-      const inboxUrl = fields["inbox_url"] || fields["conversation_url"] || ""
-      const formPsid = inboxUrl.match(/latest\/(\d{6,})/)?.[1] ?? null
-
-      // Zip from the form — previously discarded entirely; routing and the AI
-      // both want it
-      const formZip = (fields["zip"] || fields["zip_code"] || fields["postal_code"] ||
-        Object.entries(fields).find(([k, v]) => /zip|postal/.test(k) && /^\d{5}/.test(v ?? ""))?.[1] || "")
-        .match(/\d{5}/)?.[0] ?? null
-
-      // Extract job/project details from any non-identity form fields.
-      // Facebook lead forms often include custom questions like "What type of service do you need?"
-      // We capture everything that isn't phone/name/email/location as notes so the AI can use it.
-      const ADDRESS_KEYS = [
-        "street_address", "address", "home_address", "lead_address",
-        "property_address", "service_address", "full_address", "mailing_address",
-      ]
-      const IDENTITY_KEYS = new Set([
-        "phone_number", "phone", "mobile_phone", "mobile",
-        "first_name", "last_name", "full_name", "email", "email_address",
-        "city", "state", "zip", "zip_code", "country", "postal_code",
-        ...ADDRESS_KEYS,
-      ])
-      const JOB_TYPE_KEYS = [
-        "job_type", "service_type", "service_requested", "service_needed",
-        "type_of_service", "project_type", "service_interest",
-        "what_type_of_service", "what_service_do_you_need",
-      ]
-
-      // Pull address from any recognised address field name
-      let leadAddress: string | null = null
-      for (const k of ADDRESS_KEYS) {
-        if (fields[k]) { leadAddress = fields[k]; break }
-      }
-
-      // Pull explicit job-type field first
-      let jobType: string | null = null
-      for (const k of JOB_TYPE_KEYS) {
-        if (fields[k]) { jobType = fields[k]; break }
-      }
-
-      // Collect all remaining custom question answers as notes. Skip identity
-      // keys by EXACT name and also by fuzzy class (a phone captured from
-      // "what_is_your_phone_number" must not leak into notes as a question).
-      const extraParts: string[] = []
-      if (jobType) extraParts.push(jobType)
-      for (const [k, v] of Object.entries(fields)) {
-        if (!v || IDENTITY_KEYS.has(k) || JOB_TYPE_KEYS.includes(k)) continue
-        if (/phone|mobile|cell|email|zip|postal|name$/.test(k)) continue
-        // Format the key nicely: "what_is_the_issue" → "What is the issue"
-        const label = k.replace(/_/g, " ").replace(/^\w/, c => c.toUpperCase())
-        extraParts.push(`${label}: ${v}`)
-      }
-      if (formZip) extraParts.push(`Zip: ${formZip}`)
-      // Unparseable phone: keep exactly what the lead typed — the owner may
-      // still be able to read a real number out of it ("'6305551234", "630 555
-      // 0187 ext 2"); losing it entirely made call-back impossible.
-      if (rawPhone && !parseLeadPhone(rawPhone)) extraParts.push(`Phone (as typed): ${rawPhone}`)
-      const formNotes = extraParts.length > 0 ? extraParts.join(" | ") : null
-
-      // NEVER drop a paid lead. If no phone could be extracted, the lead still
-      // gets created under a deterministic placeholder (dedupes Facebook's
-      // webhook retries) with needs_attention so the owner sees it and calls
-      // back manually — a silent drop is the one unforgivable outcome here.
-      const effectivePhone = phone ?? `fbform:${leadgen_id}`
-      if (!phone) {
-        console.error(`[webhook/facebook] leadgen ${leadgen_id} (form ${form_id}): no phone field recognized — creating needs_attention lead. Keys: ${Object.keys(fields).join(",")}`)
-      }
-
-      // Upsert lead — excludes soft-deleted leads so a deleted lead's phone
-      // number gets a clean slate instead of silently resurrecting old
-      // history (see app/api/webhooks/lead/route.ts for the full reasoning)
-      // Match on PSID FIRST when the form came from Messenger: the same person
-      // otherwise landed twice — once as a Messenger lead (placeholder phone)
-      // and once as a form lead (real phone) — with the AI half-blind in both.
-      let existing: { id: string; status: string } | null = null
-      if (formPsid) {
-        const { data: byPsid } = await supabase
-          .from("leads")
-          .select("id, status")
-          .eq("company_id", integration.company_id)
-          .eq("messenger_psid", formPsid)
-          .is("deleted_at", null)
-          .maybeSingle()
-        existing = byPsid ?? null
-      }
-      if (!existing) {
-        const { data: byPhone } = await supabase
-          .from("leads")
-          .select("id, status")
-          .eq("company_id", integration.company_id)
-          .eq("phone", effectivePhone)
-          .is("deleted_at", null)
-          .maybeSingle()
-        existing = byPhone ?? null
-      }
-
-      let leadId: string
-      let isNewLead = false
-      // FieldBuilt's own funnel: form said not a fit → record it, never chase it
-      let funnelRejected = false
-
-      if (existing) {
-        // Opted-out leads stay opted out — a redelivered payload or genuine
-        // re-submission must NOT revive an ai_paused lead into the texting
-        // pipeline (adversarial-verify finding 3). Log + notify only.
-        const { data: fullExisting } = await supabase
-          .from("leads").select("ai_paused").eq("id", existing.id).single()
-        if (fullExisting?.ai_paused) {
-          console.log(`[webhook/facebook] leadgen for opted-out/paused lead ${existing.id} — not reviving, notifying owner`)
-          notifyNewLead(integration.company_id, "Opted-out lead re-submitted a form", phone ?? "", "facebook").catch(() => {})
-          continue
-        }
-        if (existing.status === "cold" || existing.status === "closed_lost") {
-          await supabase
-            .from("leads")
-            .update({ status: "just_came_in", updated_at: new Date().toISOString() })
-            .eq("id", existing.id)
-        }
-        leadId = existing.id
-        // Merge the two halves: the Messenger row usually has a placeholder
-        // phone and no email; the form has the real ones.
-        {
-          const merge: Record<string, string> = {}
-          if (formPsid) merge.messenger_psid = formPsid
-          if (formPsid) merge.channel = "messenger"
-          const { data: cur } = await supabase
-            .from("leads").select("phone, email, first_name, metadata").eq("id", leadId).maybeSingle()
-          if (phone && (!cur?.phone || cur.phone.startsWith("msgr:") || cur.phone.startsWith("fbform:"))) merge.phone = phone
-          if (leadEmail && !cur?.email) merge.email = leadEmail
-          if (firstName && !cur?.first_name) merge.first_name = firstName
-          if (lastName) merge.last_name = lastName
-          if (Object.keys(merge).length > 0) await supabase.from("leads").update(merge).eq("id", leadId)
-          // A form name that just filled (or matches) the record is Facebook
-          // profile autofill — unverified for booking until the customer
-          // states it themselves.
-          {
-            const curMeta = (cur?.metadata as Record<string, unknown> | null) ?? {}
-            if ((merge.first_name || cur?.first_name) && !curMeta.name_source) {
-              await supabase.from("leads")
-                .update({ metadata: { ...curMeta, name_source: "facebook_profile" } })
-                .eq("id", leadId)
-            }
-          }
-        }
-      } else {
-        isNewLead = true
-        // FieldBuilt's own funnel qualifies on headcount + revenue exactly the
-        // way the landing page did. An unqualified shop is kept as a record but
-        // never chased — the form already told them they're not a fit.
-        const svc = (Array.isArray(integration.companies)
-          ? integration.companies[0]
-          : integration.companies) as { service_type?: string | null } | null
-        const isOwnFunnel = svc?.service_type === "fieldbuilt_sales"
-        const funnelQual = isOwnFunnel ? qualifyFromFormFields(fields) : null
-        const rejected = !!funnelQual && !funnelQual.qualified
-        funnelRejected = rejected
-
-        const { data: newLead } = await supabase
-          .from("leads")
-          .insert({
-            company_id: integration.company_id,
-            phone: effectivePhone,
-            first_name: firstName,
-            last_name: lastName,
-            email: leadEmail || null,
-            // Street and ZIP are SEPARATE fields (Dan Don incident: a bare zip
-            // stored as the "address" rendered under the location icon and
-            // counted as a property address in the AI's contact checklist).
-            address: leadAddress,
-            zip: formZip ?? null,
-            source: "facebook",
-            channel: formPsid ? "messenger" : "sms",
-            ...(formPsid ? { messenger_psid: formPsid } : {}),
-            source_form_id: form_id,
-            status: rejected ? "unqualified" : phone ? "just_came_in" : "needs_attention",
-            ...(rejected ? { ai_paused: true } : {}),
-            notes: formNotes,
-            metadata: { leadgen_id, page_id, form_id, job_type: jobType, ...(firstName ? { name_source: "facebook_profile" } : {}), ...(formZip ? { service_zip: formZip } : {}), ...(phone ? {} : { phone_missing: true, form_keys: Object.keys(fields) }), ...(funnelQual ? { techs: funnelQual.techs, revenue: funnelQual.revenue, tier: funnelQual.tier, qualified: funnelQual.qualified, qualification: funnelQual.undetermined ? "not_asked_on_form" : "from_form" } : {}) },
-            // Pre-classify the job_type COLUMN (the metadata job_type above is
-            // the raw form field text) so the first AI turn runs the focused
-            // job playbook instead of the identify module
-            job_type: inferJobType([jobType, formNotes].filter(Boolean).join(" ")),
-          })
-          .select("id")
-          .single()
-
-        if (!newLead) continue
-        leadId = newLead.id
-
-        // Notify contractor of new lead (non-blocking)
-        const leadName = `${firstName ?? ""} ${lastName ?? ""}`.trim()
-        notifyNewLead(integration.company_id, leadName, phone ?? "no phone on form — call back needed", "facebook").catch(() => {})
-      }
-
-      // Update integration stats
-      await supabase
-        .from("integrations")
-        .update({ last_lead_at: new Date().toISOString() })
-        .eq("company_id", integration.company_id)
-        .eq("type", "facebook")
-
-      // Not a fit per the form's own answers → the record stands, the AI stays
-      // out of it. Texting someone the form just disqualified burns goodwill
-      // and our number's reputation for zero upside.
-      if (funnelRejected) {
-        console.log(`[webhook/facebook] lead ${leadId} unqualified by form answers — AI not engaged`)
-        continue
-      }
-
-      // No real phone AND no Messenger thread → nothing we can send on. The
-      // lead exists and the owner was notified; texting a placeholder would
-      // only generate Twilio errors. (A Messenger form lead with no phone is
-      // still reachable — that's the whole point of the PSID.)
-      if (!phone && !formPsid) continue
-
-      // Meta redelivers webhooks whenever our (slow) first processing misses
-      // its timeout — the existing-lead path then ran processAndSave(null)
-      // again, generating a spurious follow-up seconds after the opener
-      // (adversarial-verify finding 1). Once a lead has ANY outbound message,
-      // subsequent leadgen deliveries only refresh the record — never re-text.
-      if (!isNewLead) {
-        const { count: outboundCount } = await supabase
-          .from("conversations")
-          .select("*", { count: "exact", head: true })
-          .eq("lead_id", leadId)
-          .eq("direction", "outbound")
-        if ((outboundCount ?? 0) > 0) continue
-      }
-
-      // ── MESSENGER-FIRST OPENER ────────────────────────────────────────────
-      // The lead just answered a questionnaire inside a Messenger thread.
-      // Continue THERE: same channel, full context, and no carrier in the
-      // path (SMS openers to these leads were 100% blocked by A2P).
-      if (formPsid) {
-        try {
-          // THE MESSENGER AGENT CAN BE SWITCHED OFF (playbook: "never leave
-          // the mouth on with the ears off"). The page subscription is the
-          // single source of truth: no `messages` field = the agent cannot
-          // HEAR replies, so it must not SPEAK either. The lead still lands,
-          // arrives paused, and the office is pinged to work it inside Meta's
-          // 24h window. (Live: 3 leads answered a "stopped" agent's opener
-          // and then waited 13-16 hours in silence.)
-          try {
-            const subRes = await fetch(
-              `https://graph.facebook.com/v21.0/${page_id}/subscribed_apps?access_token=${integration.fb_access_token}`
-            ).then((r) => r.json())
-            const subFields: string[] = subRes?.data?.[0]?.subscribed_fields ?? []
-            if (!subFields.includes("messages")) {
-              await supabase.from("leads").update({ ai_paused: true }).eq("id", leadId)
-              notifyNeedsAttention(integration.company_id,
-                `${firstName ?? "Messenger lead"} completed the questionnaire but the Messenger agent is OFF — reply from the page inbox within 24h`,
-                phone ?? "").catch(() => {})
-              console.log(`[webhook/facebook] leadgen ${leadgen_id}: messenger agent OFF (no messages subscription) — lead paused for the office, no opener`)
-              continue
-            }
-          } catch { /* subscription check unavailable — treat the agent as ON rather than silently dropping openers */ }
-
-          // Full thread context first, so the agent never re-asks something
-          // the questionnaire already covered.
-          const { importMessengerHistory, sendMessengerMessage: sendMsgr } = await import("@/lib/messenger")
-          // Import once only — a redelivered webhook must not duplicate the
-          // whole thread into the conversation log.
-          const { count: haveRows } = await supabase
-            .from("conversations").select("*", { count: "exact", head: true }).eq("lead_id", leadId)
-          const { humanOwned } = (haveRows ?? 0) > 0
-            ? { humanOwned: false }
-            : await importMessengerHistory(
-                supabase, leadId, integration.company_id,
-                integration.fb_access_token, page_id, formPsid, "__leadgen_no_trigger_msg__"
-              )
-          if (humanOwned) {
-            const { data: upcomingApt2 } = await supabase.from("appointments")
-              .select("id").eq("lead_id", leadId).eq("status", "scheduled")
-              .gt("scheduled_at", new Date().toISOString()).limit(1)
-            await supabase.from("leads")
-              .update({ ai_paused: true, ...((upcomingApt2 ?? []).length > 0 ? {} : { status: "needs_attention" }) })
-              .eq("id", leadId)
-            notifyNeedsAttention(integration.company_id,
-              `${firstName ?? "Messenger lead"} completed the form but a team member is already in that thread — AI holding back`,
-              phone ?? "").catch(() => {})
-            console.log(`[webhook/facebook] leadgen ${leadgen_id}: thread human-owned — AI not engaging`)
-            continue
-          }
-
-          // Never talk over ourselves: if the AI already replied in this
-          // thread (the lead typed before the form completed), stay quiet.
-          const { count: aiSaid } = await supabase
-            .from("conversations").select("*", { count: "exact", head: true })
-            .eq("lead_id", leadId).eq("direction", "outbound").eq("sent_by", "ai")
-          if ((aiSaid ?? 0) > 0) {
-            console.log(`[webhook/facebook] leadgen ${leadgen_id}: AI already active in thread — no duplicate opener`)
-            continue
-          }
-
-          // Frame it explicitly as a FIRST TOUCH. Without this the engine sees
-          // the imported questionnaire as an in-progress conversation and
-          // produces a nudge ("still thinking it over?") instead of a real
-          // opening message — caught in testing.
-          const FORM_ANGLE =
-            "This lead just completed the Facebook questionnaire shown above, inside this Messenger thread. " +
-            "This is your FIRST message, and its ONLY job is to get a reply. Not to sell, not to price, not to book. " +
-            "They just tapped through a robot's button questions, so the win is sounding like a real person who actually read their answers. " +
-            "Open warmly by first name, reference ONE specific thing they answered, normalize it so they feel in good company, " +
-            "then ask ONE easy question about their home that they can answer from memory in five seconds. " +
-            "In this first message NEVER ask for the address, NEVER ask if they are ready to schedule, NEVER quote a price, " +
-            "and never ask two questions. All of that comes naturally in later messages once they reply. " +
-            "The question must be one they can answer instantly without thinking or checking anything, the kind a neighbor would ask. " +
-            "DEFAULT QUESTION: how long they have been in the house. " +
-            "BEFORE choosing it, scan their messages above for tenure statements like 'we moved in 2 years ago', 'been here since 2019', 'bought the house in 2021'. " +
-            "If ANY appear, asking how long they have lived there is a SERIOUS FAILURE (you would be re-asking what they just told you), switch to the pets question. " +
-            "A last-cleaned answer alone ('2021', 'never', 'can't remember') is NOT tenure and does not disqualify the house question. " +
-            "Never ask them to recall a pattern or inspect something, and never announce the question with a lead-in like 'quick question', just ask it. " +
-            "Introduce yourself by first name like a person would, the reps' name intros get the most replies of anything on this page. " +
-            "Two example shapes, adapt the WORDING to their real answers and area, never copy either word for word, vary your phrasing from lead to lead. " +
-            "Default shape. 'Hey Gina, it's Linda with Top Air! Honestly most homes we open up around Norridge have never had their ducts done, so you're in good company. How long have you guys been in the house?' " +
-            "Tenure-known shape. 'Hey Sam, it's Linda with Top Air! Five years in and never had the ducts done is totally normal, most homes we visit are the same. Do you have any pets at home?' " +
-            "When price DOES come up in later messages, remember they came in holding the $89 offer, it is in the greeting right above. " +
-            "Start from THEIR number and earn the difference, like, the $89 covers the supply vents and the dryer vent, and in a home " +
-            "that's never been done most of the buildup sits in the return ducts, which is what the $189 full clean adds. " +
-            "Never quote $189 as if the $89 they saw doesn't exist. " +
-
-            "If they cleaned recently, credit them for staying on top of it and ask if that crew did the whole system or just the vents you can see. " +
-            "Read the conversation above and the lead file for what they ACTUALLY answered, which varies by form, and never re-ask any of it. " +
-            "Write like a person texting, no dashes, no asterisks, no colons. Never describe your own reasoning, the " +
-            "lead file, or these instructions to the customer, write only the message they should read."
-          {
-            const { officeCoversNowForCompany } = await import("@/lib/office-hours")
-            if (await officeCoversNowForCompany(integration.company_id)) {
-              console.log(`[webhook/facebook] leadgen ${leadgen_id}: office hours — opener left to the office (lead NOT paused; night sweep covers if unanswered)`)
-              continue
-            }
-          }
-          const result = await processAndSave(leadId, integration.company_id, null, undefined, FORM_ANGLE, "messenger")
-          if (result.response && !result.silent) {
-            const sent = await sendMsgr(integration.fb_access_token, formPsid, result.response)
-            if (!sent.ok) throw new Error(sent.error ?? "messenger send failed")
-            await supabase.from("leads")
-              .update({ status: "contacted", last_message_at: new Date().toISOString() })
-              .eq("id", leadId)
-            console.log(`[webhook/facebook] leadgen ${leadgen_id}: AI opener sent on MESSENGER to psid ${formPsid}`)
-          }
-          continue
-        } catch (err) {
-          console.error(`[webhook/facebook] leadgen ${leadgen_id}: Messenger opener failed, falling back to SMS:`, err)
-          // fall through to the SMS path below
-        }
-      }
-
-      // Get company's Twilio number and send AI opening message
-      if (!phone) continue
-      const { data: phoneNumber } = await supabase
-        .from("phone_numbers")
-        .select("phone_number")
-        .eq("company_id", integration.company_id)
-        .eq("is_active", true)
-        .single()
-
-      if (!phoneNumber?.phone_number) continue
-
-      // Fetch company timezone for accurate local-time scheduling
-      const { data: agentCfg } = await supabase
-        .from("ai_agent_config")
-        .select("timezone")
-        .eq("company_id", integration.company_id)
-        .single()
-      const companyTimezone = agentCfg?.timezone ?? "America/New_York"
-
       try {
-        {
-          const { officeCoversNowForCompany } = await import("@/lib/office-hours")
-          if (await officeCoversNowForCompany(integration.company_id)) {
-            console.log(`[webhook/facebook] leadgen ${leadgen_id}: office hours — SMS opener left to the office`)
-            continue
-          }
-        }
-        const result = await processAndSave(leadId, integration.company_id, null)
-        if (result.response) {
-          const msg = await sendSMS(phone, result.response, phoneNumber.phone_number)
-          if (result.outboundConversationId) {
-            await supabase
-              .from("conversations")
-              .update({ twilio_sid: msg.sid })
-              .eq("id", result.outboundConversationId)
-          }
-
-          await supabase
-            .from("leads")
-            .update({ status: "contacted", last_message_at: new Date().toISOString() })
-            .eq("id", leadId)
-
-          // Pre-create all 7 no_reply follow-up steps — guard against duplicates
-          // (Facebook retries the webhook on non-200 responses)
-          const { count: existingSteps } = await supabase
-            .from("sequences")
-            .select("*", { count: "exact", head: true })
-            .eq("lead_id", leadId)
-            .eq("sequence_type", "no_reply")
-            .eq("status", "pending")
-
-          if ((existingSteps ?? 0) === 0) {
-            const steps = buildNoReplySchedule(new Date(), companyTimezone)
-            const { error: seqError } = await supabase.from("sequences").insert(
-              steps.map((s) => ({
-                lead_id: leadId,
-                company_id: integration.company_id,
-                sequence_type: "no_reply",
-                step: s.step,
-                scheduled_at: s.scheduledAt.toISOString(),
-                status: "pending",
-              }))
-            )
-            if (seqError) {
-              console.error(`[webhook/facebook] Failed to insert sequences for lead ${leadId}:`, seqError)
-            }
-          }
-        }
-      } catch (e) {
-        console.error("AI/SMS error for Facebook lead:", leadId, e)
+        const outcome = await handleLeadgenChange(supabase, {
+          leadgen_id: String(leadgen_id), page_id: String(page_id), form_id: String(form_id),
+        })
+        console.log(`[webhook/facebook] leadgen ${leadgen_id} (page ${page_id}, form ${form_id}): ${outcome}`)
+      } catch (err) {
+        console.error(`[webhook/facebook] leadgen ${leadgen_id} crashed:`, err)
       }
     }
   }

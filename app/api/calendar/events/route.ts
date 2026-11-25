@@ -21,6 +21,8 @@ export async function GET(req: NextRequest) {
     .from("appointments")
     .select("*, leads(first_name, last_name, phone, status)")
     .eq("company_id", profile.company_id)
+    // A cancelled measure is not on the calendar: it used to render as if it were still booked.
+    .neq("status", "cancelled")
     .gte("scheduled_at", timeMin)
     .lte("scheduled_at", timeMax)
     .order("scheduled_at")

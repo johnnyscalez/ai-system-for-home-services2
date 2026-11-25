@@ -1,71 +1,47 @@
 "use client"
 
 import { useState, useMemo } from "react"
-import { Users, Search, Zap, MessageSquare, X } from "lucide-react"
+import { Users, Search, Zap, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { DeleteLeadButton } from "@/components/leads/DeleteLeadButton"
 import { formatDistanceToNow } from "@/lib/utils"
+import { LEAD_STATUS, leadStatusLabel, leadStatusBadge, hasRealPhone } from "@/lib/lead-status"
 import type { Lead } from "@/types/database"
 
-type AptOrigin = { origin: string | null; status: string; created_at: string }
+// Filter options come from the shared status map so the labels cannot drift.
+const STATUS_FILTER_LABELS = Array.from(new Set(Object.values(LEAD_STATUS).map((m) => m.label)))
 
-/** Who booked this lead: the office (HCP-imported job) or the AI agent. */
-function bookedBadge(lead: { appointments?: AptOrigin[] }): { label: string; office: boolean } {
-  const apts = [...(lead.appointments ?? [])].sort((a, b) => b.created_at.localeCompare(a.created_at))
-  const src = apts.find((a) => a.status === "scheduled") ?? apts[0]
-  const office = src?.origin === "hcp"
-  return { label: office ? "Booked by office" : "Booked by AI", office }
-}
-
-const STATUS_LABEL: Record<string, string> = {
-  just_came_in:        "Just came in",
-  new:                 "Just came in",
-  contacted:           "Just came in",
-  following_up:        "No reply",
-  active_conversation: "Active",
-  followed_up:         "Active",
-  nurturing:           "Active",
-  qualified:           "Qualified",
-  unqualified:         "Unqualified",
-  appointment_booked:  "Booked",
-  closed:              "Closed",
-  closed_won:          "Closed",
-  lost:                "Lost",
-  cold:                "Lost",
-  closed_lost:         "Lost",
-  needs_attention:     "Needs attention",
-}
-
-const STATUS_BADGE: Record<string, string> = {
-  just_came_in:        "bg-sky-500/15 text-sky-400 border-sky-500/20",
-  new:                 "bg-sky-500/15 text-sky-400 border-sky-500/20",
-  contacted:           "bg-sky-500/15 text-sky-400 border-sky-500/20",
-  following_up:        "bg-orange-500/15 text-orange-400 border-orange-500/20",
-  active_conversation: "bg-[#FFF3EC] text-[#F97316] border-[#F97316]/20",
-  followed_up:         "bg-[#FFF3EC] text-[#F97316] border-[#F97316]/20",
-  nurturing:           "bg-[#FFF3EC] text-[#F97316] border-[#F97316]/20",
-  qualified:           "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  unqualified:         "bg-red-500/15 text-red-400 border-red-500/20",
-  appointment_booked:  "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-  closed:              "bg-green-500/15 text-green-400 border-green-500/20",
-  closed_won:          "bg-green-500/15 text-green-400 border-green-500/20",
-  lost:                "bg-slate-500/15 text-slate-400 border-slate-500/20",
-  cold:                "bg-slate-500/15 text-slate-400 border-slate-500/20",
-  closed_lost:         "bg-slate-500/15 text-slate-400 border-slate-500/20",
-  needs_attention:     "bg-red-500/15 text-red-400 border-red-500/20",
-}
-
-export function LeadsTable({ initialLeads }: { initialLeads: Lead[] }) {
+export function LeadsTable({
+  leads,
+  nowMs,
+  initialStatus = null,
+  onDeleted,
+  onChanged,
+}: {
+  /** The live lead list, owned by the page */
+  leads: Lead[]
+  /** The clock as of the last refresh, for the "Replying now" marker */
+  nowMs: number
+  /** Raw status from the URL (?status=needs_attention); mapped to its shared label. */
+  initialStatus?: string | null
+  onDeleted?: (leadId: string) => void
+  /** Called with the saved fields after a refund is recorded on a signed lead */
+  onChanged?: (leadId: string, lead: Record<string, unknown>) => void
+}) {
   const [query, setQuery] = useState("")
+  const [statusFilter, setStatusFilter] = useState<string>(initialStatus ? leadStatusLabel(initialStatus) : "all")
 
-  const twoHoursAgo = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString()
+  const twoHoursAgo = new Date(nowMs - 2 * 60 * 60 * 1000).toISOString()
   const isActive = (lead: Lead) =>
     lead.is_active_conversation && !!lead.last_inbound_at && lead.last_inbound_at > twoHoursAgo
 
   const filtered = useMemo(() => {
     const q = query.trim().toLowerCase()
-    if (!q) return initialLeads
-    return initialLeads.filter(lead => {
+    const byStatus = statusFilter === "all"
+      ? leads
+      : leads.filter(l => leadStatusLabel(l.status) === statusFilter)
+    if (!q) return byStatus
+    return byStatus.filter(lead => {
       const name    = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.toLowerCase()
       const phone   = (lead.phone ?? "").toLowerCase().replace(/\D/g, "")
       const email   = (lead.email ?? "").toLowerCase()
@@ -79,7 +55,7 @@ export function LeadsTable({ initialLeads }: { initialLeads: Lead[] }) {
         phone.includes(q)
       )
     })
-  }, [initialLeads, query])
+  }, [leads, query, statusFilter])
 
   return (
     <div className="bg-card border border-border rounded-xl overflow-hidden">
@@ -108,8 +84,18 @@ export function LeadsTable({ initialLeads }: { initialLeads: Lead[] }) {
           )}
         </div>
 
+        <select
+          value={statusFilter}
+          onChange={e => setStatusFilter(e.target.value)}
+          aria-label="Filter by status"
+          className="text-xs rounded-lg border border-border bg-background px-2 py-1.5 focus:outline-none focus:ring-2 focus:ring-[#F97316]/30"
+        >
+          <option value="all">All statuses</option>
+          {STATUS_FILTER_LABELS.map(l => <option key={l} value={l}>{l}</option>)}
+        </select>
+
         <span className="text-xs text-muted-foreground ml-auto shrink-0">
-          {filtered.length}{query ? ` of ${initialLeads.length}` : " total"}
+          {filtered.length}{query || statusFilter !== "all" ? ` of ${leads.length}` : " total"}
         </span>
       </div>
 
@@ -117,7 +103,7 @@ export function LeadsTable({ initialLeads }: { initialLeads: Lead[] }) {
       <div className="divide-y divide-border">
         {filtered.length === 0 ? (
           <div className="px-5 py-10 text-center text-muted-foreground text-sm">
-            {query ? `No leads match "${query}"` : "No leads yet. They will appear here as soon as your first lead comes in."}
+            {query ? `No leads match "${query}"` : statusFilter !== "all" ? `No leads marked "${statusFilter}".` : "No leads yet. They will appear here as soon as your first lead comes in."}
           </div>
         ) : (
           filtered.map(lead => (
@@ -132,20 +118,17 @@ export function LeadsTable({ initialLeads }: { initialLeads: Lead[] }) {
                 <div className="min-w-0">
                   <div className="flex items-center gap-2 flex-wrap">
                     <p className="text-sm font-medium">
-                      {lead.first_name} {lead.last_name}
+                      {`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "No name yet"}
                     </p>
                     {isActive(lead) && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-500/15 text-emerald-500 border border-emerald-500/20">
-                        <Zap className="w-2 h-2" /> Active
-                      </span>
-                    )}
-                    {lead.status === "following_up" && (
-                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-orange-500/15 text-orange-400 border border-orange-500/20">
-                        <MessageSquare className="w-2 h-2" /> Following up
+                      <span className="inline-flex items-center gap-1 px-1.5 py-0.5 rounded-full text-[10px] font-semibold bg-emerald-50 text-emerald-700 border border-emerald-200">
+                        <Zap className="w-2 h-2" /> Replying now
                       </span>
                     )}
                   </div>
-                  <p className="text-xs text-muted-foreground">{lead.phone}</p>
+                  <p className="text-xs text-muted-foreground">
+                    {hasRealPhone(lead.phone) ? lead.phone : (lead.email ?? "No phone on file")}
+                  </p>
                   {lead.address && (
                     <p className="text-xs text-muted-foreground/70 truncate max-w-[220px]">{lead.address}</p>
                   )}
@@ -154,32 +137,25 @@ export function LeadsTable({ initialLeads }: { initialLeads: Lead[] }) {
 
               <div className="flex items-center gap-4 shrink-0">
                 {lead.deal_value && (
-                  <span className="text-xs font-semibold text-green-700 hidden md:block">
+                  <span className="text-xs font-semibold text-[#16A34A] font-mono hidden md:block">
                     ${lead.deal_value.toLocaleString()}
                   </span>
                 )}
-                <span className="text-xs text-muted-foreground hidden md:block capitalize">{lead.source}</span>
+                <span className="text-xs text-muted-foreground hidden md:block capitalize">{(lead.source as string) === "whatsapp" ? "text" : lead.source}</span>
                 <span className="text-xs text-muted-foreground hidden md:block">
                   {formatDistanceToNow(lead.created_at)}
                 </span>
-                {lead.status === "appointment_booked" ? (() => {
-                  const b = bookedBadge(lead as unknown as { appointments?: AptOrigin[] })
-                  return (
-                    <Badge variant="outline" className={`text-xs ${b.office ? "bg-sky-500/15 text-sky-400 border-sky-500/20" : STATUS_BADGE[lead.status] ?? ""}`}>
-                      {b.label}
-                    </Badge>
-                  )
-                })() : (
-                  <Badge variant="outline" className={`text-xs ${STATUS_BADGE[lead.status] ?? ""}`}>
-                    {STATUS_LABEL[lead.status] ?? lead.status.replace(/_/g, " ")}
-                  </Badge>
-                )}
+                <Badge variant="outline" className={`text-xs ${leadStatusBadge(lead.status)}`}>
+                  {leadStatusLabel(lead.status)}
+                </Badge>
                 <DeleteLeadButton
                   leadId={lead.id}
                   leadName={`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim()}
                   leadStatus={lead.status}
                   dealValue={lead.deal_value as number | null}
                   refundAmount={lead.refund_amount as number | null}
+                  onDeleted={onDeleted}
+                  onChanged={onChanged ? (saved) => onChanged(lead.id, saved) : undefined}
                 />
               </div>
             </div>

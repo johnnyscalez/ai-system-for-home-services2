@@ -55,7 +55,9 @@ export async function GET(req: NextRequest) {
     })(),
     // Appointments booked in the period
     (() => {
-      let q = supabase.from("appointments").select("*", { count: "exact", head: true }).eq("company_id", companyId).eq("status", "scheduled")
+      // Every measure booked in the period that was not cancelled. A measure
+      // that has since been completed still counts as booked.
+      let q = supabase.from("appointments").select("*", { count: "exact", head: true }).eq("company_id", companyId).neq("status", "cancelled")
       if (since) q = q.gte("created_at", since)
       if (until) q = q.lte("created_at", until)
       return q
@@ -79,7 +81,7 @@ export async function GET(req: NextRequest) {
       .eq("company_id", companyId)
       .eq("excluded_from_stats", false)
       .is("deleted_at", null)
-      .not("status", "in", '("closed","closed_won","closed_lost","unqualified","appointment_booked","needs_attention")')
+      .not("status", "in", '("closed","closed_won","closed_lost","lost","unqualified","appointment_booked","measure_done","quote_sent","needs_attention")')
       .lt("last_inbound_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
     // Current needs-attention
     supabase.from("leads").select("*", { count: "exact", head: true }).eq("company_id", companyId)
@@ -87,7 +89,7 @@ export async function GET(req: NextRequest) {
       .is("deleted_at", null).eq("status", "needs_attention"),
     // Closed deals with revenue in the period
     (() => {
-      let q = supabase.from("leads").select("deal_value").eq("company_id", companyId)
+      let q = supabase.from("leads").select("deal_value, refund_amount").eq("company_id", companyId)
       .eq("excluded_from_stats", false)
       .is("deleted_at", null).in("status", ["closed", "closed_won"]).not("deal_value", "is", null)
       if (since) q = q.gte("closed_at", since)
@@ -112,7 +114,12 @@ export async function GET(req: NextRequest) {
 
   const revenueProjected = aptBooked * avgJobValue
   const closedLeads = closedLeadsRes.data ?? []
-  const revenueClosed = closedLeads.reduce((sum, l) => sum + (Number(l.deal_value) || 0), 0)
+  // Net of refunds, the same way the dashboard's first paint computes it:
+  // changing the date range used to flip this number from net to gross.
+  const revenueClosed = closedLeads.reduce(
+    (sum, l) => sum + Math.max(0, (Number(l.deal_value) || 0) - (Number(l.refund_amount) || 0)),
+    0
+  )
   const closedCount = closedLeads.length
 
   return NextResponse.json({

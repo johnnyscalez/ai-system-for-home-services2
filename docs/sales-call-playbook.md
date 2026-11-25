@@ -27,7 +27,7 @@
 **Never on a call:**
 - Never call it "software", "platform", "SaaS", "tool", "app" or "solution". It is an AI front office we install.
 - Never invent flooring results, testimonials or client names. There is no flooring client result yet.
-- The only live numbers you can quote come from **"a live home-services account"**, said exactly like that, never implied as flooring.
+- The only live numbers you can quote come from **"a home services account"**, said exactly like that, never implied as flooring.
 - Never promise "one company per area" exclusivity. It is not confirmed.
 - The AI never quotes a flooring price and always says it is an AI. Say so before they ask.
 
@@ -173,7 +173,7 @@ Then:
 **Frame before you share screen:**
 > "I'm going to walk you through exactly what happens from the moment a homeowner in your area sees the ad until that quote signs or says no. Five steps, about seven minutes."
 
-> **Demo honesty rule:** if a flooring-configured demo account isn't ready, walk the example conversation and say "this is an example" out loud. Never pass off another trade's screens or a live home-services account's conversations as flooring.
+> **Demo honesty rule:** if a flooring-configured demo account isn't ready, walk the example conversation and say "this is an example" out loud. Never pass off another trade's screens or a home services account's conversations as flooring.
 
 **The demo narrative, step by step:**
 
@@ -390,7 +390,7 @@ Identify the bucket. Then fix that one thing.
 >
 > Second, speed. 78% of homeowners hire the first company that responds. Responding within a minute lifts conversion by 391%. The system answers every lead in seconds.
 >
-> On a live home-services account, it worked 130 leads in 9 days, had real conversations with 77 of them, and booked 13. That's not flooring, it's a different trade, but it's the same engine doing the same job."
+> On a home services account, it worked 130 leads in 9 days, had real conversations with 77 of them, and booked 13. That's not flooring, it's a different trade, but it's the same engine doing the same job."
 
 **Never** imply those numbers are flooring. There is no flooring result yet.
 
@@ -521,7 +521,7 @@ Use these when you share your screen in Phase 3. 8 slides maximum. Less is more.
 
 ### Slide 7 — Proof (labelled honestly)
 **Headline:** "Answered in seconds, every time."
-**Visual:** Speed stats (78% hire first responder; 391% lift within 60 seconds; 21x more likely to qualify at 5 min vs 30 min), plus "A live home-services account: 130 leads, 77 worked, 13 booked in 9 days"
+**Visual:** Speed stats (78% hire first responder; 391% lift within 60 seconds; 21x more likely to qualify at 5 min vs 30 min), plus "A home services account: 130 leads, 77 worked, 13 booked in 9 days"
 **Rule:** never imply these numbers are flooring.
 
 ---
@@ -580,8 +580,8 @@ After every call, score these before moving to next action:
 | Homeowners who hire the first company to respond | 78% (pipelineon.com) |
 | Conversion lift responding within 60 seconds | 391% (Velocify, via leadwinner.ai) |
 | More likely to qualify at 5 min vs 30 min | 21x (MIT, via getnextphone.com) |
-| A live home-services account, first 24h | 27 leads / 14 conversations / 3 booked |
-| A live home-services account, 9 days | 130 leads / 77 worked / 13 booked |
+| A home services account, first 24h | 27 leads / 14 conversations / 3 booked |
+| A home services account, 9 days | 130 leads / 77 worked / 13 booked |
 | Flooring slow season | November to February, after the early-fall peak |
 | Flooring client results | None yet. Don't invent any. |
 | Exclusivity | Not confirmed. Don't promise it. |
@@ -596,7 +596,7 @@ After every call, score these before moving to next action:
 2. The offer line, word for word
 3. How it works (the five steps, in order; ad spend paid straight to Meta)
 4. What happens after you say yes (onboarding call, ads built for your ZIPs, measures on your calendar)
-5. Proof: speed stats with sources, and "a live home-services account" numbers, labelled exactly like that
+5. Proof: speed stats with sources, and "a home services account" numbers, labelled exactly like that
 
 **Never in the one-pager:** the fee, guarantee failure terms, flooring results, exclusivity.
 

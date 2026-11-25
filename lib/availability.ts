@@ -1,3 +1,5 @@
+import { holidayOn } from "@/lib/holidays"
+
 export type AppointmentWindow = {
   id: string
   label: string
@@ -100,6 +102,7 @@ export function getAvailableSlots(
 
       const localDateStr = date.toLocaleDateString("en-CA", { timeZone: tz })
       if (localDateStr < earliestDateStr) continue
+      if (holidayOn(localDateStr)) continue
       const bookedThisDay = companyAppointments.filter((a) =>
         new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: tz }) === localDateStr
       )
@@ -158,6 +161,7 @@ export function getAvailableSlots(
 
     const localDateStr = date.toLocaleDateString("en-CA", { timeZone: tz })
     if (localDateStr < earliestDateStr) continue
+    if (holidayOn(localDateStr)) continue
     const bookedThisDay = companyAppointments.filter((a) => {
       return new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: tz }) === localDateStr
     })

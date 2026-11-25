@@ -3,6 +3,7 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 import { formatPhone } from "@/lib/twilio"
 import { getOrCreateSession, appendMessages } from "@/lib/voice-session"
 import { prewarmTts } from "@/lib/tts"
+import { voiceEnabled } from "@/lib/voice-enabled"
 
 export const runtime = "nodejs"
 
@@ -94,6 +95,45 @@ export async function POST(req: NextRequest) {
   <Play>${speakUrl("Call forwarding is verified and working. Your AI agent is now answering this line. Goodbye!", appUrl)}</Play>
   <Hangup/>
 </Response>`)
+  }
+
+  // ── Voice agent OFF (the default) ──────────────────────────────────────────
+  // The AI neither places nor answers calls. An outbound leg that somehow got
+  // here hangs up. A real inbound call rings the owner's phone; if nobody picks
+  // up, /api/voice/missed apologises and texts the caller back so the SMS
+  // assistant can take it from there. Plain <Say>, no paid TTS.
+  {
+    let gateCompanyId = companyIdParam
+    if (!gateCompanyId) {
+      const { data: phoneRecord } = await db
+        .from("phone_numbers").select("company_id").eq("phone_number", toRaw).eq("is_active", true).maybeSingle()
+      gateCompanyId = (phoneRecord?.company_id as string | undefined) ?? null
+    }
+    if (gateCompanyId && !(await voiceEnabled(gateCompanyId))) {
+      if (direction === "outbound") {
+        console.log(`[voice/inbound] voice agent off for company ${gateCompanyId}, hanging up an outbound AI leg`)
+        return twiml(`<?xml version="1.0" encoding="UTF-8"?><Response><Hangup/></Response>`)
+      }
+      const { data: co } = await db
+        .from("companies").select("notification_phone, office_number").eq("id", gateCompanyId).maybeSingle()
+      const target = (co?.notification_phone as string | null) || null
+      const missedUrl = `${appUrl}/api/voice/missed?companyId=${gateCompanyId}`
+      // Never dial the number that forwarded this call to us: that is a loop.
+      const sameNumber = (a: string | null, b: string | null) =>
+        !!a && !!b && a.replace(/\D/g, "").slice(-10) === b.replace(/\D/g, "").slice(-10)
+      const dialable = target && !sameNumber(target, forwardedFrom) && !sameNumber(target, toRaw)
+      console.log(`[voice/inbound] voice agent off for company ${gateCompanyId}, ${dialable ? "forwarding to the owner" : "no forward target, going to text-back"}`)
+      if (dialable) {
+        return twiml(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Dial timeout="20" answerOnBridge="true" action="${missedUrl}" method="POST">${formatPhone(target!)}</Dial>
+</Response>`)
+      }
+      return twiml(`<?xml version="1.0" encoding="UTF-8"?>
+<Response>
+  <Redirect method="POST">${missedUrl}</Redirect>
+</Response>`)
+    }
   }
 
   let leadId: string

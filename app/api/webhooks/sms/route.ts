@@ -1,10 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { processAndSave, inferJobType } from "@/lib/ai-engine"
-import { sendSMS, sendWhatsApp, validateTwilioSignature, formatPhone } from "@/lib/twilio"
-import { notifyAppointmentBooked, notifyNeedsAttention } from "@/lib/notifications"
+import { sendSMS, validateTwilioSignature, formatPhone } from "@/lib/twilio"
+import { notifyAppointmentBooked, notifyNeedsAttention, notifyNewLead } from "@/lib/notifications"
 import { reseedRepliedNotBooked } from "@/lib/sequences"
 import { notifyTechnicianConfirmed } from "@/lib/appointment-reminders"
+import { HOLDING_REPLY } from "@/lib/service-copy"
 
 // ─── Address extraction ────────────────────────────────────────────────────────
 
@@ -56,8 +57,7 @@ async function handleConfirmationReply(
   messageBody: string,
   leadPhone: string,
   fromNumber: string,
-  supabase: ReturnType<typeof createServiceRoleClient>,
-  channel: "sms" | "whatsapp" = "sms"
+  supabase: ReturnType<typeof createServiceRoleClient>
 ): Promise<boolean> {
   // Find the most recent appointment pending confirmation for this lead
   const { data: apt } = await supabase
@@ -94,17 +94,16 @@ async function handleConfirmationReply(
   })
 
   if (isConfirmation(messageBody)) {
-    // Lead confirmed → update status, send follow-up SMS, notify technician
+    // Lead confirmed → update status, send follow-up SMS, notify whoever runs the visit
     await supabase.from("appointments").update({
       confirmation_status: "confirmed",
       confirmed_at: new Date().toISOString(),
     }).eq("id", apt.id)
 
-    const reply = `Perfect${firstName ? `, ${firstName}` : ""}! You're all set — our technician will be there ${timeLabel}. See you then!`
+    // Written in code, so it must be right for every trade: no "technician".
+    const reply = `Thanks${firstName ? `, ${firstName}` : ""}. You're confirmed for ${timeLabel}. See you then.`
 
-    const msg = channel === "whatsapp"
-      ? await sendWhatsApp(leadPhone, reply, fromNumber)
-      : await sendSMS(leadPhone, reply, fromNumber)
+    const msg = await sendSMS(leadPhone, reply, fromNumber)
     await supabase.from("conversations").insert({
       lead_id:    leadId,
       company_id: companyId,
@@ -112,7 +111,7 @@ async function handleConfirmationReply(
       sent_by:    "reminder",
       body:       reply,
       twilio_sid: msg.sid,
-      channel,
+      channel:    "sms",
     })
 
     // Notify technician
@@ -155,12 +154,16 @@ export async function POST(req: NextRequest) {
     }
   }
 
-  // WhatsApp traffic arrives on this same webhook with a channel prefix
+  // SMS only. WhatsApp was removed from the product: a "whatsapp:" sender left
+  // attached to a number in Twilio must not be mistaken for a phone number.
   const rawFrom = params["From"] ?? ""
-  const isWhatsApp = rawFrom.startsWith("whatsapp:")
-  const channel = isWhatsApp ? "whatsapp" : "sms"
-  const from = rawFrom.replace(/^whatsapp:/, "")
-  const to = (params["To"] ?? "").replace(/^whatsapp:/, "")
+  if (rawFrom.startsWith("whatsapp:")) {
+    console.warn("[webhook/sms] ignoring WhatsApp traffic, the channel is not supported")
+    return twimlOk()
+  }
+  const channel = "sms" as const
+  const from = rawFrom
+  const to = params["To"] ?? ""
   const messageBody = params["Body"]?.trim() ?? ""
   const twilioSid = params["MessageSid"] ?? undefined
 
@@ -203,7 +206,7 @@ export async function POST(req: NextRequest) {
       .insert({
         company_id: companyId,
         phone: normalizedFrom,
-        source: isWhatsApp ? "whatsapp" : "sms_inbound",
+        source: "sms_inbound",
         channel,
         status: "new",
         metadata: { inbound_first_message: messageBody },
@@ -213,6 +216,8 @@ export async function POST(req: NextRequest) {
       .single()
 
     lead = newLead
+    // Someone texted the number out of the blue: that is a new lead too.
+    if (newLead) notifyNewLead(companyId, "", normalizedFrom, "sms", newLead.id).catch(() => {})
   }
 
   if (!lead) return twimlOk()
@@ -224,7 +229,7 @@ export async function POST(req: NextRequest) {
   // got dispatched (adversarial finding 4). The interceptor only acts when a
   // pending confirmation exists, so ordering it first is safe.
   const wasConfirmationReply = await handleConfirmationReply(
-    lead.id, companyId, messageBody, normalizedFrom, to, supabase, channel
+    lead.id, companyId, messageBody, normalizedFrom, to, supabase
   ).catch(() => false)
 
   // ── Deterministic opt-out — BEFORE any AI involvement (audit C8) ──────────
@@ -239,8 +244,14 @@ export async function POST(req: NextRequest) {
       lead_id: lead.id, company_id: companyId, direction: "inbound",
       sent_by: "human", body: messageBody, twilio_sid: twilioSid ?? null, channel,
     }).then(() => {}, () => {})
+    // Remember where they were, so a later START puts them back there.
+    const { data: before } = await supabase.from("leads").select("status, metadata").eq("id", lead.id).maybeSingle()
+    const beforeMeta = ((before?.metadata ?? {}) as Record<string, unknown>) ?? {}
     await supabase.from("leads")
-      .update({ status: "closed_lost", ai_paused: true, last_message_at: new Date().toISOString() })
+      .update({
+        status: "closed_lost", ai_paused: true, last_message_at: new Date().toISOString(),
+        metadata: { ...beforeMeta, opted_out_at: new Date().toISOString(), status_before_opt_out: before?.status ?? null },
+      })
       .eq("id", lead.id)
     await supabase.from("sequences").update({ status: "cancelled" })
       .eq("lead_id", lead.id).eq("status", "pending")
@@ -250,8 +261,47 @@ export async function POST(req: NextRequest) {
     return twimlOk()
   }
 
-  // If AI is paused for this lead, skip
-  if (lead.ai_paused) return twimlOk()
+  // Opt back in: START / UNSTOP after a STOP. The carrier re-subscribes them on
+  // its side; mirror it here so the lead is not stuck silent in the CRM forever.
+  const OPT_IN_RE = /^\s*(start|unstop)\s*[.!]*\s*$/i
+  if (!wasConfirmationReply && OPT_IN_RE.test(messageBody)) {
+    await supabase.from("conversations").insert({
+      lead_id: lead.id, company_id: companyId, direction: "inbound",
+      sent_by: "human", body: messageBody, twilio_sid: twilioSid ?? null, channel,
+    }).then(() => {}, () => {})
+    // Back to the stage they were in before the STOP (a booked or quoted lead
+    // stays booked or quoted). Follow-ups are NOT restarted on their own: they
+    // opted back in to texts, not to a sequence; the AI answers their next message.
+    const { data: cur } = await supabase.from("leads").select("metadata").eq("id", lead.id).maybeSingle()
+    const curMeta = ((cur?.metadata ?? {}) as Record<string, unknown>) ?? {}
+    const prior = typeof curMeta.status_before_opt_out === "string" ? curMeta.status_before_opt_out : null
+    const restore = prior && !["closed_lost", "lost", "new", "just_came_in", "contacted"].includes(prior) ? prior : "active_conversation"
+    await supabase.from("leads")
+      .update({
+        status: restore, ai_paused: false, last_message_at: new Date().toISOString(), last_inbound_at: new Date().toISOString(),
+        metadata: { ...curMeta, opted_in_again_at: new Date().toISOString() },
+      })
+      .eq("id", lead.id)
+    console.log(`[webhook/sms] opt-in from lead ${lead.id}, AI resumed`)
+    return twimlOk()
+  }
+
+  // AI paused (a person took over the thread): the AI stays silent, but the
+  // customer's message must still land in the CRM. Returning before the insert
+  // made every reply after a manual send vanish (the owner texts, the customer
+  // answers, the thread shows nothing).
+  if (lead.ai_paused) {
+    if (!wasConfirmationReply) {
+      await supabase.from("conversations").insert({
+        lead_id: lead.id, company_id: companyId, direction: "inbound",
+        sent_by: "human", body: messageBody, twilio_sid: twilioSid ?? null, channel,
+      }).then(() => {}, () => {})
+      await supabase.from("leads")
+        .update({ last_message_at: new Date().toISOString(), last_inbound_at: new Date().toISOString() })
+        .eq("id", lead.id)
+    }
+    return twimlOk()
+  }
 
   // Mark this lead as actively replying
   await supabase
@@ -291,14 +341,32 @@ export async function POST(req: NextRequest) {
     const result = await processAndSave(lead.id, companyId, messageBody, twilioSid)
 
     if (result.response) {
-      const msg = isWhatsApp
-        ? await sendWhatsApp(normalizedFrom, result.response, to)
-        : await sendSMS(normalizedFrom, result.response, to)
-      if (result.outboundConversationId) {
-        await supabase
-          .from("conversations")
-          .update({ twilio_sid: msg.sid })
-          .eq("id", result.outboundConversationId)
+      try {
+        const msg = await sendSMS(normalizedFrom, result.response, to)
+        if (result.outboundConversationId) {
+          await supabase
+            .from("conversations")
+            .update({ twilio_sid: msg.sid })
+            .eq("id", result.outboundConversationId)
+        }
+      } catch (sendErr) {
+        // The reply was generated and saved but the carrier/Twilio refused it.
+        // Mark the row so the CRM shows "Not delivered" with the reason instead
+        // of a message that looks sent. Never fall into the engine-crash path:
+        // a second canned text would fail the same way.
+        const code = (sendErr as { code?: number })?.code
+        console.error(`[webhook/sms] reply to lead ${lead.id} was not accepted by Twilio (code ${code ?? "?"}):`, sendErr)
+        if (result.outboundConversationId) {
+          await supabase
+            .from("conversations")
+            .update({ delivery_status: "failed", delivery_error_code: code ? String(code) : null })
+            .eq("id", result.outboundConversationId)
+        }
+        if (code === 21610) {
+          // Opted out at the carrier: stop everything for this lead.
+          await supabase.from("leads").update({ status: "closed_lost", ai_paused: true }).eq("id", lead.id)
+          await supabase.from("sequences").update({ status: "cancelled" }).eq("lead_id", lead.id).eq("status", "pending")
+        }
       }
     }
 
@@ -355,7 +423,9 @@ export async function POST(req: NextRequest) {
           .single()
         if (leadData) {
           const name = `${leadData.first_name ?? ""} ${leadData.last_name ?? ""}`.trim() || leadData.phone
-          notifyAppointmentBooked(companyId, name, bookedApt.scheduled_at, bookedApt.address ?? "").catch(() => {})
+          const moved = result.action?.type === "reschedule_appointment" ||
+            (result.action?.type === "book_appointment" && result.action.outcome === "moved")
+          notifyAppointmentBooked(companyId, name, bookedApt.scheduled_at, bookedApt.address ?? "", moved, lead.id).catch(() => {})
         }
       }
     }
@@ -368,25 +438,32 @@ export async function POST(req: NextRequest) {
         .single()
       if (leadData) {
         const name = `${leadData.first_name ?? ""} ${leadData.last_name ?? ""}`.trim() || leadData.phone
-        notifyNeedsAttention(companyId, name, leadData.phone).catch(() => {})
+        notifyNeedsAttention(companyId, name, leadData.phone, lead.id).catch(() => {})
       }
     }
   } catch (err) {
     console.error("SMS conversation engine error:", err)
-    // Lead must never get silence — send a human fallback if the engine crashed entirely
+    // The engine crashed. The lead must not get silence, and must not get a line
+    // that belongs to another trade or promises something nobody will do. Send
+    // the holding reply and hand the thread to a person, loudly.
     try {
-      const fallback = "I can get a tech out to you this week — does morning or afternoon work better?"
-      if (isWhatsApp) await sendWhatsApp(normalizedFrom, fallback, to)
-      else await sendSMS(normalizedFrom, fallback, to)
+      const msg = await sendSMS(normalizedFrom, HOLDING_REPLY, to)
       await supabase.from("conversations").insert({
         lead_id:    lead.id,
         company_id: companyId,
         direction:  "outbound",
         sent_by:    "ai",
-        body:       fallback,
+        body:       HOLDING_REPLY,
+        twilio_sid: msg.sid,
         channel,
       })
     } catch { /* absolute last resort — ignore */ }
+    try {
+      await supabase.from("leads").update({ status: "needs_attention" }).eq("id", lead.id)
+        .not("status", "in", "(appointment_booked,closed_won,closed,measure_done,quote_sent)")
+      const name = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || normalizedFrom
+      notifyNeedsAttention(companyId, `${name}: the assistant could not reply, please text them back`, normalizedFrom, lead.id).catch(() => {})
+    } catch { /* best effort */ }
   }
 
   return twimlOk()

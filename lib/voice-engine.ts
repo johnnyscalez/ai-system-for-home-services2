@@ -1,4 +1,5 @@
 import { anthropic } from "@/lib/claude"
+import { logUsage } from "@/lib/usage-log"
 import { buildQualificationBlock, saveLeadDetailsForLead } from "@/lib/ai-engine"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { kbValue } from "@/lib/kb-utils"
@@ -405,7 +406,12 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
     : ""
 
   // Note: no pre-computed slots block on fresh calls — the agent calls find_available_slots after getting zip code.
-  const systemPrompt = [voiceRules, basePrompt, pricingPolicyBlock, financingBlock, jobKnowledgeBlock, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt, leadContext, bookedBlock, offeredSlotsBlock, hcpBlock, historyBlock]
+  // Same blocks, same order, same text. The split point sits where the per-turn content starts
+  // (leadContext onward), so everything before it is cacheable across turns of one call.
+  const staticPrompt = [voiceRules, basePrompt, pricingPolicyBlock, financingBlock, jobKnowledgeBlock, customKnowledgeBlock, qualificationBlock, technicianContext, agentPrompt]
+    .filter(Boolean)
+    .join("\n\n")
+  const dynamicPrompt = [leadContext, bookedBlock, offeredSlotsBlock, hcpBlock, historyBlock]
     .filter(Boolean)
     .join("\n\n")
 
@@ -415,7 +421,8 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
   // booking turns) reads it — a direct time-to-first-token cut on a live phone
   // call where every 100ms of silence is audible. Identical output, same prompt.
   const cachedSystem = [
-    { type: "text" as const, text: systemPrompt, cache_control: { type: "ephemeral" as const } },
+    { type: "text" as const, text: staticPrompt, cache_control: { type: "ephemeral" as const } },
+    ...(dynamicPrompt ? [{ type: "text" as const, text: dynamicPrompt }] : []),
   ]
 
   // ── Build message list for Claude ───────────────────────────────────────────
@@ -473,6 +480,7 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
     tools: TOOLS,
     messages: messages as Parameters<typeof anthropic.messages.create>[0]["messages"],
   })
+  logUsage({ site: "voice-main", companyId: session.company_id, leadId: session.lead_id, model: mainModel, usage: response.usage })
 
   // The model can emit MULTIPLE tool_use blocks in one response (e.g.
   // update_lead_details + book_appointment together). Every tool_use id MUST
@@ -607,6 +615,7 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
       tools:      TOOLS,
       messages:   slotMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],
     })
+    logUsage({ site: "voice-slot-check", companyId: session.company_id, leadId: session.lead_id, model: "claude-sonnet-4-6", usage: slotResponse.usage })
 
     const second = parseResponse(slotResponse.content)
     responseText = second.text
@@ -632,6 +641,7 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
         tools:      TOOLS,
         messages:   nestedMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],
       })
+      logUsage({ site: "voice-slot-nested", companyId: session.company_id, leadId: session.lead_id, model: "claude-sonnet-4-6", usage: nested.usage })
       const third = parseResponse(nested.content)
       responseText = third.text
       toolsToExecute.push(...third.tools)
@@ -662,6 +672,7 @@ The moment the caller accepts a day or time, call book_appointment IMMEDIATELY w
       tools:      TOOLS,
       messages:   followUpMessages as Parameters<typeof anthropic.messages.create>[0]["messages"],
     })
+    logUsage({ site: "voice-tool-followup", companyId: session.company_id, leadId: session.lead_id, model: "claude-sonnet-4-6", usage: followUp.usage })
 
     const fu = parseResponse(followUp.content)
     responseText = fu.text

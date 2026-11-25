@@ -170,7 +170,7 @@ export default function SignupPage() {
               <Input
                 id="email"
                 type="email"
-                placeholder="john@apexroofing.com"
+                placeholder="john@summitfloors.com"
                 value={form.email}
                 onChange={set("email")}
                 required

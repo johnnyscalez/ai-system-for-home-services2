@@ -5,18 +5,15 @@ import { useEffect, useRef, useState, useCallback } from "react"
 import {
   Users, CalendarCheck, TrendingUp, DollarSign,
   ArrowUpRight, ArrowDownRight, Minus,
-  BarChart3, PieChart, GitMerge, HardHat, Wrench,
-  RefreshCw, Edit2, Check, X, ChevronDown,
+  BarChart3, PieChart, GitMerge, Wrench,
+  RefreshCw, Edit2, Check, X,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { FLOORING_JOB_TYPE_LABELS } from "@/lib/job-types"
+import { normalizeJobTypeLabel } from "@/lib/report-helpers"
 import { DateRangePicker, type DateRange, PRESETS } from "@/components/ui/DateRangePicker"
 
 // ── Types ─────────────────────────────────────────────────────────────────────
-
-type TechRow = {
-  id: string; name: string; status: string
-  appointments: number; closedJobs: number; revenue: number
-}
 
 type JobTypeRow = { name: string; jobs: number; revenue: number; avgJob: number }
 
@@ -30,12 +27,8 @@ type Deal = {
   refund_note: string | null
   closed_at: string | null
   closed_job_type: string | null
-  closed_technician_id: string | null
-  closed_technician_name: string | null
   status: string
 }
-
-type Technician = { id: string; name: string; status: string }
 
 type Props = {
   leadsThisMonth: number
@@ -54,9 +47,7 @@ type Props = {
   statusCounts: Record<string, number>
   sourceCounts: Record<string, number>
   funnel: { stage: string; count: number }[]
-  techPerformance: TechRow[]
   jobTypePerformance: JobTypeRow[]
-  technicians: Technician[]
   initialDeals: Deal[]
 }
 
@@ -173,28 +164,35 @@ function SparkBar({ dailyLeads }: { dailyLeads: { date: string; count: number }[
 // ── Funnel bar ────────────────────────────────────────────────────────────────
 
 const STAGE_LABELS: Record<string, string> = {
-  new: "New",
-  contacted: "Contacted",
-  qualified: "Qualified",
-  appointment_booked: "Booked",
-  closed_lost: "Lost",
+  leads: "Leads",
+  engaged: "Replied",
+  measure_booked: "Measure booked",
+  quote_out: "Quote out",
+  signed: "Signed",
+  lost: "Lost",
 }
 
 const STAGE_COLORS: Record<string, string> = {
-  new: "bg-sky-400",
-  contacted: "bg-blue-500",
-  qualified: "bg-[#F97316]",
-  appointment_booked: "bg-emerald-500",
-  closed_lost: "bg-red-400",
+  leads: "bg-sky-400",
+  engaged: "bg-[#F97316]",
+  measure_booked: "bg-emerald-500",
+  quote_out: "bg-teal-500",
+  signed: "bg-[#16A34A]",
+  lost: "bg-slate-400",
 }
 
 // ── Source labels ─────────────────────────────────────────────────────────────
 
 const SOURCE_LABELS: Record<string, string> = {
   facebook: "Facebook Ads",
-  webhook: "Webhook / Other",
+  google: "Google Ads",
+  ghl: "Website form",
+  website: "Website form",
+  messenger: "Messenger",
   manual: "Manual",
-  organic: "Organic SMS",
+  webhook: "Website form",
+  organic: "Text-in",
+  sms: "Text-in",
   unknown: "Unknown",
 }
 
@@ -223,9 +221,7 @@ export function ReportsClient({
   statusCounts: initialStatusCounts,
   sourceCounts: initialSourceCounts,
   funnel: initialFunnel,
-  techPerformance: initialTechPerf,
   jobTypePerformance: initialJobTypePerf,
-  technicians,
   initialDeals,
 }: Props) {
   const [range, setRange]       = useState<DateRange>(defaultRange())
@@ -245,11 +241,10 @@ export function ReportsClient({
   const [statusCounts, setStatusCounts]     = useState(initialStatusCounts)
   const [sourceCounts, setSourceCounts]     = useState(initialSourceCounts)
   const [funnel, setFunnel]                 = useState(initialFunnel)
-  const [techPerformance, setTechPerf]      = useState(initialTechPerf)
   const [jobTypePerf, setJobTypePerf]       = useState(initialJobTypePerf)
   const [deals, setDeals]                   = useState<Deal[]>(initialDeals)
   const [editingDeal, setEditingDeal]       = useState<string | null>(null)
-  const [editForm, setEditForm]             = useState<{ dealValue: string; closedJobType: string; closedTechnicianId: string; closedTechnicianName: string }>({ dealValue: "", closedJobType: "", closedTechnicianId: "", closedTechnicianName: "" })
+  const [editForm, setEditForm]             = useState<{ dealValue: string; closedJobType: string }>({ dealValue: "", closedJobType: "" })
   const [savingDeal, setSavingDeal]         = useState(false)
 
   const fetchReports = useCallback(async (r: DateRange) => {
@@ -272,7 +267,6 @@ export function ReportsClient({
       setStatusCounts(d.statusCounts)
       setSourceCounts(d.sourceCounts)
       setFunnel(d.funnel)
-      setTechPerf(d.techPerformance)
       setJobTypePerf(d.jobTypePerformance ?? [])
       // Also refresh deals for the new range
       const dr = await fetch(`/api/reports/deals?since=${r.from}&until=${r.until}`)
@@ -291,8 +285,6 @@ export function ReportsClient({
           id,
           dealValue: parseFloat(editForm.dealValue),
           closedJobType: editForm.closedJobType,
-          closedTechnicianId: editForm.closedTechnicianId || null,
-          closedTechnicianName: editForm.closedTechnicianName || null,
         }),
       })
       if (!res.ok) return
@@ -307,9 +299,7 @@ export function ReportsClient({
   function startEdit(d: Deal) {
     setEditForm({
       dealValue: String(d.deal_value),
-      closedJobType: d.closed_job_type ?? "",
-      closedTechnicianId: d.closed_technician_id ?? "",
-      closedTechnicianName: d.closed_technician_name ?? "",
+      closedJobType: normalizeJobTypeLabel(d.closed_job_type),
     })
     setEditingDeal(d.id)
   }
@@ -373,13 +363,13 @@ export function ReportsClient({
                 <div className="w-7 h-7 rounded-lg bg-white/20 flex items-center justify-center">
                   <DollarSign className="w-4 h-4 text-white" />
                 </div>
-                <p className="text-green-200 text-xs font-bold uppercase tracking-widest">Net Revenue Closed</p>
+                <p className="text-green-200 text-xs font-bold uppercase tracking-widest">Net Revenue Signed</p>
               </div>
               <p className="text-5xl font-bold" style={{ fontFamily: "var(--font-jakarta), 'Plus Jakarta Sans', sans-serif" }}>
                 ${revenueClosed.toLocaleString()}
               </p>
               <p className="text-green-200 text-sm mt-2">
-                {closedCount} deal{closedCount !== 1 ? "s" : ""} · {range.label}
+                {closedCount} signed deal{closedCount !== 1 ? "s" : ""} · {range.label}
                 {closedCount > 0 && ` · avg $${Math.round(revenueClosed / closedCount).toLocaleString()} per deal`}
               </p>
               {totalRefunded > 0 && (
@@ -392,7 +382,7 @@ export function ReportsClient({
             <div className="flex gap-4 sm:flex-col sm:items-end">
               <div className="text-center sm:text-right">
                 <p className="text-2xl font-bold">{closedCount}</p>
-                <p className="text-green-200 text-xs">Deals closed</p>
+                <p className="text-green-200 text-xs">Deals signed</p>
               </div>
               {totalRefunded > 0 ? (
                 <div className="text-center sm:text-right">
@@ -419,7 +409,7 @@ export function ReportsClient({
             delay={0}
           />
           <StatCard
-            label={`Appointments · ${range.label}`}
+            label={`Measures booked · ${range.label}`}
             value={aptInPeriod}
             icon={CalendarCheck}
             iconColor="bg-emerald-100 text-emerald-600"
@@ -453,7 +443,7 @@ export function ReportsClient({
         >
           <div className="flex items-center gap-2 mb-1">
             <BarChart3 className="w-4 h-4 text-muted-foreground" />
-            <h2 className="font-semibold text-sm">Lead volume — last 30 days</h2>
+            <h2 className="font-semibold text-sm">Lead volume, last 30 days</h2>
           </div>
           <p className="text-xs text-muted-foreground mb-4">{leadsInPeriod} leads · {range.label}</p>
           <SparkBar dailyLeads={dailyLeads} />
@@ -499,7 +489,7 @@ export function ReportsClient({
               })}
             </div>
             <div className="mt-4 pt-4 border-t border-border/50 flex items-center justify-between">
-              <span className="text-xs text-muted-foreground">Overall booking rate</span>
+              <span className="text-xs text-muted-foreground">Measure booking rate</span>
               <span className="text-sm font-bold text-emerald-600">{bookingRate}%</span>
             </div>
           </motion.div>
@@ -548,145 +538,6 @@ export function ReportsClient({
           </motion.div>
         </div>
 
-        {/* Technician Performance */}
-        <motion.div
-          initial={{ opacity: 0, y: 20 }}
-          animate={{ opacity: 1, y: 0 }}
-          transition={{ duration: 0.4, delay: 0.45 }}
-          className="bg-white rounded-2xl border border-border/60 overflow-hidden mb-6"
-          style={{ boxShadow: "0 4px 24px rgba(77,124,15,0.06)" }}
-        >
-          <div className="px-6 py-4 border-b border-border/60 flex items-center gap-2">
-            <div className="w-7 h-7 rounded-lg bg-[#4D7C0F]/10 flex items-center justify-center">
-              <HardHat className="w-3.5 h-3.5 text-[#4D7C0F]" />
-            </div>
-            <h2 className="font-semibold text-sm">Technician Performance</h2>
-            <span className="text-xs text-muted-foreground ml-1">— AI-booked appointments & closed deals per tech</span>
-          </div>
-
-          {techPerformance.length === 0 ? (
-            <div className="px-6 py-10 text-center">
-              <HardHat className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No technicians added yet.</p>
-              <p className="text-xs text-muted-foreground mt-1">
-                Add your team in <a href="/technicians" className="text-[#4D7C0F] underline">Technicians</a> to track performance here.
-              </p>
-            </div>
-          ) : (
-            <div className="overflow-x-auto">
-              <table className="w-full">
-                <thead>
-                  <tr className="bg-[#F5F4F2] text-[11px] font-semibold text-[#78716C] uppercase tracking-wider">
-                    <th className="text-left px-6 py-3">Technician</th>
-                    <th className="text-center px-4 py-3">Appointments booked</th>
-                    <th className="text-center px-4 py-3">Jobs closed</th>
-                    <th className="text-center px-4 py-3">Close rate</th>
-                    <th className="text-right px-6 py-3">Revenue generated</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-border/40">
-                  {techPerformance.map((tech, i) => {
-                    // Close rate = jobs closed ÷ AI-booked appointments, both
-                    // within the selected period. Capped at 100% for display:
-                    // a deal closed this period from an appointment booked in
-                    // a previous period can push the raw ratio over 100%,
-                    // which reads as a bug — the raw counts are right beside
-                    // it either way. Null when there's no denominator.
-                    const closeRate = tech.appointments > 0
-                      ? Math.min(100, Math.round((tech.closedJobs / tech.appointments) * 100))
-                      : null
-                    return (
-                    <motion.tr
-                      key={tech.id}
-                      initial={{ opacity: 0, x: -10 }}
-                      animate={{ opacity: 1, x: 0 }}
-                      transition={{ delay: 0.5 + i * 0.05 }}
-                      className="hover:bg-[#F5F4F2]/50 transition-colors"
-                    >
-                      <td className="px-6 py-4">
-                        <div className="flex items-center gap-3">
-                          <div className="w-8 h-8 rounded-full bg-[#4D7C0F]/10 flex items-center justify-center shrink-0">
-                            <HardHat className="w-3.5 h-3.5 text-[#4D7C0F]" />
-                          </div>
-                          <div>
-                            <p className="text-sm font-semibold text-[#1C1917]">{tech.name}</p>
-                            <span className={cn(
-                              "text-[10px] font-medium px-1.5 py-0.5 rounded-full",
-                              tech.status === "active"
-                                ? "bg-green-100 text-green-700"
-                                : "bg-slate-100 text-slate-500"
-                            )}>
-                              {tech.status}
-                            </span>
-                          </div>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-center">
-                        <div className="flex flex-col items-center">
-                          <span className="text-lg font-bold text-[#1C1917] font-mono">{tech.appointments}</span>
-                          <span className="text-[10px] text-[#78716C]">booked by AI</span>
-                        </div>
-                      </td>
-                      <td className="px-4 py-4 text-center">
-                        <span className="text-lg font-bold text-[#1C1917] font-mono">{tech.closedJobs}</span>
-                      </td>
-                      <td className="px-4 py-4 text-center">
-                        {closeRate !== null ? (
-                          <div className="flex flex-col items-center gap-1">
-                            <span className="text-lg font-bold font-mono text-[#1C1917]">{closeRate}%</span>
-                            <div className="w-16 h-1.5 rounded-full bg-[#E7E5E4] overflow-hidden">
-                              <div className="h-full rounded-full bg-[#4D7C0F]" style={{ width: `${closeRate}%` }} />
-                            </div>
-                          </div>
-                        ) : (
-                          <span className="text-sm text-[#78716C]" title="No AI-booked appointments in this period">—</span>
-                        )}
-                      </td>
-                      <td className="px-6 py-4 text-right">
-                        <span className={cn(
-                          "text-lg font-bold font-mono",
-                          tech.revenue > 0 ? "text-[#4D7C0F]" : "text-[#78716C]"
-                        )}>
-                          ${tech.revenue.toLocaleString()}
-                        </span>
-                        {tech.closedJobs > 0 && (
-                          <p className="text-[10px] text-[#78716C] mt-0.5">
-                            avg ${Math.round(tech.revenue / tech.closedJobs).toLocaleString()}/job
-                          </p>
-                        )}
-                      </td>
-                    </motion.tr>
-                    )
-                  })}
-                </tbody>
-                {techPerformance.length > 1 && (
-                  <tfoot>
-                    <tr className="bg-[#4D7C0F]/5 border-t-2 border-[#4D7C0F]/20">
-                      <td className="px-6 py-3 text-xs font-bold text-[#1C1917]">Total</td>
-                      <td className="px-4 py-3 text-center text-sm font-bold text-[#1C1917] font-mono">
-                        {techPerformance.reduce((s, t) => s + t.appointments, 0)}
-                      </td>
-                      <td className="px-4 py-3 text-center text-sm font-bold text-[#1C1917] font-mono">
-                        {techPerformance.reduce((s, t) => s + t.closedJobs, 0)}
-                      </td>
-                      <td className="px-4 py-3 text-center text-sm font-bold text-[#1C1917] font-mono">
-                        {(() => {
-                          const apts = techPerformance.reduce((s, t) => s + t.appointments, 0)
-                          const closed = techPerformance.reduce((s, t) => s + t.closedJobs, 0)
-                          return apts > 0 ? `${Math.min(100, Math.round((closed / apts) * 100))}%` : "—"
-                        })()}
-                      </td>
-                      <td className="px-6 py-3 text-right text-sm font-bold text-[#4D7C0F] font-mono">
-                        ${techPerformance.reduce((s, t) => s + t.revenue, 0).toLocaleString()}
-                      </td>
-                    </tr>
-                  </tfoot>
-                )}
-              </table>
-            </div>
-          )}
-        </motion.div>
-
         {/* Revenue by Job Type — ranked most → least profitable */}
         <motion.div
           initial={{ opacity: 0, y: 20 }}
@@ -700,15 +551,15 @@ export function ReportsClient({
               <Wrench className="w-3.5 h-3.5 text-[#4D7C0F]" />
             </div>
             <h2 className="font-semibold text-sm">Revenue by Job Type</h2>
-            <span className="text-xs text-muted-foreground ml-1">— which jobs actually make you money, most to least</span>
+            <span className="text-xs text-muted-foreground ml-1">which jobs make you the most money, most to least</span>
           </div>
 
           {jobTypePerf.length === 0 ? (
             <div className="px-6 py-10 text-center">
               <Wrench className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No closed jobs in this period.</p>
+              <p className="text-sm text-muted-foreground">No signed jobs in this period.</p>
               <p className="text-xs text-muted-foreground mt-1">
-                Job types are recorded when a deal is closed — they&apos;ll rank here automatically.
+                Job types are recorded when a deal is marked signed, and they rank here automatically.
               </p>
             </div>
           ) : (
@@ -777,8 +628,8 @@ export function ReportsClient({
               <div className="w-7 h-7 rounded-lg bg-[#F97316]/10 flex items-center justify-center">
                 <DollarSign className="w-3.5 h-3.5 text-[#F97316]" />
               </div>
-              <h2 className="font-semibold text-sm">Closed Deals</h2>
-              <span className="text-xs text-muted-foreground ml-1">— {range.label}</span>
+              <h2 className="font-semibold text-sm">Signed Deals</h2>
+              <span className="text-xs text-muted-foreground ml-1">· {range.label}</span>
             </div>
             <span className="text-xs text-muted-foreground">{deals.length} deal{deals.length !== 1 ? "s" : ""}</span>
           </div>
@@ -786,7 +637,7 @@ export function ReportsClient({
           {deals.length === 0 ? (
             <div className="px-6 py-10 text-center">
               <DollarSign className="w-8 h-8 text-muted-foreground/30 mx-auto mb-3" />
-              <p className="text-sm text-muted-foreground">No closed deals in this period.</p>
+              <p className="text-sm text-muted-foreground">No signed deals in this period.</p>
             </div>
           ) : (
             <div className="overflow-x-auto">
@@ -794,9 +645,8 @@ export function ReportsClient({
                 <thead>
                   <tr className="bg-[#F5F4F2] text-[11px] font-semibold text-[#78716C] uppercase tracking-wider">
                     <th className="text-left px-6 py-3">Lead</th>
-                    <th className="text-left px-4 py-3">Date Closed</th>
+                    <th className="text-left px-4 py-3">Date Signed</th>
                     <th className="text-left px-4 py-3">Job Type</th>
-                    <th className="text-left px-4 py-3">Technician</th>
                     <th className="text-right px-4 py-3">Deal Value</th>
                     <th className="text-right px-4 py-3">Refunded</th>
                     <th className="text-right px-4 py-3">Net</th>
@@ -826,38 +676,19 @@ export function ReportsClient({
                         </td>
                         <td className="px-4 py-4">
                           {isEditing ? (
-                            <input
+                            <select
                               value={editForm.closedJobType}
                               onChange={e => setEditForm(f => ({ ...f, closedJobType: e.target.value }))}
-                              placeholder="e.g. AC Install"
-                              className="border border-[#E7E5E4] rounded-lg px-2 py-1 text-sm w-32 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20"
-                            />
+                              className="border border-[#E7E5E4] rounded-lg px-2 py-1 text-sm w-40 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20"
+                            >
+                              <option value="">Not set</option>
+                              {editForm.closedJobType && !FLOORING_JOB_TYPE_LABELS.includes(editForm.closedJobType) && (
+                                <option value={editForm.closedJobType}>{editForm.closedJobType}</option>
+                              )}
+                              {FLOORING_JOB_TYPE_LABELS.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
                           ) : (
-                            <span className="text-sm text-[#1C1917]">{deal.closed_job_type || <span className="text-muted-foreground">—</span>}</span>
-                          )}
-                        </td>
-                        <td className="px-4 py-4">
-                          {isEditing ? (
-                            <div className="relative">
-                              <select
-                                value={editForm.closedTechnicianId}
-                                onChange={e => {
-                                  const tech = technicians.find(t => t.id === e.target.value)
-                                  setEditForm(f => ({ ...f, closedTechnicianId: e.target.value, closedTechnicianName: tech?.name ?? "" }))
-                                }}
-                                className="border border-[#E7E5E4] rounded-lg px-2 py-1 text-sm w-36 focus:outline-none focus:ring-2 focus:ring-[#F97316]/20 appearance-none pr-7"
-                              >
-                                <option value="">Unassigned</option>
-                                {technicians.map(t => (
-                                  <option key={t.id} value={t.id}>{t.name}</option>
-                                ))}
-                              </select>
-                              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-muted-foreground pointer-events-none" />
-                            </div>
-                          ) : (
-                            <span className="text-sm text-[#1C1917]">
-                              {deal.closed_technician_name || <span className="text-muted-foreground text-xs">Unassigned</span>}
-                            </span>
+                            <span className="text-sm text-[#1C1917]">{normalizeJobTypeLabel(deal.closed_job_type) || <span className="text-muted-foreground">—</span>}</span>
                           )}
                         </td>
                         <td className="px-4 py-4 text-right">
@@ -935,7 +766,7 @@ export function ReportsClient({
                 </tbody>
                 <tfoot>
                   <tr className="bg-[#F97316]/5 border-t-2 border-[#F97316]/20">
-                    <td colSpan={4} className="px-6 py-3 text-xs font-bold text-[#1C1917]">Total · {deals.length} deal{deals.length !== 1 ? "s" : ""}</td>
+                    <td colSpan={3} className="px-6 py-3 text-xs font-bold text-[#1C1917]">Total · {deals.length} deal{deals.length !== 1 ? "s" : ""}</td>
                     <td className="px-4 py-3 text-right text-sm font-bold text-[#4D7C0F] font-mono">
                       ${deals.reduce((s, d) => s + Number(d.deal_value), 0).toLocaleString()}
                     </td>
@@ -965,14 +796,14 @@ export function ReportsClient({
           <h2 className="font-semibold text-sm mb-4">All-time totals</h2>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
             <AllTimeStat label="Total leads" value={totalLeads} />
-            <AllTimeStat label="Appointments booked" value={totalApts} />
+            <AllTimeStat label="Measures booked" value={totalApts} />
             <AllTimeStat
               label="Avg. job value"
               value={avgJobValue}
               format={(v) => `$${v.toLocaleString()}`}
             />
             <AllTimeStat
-              label="Revenue potential booked"
+              label="Projected pipeline revenue"
               value={totalApts * avgJobValue}
               format={(v) => `$${v.toLocaleString()}`}
               green

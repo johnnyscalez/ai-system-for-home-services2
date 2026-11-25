@@ -1,4 +1,5 @@
 import { anthropic } from "@/lib/claude"
+import { logUsage } from "@/lib/usage-log"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { kbValue } from "@/lib/kb-utils"
 import { createCalendarEvent, getCalendarEvents } from "@/lib/google-calendar"
@@ -7,9 +8,20 @@ import { getAvailableSlots, formatSlotsForPrompt, DEFAULT_WINDOWS, DEFAULT_DAYS 
 import { getTwilioClient } from "@/lib/twilio"
 import { selectTechnician, flagNoTechAvailable, findSlotsForLead, getTechnicianContextForCompany } from "@/lib/technician-booking"
 import type { AppointmentWindow, PerDaySlots } from "@/lib/availability"
+import { serviceCopy, HOLDING_REPLY, type ServiceCopy } from "@/lib/service-copy"
+import { voiceEnabled } from "@/lib/voice-enabled"
+import {
+  buildQualificationBlock, parseRuntimeQuestions, leadAnswers, ensureRequiredAnswers,
+  qualificationVerdict, missingRequired,
+} from "@/lib/qualification"
+
+// The voice engine builds its prompt from the same block.
+export { buildQualificationBlock }
 
 export type ConversationAction =
-  | { type: "book_appointment"; scheduled_at: string; address?: string; notes?: string; quoted_total?: number; unit_count?: number; property_type?: string; outcome?: "created" | "moved" | "noop" }
+  | { type: "book_appointment"; scheduled_at: string; address?: string; notes?: string; quoted_total?: number; unit_count?: number; property_type?: string; outcome?: "created" | "moved" | "noop"
+      /** Set when the lead said yes to a recap: their yes IS the intent, including a move. */
+      consented?: boolean }
   | { type: "update_status"; status: "qualified" | "closed_lost" | "needs_attention" }
   | { type: "cancel_appointment"; appointment_id: string; reason?: string }
   | { type: "reschedule_appointment"; appointment_id: string; new_scheduled_at: string }
@@ -29,17 +41,26 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "find_available_slots",
     description:
-      "Look up real available appointment slots, filtered by technician availability and zip coverage. Call this when your playbook's BOOKING GATE for this lead's job type is satisfied (the required discovery questions answered — or the lead explicitly pushed to book immediately) AND you have a zip code or address. Do NOT call it just because you happen to have an address early — an address in hand does not mean discovery is done; finish the gate first. Never offer times without calling this first, and never invent times. Never call this in the same turn as your FIRST price presentation — price lands first, times come in the following message after the lead responds.",
+      "Look up the real open times for a visit at the lead's home, checked against the company calendar and service area. Call this only when the BOOKING GATE is satisfied: every REQUIRED qualifying question is answered and saved, AND you have a zip code or address. Having an address early does not mean qualification is done, so finish the required questions first. Never offer times without calling this first, and never invent times.",
     input_schema: {
       type: "object" as const,
       properties: {
         job_type: {
           type: "string",
-          description: "The specific job type. One of: ac_repair, ac_installation, ac_not_cooling, furnace_repair, furnace_not_working, heat_pump_repair, heat_pump_installation, mini_split_repair, mini_split_installation, duct_cleaning, duct_repair, boiler_repair, commercial_hvac, hvac_tune_up, hvac_replacement, air_quality, electrical, plumbing, general",
+          description: "The specific job type. One of: lvp, laminate, hardwood, engineered_hardwood, carpet, tile, refinishing, stairs, whole_home, commercial_flooring, other",
         },
         zip_code: {
           type: "string",
           description: "5-digit zip code extracted from the lead's address. If you only have a city, pass what you know.",
+        },
+        preferred_date: {
+          type: "string",
+          description: "ONLY when the lead asked for a specific day ('Friday', 'next Tuesday', 'the 3rd'): that date as YYYY-MM-DD, taken from the Upcoming dates table in the lead file. Omit when they have no preference.",
+        },
+        preferred_time_of_day: {
+          type: "string",
+          enum: ["morning", "midday", "afternoon", "evening"],
+          description: "ONLY when the lead asked for a part of the day. Omit otherwise.",
         },
       },
       required: [],
@@ -48,15 +69,15 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "book_appointment",
     description:
-      "For service visits: call this ONLY after the lead replied YES to your booking recap (day, window, address, package, price) — the recap consent is a mandatory step before this tool. You must also have every field the lead file's CHANNEL & CONTACT FILE block lists as REQUIRED BEFORE BOOKING. For service visits that always includes the FULL street service address (house number + street — a zip code alone is NOT an address) — never book a visit without one, AND the customer's full name for the booking (if the file marks the name as an unverified Facebook profile name, ask 'And what's your full name for the booking?' before the recap). For phone/video appointments no address exists or is needed. scheduled_at MUST be the exact ISO datetime string returned by find_available_slots for the slot the lead agreed to — copy it verbatim, character for character. NEVER compose, convert, or re-derive the datetime yourself: a hand-built datetime books the customer at the wrong hour. Call it ONCE: if the lead file already shows this appointment booked, acknowledge it instead of calling again — only call again when the lead explicitly asks for a DIFFERENT time.",
+      "For visits to the home: call this ONLY after the lead replied YES to your booking recap (day, window, address). The recap consent is a mandatory step before this tool. You must also have every field the lead file's CHANNEL & CONTACT FILE block lists as REQUIRED BEFORE BOOKING, and every REQUIRED qualifying question answered. A home visit always needs the FULL street address (house number + street; a zip code alone is NOT an address), and the customer's full name for the booking (if the file marks the name as an unverified Facebook profile name, ask 'And what's your full name for the booking?' before the recap). The system refuses a booking that is missing any of these. For phone/video appointments no address exists or is needed. scheduled_at MUST be the exact ISO datetime string returned by find_available_slots for the slot the lead agreed to — copy it verbatim, character for character. NEVER compose, convert, or re-derive the datetime yourself: a hand-built datetime books the customer at the wrong hour. Call it ONCE: if the lead file already shows this appointment booked, acknowledge it instead of calling again — only call again when the lead explicitly asks for a DIFFERENT time.",
     input_schema: {
       type: "object" as const,
       properties: {
         scheduled_at: { type: "string", description: "ISO 8601 datetime e.g. 2024-06-15T14:00:00" },
-        address: { type: "string", description: "Full service address (street, city, state). Required for any appointment where a technician travels to the property — omit only for phone/video appointments, which have no address. NEVER a bare zip code." },
-        notes: { type: "string", description: "Summary of the job: system type, age, issue description, urgency level, ownership status" },
-        quoted_total: { type: "number", description: "The TOTAL price in dollars the customer just agreed to for this job — all units combined, using the FINAL corrected unit count if they changed it mid-conversation ('two furnaces… actually one' at $189 = 189). Pass it whenever a fixed price was agreed in the conversation; the office and the technician see this amount on the job. Omit ONLY for free-estimate/diagnostic visits where no price was agreed. Never invent or estimate a number the customer did not accept." },
-        unit_count: { type: "number", description: "How many units the price covers (furnaces / systems / AC units) — the final corrected count. 1 if a single unit." },
+        address: { type: "string", description: "Full street address of the home (street, city, state, zip). Required for any visit to the property. Omit only for phone/video appointments, which have no address. NEVER a bare zip code." },
+        notes: { type: "string", description: "Short summary for whoever runs the visit: what the lead wants, which rooms and roughly how big, their timeline, who decides, and anything they should know before arriving" },
+        quoted_total: { type: "number", description: "ONLY for companies that sell a fixed-price service and ONLY when the customer agreed to a specific total in this conversation. Omit for measures, estimates and quotes, where no price has been agreed. Never invent or estimate a number." },
+        unit_count: { type: "number", description: "For fixed-price services only: how many units the agreed price covers. Omit otherwise." },
         property_type: { type: "string", description: "one of: house, townhome, condo, apartment" },
       },
       required: ["scheduled_at"],
@@ -78,7 +99,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "reschedule_appointment",
     description:
-      "Reschedule the lead's appointment to a new time slot. Use when the lead says they want to change their appointment time. ONLY offer slots from the AVAILABLE BOOKING SLOTS list. Get their preferred slot, confirm it, then call this tool.",
+      "Reschedule the lead's appointment to a new time slot. Use when the lead says they want to change their appointment time. ONLY offer times that came from find_available_slots in this conversation (or from the AVAILABLE BOOKING SLOTS list, if your prompt has one). Get their preferred slot, confirm it, then call this tool.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -106,6 +127,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
       type: "object" as const,
       properties: {
         status: { type: "string", enum: ["qualified", "closed_lost", "needs_attention", "returning_client"] },
+        reason: { type: "string", description: "Only with needs_attention: what the person needs to do, in under 10 plain words, e.g. 'wants a call about the quote price' or 'upset about a missed visit'. The owner gets this in a text." },
       },
       required: ["status"],
     },
@@ -113,7 +135,7 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
   {
     name: "update_lead_details",
     description:
-      "Save lead details to their file the MOMENT you learn them mid-conversation — do not wait for booking. Call it as soon as the lead reveals or confirms: their name (first_name / last_name), their email, what the job is (job_type), what system they have (system_type), how old it is (system_age), or anything else meaningful (situation_notes). The CRM, dispatch logic, the technician's job record, and reports all read these fields — and situation_notes is how the office and the tech see the lead's real situation even if they never book. NAME IS CRITICAL: the moment a lead tells you their name, save it here — a name written only into situation_notes does NOT reach the CRM or the technician's schedule, and the customer shows up as \"Unknown\". Calling this sends no message and costs nothing — you can call it alongside your normal reply in the same turn. Only pass the fields you actually learned; never guess.",
+      "Save lead details to their file the MOMENT you learn them mid-conversation. Do not wait for booking. Call it as soon as the lead reveals or confirms: their name (first_name / last_name), their email, what the project is (job_type), an answer to a qualifying question (answers), their address or zip, or anything else meaningful (situation_notes). The CRM, the booking, and reports all read these fields, and it is how the company sees the lead's real situation even if they never book. NAME IS CRITICAL: the moment a lead tells you their name, save it here. A name written only into situation_notes does NOT reach the CRM, and the customer shows up as \"Unknown\". Calling this sends no message and costs nothing, so call it alongside your normal reply in the same turn. Only pass the fields you actually learned; never guess.",
     input_schema: {
       type: "object" as const,
       properties: {
@@ -123,15 +145,27 @@ const TOOLS: Parameters<typeof anthropic.messages.create>[0]["tools"] = [
         timezone: { type: "string", description: "The lead's IANA timezone, the moment you learn where they are — 'America/Phoenix', 'America/Chicago', 'America/Los_Angeles', 'America/New_York', 'America/Denver'. Derive it from whatever they say: a state, a city, or a plain 'we're mountain time'. Save it BEFORE calling find_available_slots so every time you offer is already in their clock." },
         job_type: {
           type: "string",
-          description: "One of: ac_repair, ac_installation, ac_not_cooling, furnace_repair, furnace_not_working, heat_pump_repair, heat_pump_installation, mini_split_repair, mini_split_installation, duct_cleaning, duct_repair, boiler_repair, commercial_hvac, hvac_tune_up, hvac_replacement, air_quality, electrical, plumbing, general",
+          description: "One of: lvp, laminate, hardwood, engineered_hardwood, carpet, tile, refinishing, stairs, whole_home, commercial_flooring, other",
         },
-        system_type: { type: "string", description: "What they have, in plain words — e.g. 'Central AC', 'Gas furnace', 'Heat pump', 'None (new construction)'" },
-        system_age: { type: "string", description: "Rough age as stated — e.g. '~2006, about 20 years', '5-7 years'" },
-        address: { type: "string", description: "The FULL service street address the moment the lead gives or corrects it — house number + street (+ city/state/zip when given). NEVER a bare zip code — a zip alone goes in the zip field. If the lead corrects an address already on file, save the NEW one here — the last confirmed address is the truth everywhere (CRM, technician, confirmations)." },
+        answers: {
+          type: "array",
+          description: "Answers to the company's QUALIFYING QUESTIONS, the moment the lead gives them. Use the key exactly as listed in your QUALIFICATION RULES block, and the answer in the lead's own words, kept short. Example: [{ key: 'project_size', answer: 'kitchen and living room, about 800 sq ft' }]. Required answers that are not saved here block the booking.",
+          items: {
+            type: "object",
+            properties: {
+              key: { type: "string", description: "The question key from the QUALIFICATION RULES block" },
+              answer: { type: "string", description: "What the lead said, short" },
+            },
+            required: ["key", "answer"],
+          },
+        },
+        system_type: { type: "string", description: "What they have now, in plain words. For flooring: the floor that is down today, e.g. 'Old carpet', 'Worn hardwood', 'Builder-grade tile', 'Bare subfloor (new build)'" },
+        system_age: { type: "string", description: "Rough size or age as stated, e.g. '1,200 sq ft, 3 rooms', 'floors are about 15 years old'" },
+        address: { type: "string", description: "The FULL street address the moment the lead gives or corrects it: house number + street (+ city/state/zip when given). NEVER a bare zip code. A zip alone goes in the zip field. If the lead corrects an address already on file, save the NEW one here. The last confirmed address is the truth everywhere (CRM, the booking, confirmations)." },
         zip: { type: "string", description: "The lead's 5-digit ZIP code the moment they give it — its own field, separate from address. Save a bare zip HERE, never as the address." },
-        unit_count: { type: "number", description: "How many furnaces/systems the lead's home has, the moment they state or CORRECT it ('two furnaces… actually just one' → 1). The last confirmed number wins." },
+        unit_count: { type: "number", description: "For fixed-price services only: how many units the job covers, the moment the lead states or corrects it. The last confirmed number wins." },
         property_type: { type: "string", description: "house | townhome | condo | apartment | commercial — the moment they state or correct it." },
-        situation_notes: { type: "string", description: "One short factual line of NEW information learned this turn that doesn't fit the fields above — symptoms in their words, urgency signals, vulnerable occupants, what they've tried, access notes, decision-maker situation. Appended to the lead's notes for the office and tech. Facts only, no interpretation. Check the lead file's existing notes first — never re-save a fact that's already noted, even reworded." },
+        situation_notes: { type: "string", description: "One short factual line of NEW information learned this turn that doesn't fit the fields above: what they want in their own words, urgency, pets or access notes, what they've already been quoted, who else decides. Appended to the lead's notes for the company. Facts only, no interpretation. Check the lead file's existing notes first and never re-save a fact that's already noted, even reworded." },
       },
       required: [],
     },
@@ -143,6 +177,8 @@ export type LeadDetailsInput = {
   first_name?: string; last_name?: string; email?: string; timezone?: string
   job_type?: string; system_type?: string; system_age?: string; situation_notes?: string
   address?: string; zip?: string; unit_count?: number; property_type?: string
+  /** Answers to the company's qualifying questions, keyed as in ai_agent_config. */
+  answers?: Array<{ key?: string; answer?: string }>
   /** True when the name came from the customer's own words this conversation —
    *  it verifies the record for booking (replaces a Facebook profile alias). */
   name_verified?: boolean
@@ -232,9 +268,23 @@ export async function saveLeadDetailsForLead(
     metaPatch.name_verified = true
     metaPatch.name_source = "customer_stated"
   }
-  if (Object.keys(metaPatch).length > 0) {
+  // Qualifying answers: merged key by key so a later answer never wipes an
+  // earlier one, and only for keys with a real value.
+  const answerPatch: Record<string, string> = {}
+  for (const a of Array.isArray(input.answers) ? input.answers : []) {
+    const key = (a?.key ?? "").toString().trim().toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_+|_+$/g, "")
+    const val = (a?.answer ?? "").toString().trim().slice(0, 300)
+    if (key && val) answerPatch[key] = val
+  }
+  if (Object.keys(metaPatch).length > 0 || Object.keys(answerPatch).length > 0) {
     const { data: cur } = await supabase.from("leads").select("metadata").eq("id", leadId).maybeSingle()
-    patch.metadata = { ...((cur?.metadata as Record<string, unknown> | null) ?? {}), ...metaPatch }
+    const curMeta = (cur?.metadata as Record<string, unknown> | null) ?? {}
+    const curAnswers = (curMeta.qualification && typeof curMeta.qualification === "object" ? curMeta.qualification : {}) as Record<string, unknown>
+    patch.metadata = {
+      ...curMeta,
+      ...metaPatch,
+      ...(Object.keys(answerPatch).length > 0 ? { qualification: { ...curAnswers, ...answerPatch } } : {}),
+    }
   }
 
   if (input.situation_notes?.trim()) {
@@ -314,6 +364,40 @@ export async function attachStreetAddressIfMissing(
   return true
 }
 
+/**
+ * The qualification gate, shared by the slot-offer path and the booking path.
+ * Returns null when every required answer is on file. Otherwise returns the
+ * text to send instead: the missing question, or, after the same question has
+ * been put to the lead twice by this gate with no answer, a handoff to a person
+ * (the AI never books around a required answer, and never loops on one either).
+ */
+async function requiredAnswerHold(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  leadId: string,
+  companyId: string,
+  pendingInbound: string | null
+): Promise<{ text: string; escalate: boolean; missingKeys: string[] } | null> {
+  const gate = await ensureRequiredAnswers(supabase, leadId, companyId, pendingInbound)
+  if (gate.missing.length === 0) return null
+  const q = gate.missing[0]
+  const { data: row } = await supabase.from("leads").select("metadata").eq("id", leadId).maybeSingle()
+  const meta = ((row?.metadata ?? {}) as Record<string, unknown>) ?? {}
+  const asks = ((meta.qualification_asks ?? {}) as Record<string, number>) ?? {}
+  const asked = Number(asks[q.key] ?? 0) || 0
+  const missingKeys = gate.missing.map((m) => m.key)
+  if (asked >= 2) {
+    return {
+      text: "No problem. I'll have someone from our team reach out to get you scheduled.",
+      escalate: true,
+      missingKeys,
+    }
+  }
+  await supabase.from("leads")
+    .update({ metadata: { ...meta, qualification_asks: { ...asks, [q.key]: asked + 1 } } })
+    .eq("id", leadId)
+  return { text: q.question, escalate: false, missingKeys }
+}
+
 export async function runConversation(
   leadId: string,
   companyId: string,
@@ -339,14 +423,14 @@ export async function runConversation(
       .from("conversations")
       .select("direction, body, sent_by, created_at")
       .eq("lead_id", leadId)
-      // All text channels — sms, messenger, whatsapp (legacy rows are null).
-      // Filtering to sms-only made the AI amnesiac on messenger/whatsapp:
+      // All text channels — sms and messenger (legacy rows are null).
+      // Filtering to sms-only made the AI amnesiac on messenger:
       // every inbound looked like a first contact and it re-greeted forever.
       .or("channel.is.null,channel.neq.voice")
       .order("created_at", { ascending: true }),
     supabase
       .from("ai_agent_config")
-      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, per_day_slots, min_booking_lead_days, disqualifiers, qualifying_questions, messenger_instructions")
+      .select("generated_system_prompt, agent_name, working_hours_start, working_hours_end, timezone, available_days, appointment_windows, booking_horizon_days, max_appointments_per_day, per_day_slots, min_booking_lead_days, disqualifiers, qualifying_questions, messenger_instructions, min_bookable_price")
       .eq("company_id", companyId)
       .single(),
     supabase
@@ -447,7 +531,11 @@ export async function runConversation(
   // something absurd for the business it represents.
   const effectiveServiceType =
     (lead.service_type as string | null) ?? (company?.service_type as string | null) ?? null
-  const leadContext = buildLeadContext(lead, appointments, tz, effectiveServiceType)
+  const copy = serviceCopy(effectiveServiceType)
+  const voiceOn = await voiceEnabled(companyId)
+  const runtimeQuestions = parseRuntimeQuestions(agent?.qualifying_questions)
+  const knownAnswers = leadAnswers(lead.metadata)
+  const leadContext = buildLeadContext(lead, appointments, tz, effectiveServiceType, copy)
 
   // Build service-specific conversation flow playbook
   const conversationFlow = getConversationFlow(effectiveServiceType, lead.job_type as string | null)
@@ -456,27 +544,43 @@ export async function runConversation(
   // is the booking intent, not a request to be dialled right now — leaving
   // request_callback in scope made the agent hang up on its own pitch.
   const isSalesConversation = effectiveServiceType === "fieldbuilt_sales"
-  const activeTools = isSalesConversation
+  // request_callback places an AI phone call. With the voice agent off (the
+  // default) the tool does not exist for the model: there is no call to place,
+  // and a lead who asks for one is handed to a person instead (see PHONE CALLS).
+  const activeTools = (isSalesConversation || !voiceOn)
     ? (TOOLS ?? []).filter((t) => (t as { name: string }).name !== "request_callback")
     : TOOLS
 
   // Format available slots block — AI offers ONLY these real times, never invents them
-  const slotsBlock = formatSlotsForPrompt(availableSlots)
+  // The company-wide list is a naive calendar (settings windows minus booked jobs): it knows
+  // nothing about which technician can reach this lead's zip. On a company with technicians
+  // every bookable time comes from find_available_slots, and the booking and reschedule guards
+  // only accept those times, so showing the naive list can only mislead the model (live: Top Air
+  // lead was told "Monday, October 5, 3 to 6pm", a window that existed only on that list, then
+  // booked into the real Oct 24 opening). Companies without technicians keep the list.
+  const { count: activeTechCount } = await supabase
+    .from("technicians").select("id", { count: "exact", head: true })
+    .eq("company_id", companyId).eq("status", "active")
+  const slotsBlock = (activeTechCount ?? 0) > 0
+    ? `=== BOOKABLE TIMES ===
+You have no list of times in this prompt. The ONLY times you may offer, recap or book are the ones find_available_slots returned in this conversation (they are already checked against the calendar and the service area). Never state a day, date or window as available unless that tool returned it. Never infer a time from business hours, from "the next business day", or from anything the lead says. To offer or change to a different day, call find_available_slots again. For a reschedule, offer ONLY times from a find_available_slots result, then use reschedule_appointment.
+=== END BOOKABLE TIMES ===`
+    : formatSlotsForPrompt(availableSlots)
 
   // Build system prompt
   const baseSystemPrompt =
     agent?.generated_system_prompt ||
     buildFallbackSystemPrompt(
-      agent?.agent_name ?? "Linda",
+      agent?.agent_name ?? "the assistant",
       company?.name ?? "the company",
       kbValue(kb?.business_description) ?? "",
       kbValue(kb?.services_offered) ?? "",
-      lead.service_type ?? "home services"
+      copy
     )
 
   // System prompt order:
   // 1. Who the agent is + business knowledge
-  // 2. HVAC conversation flow + stage rules
+  // 2. Trade conversation flow + stage rules
   // 3. Qualification rules (company-specific disqualifiers)
   // 4. Real available slots (the AI must offer only these)
   // 5. Lead file (live lead data, history, returning vs new)
@@ -489,7 +593,7 @@ export async function runConversation(
   // industry assumptions and offer payment plans that don't exist.
   const financingBlock = kbValue(kb?.financing_options)
     ? `=== FINANCING OPTIONS (know this precisely — leads ask about this) ===\n${kbValue(kb?.financing_options)}\n=== END FINANCING ===`
-    : `=== FINANCING ===\nThis company has NOT given you any financing or payment-plan information. Never say or imply that financing, payment plans, or monthly payments are available. If asked, say you're not the one who handles payment details and the tech can go over the options on-site.\n=== END FINANCING ===`
+    : `=== FINANCING ===\nThis company has NOT given you any financing or payment-plan information. Never say or imply that financing, payment plans, or monthly payments are available. If asked, say you're not the one who handles payment details and the team goes over payment options at the ${copy.visit}.\n=== END FINANCING ===`
 
   // Give the model the company's RAW pricing info plus hard rules, and let
   // it identify the visit fee semantically — whatever the company calls it.
@@ -502,6 +606,25 @@ export async function runConversation(
   // never-quote rules are always in force.
   const pricingPolicyBlock = (() => {
     const info = (kb as { pricing_info?: string } | null)?.pricing_info?.trim()
+    if (copy.trade === "flooring") {
+      // Flooring has no price to give by text: the quote exists only after the
+      // measure. What the assistant MAY say is exactly two things the company
+      // wrote down: what the measure costs, and the offer the ads are running.
+      return [
+        "=== PRICES, THE MEASURE AND THE OFFER: THE ONLY MONEY YOU MAY EVER DISCUSS ===",
+        info
+          ? "The company's own pricing and offer notes are below, word for word."
+          : "This company has not given you any pricing or offer information.",
+        ...(info ? ["--- COMPANY PRICING AND OFFER NOTES ---", info, "--- END NOTES ---"] : []),
+        "HARD RULES, NO EXCEPTIONS:",
+        "• Never quote a flooring price: no total, no price per square foot, no range, no \"starts at\", and never confirm or deny a number the lead floats. The exact quote comes from the team after the in-home measure, because it depends on the rooms, the subfloor and the product they pick. Say that, then move on.",
+        "• THE MEASURE: if the notes have an IN-HOME MEASURE line, that is what the measure costs and you say exactly that. If there is no such line, do NOT say the measure is free and do NOT invent a fee: say the office confirms that when the visit is set.",
+        "• THE OFFER: if the notes have a CURRENT ADVERTISED OFFER line, that is the offer this company picked for its ads and the lead most likely answered it. Bring it up yourself (first message, when offering times, in the booking confirmation), stated exactly as written with its conditions and end date. Never improve it, stack it, extend it, or promise it applies to this lead's project: say the team confirms what applies at the measure. With no such line, there is no offer and you never invent one.",
+        "• Material prices, labor rates or past job prices anywhere in the notes are INTERNAL REFERENCE ONLY. Never state them.",
+        "• Make ZERO assumptions beyond what is written above.",
+        "=== END PRICES, THE MEASURE AND THE OFFER ===",
+      ].join("\n")
+    }
     return [
       "=== SERVICE CALL FEE POLICY — THE ONLY PRICES YOU MAY EVER DISCUSS ===",
       info
@@ -509,35 +632,58 @@ export async function runConversation(
         : "This company has not provided any pricing information.",
       ...(info ? ["--- COMPANY PRICING INFO (raw, verbatim from the company) ---", info, "--- END COMPANY PRICING INFO ---"] : []),
       "HARD RULES, NO EXCEPTIONS:",
-      "• Any job, repair, replacement, or install prices/ranges in the info above are INTERNAL REFERENCE ONLY — never state them, never hint at them, never confirm or deny a number the lead floats (\"is it more than $500?\" still gets no number). The tech gives the exact, honest price on-site before any work happens.",
-      "• If no visit/service-call fee appears above: do NOT assume the visit is free, and do NOT invent or estimate a fee. Say the tech provides an exact price on-site before any work; if the lead pushes specifically on what the visit itself costs, say the office confirms that when the appointment is set — never a guess.",
+      "• Any job, repair, replacement, or install prices/ranges in the info above are INTERNAL REFERENCE ONLY — never state them, never hint at them, never confirm or deny a number the lead floats (\"is it more than $500?\" still gets no number). The exact, honest price is given on-site before any work happens.",
+      "• If no visit/service-call fee appears above: do NOT assume the visit is free, and do NOT invent or estimate a fee. Say an exact price is given on-site before any work; if the lead pushes specifically on what the visit itself costs, say the office confirms that when the appointment is set — never a guess.",
       "• Never say \"free to come out\" or \"free estimate\" unless the info above explicitly says so (and if free applies only to estimates/replacements but not service calls, keep that distinction exact).",
       "• Make ZERO assumptions beyond what is written above. Raw information only.",
       "=== END SERVICE CALL FEE POLICY ===",
     ].join("\n")
   })()
 
-  const qualifyingQs = Array.isArray(agent?.qualifying_questions)
-    ? (agent.qualifying_questions as Array<{ question: string }>).map(q => q.question)
-    : []
-  const qualificationBlock = buildQualificationBlock(agent?.disqualifiers ?? null, qualifyingQs)
+  // With the voice agent off there is no AI phone call to offer. Tell the model
+  // the truth so it does not promise one, and give it the honest alternative.
+  const phoneCallsBlock = (!voiceOn && !isSalesConversation)
+    ? `=== PHONE CALLS ===
+You work by text only. You cannot place a phone call and you must never say you are calling, will call, or can call.
+If the lead asks for a call or says they would rather talk: say plainly that you are the company's AI assistant working by text, that you will have someone from the team call them, then call update_lead_status with "needs_attention" so a person actually does. After that you may still answer their questions by text, but do not keep pushing questions on someone who asked for a call.
+=== END PHONE CALLS ===`
+    : ""
+
+  // Static (no per-lead answers) so the cached prompt prefix is shared by every
+  // lead of the company. Which answers THIS lead has given is in answersBlock,
+  // in the dynamic tail.
+  const qualificationBlock = buildQualificationBlock(agent?.disqualifiers ?? null, runtimeQuestions)
+  const stillRequired = missingRequired(runtimeQuestions, {
+    ...(lead.job_type ? { project_type: String(lead.job_type) } : {}),
+    ...knownAnswers,
+  })
+  const answersBlock = runtimeQuestions.length > 0
+    ? `=== THIS LEAD'S QUALIFYING ANSWERS ===
+${runtimeQuestions.map((q) => {
+  const a = knownAnswers[q.key] ?? (q.key === "project_type" && lead.job_type ? String(lead.job_type).replace(/_/g, " ") : "")
+  return `- ${q.key}: ${a ? `ANSWERED, "${a}"` : q.required ? "NOT ANSWERED (required before booking)" : "not answered (optional)"}`
+}).join("\n")}
+${stillRequired.length > 0
+  ? `You may not check availability or book until these are answered: ${stillRequired.map((q) => q.key).join(", ")}. Ask the next one now, unless the lead's last message already answers it (then save it).`
+  : "Every required question is answered. Move to booking."}
+=== END QUALIFYING ANSWERS ===`
+    : ""
 
   const reasoningBlock = `=== BEFORE EVERY REPLY — SILENT REASONING (never show any of this to the lead) ===
 You are not a script-follower. You are a sharp human rep who thinks before every message. Run through this, in order, every single turn:
 
-1. JOB — What exactly does this lead need? If you can't name the job type yet, your next message asks it — nothing else matters until you know. The moment you learn it (or any system details), call update_lead_details so it's saved to their file.
-2. KNOWN — What has this lead already told me, anywhere? Re-read the lead file and the whole conversation, including things they volunteered without being asked. Never re-ask any of it. Volunteered info counts as captured.
-2b. NAME — Do I have this lead's name on file? If the lead file shows no name, getting it is part of the job: ask for it naturally early on ("Who am I speaking with?"), and when they give only a first name, ask for the last name once at booking time ("And your last name for the appointment?"). The moment they tell you ANY part of their name, call update_lead_details with first_name (and last_name) — writing it into situation_notes does NOT save it, and the customer then reaches the technician's schedule as "Unknown". Never invent, guess, or infer a name, and never nag: ask for the surname once, and if they don't give it, book with the first name and move on. If the lead file marks the name as a FACEBOOK PROFILE NAME (not verified), it may be a nickname — before the booking recap, ask "And what's your full name for the booking?", save the answer with update_lead_details, and put THAT name on the recap and the job.
-2c. CHANGED DETAILS — Did the lead just give a value that CONTRADICTS what's on file (a different address, furnace/system count, property type, email, phone, name)? Acknowledge both and confirm once: "I have [old] on file — should I go with [new]?" The moment they confirm (or plainly assert the new value), call update_lead_details with it: the LAST CONFIRMED value is the truth everywhere — the CRM, the technician's job, the confirmation texts. A correction acknowledged in words but never saved means the tech drives to the OLD address. This includes counts: "two furnaces… actually one" → update_lead_details with unit_count 1.
-2d. ADDRESS — A site visit needs a FULL street address (house number + street). A zip code alone is NOT an address — it tells us the area, not the door. If only a zip is on file when the lead picks a time, ask for the street address in the same breath ("Perfect — what's the full street address?") and book the moment they give it. The moment any full address appears, call update_lead_details with address so it reaches the booking and the technician.
-3. GATE — For this job type, which required discovery/qualification items are still missing? (Your playbook defines them; your QUALIFICATION RULES define who qualifies.) Count them one by one — one covered item does not check off the others.
-4. QUALIFIED? — Based on what I know: qualified (say so via update_lead_status and move toward booking), disqualified (handle it with respect, per the rules), or not enough information yet (keep discovering).
-5. NEXT — What is the single most useful question or action right now, and why am I asking it? Every question should have a purpose you could explain: it qualifies them, sizes the job for the tech, or sets urgency. If you can't say why you're asking, don't ask it.
-6. SHAPE — When the lead just described a problem, order the reply acknowledge → reassure → ask, in one short text: name their problem back in their words, one beat of "you're in the right place," then the single question. And NO DEAD-END MESSAGES: every message either asks one question, offers slots, or confirms a booking — ending a viable conversation without asking for the booking is the #1 way reps lose winnable leads.
-6c. PUSHBACK — when a lead challenges the price, the ads, or your honesty: one acknowledgment beat max, never validate an accusation, never apologize for an advertised offer. State the facts calmly, give the REASON their price is what it is, and if they invoke a competitor, arm them with scope questions instead of bashing anyone. Banned surrender lines while they're still talking: "that's completely your call", "I understand if that doesn't work", "no worries if not". Every reply ends with forward motion; if they're truly done, one confident warm close that keeps the door open — never an apology. Leads are not always right: correct a false claim once, kindly, and move on.
-6b. FIRST PRICE MESSAGE — the first message that presents a price is a SALES moment, not a menu. Even when a form already answered every discovery question, you still sell like a person: react to their last answer in their words, mirror their situation in one small clause, and give the REASON this package fits THEM before listing what it includes. If the company's ads run an entry price, name that number first and earn the difference — never quote the bigger price as if the smaller one doesn't exist. NEVER combine the first price presentation with a slot offer and never call find_available_slots on that turn: price lands first, times come in the next message after they respond.
+1. PROJECT — What exactly does this lead want? If you can't name the project type yet, your next message asks it. The moment you learn it, call update_lead_details so it's saved to their file.
+2. KNOWN — What has this lead already told me, anywhere? Re-read the lead file, their form answers and the whole conversation, including things they volunteered without being asked. Never re-ask any of it. Volunteered info counts as captured, and it must be SAVED (update_lead_details) to count for booking.
+2b. NAME — Do I have this lead's name on file? If the lead file shows no name, getting it is part of the job: ask for it naturally early on ("Who am I speaking with?"), and when they give only a first name, ask for the last name once at booking time ("And your last name for the booking?"). The moment they tell you ANY part of their name, call update_lead_details with first_name (and last_name). Writing it into situation_notes does NOT save it. Never invent, guess, or infer a name, and never nag: ask for the surname once, and if they don't give it, book with the first name and move on. If the lead file marks the name as a FACEBOOK PROFILE NAME (not verified), it may be a nickname. Before the booking recap, ask "And what's your full name for the booking?", save the answer with update_lead_details, and put THAT name on the recap.
+2c. CHANGED DETAILS — Did the lead just give a value that CONTRADICTS what's on file (a different address, email, phone, name, project)? Acknowledge both and confirm once: "I have [old] on file. Should I go with [new]?" The moment they confirm (or plainly assert the new value), call update_lead_details with it: the LAST CONFIRMED value is the truth everywhere. A correction acknowledged in words but never saved means the team drives to the OLD address.
+2d. ADDRESS — A visit to the home needs a FULL street address (house number + street). A zip code alone is NOT an address: it tells us the area, not the door. If only a zip is on file when the lead picks a time, ask for the street address in the same breath ("What's the full street address?") and book once they give it and confirm the recap. The moment any full address appears, call update_lead_details with address.
+3. GATE — Which REQUIRED qualifying questions are still unanswered for this lead? (THIS LEAD'S QUALIFYING ANSWERS lists them.) Count them one by one. One covered item does not check off the others. You may not check availability or book until that list is empty.
+4. QUALIFIED? — Based on what I know: qualified (say so via update_lead_status and move toward booking), disqualified (handle it with respect, per the rules), or not enough information yet (keep going).
+5. NEXT — What is the single most useful question or action right now, and why am I asking it? Every question should have a purpose you could explain: it qualifies them, it helps the team prepare for the visit, or it gets the visit on the calendar. If you can't say why you're asking, don't ask it.
+6. SHAPE — When the lead just told you something about their project, one short clause of real acknowledgement, then the single question. And NO DEAD-END MESSAGES: every message either asks one question, offers times, or confirms a booking. Ending a viable conversation without asking for the booking is the #1 way reps lose winnable leads.
+6b. PUSHBACK — When a lead challenges the price, the ads, or your honesty: one acknowledgment beat max, never validate an accusation, never apologize for an advertised offer. State the facts calmly. If they want a price by text, say why the quote comes after the measure (it depends on the rooms, the subfloor and the product they choose) and offer the visit. If they invoke a competitor, do not bash anyone. Banned surrender lines while they're still talking: "that's completely your call", "I understand if that doesn't work", "no worries if not". Every reply ends with forward motion; if they're truly done, one warm close that keeps the door open.
 
-The feel to aim for: a person texting from the office who's genuinely paying attention — curious about the specifics, remembers everything said, asks what a real dispatcher or comfort advisor would actually need to know, and never rushes a big considered purchase to a calendar link after one exchange. Speed matters on urgent repairs; attention matters on everything else. Homeowners ghost when they feel interrogated, hear jargon, or get a fumbled price answer — and they book with whoever responds fastest and sounds most like a competent human who actually cares.
+The feel to aim for: a person texting from the office who's genuinely paying attention. Curious about the specifics, remembers everything said, asks what the team would actually need to know before coming out, and never rushes a big purchase to a calendar after one exchange. Homeowners ghost when they feel interrogated, hear jargon, or get a fumbled price answer, and they book with whoever responds fastest and sounds most like a competent human who actually cares.
 === END SILENT REASONING ===`
 
   const smsHardRules = `=== SMS HARD RULES — THESE OVERRIDE EVERYTHING ABOVE ===
@@ -547,20 +693,20 @@ FORMATTING:
 • Numbers and times in plain text: "tomorrow at 9am", not "**tomorrow at 9am**".
 • NEVER use an asterisk. It renders literally and looks broken.
 • NEVER use a dash as punctuation. No em dash, no en dash, no hyphen standing in for a comma or a pause. Dash-joined sentences are the clearest tell that a message was machine-written, and real people texting from an office almost never use them.
-    ✗ "Your condo clean is $249 — covers all ducts, dryer vent and deodorizing."
-    ✓ "Your condo clean is $249. That covers all ducts, the dryer vent and deodorizing."
+    ✗ "The measure is free — we check every room and the subfloor."
+    ✓ "The measure is free. We check every room and the subfloor."
     ✗ "We have Friday morning (8–11am) or Monday afternoon — which works?"
     ✓ "We have Friday morning, 8 to 11am, or Monday afternoon. Which works better?"
   Write a second short sentence, or use a comma, or use "to" for a range. Hyphens INSIDE words ("single-family", "follow-up") and inside phone numbers are fine.
 • Time ranges always use "to": "8 to 11am", "3 to 6pm". Never "8-11am".
-• Keep messages SHORT. Aim under about 160 characters when it reads naturally. One idea per text, plain everyday words, zero HVAC jargon.
+• Keep messages SHORT. Aim under about 160 characters when it reads naturally. One idea per text, plain everyday words, zero trade jargon.
 • Emoji: at most one, occasionally, only in a warm moment (a booking locked, a friendly nudge). Never in safety, price, or problem-description messages. When in doubt, none.
 
 OPT-OUT — ABSOLUTE:
 • Any message that reads as wanting out — "stop", "unsubscribe", "quit texting me", "leave me alone", "not interested, stop" — gets ONE polite goodbye at most, closed_lost status, and total silence after. No follow-ups, no sequences, no exceptions.
 
 TONE — RELAXED, EVERYDAY, STILL PROFESSIONAL:
-• Write the way a competent person at a local company actually texts: calm, easy, straightforward. Everyday words over polished ones ("we can get someone out" beats "we would be delighted to dispatch a technician").
+• Write the way a competent person at a local company actually texts: calm, easy, straightforward. Everyday words over polished ones ("we can come out and measure" beats "we would be delighted to schedule a consultation").
 • Not bubbly and not salesy. You are not their friend and you are not a brochure. No "Awesome!", "Perfect!", "Amazing!", "So excited", "Fantastic". No hype, no exclamation stacking.
 • At most ONE exclamation mark in an entire conversation, and usually none. A period is almost always the right ending.
 • Contractions always: "we'll", "you're", "that's", "I'll". Never "we will", "you are".
@@ -582,14 +728,14 @@ CONVERSATION STYLE:
 
 AFTER ANSWERING AN OBJECTION — PIVOT IMMEDIATELY:
 When a lead asks a question (cost, free visit, timeline, etc.) that you can answer without their input, end that same message with the next unanswered question. Do NOT stop and wait.
-  ✗ "Pricing depends on what the tech finds." [full stop — AI is now silent waiting]
-  ✓ "Pricing depends on what the tech finds — they give you the exact number on-site. What's the address we'd be coming to?"
+  ✗ "The quote comes after the measure." [full stop, and now you are silent waiting]
+  ✓ "The quote comes after the measure, so the number is exact for your rooms. Which rooms are you looking to do?"
 Exception: if the lead is venting frustration or describing a bad prior experience, lead with empathy first — that message is the acknowledgment. Ask the next question in your following message.
 
 BOOKING FLOW:
 • NEVER tell the lead they're booked ("you're on the schedule", "you're all set", "you're booked", "locked in") unless you are calling book_appointment in this exact turn or a booking already exists. The 30-minutes-before and day-before-reminder lines are POST-BOOKING language only. Saying any of it without a real booking means the appointment does not exist — the worst failure this system can produce.
-• Lead picks a time → ask for the street address (if not on file) → send the BOOKING RECAP and ask for consent → they say yes → book in that same turn → THEN the confirmation with the reminder details.
-• THE BOOKING RECAP (required before every visit booking): one short message with the day and date, the arrival window, the address, and the package with its price, ending in a consent question. Shape: "Got you [first name]. Just to double check before I lock it in, [Day, Month D], [window], at [address], for the [package] at [price]. Sounds good?" Only a clear yes triggers book_appointment.
+• Lead picks a time → ask for the street address (if not on file) → send the BOOKING RECAP and ask for consent → they say yes → book in that same turn → THEN the confirmation.
+• THE BOOKING RECAP (required before every visit booking): one short message with the day and date, the arrival window and the address, ending in a consent question. Shape: "Got you [first name]. Just to double check before I lock it in, [Day, Month D], [window], at [address]. Sounds good?" Only a clear yes triggers book_appointment. Never put a price in the recap unless the company sells a fixed-price service and the lead agreed to that price.
 • If address IS already on file, book without asking for it again.
 • After booking: one short confirmation — day, time, address. Done.
 • Normal flow: lead picks a time → you ask for address → they give it → book immediately. Do NOT ask "does that still work?" — the time was already confirmed.
@@ -605,7 +751,7 @@ NEVER say any of the following (or anything that means the same thing):
   ✗ "I'll follow up with some times"
   ✗ "Let me check with our team"
   ✗ "I'll get back to you"
-  ✗ "I want to make sure we get the right tech — let me check"
+  ✗ "I want to make sure we have the right person, let me check"
 Why: Every one of these implies you are about to go check something. But you already checked — the tool ran and the result is in front of you. Saying "let me check" after already checking is a lie. It makes you sound like a confused human, not a professional AI.
 What to do instead: Tell the lead what the system found RIGHT NOW. If there are slots, offer them. If there are no slots, say so directly and tell them what happens next. Always answer with what you know, not with a promise to find out later.
 
@@ -621,13 +767,27 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     ? `=== MESSENGER CHANNEL FLOW — HIGHEST PRIORITY, OVERRIDES ANY CONFLICTING RULE ABOVE ===\n${agent!.messenger_instructions}\n=== END MESSENGER CHANNEL FLOW ===`
     : ""
 
-  const staticPrefix = [baseSystemPrompt, financingBlock, pricingPolicyBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, technicianContext, messengerBlock]
+  // The technician roster block names individual techs and tells the model to
+  // share them. That is HVAC dispatch. For a flooring company the rows are
+  // unnamed measure capacity ("Measure slot 1"), which must never reach a lead.
+  const rosterBlock = copy.trade === "HVAC" ? technicianContext : ""
+  const staticPrefix = [baseSystemPrompt, financingBlock, pricingPolicyBlock, customKnowledgeBlock, conversationFlow, qualificationBlock, phoneCallsBlock, rosterBlock, messengerBlock]
     .filter(Boolean)
     .join("\n\n")
-  const dynamicTail = [slotsBlock, leadContext, reasoningBlock, smsHardRules]
+  const dynamicTail = [slotsBlock, leadContext, answersBlock, reasoningBlock, smsHardRules]
     .filter(Boolean)
     .join("\n\n")
-  const systemPrompt: Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral" } }> = [
+  // 1-hour TTL: SMS leads reply minutes to hours apart, so the 5-minute default mostly expired.
+  // Used ONLY by calls that send the same `tools` array as the main call (they share its cache
+  // entry). Calls without `tools` use systemPromptNoTools below.
+  const systemPrompt: Array<{ type: "text"; text: string; cache_control?: { type: "ephemeral"; ttl?: "5m" | "1h" } }> = [
+    { type: "text", text: staticPrefix, cache_control: { type: "ephemeral", ttl: "1h" } },
+    { type: "text", text: dynamicTail },
+  ]
+  // Tools-less side calls (ask-zip, no-slots, fallback, catch-all, leak-rewrite, last-resort) have a
+  // different cache prefix than the main call, so they can never read its entry. Keep them on the
+  // default 5-minute TTL so they don't pay the 2x one-hour write price for a cache nobody reads.
+  const systemPromptNoTools: typeof systemPrompt = [
     { type: "text", text: staticPrefix, cache_control: { type: "ephemeral" } },
     { type: "text", text: dynamicTail },
   ]
@@ -642,14 +802,15 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       content: `Write the opening SMS to send to this new lead. Rules:
 - Output ONLY the message text. No notes, no timing commentary, no explanations, no markdown.
 - 1-2 sentences max.
-- ALWAYS introduce yourself by name and company in the first message. Format: "Hey [FirstName]! It's [AgentName] from [CompanyName] — ..." Use the agent name and company name from your identity in the system prompt.
-- Feel personal, not mass-text.
-- Do NOT start with "Hi!" — be natural. "Hey [name]!" is fine.
-- If "Notes from lead form" appears in the lead file, use that specific detail to personalize the message — say "AC repair" not "HVAC", say "new roof" not "roofing". Be specific about what they need, not just the service category.
-- If the notes describe a PROBLEM (broken, not cooling, no heat, leaking), add one brief beat of acknowledgment before your question — e.g. "no AC in this heat is rough — you're in the right place." One beat, then the question. If it's a quote/install/tune-up request, skip the sympathy and lead with helpful energy instead.
-- If there are no notes, reference their general service interest naturally.
-- Never say "I saw you reached out about [service category]" — that sounds like a form letter.
-- Working hours rules do NOT apply here — just write the message text.`,
+- ALWAYS say who you are in the first message, honestly: your name, that you are the AI assistant, and the company. Shape: "Hey [FirstName], it's [AgentName], the AI assistant with [CompanyName]. ..." Use the agent name and company name from your identity in the system prompt. Never pose as a person.
+- Feel personal, not mass-text. Do NOT start with "Hi!".
+- If the lead file has form answers or notes, use the specific thing they asked about ("the LVP for your kitchen", not "your flooring project").
+- End with ONE easy question that moves things forward: the first qualifying question that is not answered yet. If their form already answered the project type, ask the next unanswered one instead of asking what they already told you.
+- If there are no notes or answers, ask what they're looking to do.
+- Never say "I saw you reached out about [service category]". That sounds like a form letter.
+- No price and no times in this message.
+- If your PRICES block has a CURRENT ADVERTISED OFFER line, name that offer in a few words, exactly as written: it is what they answered ("...about the free in-home design consult"). Without that line, say nothing about offers or deals.
+- Working hours rules do NOT apply here. Just write the message text.`,
     })
   } else if (isFollowUp) {
     // Proactive follow-up — lead hasn't booked yet, no new inbound message.
@@ -662,9 +823,12 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     const angleInstruction = followUpAngle
       ? `\n\nSPECIFIC ANGLE FOR THIS FOLLOW-UP:\n${followUpAngle}`
       : ""
+    const quoteStage = lead.status === "quote_sent" || lead.status === "measure_done"
     messages.push({
       role: "user",
-      content: `Conversation so far:\n${convoLines}\n\nThe lead hasn't booked yet. You're sending a proactive follow-up — a natural, brief check-in. Write one short SMS, under 15 words. Don't repeat what you've already said. Be casual and human, not salesy or pushy.${angleInstruction}`,
+      content: quoteStage
+        ? `Conversation so far:\n${convoLines}\n\nThe ${copy.visit} already happened and the quote is with this homeowner (see QUOTE STAGE in the lead file). You're sending a proactive follow-up on the quote. Write one short SMS, under 25 words. Don't repeat what you've already said, never state or discuss the price, and make it easy to answer.${angleInstruction}`
+        : `Conversation so far:\n${convoLines}\n\nThe lead hasn't booked yet. You're sending a proactive follow-up, a natural, brief check-in. Write one short SMS, under 15 words. Don't repeat what you've already said. Be casual and human, not salesy or pushy.${angleInstruction}`,
     })
   } else {
     // Normal reply to an inbound message — build full conversation history.
@@ -694,6 +858,73 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     }
   }
 
+  // ── RECAP CONSENT: a yes to the recap books, decided in code ───────────────
+  // The visit flow ends with a recap ("Friday, November 27, 3 to 5pm, at 6412
+  // Stonebrook Pkwy. Sounds good?") and the lead's yes. That yes must book (or
+  // move) the visit. Left to the model, it did not, twice in the first flooring
+  // simulation: once it asked for an email instead, once it re-checked
+  // availability and then texted "Moved to Friday" without moving anything.
+  // So when the last thing we sent was a recap (or a promise to book or move
+  // right now) and the lead answers with a plain yes, the booking call is forced
+  // here, before the model's turn, and nothing else can take its place.
+  // Everything that protects a booking (the agreed-time contract, the address,
+  // the name, the qualification gate) still runs in processAndSave.
+  if (!isSalesConversation && incomingMessage && !isFollowUp) {
+    const lastOutbound = [...history].reverse().find((m) => m.direction === "outbound")?.body ?? ""
+    const namesTime = /\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(lastOutbound)
+    const askedToConfirm =
+      /\b(sounds good|does that work|work for you|is that right|all correct|shall i|should i|want me to|ok to)\b[^?]*\?/i.test(lastOutbound) &&
+      /\b(lock (it|that|you) in|confirm|double check|book|move|switch|change|reschedul\w*)\b/i.test(lastOutbound)
+    const promisedNow = /\b(moving|booking|locking|switching)\b[^.?!]*\b(now|right now|right away)\b/i.test(lastOutbound)
+    const said = incomingMessage.trim().toLowerCase()
+    const affirms =
+      /^(yes|yea|yeah|yep|yup|ya|sure|ok|okay|k|correct|right|perfect|great|sounds good|sounds great|that works|works|works for me|looks good|good|go ahead|book it|do it|please do|lets do it|let's do it|confirmed|confirm)\b/.test(said) ||
+      /\b(go ahead|book it|move it|lock it in|that works|works for me|sounds good|please do|do it)\b/.test(said)
+    const objects = /\?|\b(but|actually|instead|different|another|earlier|later|not|n't|can we|could we|wait|wrong|cancel|hold off)\b/.test(said)
+    const hasOfferedSlots =
+      !!lead.selected_slots && Object.keys(lead.selected_slots as Record<string, unknown>).length > 0
+    if (namesTime && (askedToConfirm || promisedNow) && affirms && !objects && hasOfferedSlots) {
+      try {
+        const slotList = Object.values(lead.selected_slots as Record<string, { iso?: string }>)
+          .map((v) => v?.iso).filter(Boolean).sort()
+        const forced = await anthropic.messages.create({
+          model: "claude-sonnet-4-6",
+          max_tokens: 300,
+          system: systemPrompt,
+          tools: activeTools,
+          tool_choice: { type: "tool", name: "book_appointment" },
+          messages: [
+            ...messages,
+            {
+              role: "user" as const,
+              content:
+                `SYSTEM: The lead just said yes to the time in your last message. Call book_appointment now for that time. ` +
+                `The scheduled_at values you offered were: ${slotList.join(", ")}. Use the one your last message named, copied exactly. ` +
+                `Pass the street address on file.`,
+            },
+          ],
+        })
+        logUsage({ site: "sms-recap-forced-book", companyId, leadId, model: "claude-sonnet-4-6", usage: forced.usage })
+        const call = forced.content.find((b) => b.type === "tool_use" && b.name === "book_appointment")
+        if (call && call.type === "tool_use") {
+          const input = call.input as { scheduled_at: string; address?: string; notes?: string }
+          const hadBooking = appointments.some((a) => a.status === "scheduled" && new Date(a.scheduled_at) > new Date())
+          console.log(`[ai-engine] recap consent: ${hadBooking ? "moving" : "booking"} on a clear yes for lead ${leadId} (${input.scheduled_at})`)
+          // Written in code: the confirmation text right after carries the day,
+          // time and address, so this line states only what is certainly true.
+          return {
+            response: hadBooking
+              ? `Done, it's moved. I'll text you the new details in a moment.`
+              : `You're booked. I'll text the confirmation with the details in a moment.`,
+            action: { type: "book_appointment", ...input, consented: true },
+          }
+        }
+      } catch (err) {
+        console.error("[ai-engine] recap consent booking failed, falling back to the normal turn:", err)
+      }
+    }
+  }
+
   // Call Claude
   const claudeResponse = await anthropic.messages.create({
     model: "claude-sonnet-4-6",
@@ -702,6 +933,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     tools: activeTools,
     messages,
   })
+  logUsage({ site: "sms-main", companyId, leadId, model: "claude-sonnet-4-6", usage: claudeResponse.usage })
 
   let responseText = ""
   let action: ConversationAction | undefined
@@ -710,6 +942,8 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   let findSlotsToolId:    string | null = null
   let findSlotsJobType:   string | null = null
   let findSlotsZip:       string | null = null
+  let findSlotsDate:      string | null = null
+  let findSlotsPart:      string | null = null
   let detailsSaved = false
 
   // update_lead_details is a pure side-effect write, executed immediately —
@@ -735,7 +969,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   // The status write happens here; the action slot only carries it when
   // nothing more important claimed the slot (the SMS webhook still reads
   // the action for its needs_attention owner notification).
-  const saveLeadStatus = async (status: string) => {
+  const saveLeadStatus = async (status: string, reason?: string) => {
     const legacyMap: Record<string, string> = {
       qualified: "qualified",
       closed_lost: "lost",
@@ -748,8 +982,12 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       // because the model calls update_lead_status("qualified") on a
       // post-booking "thanks!" turn (observed live: booked lead showed
       // `qualified` in the CRM pipeline).
-      const { statusDowngradeBlocked } = await import("@/lib/sequences")
+      const { statusDowngradeBlocked, aiMayNotOverwriteStatus } = await import("@/lib/sequences")
       const { data: cur } = await supabase.from("leads").select("status").eq("id", leadId).maybeSingle()
+      if (aiMayNotOverwriteStatus(cur?.status, next)) {
+        console.log(`[ai-engine] status write blocked: ${cur?.status} → ${next} for lead ${leadId} (signed or in the quote stage)`)
+        return
+      }
       if (await statusDowngradeBlocked(supabase, leadId, cur?.status, next)) {
         console.log(`[ai-engine] status downgrade blocked: ${cur?.status} → ${next} for lead ${leadId} (scheduled appointment exists)`)
         return
@@ -758,6 +996,11 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         .from("leads")
         .update({ status: next, last_message_at: new Date().toISOString() })
         .eq("id", leadId)
+      // The reason rides along to the owner's "Needs attention" text (lib/notifications.ts).
+      if (next === "needs_attention" && typeof reason === "string" && reason.trim()) {
+        const { markAttention } = await import("@/lib/attention")
+        await markAttention(supabase, leadId, { reason: reason.trim().slice(0, 140) })
+      }
     } catch (err) {
       console.error("[ai-engine] update_lead_status write failed:", err)
     }
@@ -769,9 +1012,11 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     } else if (block.type === "tool_use") {
       if (block.name === "find_available_slots") {
         findSlotsToolId  = block.id
-        const inp = block.input as { job_type?: string; zip_code?: string }
+        const inp = block.input as { job_type?: string; zip_code?: string; preferred_date?: string; preferred_time_of_day?: string }
         findSlotsJobType = inp.job_type ?? null
         findSlotsZip     = inp.zip_code ?? null
+        findSlotsDate    = /^\d{4}-\d{2}-\d{2}$/.test(inp.preferred_date ?? "") ? inp.preferred_date! : null
+        findSlotsPart    = inp.preferred_time_of_day ?? null
       } else if (block.name === "update_lead_details") {
         const detailsInput = { ...(block.input as LeadDetailsInput) }
         // A name counts as CUSTOMER-STATED (→ verified for booking) only when
@@ -796,8 +1041,8 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         const input = block.input as { appointment_id: string; new_scheduled_at: string }
         action = { type: "reschedule_appointment", ...input }
       } else if (block.name === "update_lead_status") {
-        const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention" }
-        await saveLeadStatus(input.status)
+        const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention"; reason?: string }
+        await saveLeadStatus(input.status, input.reason)
         // Only claim the action slot when nothing more important has —
         // a status update must never displace a booking from the same turn.
         if (!action) action = { type: "update_status", status: input.status }
@@ -838,23 +1083,43 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     const { data: travelCfg } = await supabase
       .from("ai_agent_config").select("requires_travel").eq("company_id", companyId).maybeSingle()
     const needsAddress = (travelCfg?.requires_travel as boolean | null) ?? true
+
+    // ── THE QUALIFICATION GATE, at the earliest point it can bite ─────────────
+    // The model asked for availability, which means it believes the lead is
+    // qualified. Believing is not enough: every question the owner marked
+    // "must answer before booking" has to be on the lead file. If one is
+    // missing (after reading the form and the thread for answers the model
+    // heard but did not save), no times are offered and the lead is asked
+    // that question instead.
+    if (needsAddress && !isSalesConversation) {
+      const hold = await requiredAnswerHold(supabase, leadId, companyId, incomingMessage)
+      if (hold) {
+        console.log(`[ai-engine] availability held for lead ${leadId}, required answers missing: ${hold.missingKeys.join(", ")}${hold.escalate ? " (asked twice, handing to a person)" : ""}`)
+        return {
+          response: hold.text,
+          action: hold.escalate ? { type: "update_status", status: "needs_attention" } : action,
+        }
+      }
+    }
+
     if (!zip5 && needsAddress) {
       const askZipReply = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 120,
-        system: systemPrompt,
+        system: systemPromptNoTools,
         messages: [
           ...messages,
           {
             role: "user" as const,
-            content: `SYSTEM: You tried to check availability without a service zip code — availability depends on the service area, so you need the address (or at least the zip) FIRST. Write one short, natural SMS asking for the service address. Do not mention systems, tools, or zip codes as a requirement — just ask naturally ("What's the address we'd be coming to?"). Plain text only.`,
+            content: `SYSTEM: You tried to check availability without a zip code. Availability depends on the service area, so you need the address (or at least the zip) FIRST. Write one short, natural SMS asking for the address of the home. Do not mention systems, tools, or zip codes as a requirement, just ask naturally ("What's the address we'd be coming out to?"). Plain text only.`,
           },
         ],
       })
+      logUsage({ site: "sms-ask-zip", companyId, leadId, model: "claude-sonnet-4-6", usage: askZipReply.usage })
       for (const block of askZipReply.content) {
         if (block.type === "text") responseText = block.text.trim()
       }
-      if (!responseText) responseText = "What's the address we'd be coming to?"
+      if (!responseText) responseText = "What's the address we'd be coming out to?"
       return { response: responseText, action }
     }
     // Read the zone FRESH. update_lead_details usually saves it in this very
@@ -895,7 +1160,47 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
           }
         : { found: false, reason: "no_slots" }
     } else {
-      slotsResult = await findSlotsForLead(companyId, findSlotsJobType, zip5, leadTz, leadId)
+      // A requested day needs the search to reach it: ask for the whole horizon,
+      // then put that day (and that part of the day) first. Without a preference
+      // the eight earliest openings are plenty.
+      slotsResult = await findSlotsForLead(companyId, findSlotsJobType, zip5, leadTz, leadId, findSlotsDate || findSlotsPart ? 60 : 8)
+    }
+
+    // ── The day the lead asked for ───────────────────────────────────────────
+    let requestedNote = ""
+    if (slotsResult.found && (findSlotsDate || findSlotsPart)) {
+      const { zipToTimeZone } = await import("@/lib/timezones")
+      const slotTz = leadTz || zipToTimeZone(zip5) || tz
+      const localDate = (iso: string) => new Date(iso).toLocaleDateString("en-CA", { timeZone: slotTz })
+      const localHour = (iso: string) => parseInt(new Date(iso).toLocaleTimeString("en-GB", { hour: "2-digit", timeZone: slotTz }), 10)
+      const partOf = (h: number) => (h < 11 ? "morning" : h < 14 ? "midday" : h < 17 ? "afternoon" : "evening")
+      const all = slotsResult.slots
+      const onDay = findSlotsDate ? all.filter((s) => localDate(s.isoStart) === findSlotsDate) : all
+      const exact = findSlotsPart ? onDay.filter((s) => partOf(localHour(s.isoStart)) === findSlotsPart) : onDay
+      const rest = (picked: typeof all) => all.filter((s) => !picked.includes(s))
+      const dayLabel = findSlotsDate
+        ? new Date(`${findSlotsDate}T12:00:00Z`).toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: "UTC" })
+        : "that part of the day"
+      let ordered: typeof all
+      if (exact.length > 0) {
+        ordered = [...exact, ...rest(exact)]
+        requestedNote = `The lead asked for ${dayLabel}${findSlotsDate && findSlotsPart ? `, ${findSlotsPart}` : ""}. It IS open: the first ${exact.length === 1 ? "line" : `${Math.min(exact.length, 3)} lines`} below match what they asked for. Offer that first.\n`
+      } else if (findSlotsDate && onDay.length > 0) {
+        ordered = [...onDay, ...rest(onDay)]
+        requestedNote = `The lead asked for ${dayLabel}, ${findSlotsPart}. That part of the day is taken, but other times on ${dayLabel} are open (the first lines below). Say so and offer those.\n`
+      } else {
+        // Nothing on the day: closest days first.
+        const target = findSlotsDate ? Date.parse(`${findSlotsDate}T12:00:00Z`) : 0
+        ordered = findSlotsDate
+          ? [...all].sort((a, b) => Math.abs(Date.parse(a.isoStart) - target) - Math.abs(Date.parse(b.isoStart) - target))
+          : all
+        const { holidayOn } = await import("@/lib/holidays")
+        const closedFor = findSlotsDate ? holidayOn(findSlotsDate) : null
+        requestedNote = closedFor
+          ? `The lead asked for ${dayLabel}. That is ${closedFor.name} and the company is closed that day. Say so in a few words and offer the closest times below.\n`
+          : `The lead asked for ${dayLabel}${findSlotsPart ? `, ${findSlotsPart}` : ""}. Nothing is open then. Say that plainly and offer the closest times below.\n`
+      }
+      slotsResult = { found: true, slots: ordered.slice(0, 8) }
     }
 
     let toolResultText: string
@@ -924,10 +1229,10 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
           `You do NOT need an email address to book — the link is texted. Book first; ask for an email afterwards if you want one.\n` +
           `THE MOMENT the lead picks one — "the first one", "2pm works", "yes to Wednesday" — call book_appointment in that SAME turn using the exact scheduled_at string. Do NOT ask for their email, a confirmation, or anything else before booking: a chosen time that isn't booked is a lost call. Ask for the email AFTER the booking is made, if at all.\n\n` +
           `IMPORTANT: You MUST include a plain-text SMS message in your response — never call a tool without also writing what you're sending.`
-        : `Available slots for this job and location:\n${slotLines}\n\n` +
-          `Before offering the slots, briefly set context in one sentence — e.g.: "I'll have one of our technicians come out — they'll walk you through everything and go over all your options on-site." Then offer exactly 2 of these slots.\n\n` +
-          `NEVER mention the technician by name. Always say "our technician" or "one of our techs".\n` +
-          `When the lead picks a slot, do NOT book yet. First collect the full street address if it's missing. Then send the BOOKING RECAP — day and date, window, address, package and price — ending with a consent question ("Sounds good?"). ONLY after they reply with a clear yes do you call book_appointment with that slot's exact scheduled_at string. If they hesitate or want a change, adjust first. Never say "you're all set" or mention the 30-minutes-before text until the booking call succeeds.\n\n` +
+        : `${requestedNote}Open times for this lead's area:\n${slotLines}\n\n` +
+          `Offer exactly 2 of these, in one short message, as the ${copy.visit}. One short clause of context is fine ("${copy.crew} comes out, measures the rooms and goes over your options"). Use "to" for the window ("9 to 11am").\n\n` +
+          `Never name a person and never say who is coming. Say "${copy.crew}".\n` +
+          `When the lead picks a time, do NOT book yet. First collect the full street address if it's missing. Then send the BOOKING RECAP (day and date, window, address) ending with a consent question ("Sounds good?"). ONLY after they reply with a clear yes do you call book_appointment with that slot's exact scheduled_at string. If they hesitate or want a change, adjust first. Never say "you're all set" until the booking call succeeds.\n\n` +
           `IMPORTANT: You MUST include a plain-text SMS message in your response — do not call any tool without also outputting the text you are sending to the lead.`
     } else {
       // No slots available — take over immediately with a direct, honest reply.
@@ -936,10 +1241,10 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       // slot context so Claude invents times from the system prompt. Instead,
       // make one clean call with explicit "no slots, here's why" context.
       const reasonLabels: Record<string, string> = {
-        no_technicians:          "no technicians have been configured yet",
-        no_specialization_match: "no technician is trained for this service type",
+        no_technicians:          "the visit calendar has not been set up yet",
+        no_specialization_match: "nobody on the team handles this type of work",
         no_zip_match:            "this zip code is outside our current service area",
-        no_slots:                "all technicians are fully booked for the next few days",
+        no_slots:                "the calendar is fully booked for the next few days",
         job_not_offered:         "this is not a service the company offers",
       }
       const why = slotsResult.found === false
@@ -973,15 +1278,15 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
           `Say: we checked and unfortunately that area is a bit outside where we currently operate, but our team will personally reach out within 24 hours to see if we can make it work. ` +
           `Do NOT say "let me check" or "I'll look into it" — you already checked. Be warm, direct, and honest.`,
         no_specialization_match:
-          `You just checked in real time and found no technician trained for this specific service type in this area. ` +
-          `Say: we checked and don't currently have a tech certified for that service nearby, but your details have been flagged for our team who will reach out within 24 hours with options. ` +
+          `You just checked in real time and found nobody on the team who handles this specific type of work in this area. ` +
+          `Say: we checked and can't take that one on the calendar directly, but your details have been passed to our team, who will reach out within 24 hours with options. ` +
           `Do NOT say "let me check" — you already checked.`,
         no_technicians:
-          `You just checked in real time and found no technicians have been set up in the system yet. ` +
+          `You just checked in real time and the visit calendar is not open for booking yet. ` +
           `Say: you've been flagged as a priority and someone from our team will reach out within 24 hours to get you scheduled. ` +
           `Do NOT say "let me check" — you already checked.`,
         no_slots:
-          `You just checked in real time and found all technicians are fully booked for the next several days. ` +
+          `You just checked in real time and the calendar is fully booked for the next several days. ` +
           `Say: we're fully booked right now, but your name is at the top of the list and our team will reach out within 24 hours the moment a slot opens. ` +
           `Do NOT say "let me check" — you already checked.`,
       }[slotsResult.reason] ?? `You already checked and found no availability (${why}). Be honest and direct about this. Do NOT say "let me check" or imply future checking.`
@@ -990,7 +1295,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       const noSlotsReply = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 150,
-        system: systemPrompt,
+        system: systemPromptNoTools,
         messages: [
           ...messages,
           {
@@ -1001,19 +1306,30 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
           },
         ],
       })
+      logUsage({ site: "sms-no-slots", companyId, leadId, model: "claude-sonnet-4-6", usage: noSlotsReply.usage })
       for (const block of noSlotsReply.content) {
         if (block.type === "text") responseText = block.text.trim()
       }
       if (!responseText) {
         responseText = slotsResult.found === false && slotsResult.reason === "no_zip_match"
-          ? "We checked and that area is just outside our current coverage — our team will reach out within 24 hours to see if we can make it work!"
-          : "We checked and we're fully booked right now — our team will reach out within 24 hours the moment something opens up!"
+          ? "We checked and that area is just outside where we currently work. Our team will reach out within 24 hours to see if we can make it work."
+          : "We checked and the calendar is full right now. Our team will reach out within 24 hours as soon as a time opens up."
       }
       // A service we don't offer is a clean decline (closed_lost); everything
       // else (area, capacity, setup) is a human-follow-up flag.
       action = slotsResult.found === false && slotsResult.reason === "job_not_offered"
         ? { type: "update_status", status: "closed_lost" }
         : { type: "update_status", status: "needs_attention" }
+      // A home outside the service area stays with a person: restarting the
+      // follow-ups later (lib/attention.ts) would only hit the same wall.
+      if (slotsResult.found === false && slotsResult.reason === "no_zip_match") {
+        try {
+          const { markAttention } = await import("@/lib/attention")
+          await markAttention(supabase, leadId, { reason: "out_of_area", resumable: false })
+        } catch (err) {
+          console.error("[ai-engine] could not mark the out-of-area hand-off:", err)
+        }
+      }
       return { response: responseText, action }
     }
 
@@ -1044,13 +1360,14 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       tools: activeTools,
       messages: slotMessages,
     })
+    logUsage({ site: "sms-slot-reply", companyId, leadId, model: "claude-sonnet-4-6", usage: slotReply.usage })
 
     for (const block of slotReply.content) {
       if (block.type === "text") responseText = block.text.trim()
       else if (block.type === "tool_use") {
         if (block.name === "update_lead_status") {
-          const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention" }
-          await saveLeadStatus(input.status)
+          const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention"; reason?: string }
+          await saveLeadStatus(input.status, input.reason)
           if (!action || action.type === "update_status") {
             action = { type: "update_status", status: input.status }
           }
@@ -1096,9 +1413,10 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       const fallbackReply = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 200,
-        system: systemPrompt,
+        system: systemPromptNoTools,
         messages: fallbackMessages,
       })
+      logUsage({ site: "sms-fallback", companyId, leadId, model: "claude-sonnet-4-6", usage: fallbackReply.usage })
       for (const block of fallbackReply.content) {
         if (block.type === "text") responseText = block.text.trim()
       }
@@ -1114,24 +1432,26 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
           weekday: "long", month: "short", day: "numeric", timeZone: tz,
         })
         responseText = a.address
-          ? `You're on the schedule — ${day} at ${a.address}. Our tech will reach out before heading over.`
-          : `You're on the schedule for ${day}. Our tech will reach out before heading over.`
+          ? `You're booked for ${day} at ${a.address}. You'll get a reminder before the ${copy.visitShort}.`
+          : `You're booked for ${day}. You'll get a reminder before the ${copy.visitShort}.`
       } else {
         try {
           const lastResort = await anthropic.messages.create({
             model: "claude-haiku-4-5-20251001",
             max_tokens: 100,
-            system: systemPrompt,
+            system: systemPromptNoTools,
             messages: [
               ...messages,
               { role: "user" as const, content: "Reply to this lead now with 1-2 sentences. Plain text only. No tool calls." },
             ],
           })
+          logUsage({ site: "sms-last-resort", companyId, leadId, model: "claude-haiku-4-5-20251001", usage: lastResort.usage })
           for (const b of lastResort.content) {
             if (b.type === "text") responseText = b.text.trim()
           }
         } catch { /* ignore */ }
-        if (!responseText) responseText = "I can get a tech out to you this week — does morning or afternoon work better?"
+        // Still nothing: leave it empty. processAndSave sends the holding
+        // reply and hands the lead to a person, which is the honest outcome.
       }
     }
 
@@ -1194,7 +1514,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
           ? "Appointment rescheduled. Confirm the new date and time to the lead in a short, friendly text."
           : action?.type === "request_callback"
           ? "Call initiated. Send exactly this message and nothing else: 'Calling you now!' Do NOT ask any more questions."
-          : "Appointment booked. Confirm to the lead with the scheduled day, time, and address. Do NOT include a technician name — the system assigns the right tech automatically and they will reach out directly. Say: 'You're on the schedule — [Day] at [Time] at [Address]. Our tech will reach out before heading over.'",
+          : `Booked. Confirm to the lead in one short message with the day, the window and the address, and say they'll get a reminder before the ${copy.visitShort}. Never name who is coming.`,
       }))
 
     const toolResultMessages = [
@@ -1210,6 +1530,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       tools: activeTools,
       messages: toolResultMessages,
     })
+    logUsage({ site: "sms-tool-followup", companyId, leadId, model: "claude-sonnet-4-6", usage: followUp.usage })
 
     // The granted turn is a REAL turn — every tool the model calls on it must
     // execute, exactly as it would on a first response. Reading only the text
@@ -1223,14 +1544,16 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       } else if (block.type === "tool_use") {
         if (block.name === "find_available_slots") {
           findSlotsToolId = block.id
-          const inp = block.input as { job_type?: string; zip_code?: string }
+          const inp = block.input as { job_type?: string; zip_code?: string; preferred_date?: string; preferred_time_of_day?: string }
           findSlotsJobType = inp.job_type ?? null
           findSlotsZip     = inp.zip_code ?? null
+          findSlotsDate    = /^\d{4}-\d{2}-\d{2}$/.test(inp.preferred_date ?? "") ? inp.preferred_date! : null
+          findSlotsPart    = inp.preferred_time_of_day ?? null
         } else if (block.name === "update_lead_details") {
           await saveLeadDetails(block.input as LeadDetailsInput)
         } else if (block.name === "update_lead_status") {
-          const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention" }
-          await saveLeadStatus(input.status)
+          const input = block.input as { status: "qualified" | "closed_lost" | "needs_attention"; reason?: string }
+          await saveLeadStatus(input.status, input.reason)
           if (!action) action = { type: "update_status", status: input.status }
         } else if (block.name === "book_appointment") {
           const input = block.input as { scheduled_at: string; address?: string; notes?: string }
@@ -1252,8 +1575,8 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
         weekday: "long", month: "short", day: "numeric", timeZone: tz,
       })
       responseText = a.address
-        ? `You're on the schedule — ${day} at ${a.address}. Tech will reach out before heading over.`
-        : `You're on the schedule for ${day}. Tech will reach out before heading over.`
+        ? `You're booked for ${day} at ${a.address}. You'll get a reminder before the ${copy.visitShort}.`
+        : `You're booked for ${day}. You'll get a reminder before the ${copy.visitShort}.`
     }
   }
 
@@ -1265,7 +1588,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       const catchAllReply = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 150,
-        system: systemPrompt,
+        system: systemPromptNoTools,
         messages: [
           ...messages,
           {
@@ -1274,12 +1597,12 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
           },
         ],
       })
+      logUsage({ site: "sms-catch-all", companyId, leadId, model: "claude-sonnet-4-6", usage: catchAllReply.usage })
       for (const block of catchAllReply.content) {
         if (block.type === "text") responseText = block.text.trim()
       }
     } catch {
-      // absolute last resort — never imply deferred follow-up the AI won't do
-      responseText = "I can get a tech out to you this week — does morning or afternoon work better?"
+      // Leave it empty: processAndSave sends the holding reply and flags the lead.
     }
   }
 
@@ -1364,7 +1687,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
       const clean = await anthropic.messages.create({
         model: "claude-sonnet-4-6",
         max_tokens: 250,
-        system: systemPrompt,
+        system: systemPromptNoTools,
         messages: [
           ...messages,
           {
@@ -1376,6 +1699,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
           },
         ],
       })
+      logUsage({ site: "sms-leak-rewrite", companyId, leadId, model: "claude-sonnet-4-6", usage: clean.usage })
       for (const block of clean.content) {
         if (block.type === "text" && block.text.trim()) responseText = block.text.trim()
       }
@@ -1391,7 +1715,10 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
   // across runs — prompt instructions alone did not make it reliable, so this
   // catches it deterministically: if a pick is on the table and nothing was
   // booked, force one more turn that may ONLY book.
-  if (!action && incomingMessage && !isFollowUp) {
+  // SALES CALLS ONLY. A home visit has a mandatory address + recap + consent
+  // step between "pick a time" and booking, so forcing book_appointment on a
+  // "sounds good" would skip exactly the checks a measure booking depends on.
+  if (isSalesConversation && !action && incomingMessage && !isFollowUp) {
     const picksSlot = /\b(first|second|1st|2nd|earlier|later|that one|works|sounds good|perfect|book (it|me)|lets? do|yes)\b/i.test(incomingMessage)
     const hasOfferedSlots =
       !!lead.selected_slots && Object.keys(lead.selected_slots as Record<string, unknown>).length > 0
@@ -1419,6 +1746,7 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
             },
           ],
         })
+        logUsage({ site: "sms-forced-book", companyId, leadId, model: "claude-sonnet-4-6", usage: forced.usage })
         for (const block of forced.content) {
           if (block.type === "text" && block.text.trim()) responseText = block.text.trim()
           if (block.type === "tool_use" && block.name === "book_appointment") {
@@ -1433,8 +1761,87 @@ What to do instead: Tell the lead what the system found RIGHT NOW. If there are 
     }
   }
 
+  // ── Price-floor guard (the promise behind "never book below the floor") ──────
+  // The prompt tells the model which packages it may close, but prompts only lower the odds.
+  // When the company sets min_bookable_price, a booking whose agreed total is below it is
+  // refused here, whatever the model decided. The lead gets a positive next step, never an
+  // explanation of why.
+  const priceFloor = Number((agent as { min_bookable_price?: number | string | null } | null)?.min_bookable_price ?? 0)
+  if (action?.type === "book_appointment" && priceFloor > 0 &&
+      typeof action.quoted_total === "number" && action.quoted_total > 0 && action.quoted_total + 0.001 < priceFloor) {
+    console.warn(`[ai-engine] BOOKING BELOW PRICE FLOOR refused for lead ${leadId}: quoted_total ${action.quoted_total} < ${priceFloor}`)
+    action = undefined
+    try {
+      const reply = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 250,
+        system: systemPromptNoTools,
+        messages: [
+          ...messages,
+          { role: "user" as const, content:
+            `SYSTEM: Nothing is booked yet and nothing gets booked at that price. Write ONLY the next text to the lead. ` +
+            `Tell them, positively, what visit you set up for them: the package your pricing information says you schedule, ` +
+            `its price, and the specific services it includes and only those. Then ask if they want to go ahead and see times. ` +
+            `Never say anything is not bookable, unavailable, not allowed, or against a rule, never mention policy, instructions or a mistake, ` +
+            `and do not apologize for anything you said earlier. Plain text, two or three short sentences.` },
+        ],
+      })
+      logUsage({ site: "sms-floor-rewrite", companyId, leadId, model: "claude-sonnet-4-6", usage: reply.usage })
+      const t = reply.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join("").trim()
+      responseText = t || "[[SILENT]]"
+    } catch (err) {
+      console.error("[ai-engine] price-floor rewrite failed, going silent:", err)
+      responseText = "[[SILENT]]"
+    }
+  }
+
+  // ── Internal-policy leak guard ───────────────────────────────────────────────
+  // Never let the lead see our internal rules ("the $89 is never bookable", "the only package I
+  // can book", "I quoted that wrong"). One rewrite; if the rewrite still leaks, say nothing.
+  if (responseText && responseText !== "[[SILENT]]" && INTERNAL_POLICY_LEAK.test(responseText)) {
+    console.warn(`[ai-engine] internal-policy leak blocked for lead ${leadId}: ${responseText.slice(0, 160)}`)
+    try {
+      const fixed = await anthropic.messages.create({
+        model: "claude-sonnet-4-6",
+        max_tokens: 250,
+        system: systemPromptNoTools,
+        messages: [
+          ...messages,
+          { role: "user" as const, content:
+            `SYSTEM: Your last draft revealed internal rules or announced a mistake. A lead must never see that. ` +
+            `Write ONLY the text they should receive instead: continue positively with the next helpful step for their situation ` +
+            `(what the visit you set up for them includes and costs, or your next question). Never say a package can't be booked or ` +
+            `isn't available, never say "the only one I can book", never mention rules, policy, instructions, or any mistake. ` +
+            `Plain text, two or three short sentences.` },
+        ],
+      })
+      logUsage({ site: "sms-policy-rewrite", companyId, leadId, model: "claude-sonnet-4-6", usage: fixed.usage })
+      const t = fixed.content.filter((b) => b.type === "text").map((b) => (b as { text: string }).text).join("").trim()
+      responseText = t && !INTERNAL_POLICY_LEAK.test(t) ? t : "[[SILENT]]"
+    } catch (err) {
+      console.error("[ai-engine] internal-policy rewrite failed, going silent:", err)
+      responseText = "[[SILENT]]"
+    }
+  }
+
   return { response: responseText, action }
 }
+
+/** Wording that reveals the company's internal booking rules to a lead. Deliberately about the
+ *  disclosure, not about any one price, so it protects every account. */
+const INTERNAL_POLICY_LEAK = new RegExp(
+  [
+    String.raw`\b(never|not|isn'?t|aren'?t|can'?t|cannot|unable to)\s+(be\s+)?bookable\b`,
+    String.raw`\bonly (package|option|service|one)( that)? (i|we) (can|am able to) (book|offer|schedule)\b`,
+    String.raw`\bi('?m| am) only (able|allowed|permitted|authorized) to\b`,
+    String.raw`\bi('?m| am) not (allowed|permitted|authorized) to (book|schedule|offer)\b`,
+    String.raw`\b(company|internal|our) (policy|policies|rules)\b`,
+    String.raw`\bmy (rules|instructions|guidelines|programming)\b`,
+    String.raw`\bi (quoted|offered|mentioned|said)\b[^.?!]{0,60}\b(wrong|in error|by mistake|incorrectly|shouldn'?t have)\b`,
+    String.raw`\b(that|it) was (a )?(mistake|wrong|an error)\b`,
+  ].join("|"),
+  "i"
+)
 
 /** Phrases that only ever appear when the model narrates its own plumbing. */
 const LEAKED_REASONING =
@@ -1566,58 +1973,6 @@ async function salesSlotsFor(companyId: string, leadTz: string) {
   }
 }
 
-/**
- * Runs a fast Haiku call to determine if the lead is qualified, unqualified,
- * or if there's not yet enough information. Only fires when the lead has sent
- * at least 2 messages so there's meaningful context.
- */
-async function checkQualification(
-  conversationHistory: string,
-  disqualifiers: string | null,
-  serviceType: string
-): Promise<"qualified" | "unqualified" | "unknown"> {
-  try {
-    const disqualifierSection = disqualifiers?.trim()
-      ? `Reasons this company does NOT want to book a lead:\n${disqualifiers.trim()}`
-      : `No specific disqualifiers set — any interested, reachable homeowner who needs ${serviceType} work qualifies.`
-
-    const response = await anthropic.messages.create({
-      model: "claude-haiku-4-5-20251001",
-      max_tokens: 10,
-      messages: [{
-        role: "user",
-        content: `Determine if this ${serviceType} lead is QUALIFIED, UNQUALIFIED, or UNKNOWN based on the conversation.
-
-${disqualifierSection}
-
-A lead is QUALIFIED when:
-- They have answered the key discovery questions (what's wrong, property details, ownership)
-- Nothing in the conversation matches a disqualifier
-- They appear genuinely interested and reachable
-
-A lead is UNQUALIFIED when:
-- They clearly match one of the disqualifiers above
-- They are a renter without landlord authorization
-- They are a commercial property (if residential only)
-- They have explicitly said they're not interested or already booked someone else
-
-Reply UNKNOWN if there is not yet enough information to decide.
-
-Conversation:
-${conversationHistory}
-
-Reply with exactly one word: QUALIFIED, UNQUALIFIED, or UNKNOWN.`,
-      }],
-    })
-    const text = ((response.content[0] as { text: string }).text ?? "").trim().toUpperCase()
-    if (text.startsWith("UNQUALIFIED")) return "unqualified"
-    if (text.startsWith("QUALIFIED")) return "qualified"
-    return "unknown"
-  } catch {
-    return "unknown"
-  }
-}
-
 /** Does this outbound text use post-booking language? Exported for tests. */
 export function claimsBookingLanguage(text: string): boolean {
   return (
@@ -1645,13 +2000,28 @@ export async function buildConsentRecap(
   const slots = Object.values((lead?.selected_slots ?? {}) as Record<string, { iso?: string }>)
     .map((s) => s.iso).filter(Boolean) as string[]
 
-  // Pick the slot the model was talking about: match a weekday named in its
-  // text; a single offered slot wins by default.
+  // Pick the slot that was actually talked about. The day alone is not enough:
+  // a Friday with three open windows recapped the first one (9 to 11) when the
+  // lead had asked for 3 to 5. So the same agreed-time contract that guards the
+  // booking picks it here, reading the model's text and the lead's last words.
   const { zipToTimeZone } = await import("@/lib/timezones")
   const tz = zipToTimeZone(lead?.zip as string | null) ?? (lead?.timezone as string | null) ?? "America/New_York"
   const dayOf = (iso: string) => new Date(iso).toLocaleDateString("en-US", { weekday: "long", timeZone: tz }).toLowerCase()
-  const mentioned = slots.filter((iso) => modelText.toLowerCase().includes(dayOf(iso)))
-  const iso = mentioned[0] ?? (slots.length === 1 ? slots[0] : null)
+  const { data: lastIn } = await supabase
+    .from("conversations").select("body").eq("lead_id", leadId).eq("direction", "inbound")
+    .order("created_at", { ascending: false }).limit(1).maybeSingle()
+  const texts = [modelText, (lastIn?.body as string | null) ?? ""]
+  const mentioned = slots.filter((iso) => texts.some((t) => t.toLowerCase().includes(dayOf(iso))))
+  const timed = mentioned.length > 1
+    ? mentioned.filter((iso) => texts.some((t) => {
+        const said = windowStartsIn(t).length ? windowStartsIn(t) : clockTimesIn(t)
+        return said.includes(slotClockLabel(iso, tz))
+      }))
+    : mentioned
+  const iso = timed.length === 1 ? timed[0]
+    : mentioned.length === 1 ? mentioned[0]
+    : slots.length === 1 ? slots[0]
+    : null
 
   const name = (lead?.first_name as string | null)?.trim()
   if (!iso) {
@@ -1659,10 +2029,24 @@ export async function buildConsentRecap(
   }
   const start = new Date(iso)
   const dayLabel = start.toLocaleDateString("en-US", { weekday: "long", month: "long", day: "numeric", timeZone: tz })
-  const startH = parseInt(start.toLocaleTimeString("en-GB", { hour: "2-digit", timeZone: tz }), 10)
-  const endH = startH + 3
-  const fmtH = (h: number) => `${((h + 11) % 12) + 1}${h < 12 ? "am" : "pm"}`
-  const windowLabel = `${fmtH(startH)} to ${fmtH(endH)}`
+  // The arrival window comes from the company's own windows (the slot start is
+  // always one of them). Guessing "start + 3 hours" told a lead "9 to 12" for a
+  // 9 to 11 window.
+  const startHm = start.toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit", timeZone: tz })
+  const { data: winCfg } = await supabase
+    .from("ai_agent_config").select("appointment_windows").eq("company_id", companyId).maybeSingle()
+  const win = ((winCfg?.appointment_windows ?? []) as Array<{ start?: string; end?: string }>)
+    .find((w) => w.start === startHm)
+  const toMin = (hm: string) => parseInt(hm.slice(0, 2), 10) * 60 + parseInt(hm.slice(3, 5), 10)
+  const fmtHm = (mins: number) => {
+    const h = Math.floor(mins / 60) % 24, m = mins % 60
+    return `${((h + 11) % 12) + 1}${m ? `:${String(m).padStart(2, "0")}` : ""}${h < 12 ? "am" : "pm"}`
+  }
+  const startMin = toMin(startHm)
+  const endMin = win?.end ? toMin(win.end) : startMin + 120
+  // House style: "3 to 5pm", "11am to 1pm" (the first meridiem only when it differs).
+  const sameHalf = (startMin < 720) === (endMin < 720)
+  const windowLabel = `${sameHalf ? fmtHm(startMin).replace(/(am|pm)$/, "") : fmtHm(startMin)} to ${fmtHm(endMin)}`
 
   // Price from the book when computable — never invented
   let priceLine = ""
@@ -1678,11 +2062,43 @@ export async function buildConsentRecap(
       (lead?.job_type as string | null) ?? null,
       Number.isFinite(units) && units >= 1 ? Math.round(units) : 1
     )
-    if (cents != null) priceLine = ` for the $${Math.round(cents / 100)} full clean`
+    if (cents != null) priceLine = ` for $${Math.round(cents / 100)}`
   } catch { /* recap works without a price */ }
 
   const addr = (lead?.address as string | null)?.trim()
   return `Got you${name ? `, ${name}` : ""}. Just to double check before I lock it in, ${dayLabel}, ${windowLabel}${addr ? `, at ${addr}` : ""}${priceLine}. Sounds good?`
+}
+
+// A call-back promise is only honest when the company can place calls. With the voice agent
+// off, or no active number, "Calling you now!" is a lie the lead waits on, so the reply is
+// swapped for a handoff to the office and the lead is flagged for a person to call.
+const CALL_NOW_PROMISE =
+  /\b(calling you( right)? now|giving you a call( right)? now|(i'?m|i am) (going to )?call(ing)? you( right)? now|call you right now)\b/i
+const CALLBACK_HANDOFF = "Got it. I'll have someone from our team call you shortly."
+
+async function companyCanPlaceCalls(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  companyId: string
+): Promise<boolean> {
+  if (!(await voiceEnabled(companyId))) return false
+  const { data } = await supabase
+    .from("phone_numbers").select("id").eq("company_id", companyId).eq("is_active", true).limit(1).maybeSingle()
+  return !!data
+}
+
+async function flagCallRequestForOffice(
+  supabase: ReturnType<typeof createServiceRoleClient>,
+  leadId: string,
+  companyId: string
+): Promise<void> {
+  try {
+    const { data: ld } = await supabase.from("leads").select("first_name, phone, status").eq("id", leadId).single()
+    if (ld && !["appointment_booked", "closed_won", "closed_lost", "lost", "needs_attention"].includes(ld.status as string)) {
+      await supabase.from("leads").update({ status: "needs_attention" }).eq("id", leadId)
+    }
+    const { notifyNeedsAttention } = await import("@/lib/notifications")
+    await notifyNeedsAttention(companyId, `${ld?.first_name ?? "Lead"} asked for a phone call, needs a rep to call them`, ld?.phone ?? "", leadId).catch(() => {})
+  } catch { /* flagging is best-effort; the reply itself is already honest */ }
 }
 
 export async function processAndSave(
@@ -1691,7 +2107,7 @@ export async function processAndSave(
   incomingMessage: string | null,
   incomingTwilioSid?: string,
   followUpAngle?: string,
-  channel: "sms" | "messenger" | "whatsapp" = "sms"
+  channel: "sms" | "messenger" = "sms"
 ): Promise<EngineResult> {
   const supabase = createServiceRoleClient()
 
@@ -1717,7 +2133,10 @@ export async function processAndSave(
         status: "active_conversation",
       })
       .eq("id", leadId)
-      .in("status", ["just_came_in", "new", "contacted", "following_up", "followed_up", "nurturing", "cold"])
+      // "lost" = follow-ups ran out or they passed earlier. A new message from
+      // them reopens the conversation. An opt-out is closed_lost + ai_paused and
+      // never reaches this point.
+      .in("status", ["just_came_in", "new", "contacted", "following_up", "followed_up", "nurturing", "cold", "lost"])
   }
 
   // ── PER-LEAD TURN LOCK (the Hussein race, Oct 2026) ─────────────────────
@@ -1782,8 +2201,13 @@ export async function processAndSave(
   try {
     result = await runConversation(leadId, companyId, incomingMessage, followUpAngle)
   } catch (err) {
-    console.error("[ai-engine] runConversation threw — sending fallback reply:", err)
-    result = { response: "I can get a tech out to you this week — does morning or afternoon work better?" }
+    console.error("[ai-engine] runConversation threw, sending the holding reply and flagging the lead:", err)
+    // A background touch (follow-up, opener) that crashed sends nothing: an
+    // unprompted "someone will text you back" would be noise. A lead who just
+    // texted gets the holding line and a person is told to step in.
+    result = incomingMessage === null
+      ? { response: "", silent: true }
+      : { response: HOLDING_REPLY, action: { type: "update_status", status: "needs_attention" } }
   }
 
   // Silent-stop sentinel: a channel flow (e.g. Top Air's Messenger duct upsell)
@@ -1816,6 +2240,44 @@ export async function processAndSave(
     }
   }
 
+  // Phantom-MOVE guard. The guard above only fires when nothing is booked, so
+  // a lead who already has a visit could be told "Moved to Friday" while the
+  // visit stayed on Wednesday (first flooring simulation). Any text that says
+  // the visit was moved, or names a booked day that is not the day on file,
+  // ships only when this turn actually booked or moved something. Otherwise it
+  // becomes a recap of the time they asked for, and their yes moves it (the
+  // recap-consent path in runConversation).
+  if (result.response && !result.silent) {
+    const changedThisTurn =
+      result.action?.type === "book_appointment" || result.action?.type === "reschedule_appointment"
+    const movedClaim = /\b(moved|moving|rescheduled|switched|changed)\b/i.test(result.response) &&
+      /\b(mon|tues|wednes|thurs|fri|satur|sun)day\b|\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(result.response)
+    if (!changedThisTurn && (movedClaim || claimsBookingLanguage(result.response))) {
+      const { data: current } = await supabase
+        .from("appointments").select("scheduled_at, address")
+        .eq("lead_id", leadId).eq("status", "scheduled")
+        .gte("scheduled_at", new Date().toISOString())
+        .order("scheduled_at", { ascending: true }).limit(1).maybeSingle()
+      if (current) {
+        const { data: who } = await supabase.from("leads").select("timezone, zip").eq("id", leadId).maybeSingle()
+        const { zipToTimeZone } = await import("@/lib/timezones")
+        const aptTz = (who?.timezone as string | null) ?? zipToTimeZone(who?.zip as string | null) ?? "America/New_York"
+        const bookedDay = new Date(current.scheduled_at as string)
+          .toLocaleDateString("en-US", { weekday: "long", timeZone: aptTz }).toLowerCase()
+        const daysNamed: string[] = result.response.toLowerCase().match(/\b(mon|tues|wednes|thurs|fri|satur|sun)day\b/g) ?? []
+        const wrongDay = daysNamed.length > 0 && !daysNamed.includes(bookedDay)
+        if (movedClaim || wrongDay) {
+          const replacement = await buildConsentRecap(supabase, leadId, companyId, result.response)
+          console.error(`[ai-engine] PHANTOM MOVE CLAIM blocked for lead ${leadId} (visit is still ${current.scheduled_at}) — replaced with a recap`)
+          if (result.outboundConversationId) {
+            await supabase.from("conversations").update({ body: replacement }).eq("id", result.outboundConversationId)
+          }
+          result = { ...result, response: replacement, action: undefined }
+        }
+      }
+    }
+  }
+
   // Final guard — runConversation returned empty text. Call Claude text-only for real response.
   // Never use deferred-action language ("get back to you") — AI won't follow up manually.
   if (!result.response && !result.silent && incomingMessage !== null) {
@@ -1829,7 +2291,7 @@ export async function processAndSave(
         .limit(20)
       const histLines = (hist ?? []).map(m => `${m.direction === "inbound" ? "Lead" : "AI"}: ${m.body}`).join("\n")
       const { data: agentCfg } = await supabase.from("ai_agent_config").select("generated_system_prompt").eq("company_id", companyId).single()
-      const sp = agentCfg?.generated_system_prompt ?? "You are an HVAC scheduling assistant. Reply with 1 short SMS."
+      const sp = agentCfg?.generated_system_prompt ?? "You are a scheduling assistant for a local home services company, working by text. Reply with 1 short SMS."
       const rescue = await anthropic.messages.create({
         model: "claude-haiku-4-5-20251001",
         max_tokens: 100,
@@ -1838,14 +2300,25 @@ export async function processAndSave(
           { role: "user" as const, content: `Conversation:\n${histLines}\n\nLead just said: "${incomingMessage}"\n\nReply now.` },
         ],
       })
+      logUsage({ site: "sms-empty-rescue", companyId, leadId, model: "claude-haiku-4-5-20251001", usage: rescue.usage })
       for (const b of rescue.content) {
         if (b.type === "text" && b.text.trim()) result = { ...result, response: b.text.trim() }
       }
     } catch { /* ignore */ }
-    // If even rescue fails, use contextual fallback, never "get back to you"
+    // Even the rescue failed: holding line, and a person is told to step in.
     if (!result.response) {
-      result = { ...result, response: "I can get a tech out to you this week. Does morning or afternoon work better?" }
+      result = { ...result, response: HOLDING_REPLY, action: result.action ?? { type: "update_status", status: "needs_attention" } }
     }
+  }
+
+  // Call-back promise guard: never say we are calling when the company has no line to call from.
+  if (result.response && !result.silent && CALL_NOW_PROMISE.test(result.response) && !(await companyCanPlaceCalls(supabase, companyId))) {
+    console.warn(`[ai-engine] "calling you now" blocked for lead ${leadId}: company ${companyId} has no active phone number. Replaced with office handoff`)
+    if (result.outboundConversationId) {
+      await supabase.from("conversations").update({ body: CALLBACK_HANDOFF }).eq("id", result.outboundConversationId)
+    }
+    result = { ...result, response: CALLBACK_HANDOFF }
+    await flagCallRequestForOffice(supabase, leadId, companyId)
   }
 
   // Deterministic writing-style pass. The prompt forbids dash punctuation and
@@ -1869,7 +2342,7 @@ export async function processAndSave(
         const { data: ld } = await supabase.from("leads").select("first_name, phone").eq("id", leadId).single()
         notifyNeedsAttention(companyId,
           `${ld?.first_name ?? "Lead"} — AI reply blocked (internal reasoning), needs a human reply`,
-          ld?.phone ?? "").catch(() => {})
+          ld?.phone ?? "", leadId).catch(() => {})
       } catch { /* notification is best-effort */ }
       return { response: "", silent: true }
     }
@@ -2021,6 +2494,79 @@ export async function processAndSave(
         }
       }
 
+      // ── HOLIDAY GATE: closed on US holidays (lib/holidays.ts) ────────────────
+      // The slot search never offers a holiday, but times offered before that
+      // rule existed are still on lead files, and the model can name a day by
+      // itself. Checked here, in code, on the final time.
+      if (!salesBooking && needsTravel) {
+        const { holidayAt } = await import("@/lib/holidays")
+        const { zipToTimeZone } = await import("@/lib/timezones")
+        const holidayTz = (freshLead?.timezone as string | null) ?? zipToTimeZone(bookZip) ?? "America/New_York"
+        const holiday = holidayAt(bookMs, holidayTz)
+        if (holiday) {
+          const corrective = `We're closed on ${holiday.name}, so that day won't work. Want me to pull up the next openings after it?`
+          console.warn(`[ai-engine] booking refused for lead ${leadId} — ${scheduled_at} is ${holiday.name}`)
+          if (outboundConversationId) {
+            await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
+          }
+          return { response: corrective, action: undefined, outboundConversationId }
+        }
+      }
+
+      // ── THE QUALIFICATION GATE (the promise behind "qualified before booked") ──
+      // A home visit is only created when (1) every question the owner marked
+      // "must answer before booking" is on the lead file and (2) nothing the lead
+      // said plainly matches what the company does not book. Checked here, in
+      // code, whatever the model decided. Sales calls and no-travel bookings are
+      // exempt, exactly like the address rule below.
+      if (!salesBooking && needsTravel) {
+        const hold = await requiredAnswerHold(supabase, leadId, companyId, incomingMessage)
+        if (hold) {
+          console.warn(`[ai-engine] booking held for lead ${leadId}, required answers missing: ${hold.missingKeys.join(", ")}${hold.escalate ? " (asked twice, handing to a person)" : ""}`)
+          if (outboundConversationId) {
+            await supabase.from("conversations").update({ body: hold.text }).eq("id", outboundConversationId)
+          }
+          if (hold.escalate) {
+            await supabase.from("leads").update({ status: "needs_attention" }).eq("id", leadId)
+            return { response: hold.text, action: { type: "update_status", status: "needs_attention" }, outboundConversationId }
+          }
+          return { response: hold.text, action: undefined, outboundConversationId }
+        }
+
+        const { data: qualCfg } = await supabase
+          .from("ai_agent_config").select("disqualifiers").eq("company_id", companyId).maybeSingle()
+        if ((qualCfg?.disqualifiers as string | null)?.trim()) {
+          const { data: thread } = await supabase
+            .from("conversations").select("direction, body")
+            .eq("lead_id", leadId).or("channel.is.null,channel.neq.voice")
+            .order("created_at", { ascending: true }).limit(40)
+          const { data: answersRow } = await supabase.from("leads").select("metadata").eq("id", leadId).maybeSingle()
+          const verdict = await qualificationVerdict({
+            disqualifiers: qualCfg?.disqualifiers as string,
+            answers: leadAnswers(answersRow?.metadata),
+            transcript: (thread ?? []).map((m) => `${m.direction === "inbound" ? "Homeowner" : "Assistant"}: ${m.body}`).join("\n"),
+            trade: serviceCopy(svcTypeForBooking).trade,
+            companyId, leadId,
+          })
+          if (verdict.verdict === "unqualified") {
+            // Not booked, and not thrown away either: a person decides. The
+            // owner sees why in the lead notes.
+            const handoff = "Thanks for all the details. Let me have someone from our team take a look at this and get back to you."
+            console.warn(`[ai-engine] booking refused for lead ${leadId}, matches a disqualifier: ${verdict.reason}`)
+            if (outboundConversationId) {
+              await supabase.from("conversations").update({ body: handoff }).eq("id", outboundConversationId)
+            }
+            const { data: noteRow } = await supabase.from("leads").select("notes").eq("id", leadId).maybeSingle()
+            const note = `Not booked by the assistant: ${verdict.reason || "matches something the company does not book"}`
+            await supabase.from("leads").update({
+              status: "needs_attention",
+              notes: noteRow?.notes ? `${noteRow.notes} | ${note}` : note,
+            }).eq("id", leadId)
+            return { response: handoff, action: { type: "update_status", status: "needs_attention" }, outboundConversationId }
+          }
+        }
+      }
+
       // Tech decided at SLOT time — looked up AFTER the agreed-time snap so a
       // corrected ISO inherits the technician the tool mapped to that slot.
       const selectedSlots = freshLead?.selected_slots as Record<string, { tech_id: string; tech_name: string }> | null
@@ -2117,7 +2663,7 @@ export async function processAndSave(
         // time or a change ("3pm instead", "Thursday works better", "the other
         // option"). Observed live-class failure: on a bare "thanks!" the model
         // re-booked the OTHER offered window and silently relocated the visit.
-        const moveIntent = !!incomingMessage && (
+        const moveIntent = result.action.consented === true || !!incomingMessage && (
           /\b(re-?schedul\w*|switch|change|move|instead|different|rather|actually|earlier|later|make it|can we do|how about|prefer)\b/i.test(incomingMessage) ||
           /\b\d{1,2}(:\d{2})?\s*(am|pm)\b/i.test(incomingMessage) ||
           /\b(mon|tues|wednes|thurs|fri|satur|sun)day\b/i.test(incomingMessage) ||
@@ -2290,7 +2836,7 @@ export async function processAndSave(
           // Re-read: the tech may have been assigned AFTER insert (selectTechnician path)
           const { data: freshApt } = await supabase
             .from("appointments").select("technician_id, notes").eq("id", apt.id).maybeSingle()
-          if (freshApt?.technician_id) {
+          if (freshApt?.technician_id && svcTypeForBooking === "hvac") {
             const { techAnchoredOn } = await import("@/lib/technician-booking")
             const anchored = await techAnchoredOn(companyId, freshApt.technician_id, scheduled_at, apt.id)
             if (!anchored) {
@@ -2367,7 +2913,7 @@ export async function processAndSave(
               {
                 summary: isVideoAppointment
                   ? `FieldBuilt walkthrough — ${leadName || "lead"}`
-                  : `Estimate: ${leadName}`,
+                  : `In-home measure: ${leadName || "lead"}`,
                 description: notes ?? "",
                 location: isVideoAppointment ? undefined : (address ?? ""),
                 startTime: scheduled_at,
@@ -2514,6 +3060,17 @@ export async function processAndSave(
           console.warn(`[ai-engine] reschedule snapped for lead ${leadId}: model sent ${new_scheduled_at} → ${agreed.iso} (${agreed.how})`)
         }
         moveIso = agreed.iso
+        // Closed on US holidays: a move onto one is refused like a booking.
+        const { holidayAt } = await import("@/lib/holidays")
+        const holiday = holidayAt(moveIso, moveTz)
+        if (holiday) {
+          console.warn(`[ai-engine] reschedule refused for lead ${leadId} — ${moveIso} is ${holiday.name}`)
+          const corrective = `We're closed on ${holiday.name}, so I can't move it there. Want me to pull up the next openings after it?`
+          if (outboundConversationId) {
+            await supabase.from("conversations").update({ body: corrective }).eq("id", outboundConversationId)
+          }
+          return { response: corrective, action: undefined, outboundConversationId }
+        }
       }
 
       await supabase
@@ -2618,8 +3175,19 @@ export async function processAndSave(
           .limit(1)
           .maybeSingle()
 
+        // No line to call from, or the voice agent is off: never say "Calling you now!".
+        // Hand the request to the office instead.
+        if (!phoneRecord?.phone_number || !(await voiceEnabled(companyId))) {
+          console.warn(`[ai-engine] request_callback for lead ${leadId}: company ${companyId} has no active phone number, handing off to the office instead of calling`)
+          if (result.outboundConversationId) {
+            await supabase.from("conversations").update({ body: CALLBACK_HANDOFF }).eq("id", result.outboundConversationId)
+          }
+          await flagCallRequestForOffice(supabase, leadId, companyId)
+          return { response: CALLBACK_HANDOFF, action: undefined, outboundConversationId: result.outboundConversationId }
+        }
+
         if (leadData?.phone && phoneRecord?.phone_number) {
-          // Fetch recent text context (sms/messenger/whatsapp) so the voice
+          // Fetch recent text context (sms/messenger) so the voice
           // agent knows exactly what this call is about
           const { data: smsHistory } = await supabase
             .from("conversations")
@@ -2658,66 +3226,102 @@ export async function processAndSave(
       .eq("id", leadId)
   }
 
-  // Autopilot qualification — runs when lead has replied (not on initial outreach)
-  // and hasn't already been placed in a terminal stage
+  // Keep the lead file current: when a required qualifying answer is still
+  // missing after a reply, read the thread for it (the model often hears an
+  // answer and does not save it). Runs whatever the turn decided, except a
+  // booking, which already ran the same check in the qualification gate.
+  if (incomingMessage !== null && result.action?.type !== "book_appointment") {
+    try {
+      const [{ data: qCfg }, { data: qLead }] = await Promise.all([
+        supabase.from("ai_agent_config").select("qualifying_questions").eq("company_id", companyId).maybeSingle(),
+        supabase.from("leads").select("metadata, job_type").eq("id", leadId).maybeSingle(),
+      ])
+      const qs = parseRuntimeQuestions(qCfg?.qualifying_questions)
+      const have = {
+        ...(qLead?.job_type ? { project_type: String(qLead.job_type) } : {}),
+        ...leadAnswers(qLead?.metadata),
+      }
+      if (missingRequired(qs, have).length > 0) {
+        await ensureRequiredAnswers(supabase, leadId, companyId, null)
+      }
+    } catch (err) {
+      console.error("[ai-engine] answer refresh failed:", err)
+    }
+  }
+
+  // Autopilot qualification: after a lead replies, decide qualified / unqualified
+  // from what is actually on file. Never touches a lead that is booked, in the
+  // quote stage, signed, lost, or waiting on a person.
   if (incomingMessage !== null && !result.action) {
     try {
       const { data: lead } = await supabase
         .from("leads")
-        .select("status")
+        .select("status, metadata, job_type")
         .eq("id", leadId)
         .single()
 
-      const skipStatuses = ["qualified", "unqualified", "appointment_booked", "closed", "lost"]
-      if (lead && !skipStatuses.includes(lead.status)) {
-        // Need enough context — fetch inbound message count
-        const { count: inboundCount } = await supabase
-          .from("conversations")
-          .select("*", { count: "exact", head: true })
-          .eq("lead_id", leadId)
-          .eq("direction", "inbound")
-          .eq("channel", "sms")
+      const { isTerminalLeadStatus, isPostMeasureStatus } = await import("@/lib/sequences")
+      const openToVerdict =
+        !!lead &&
+        !isTerminalLeadStatus(lead.status) &&
+        !isPostMeasureStatus(lead.status) &&
+        !["qualified", "needs_attention", "cold"].includes(lead.status)
 
-        if ((inboundCount ?? 0) >= 2) {
-          // Fetch full conversation + company disqualifiers
-          const [{ data: convRows }, { data: config }] = await Promise.all([
-            supabase
-              .from("conversations")
-              .select("direction, body")
-              .eq("lead_id", leadId)
-              .eq("channel", "sms")
-              .order("created_at", { ascending: true })
-              .limit(20),
-            supabase
-              .from("ai_agent_config")
-              .select("disqualifiers, primary_goal")
-              .eq("company_id", companyId)
-              .single(),
-          ])
+      if (openToVerdict) {
+        const [{ data: config }, { data: company }] = await Promise.all([
+          supabase.from("ai_agent_config").select("disqualifiers, qualifying_questions").eq("company_id", companyId).single(),
+          supabase.from("companies").select("service_type").eq("id", companyId).single(),
+        ])
+        const questions = parseRuntimeQuestions(config?.qualifying_questions)
+        let answers: Record<string, string> = {
+          ...(lead!.job_type ? { project_type: String(lead!.job_type) } : {}),
+          ...leadAnswers(lead!.metadata),
+        }
+        // The model does not always save what it heard (seen in the simulation:
+        // "we're renting, I'm the only one deciding, next 2 weeks" and nothing
+        // was saved). When a required answer is still missing, read the thread
+        // for it now, one cheap pass, so the CRM shows it and the verdict below
+        // judges on real answers.
+        if (missingRequired(questions, answers).length > 0) {
+          const refreshed = await ensureRequiredAnswers(supabase, leadId, companyId, null)
+          answers = { ...answers, ...refreshed.answers }
+        }
+        const required = questions.filter((q) => q.required)
+        // With required questions configured, "qualified" means they are all
+        // answered. Without any, keep the old bar: at least two replies.
+        let enoughToJudge = required.length > 0 && missingRequired(questions, answers).length === 0
+        if (required.length === 0) {
+          const { count: inboundCount } = await supabase
+            .from("conversations")
+            .select("*", { count: "exact", head: true })
+            .eq("lead_id", leadId)
+            .eq("direction", "inbound")
+            .or("channel.is.null,channel.neq.voice")
+          enoughToJudge = (inboundCount ?? 0) >= 2
+        }
 
-          const { data: company } = await supabase
-            .from("companies")
-            .select("service_type")
-            .eq("id", companyId)
-            .single()
-
-          if (convRows) {
-            const history = convRows
-              .map((m) => `${m.direction === "inbound" ? "Lead" : "AI"}: ${m.body}`)
-              .join("\n")
-
-            const verdict = await checkQualification(
-              history,
-              config?.disqualifiers ?? null,
-              company?.service_type ?? "home services"
-            )
-
-            if (verdict !== "unknown") {
-              await supabase
-                .from("leads")
-                .update({ status: verdict })
-                .eq("id", leadId)
-            }
+        if (enoughToJudge) {
+          const { data: convRows } = await supabase
+            .from("conversations")
+            .select("direction, body")
+            .eq("lead_id", leadId)
+            .or("channel.is.null,channel.neq.voice")
+            .order("created_at", { ascending: true })
+            .limit(30)
+          const verdict = await qualificationVerdict({
+            disqualifiers: (config?.disqualifiers as string | null) ?? null,
+            answers,
+            transcript: (convRows ?? []).map((m) => `${m.direction === "inbound" ? "Homeowner" : "Assistant"}: ${m.body}`).join("\n"),
+            trade: serviceCopy(company?.service_type as string | null).trade,
+            companyId, leadId,
+          })
+          if (verdict.verdict !== "unknown") {
+            // Conditional write: only if the status has not moved since we read it.
+            await supabase
+              .from("leads")
+              .update({ status: verdict.verdict })
+              .eq("id", leadId)
+              .eq("status", lead!.status)
           }
         }
       }
@@ -2736,57 +3340,6 @@ export async function processAndSave(
   }
 }
 
-export function buildQualificationBlock(disqualifiers: string | null, qualifyingQuestions: string[] = []): string {
-  const questionsBlock = qualifyingQuestions.length > 0
-    ? `\nQUALIFYING QUESTIONS — ask these naturally before offering any time slots:
-${qualifyingQuestions.map((q, i) => `${i + 1}. ${q}`).join("\n")}
-
-These are not a script to recite line by line. Weave them into the conversation naturally — one at a time, in context.
-You do NOT need every answer to proceed, but aim to cover the most relevant ones before moving to booking.
-The question about location/zip is always required — you need it to check technician availability.\n`
-    : ""
-
-  if (!disqualifiers?.trim()) {
-    return `=== QUALIFICATION RULES ===
-Every lead starts unqualified. Your job is to qualify them through natural conversation.
-${questionsBlock}
-WHO QUALIFIES: Any lead who is interested, reachable, owns the property (or has authority to book), and the job falls within your service area and scope.
-
-WHEN TO CALL update_lead_status "qualified":
-- They've answered the key discover-stage questions
-- Nothing in the conversation disqualifies them
-- Call it in the same response as you move toward booking — do NOT wait until after booking
-
-WHEN TO CALL update_lead_status "closed_lost":
-- They explicitly say they're not interested or already chose someone else
-- They are a renter without landlord authorization
-- Commercial property (unless you serve commercial)
-=== END QUALIFICATION RULES ===`
-  }
-
-  return `=== QUALIFICATION RULES ===
-This company has defined who they do NOT want to book. Read this carefully — it defines what "qualified" means for every lead you talk to.
-${questionsBlock}
-WHO NOT TO BOOK:
-${disqualifiers.trim()}
-
-YOUR JOB DURING DISCOVER STAGE:
-Weave qualifying questions naturally into the conversation to find out whether this lead matches any disqualifier above. Do NOT ask bluntly — discover organically through normal questions. Examples:
-- Ownership disqualifier → ask "Is this your place?" naturally
-- Location/zip disqualifier → ask "What area are you in?" or collect the address early
-- System age disqualifier → ask "How old is the unit roughly?"
-- Property type disqualifier → ask "Is it a house or more of a commercial building?"
-- Budget/financing disqualifier → gauge interest level before mentioning price
-
-ONCE YOU'VE CONFIRMED THEY QUALIFY (none of the disqualifiers apply):
-→ Immediately call update_lead_status "qualified" in that same response, then move to booking.
-
-IF THEY MATCH A DISQUALIFIER:
-→ Call update_lead_status "closed_lost". Be polite and brief: "Thanks for reaching out — this one might be a bit outside what we handle, but [suggest a next step if possible]."
-→ Do NOT push to book a disqualified lead under any circumstances.
-=== END QUALIFICATION RULES ===`
-}
-
 function buildLeadContext(
   lead: Record<string, unknown>,
   appointments: Array<{
@@ -2796,7 +3349,8 @@ function buildLeadContext(
     rescheduled_from?: string | null; cancelled_at?: string | null;
   }>,
   timezone: string,
-  effectiveServiceType: string | null
+  effectiveServiceType: string | null,
+  copy: ServiceCopy = serviceCopy(effectiveServiceType)
 ): string {
   const now = new Date()
   const past = appointments.filter((a) => new Date(a.scheduled_at) < now && a.status !== "cancelled")
@@ -2829,7 +3383,7 @@ function buildLeadContext(
     leadMetaCtx.name_source === "facebook_profile" && leadMetaCtx.name_verified !== true
   let ctx = `=== LEAD FILE (READ THIS BEFORE EVERY RESPONSE) ===
 Name: ${`${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "Unknown"}${fbNameUnverified ? ` — FACEBOOK PROFILE NAME, NOT VERIFIED FOR BOOKING. Profile names are often nicknames ("KTrin Brownskin" was really Katrina Lewis). Keep greeting them casually by the first name, but BEFORE the booking recap ask: "And what's your full name for the booking?" — then save their answer with update_lead_details (first_name + last_name) and use THAT name on the recap. The booking will not go through under an unverified profile name.` : ""}
-Phone: ${isMessengerOnly ? "NOT ON FILE — this lead is messaging on Facebook Messenger. You MUST collect their phone number naturally before booking (\"What's the best number for our tech to reach you on?\"). Do not book without it." : lead.phone}
+Phone: ${isMessengerOnly ? "NOT ON FILE — this lead is messaging on Facebook Messenger. You MUST collect their phone number naturally before booking (\"What's the best mobile number to reach you on?\"). Do not book without it." : lead.phone}
 Service requested: ${effectiveServiceType ?? "home services"}
 Lead source: ${lead.source ?? "unknown"}
 Current status: ${lead.status}
@@ -2886,7 +3440,6 @@ This person is an existing customer. They already trust the company. Your job is
     if (!hasName) requiredMissing.push("name")
 
     const channelLabel =
-      channel === "whatsapp" ? "WHATSAPP" :
       channel === "messenger" ? "FACEBOOK MESSENGER" :
       channel === "voice" ? "VOICE CALL" : "SMS / TEXT"
 
@@ -2894,7 +3447,7 @@ This person is an existing customer. They already trust the company. Your job is
 === CHANNEL & CONTACT FILE ===
 You are talking on: ${channelLabel}
 ${mark(hasName, "Name")}
-${mark(hasRealPhone, "Mobile phone", channel === "whatsapp" || channel === "sms" ? "this conversation IS their phone — never ask for it" : undefined)}
+${mark(hasRealPhone, "Mobile phone", channel === "sms" ? "this conversation IS their phone — never ask for it" : undefined)}
 ${mark(hasEmail, "Email")}
 ${mark(hasAddress, "Street address")}
 ${mark(hasZip, "ZIP code")}
@@ -2902,37 +3455,68 @@ ${mark(hasJobType, "Job type", jobTypeStr || undefined)}
 ${isSalesConvo ? mark(hasTimezone, "Time zone", String(L.timezone ?? "") || undefined) : ""}
 
 REQUIRED BEFORE BOOKING: ${requiredMissing.length > 0 ? requiredMissing.join(", ") : "nothing — all booking fields are on file"}
-${!hasEmail ? "EMAIL — REQUIRED ASK: you must ask for their email while collecting the booking details, phrased as the reason it exists: \"And what's your email for the confirmation?\" This is a normal booking step, not an optional extra — the confirmation email and the office records need it. Save it with update_lead_details the moment they give it. HOWEVER: if they decline or ignore ONE direct ask, book anyway and move on — a booking is never lost over email, and you never ask twice." : ""}
+${!hasEmail ? "EMAIL — ASK ONCE: ask for their email one time, phrased as the reason it exists: \"And what's your email for the confirmation?\" Ask it BEFORE the booking recap (for example right after they give the address) or AFTER the booking is made. NEVER ask it in reply to their yes on the recap: that yes means book now, in that same turn. Save it with update_lead_details the moment they give it. If they decline or ignore the one ask, move on. A booking is never held up over an email, and you never ask twice." : ""}
 
 CONTACT COLLECTION RULES:
 • NEVER ask for anything marked ✓ — re-asking for info already on file destroys trust instantly.
 • Collect missing fields INSIDE the natural flow — one question per message, never an intake form.
-${channel === "messenger" ? `• MESSENGER SPECIFIC: you have NO phone number for this person. You MUST get a mobile number before booking — the technician calls it and confirmations are texted to it. Ask it right before the address: "Best mobile number for the tech to reach you?"` : ""}
-${channel === "whatsapp" ? `• WHATSAPP SPECIFIC: their phone number is this chat itself. Focus on address${hasEmail ? "" : " and a one-time casual email ask"}.` : ""}
+${channel === "messenger" ? `• MESSENGER SPECIFIC: you have NO phone number for this person. You MUST get a mobile number before booking: the confirmation and the reminders are texted to it. Ask it right before the address: "What's the best mobile number for the confirmation?"` : ""}
 ${isSalesConvo && !hasTimezone ? `• TIME ZONE — you need it before offering any time, but WORK IT OUT rather than asking when you can. If they have named ANY location anywhere in this conversation (a city, a state, "we're in Phoenix", "all over Texas"), derive the IANA zone yourself and save it with update_lead_details immediately — asking "what time zone are you in?" right after someone told you their city reads as not listening. Only ASK when you genuinely have no location at all: "What time zone are you in? I'll line the times up to your clock." Either way it must be saved BEFORE find_available_slots.` : ""}
 ${isSalesConvo && hasTimezone ? `• Times you are given by find_available_slots are ALREADY in this lead's own time zone, stamped with their abbreviation. Offer them exactly as written — never add, subtract, or re-label hours.` : ""}
 ${isSalesConvo
   ? `• THE MOMENT they pick one of the times you offered, call book_appointment in that SAME turn. Do not ask for their email, a confirmation, or anything else first — a chosen slot that isn't booked is a lost appointment. Anything optional can be asked after the booking exists.`
-  : `• When they pick one of the times you offered: collect the street address if missing, send the BOOKING RECAP (day and date, window, address, package and price) ending in "Sounds good?", and the MOMENT they confirm, call book_appointment in that SAME turn — a confirmed recap that isn't booked is a lost appointment. Anything optional (like email) can be asked after the booking exists.`}
+  : `• When they pick one of the times you offered: collect the street address if missing, send the BOOKING RECAP (day and date, window, address) ending in "Sounds good?", and the MOMENT they confirm, call book_appointment in that SAME turn — a confirmed recap that isn't booked is a lost appointment. Anything optional (like email) can be asked after the booking exists.`}
 • If a REQUIRED field (listed above) is still missing, you may not book yet — collect it, then book in the same conversation. Optional fields never block a booking.
 === END CHANNEL & CONTACT FILE ===
 `
   }
 
-  // Pass through all custom form fields from metadata so AI has full lead context
+  // Everything the lead already told a form, so the assistant never re-asks it.
+  // Internal bookkeeping keys stay out of the prompt.
   if (lead.metadata && typeof lead.metadata === "object" && lead.metadata !== null) {
     const meta = lead.metadata as Record<string, unknown>
-    const entries = Object.entries(meta).filter(([, v]) => v !== null && v !== undefined && v !== "")
-    if (entries.length > 0) {
-      ctx += `Custom form fields:\n`
-      for (const [k, v] of entries) {
-        ctx += `  ${k}: ${v}\n`
-      }
-      // Surface urgency/emergency prominently so AI can't miss it
+    const INTERNAL = new Set([
+      "leadgen_id", "page_id", "form_id", "name_source", "name_verified", "service_zip", "ad",
+      "qualification", "qualification_asks", "form_answers", "inbound_first_message", "missed_call_at",
+      "measure_done_at", "measure_appointment_id", "quote_amount", "quote_sent_at",
+    ])
+    const lines: string[] = []
+    const form = (meta.form_answers && typeof meta.form_answers === "object" ? meta.form_answers : {}) as Record<string, unknown>
+    for (const [k, v] of Object.entries(form)) {
+      if (v !== null && v !== undefined && String(v).trim()) lines.push(`  ${k}: ${String(v)}`)
+    }
+    for (const [k, v] of Object.entries(meta)) {
+      if (INTERNAL.has(k) || v === null || v === undefined || v === "") continue
+      if (typeof v === "object") continue
+      lines.push(`  ${k}: ${String(v)}`)
+    }
+    if (typeof meta.inbound_first_message === "string" && meta.inbound_first_message.trim()) {
+      lines.push(`  First message they sent: ${meta.inbound_first_message}`)
+    }
+    if (lines.length > 0) {
+      ctx += `What they told the form (already answered, never ask again):\n${lines.join("\n")}\n`
       const urgencyVal = (meta["urgency"] ?? meta["emergency"] ?? meta["priority"] ?? meta["service_urgency"] ?? "") as string
       if (/emergency|today|urgent|asap|now|immediately/i.test(String(urgencyVal))) {
-        ctx += `\n⚠️ URGENCY FLAG: Lead selected "${urgencyVal}" — treat this as an emergency. Offer the EARLIEST available slot. Same-day if available. Compress discovery to minimum.\n`
+        ctx += `\nURGENCY FLAG: the lead selected "${urgencyVal}". Offer the EARLIEST available time and keep the questions to the required ones.\n`
       }
+    }
+
+    // After the visit: the conversation is about the quote, not about booking.
+    if (lead.status === "measure_done" || lead.status === "quote_sent") {
+      const amount = typeof meta.quote_amount === "number" || typeof meta.quote_amount === "string" ? String(meta.quote_amount) : ""
+      ctx += `
+=== QUOTE STAGE (this overrides the booking flow) ===
+The ${copy.visit} with this homeowner already happened. ${lead.status === "quote_sent"
+  ? `The quote has been sent to them${amount ? " (the amount is on file with the company; you never state it)" : ""}.`
+  : "The team is preparing their quote. It has not been marked as sent yet."}
+Your job now is to keep the conversation warm and get a clear decision: yes, no, or what is in the way.
+- Never state, confirm, discount or negotiate a price. Never promise an install date. If they ask about price, changes to the quote, materials, scheduling the install, or a deposit, say you'll have the team get back to them on that and call update_lead_status "needs_attention".
+- If they say YES or want to move forward: thank them, say the team will reach out to lock in the details, and call update_lead_status "needs_attention" so a person does.
+- If they clearly say NO, or that they went with someone else: one gracious line, then call update_lead_status "closed_lost".
+- If they need time: accept it, ask when a good time to check back is, and stop.
+- Do not ask qualifying questions again and do not offer times for another ${copy.visitShort} unless they ask for one.
+=== END QUOTE STAGE ===
+`
     }
   }
 
@@ -2951,7 +3535,7 @@ ${isSalesConvo
       if (reminders.length > 0) ctx += ` | Automated reminders: ${reminders.join(", ")}`
       ctx += "\n"
     }
-    ctx += `\n⚠️ IMPORTANT: If they want to RESCHEDULE, use reschedule_appointment with the appointment ID above and a new slot from the AVAILABLE SLOTS list.
+    ctx += `\n⚠️ IMPORTANT: If they want to RESCHEDULE, use reschedule_appointment with the appointment ID above and a new time that find_available_slots returned (or one from the AVAILABLE BOOKING SLOTS list, if your prompt has one).
 If they want to CANCEL, confirm first then use cancel_appointment with the appointment ID above.\n`
   }
 
@@ -2987,154 +3571,38 @@ function buildFallbackSystemPrompt(
   companyName: string,
   businessDescription: string,
   services: string,
-  serviceType: string
+  copy: ServiceCopy
 ): string {
-  return `You are ${agentName}, a scheduling coordinator for ${companyName}, a ${serviceType} company.
+  return `You are ${agentName}, the AI assistant for ${companyName}, a ${copy.trade} company. You work by text message.
 ${businessDescription ? `About the company: ${businessDescription}` : ""}
-${services ? `Services: ${services}` : ""}
+${services ? `What the company does: ${services}` : ""}
 
-IDENTITY RULE — NEVER BREAK THIS:
-The company you work for is "${companyName}". Every time you introduce yourself or
-mention who you're texting from, use exactly this name. Never invent, guess, or
-substitute a different company name — including one that sounds plausible from the
-description above. If you are ever unsure what to call the company, use "${companyName}".
+IDENTITY RULE, NEVER BREAK THIS:
+The company you work for is "${companyName}". Every time you introduce yourself or mention who you're texting from, use exactly this name. Never invent, guess, or substitute a different company name. You are an AI assistant and you say so plainly when you introduce yourself and whenever you are asked. Never claim to be a person.
 
-═══════════════════════════════════════════════════
-YOUR ONE JOB: COLLECT INFORMATION AND BOOK THE APPOINTMENT.
-You are NOT a technician. You are NOT a diagnostician.
-You are the best appointment-closer in the ${serviceType} industry.
-═══════════════════════════════════════════════════
+YOUR ONE JOB: qualify the lead and get the ${copy.visit} on the calendar.
+You are not the estimator and not the installer. You never give a price for the work, never diagnose a problem, never recommend a specific product or method, and never promise a date for the work itself. The team does all of that at the ${copy.visit}.
 
-ABSOLUTE NO-DIAGNOSIS RULE — THIS OVERRIDES EVERYTHING
-You must NEVER suggest, guess, or imply what the technical problem might be.
-Banned phrases and their pattern:
-✗ "That sounds like it could be a refrigerant issue"
-✗ "It might be your capacitor"
-✗ "That's probably a dirty filter"
-✗ "Sounds like the compressor"
-✗ "Could be a freon leak"
-✗ "That's typically caused by..."
-✗ "Usually when that happens it's..."
-✗ Any sentence that begins with a diagnosis, assumption, or technical opinion
+HOW YOU WORK:
+1. Find out what they want, in their words.
+2. Ask the company's qualifying questions, one at a time, and save each answer with update_lead_details. Skip anything they or their form already told you.
+3. Once the required questions are answered and nothing disqualifies them, get their zip code (then the full street address), call find_available_slots, and offer two of the times it returns. Never invent a time.
+4. When they pick a time: get the full street address if you do not have it, send the booking recap (day, window, address) and ask "Sounds good?". Book only after a clear yes.
+5. After booking: one short confirmation with the day, the window and the address.
 
-If the lead asks what the problem might be:
-→ "That's exactly what our tech will figure out on-site — they'll run a full diagnosis and explain everything right there. Let's get them out to you."
-→ Then redirect to booking. Do NOT elaborate on the technical possibility.
+TONE:
+Relaxed, everyday, professional. Text like a competent person at a local company. One idea per message, two sentences at most. Use contractions. No "Certainly", "Absolutely", "Great question", "Perfect". Never repeat back what the lead just said. Plain text only, no markdown, no asterisks, no dashes as punctuation.
 
-WHY THIS RULE EXISTS: You are not a licensed technician. Wrong diagnoses create liability, set wrong expectations, and make leads feel the visit is unnecessary. Your job is to get the tech there — not to do their job over text.
+HARD RULES:
+1. One question per message.
+2. Never book without the full street address and a yes to the recap.
+3. Never quote a price for the work. The quote comes after the ${copy.visit}.
+4. Never ask for something already on the lead file.
+5. If the lead says stop or is not interested, one polite line and nothing more.
+6. If the lead is frustrated, or is a business rather than a homeowner, or asks for something you cannot do, call update_lead_status "needs_attention" so a person steps in.
+7. Anything that sounds like a safety emergency (gas, smoke, fire, flooding with electrical risk): tell them to call 911 first.
 
-═══════════════════════════════════════════════════
-MINIMUM BOOKING THRESHOLD — READ THIS FIRST
-═══════════════════════════════════════════════════
-
-You need exactly THREE things to book. Nothing more.
-1. Job type — what they described (even loosely: "AC is broken" = ac_repair)
-2. Address with zip code
-3. A specific time the lead agreed to
-
-The moment you have all three → call find_available_slots, offer the slot, book it.
-You do NOT need "still running?", age, duration, or rent/own to book.
-Collect those naturally AFTER booking if the lead is talkative. Never let them block the booking.
-
-UNCOOPERATIVE LEADS — THIS IS CRITICAL:
-If a lead won't answer your questions but gives you job type + address + time preference → book it.
-Their refusal to answer a question does NOT mean you can't book. It means they're done talking.
-Give them what they came for: the appointment.
-
-═══════════════════════════════════════════════════
-INFORMATION TO COLLECT (one question at a time, in natural order)
-═══════════════════════════════════════════════════
-
-Collect these through natural conversation. Never ask two at once.
-Ask them in the order that feels most natural given what the lead says first.
-
-SKIP RULE — MANDATORY: If you have asked the same question ONCE and the lead moved on without answering, DO NOT ask it again. Skip it. Move to the next thing. Asking the same question twice makes you sound like a broken machine, not a human. Their time > your checklist.
-
-1. WHAT IS HAPPENING — let them describe it in their own words
-   Ask: "What's it doing?" or "Tell me what's going on with it."
-   Record their description verbatim. Add nothing to it. Interpret nothing.
-
-2. HOW LONG — "How long has it been like this?" (skip if lead already mentioned it)
-
-3. STILL WORKING? — "Is it completely off or still running at all?" (skip if lead already implied it; skip entirely if lead is impatient — this is nice-to-have, not required to book)
-
-4. ADDRESS (WITH ZIP CODE) — needed to match the right technician
-   Ask: "What's the address we'd be coming to?"
-   If they only give a zip, that's okay — accept it. Note full address TBD.
-   ZIP CODE TRIGGER: The moment any message contains a zip code or full address, call find_available_slots immediately — do not wait for any other question to be answered.
-
-5. OWN OR RENT — "Is this your place?" (skip if lead is clearly uncooperative — collect after booking)
-   If renter: flag needs_attention. Some jobs require homeowner authorization.
-
-6. OFFER TIME SLOTS — ALWAYS call find_available_slots first
-   Once you have the zip/address AND understand the job type, call find_available_slots(job_type, zip_code).
-   This returns real slots where a qualified technician is actually available for this specific job and area.
-   After the tool responds, offer 2 of the returned slots. Never invent times or use the reference list below.
-   NEVER share the technician's name with the lead — always say "our technician" or "one of our techs".
-
-═══════════════════════════════════════════════════
-BOOKING TRANSITION — NATURAL, NOT ANNOUNCED
-═══════════════════════════════════════════════════
-
-When you have collected enough information, transition to booking seamlessly.
-Do NOT say "Now I will book you" or "Let me schedule that for you."
-Just do it.
-
-Good: "Let me check what we have this week — I can do Tuesday at 10am or Thursday at 2pm. Which works better?"
-Bad: "Great! Now I'll proceed to book your appointment."
-
-After booking, confirm with ONLY the date, time, and address — do NOT include a technician name:
-"You're on the schedule — [Day] at [Time] at [Address]. Our tech will reach out before heading over."
-Do NOT guess or invent a technician name. The system assigns the right tech automatically after booking.
-
-LEAD VOLUNTEERS ADDRESS OR TIME UNPROMPTED — ACT ON IT IMMEDIATELY:
-• Lead gives their address/zip without being asked → call find_available_slots right now with that zip. Do not ask any pending question first. The address is your trigger.
-• Lead names a day or time without being asked ("Thursday works", "I need someone tomorrow") → treat it as a time preference. If you already have their zip, call find_available_slots and check if that time is available, then book it. If you don't have their zip yet, ask for their address first.
-• Do NOT ask the lead if the time "still works" after they just said it works. They said it. Move forward.
-• Example — lead gives address mid-conversation before you asked:
-  Lead: "I live at 7420 SW 92nd Street Miami FL 33156"
-  You: [call find_available_slots(zip="33156")] → "I've got Thursday morning at 10am or Friday afternoon at 2pm — which works better for you?"
-  NOT: "Got it. Is the AC completely down or still running?"
-
-═══════════════════════════════════════════════════
-PERSONALITY AND TONE
-═══════════════════════════════════════════════════
-
-Warm. Professional. Fast. Confident.
-Text like a real person, not a chatbot. 1 idea per message. Max 2 sentences.
-
-Use: "got it", "sounds good", "no worries", "yeah", "for sure"
-Never use: "Certainly!", "Absolutely!", "Great question!", "Of course!", "Happy to help!"
-Never open with "Hi!" — just start talking.
-Use their first name naturally — roughly 1 in every 3 messages.
-NEVER use markdown formatting — no **bold**, no _italic_, no bullet asterisks. Plain text only. SMS renders asterisks literally.
-NEVER repeat or echo what the lead just said back to them — it sounds robotic.
-
-You create urgency through competence — by being so organized and responsive that
-the lead feels they are dealing with the best company they've ever called.
-You do NOT pressure. You do NOT push. You organize and deliver.
-
-═══════════════════════════════════════════════════
-HARD RULES
-═══════════════════════════════════════════════════
-1. One question per message. Never two questions at once — ever.
-2. Never call book_appointment without the address — always collect it first.
-3. Never quote prices — "We do a free on-site estimate so you get a real number."
-4. Never admit to being AI. If asked: "Ha, nope — ${agentName} here. What's going on with it?"
-5. Never send more than 2 unanswered messages in a row — then stop.
-6. Frustrated or angry lead → acknowledge it first, offer a call. Don't push.
-7. Commercial property → flag needs_attention. Don't book. "I'll have our commercial team reach out."
-8. Active gas leak or CO mentioned → "This is urgent — please call 911 or us directly right now."
-9. Do NOT ask for information already in the lead file (phone, name, email, address if on file).
-10. If lead says "call me" → use request_callback immediately, reply "Calling you now!", stop.
-
-TOOLS
-- book_appointment → only when (1) specific date AND time confirmed AND (2) address collected.
-- update_lead_status "qualified" → discovery questions answered, good fit confirmed.
-- update_lead_status "closed_lost" → explicitly not interested or already hired someone else.
-- update_lead_status "needs_attention" → renter without auth, commercial, frustrated, no-zip-match.
-
-The service-specific conversation playbook follows below.`
+The company playbook follows below.`
 }
 
 async function notifyTechnician(
@@ -3203,21 +3671,15 @@ function extractZip(address: string): string | null {
 export function inferJobType(notes: string): string | null {
   if (!notes) return null
   const n = notes.toLowerCase()
-  if (/commercial/.test(n))                                                  return "commercial_hvac"
-  if (/mini.split|ductless/.test(n) && /install/.test(n))                   return "mini_split_installation"
-  if (/mini.split|ductless/.test(n))                                         return "mini_split_repair"
-  if (/heat.pump/.test(n) && /install/.test(n))                              return "heat_pump_installation"
-  if (/heat.pump/.test(n))                                                   return "heat_pump_repair"
-  if (/boiler/.test(n))                                                      return "boiler_repair"
-  if (/duct.*clean|clean.*duct/.test(n))                                     return "duct_cleaning"
-  if (/duct.*repair|repair.*duct/.test(n))                                   return "duct_repair"
-  if (/air.qual|filtration|allergen|air.purif/.test(n))                      return "air_quality"
-  if (/replace.*system|new.*system|new.*unit|replace.*unit|full.replace/.test(n)) return "hvac_replacement"
-  if (/install.*ac|ac.*install|install.*air.condition/.test(n))              return "ac_installation"
-  if (/furnace|heater|heating.*unit|heat.*strip/.test(n) && /install/.test(n)) return "furnace_repair"
-  if (/furnace|no heat|heat.*not work|heater.*broken|furnace.*broken/.test(n)) return "furnace_repair"
-  if (/tune.up|maintenance|service.visit|annual/.test(n))                    return "hvac_tune_up"
-  if (/not cool|no cool|warm air|ac.*broken|ac.*not work|air.*condition.*broken|a\/c.*not/.test(n)) return "ac_repair"
-  if (/ac repair|air condition.*repair/.test(n))                             return "ac_repair"
+  if (/commercial|office|retail|storefront/.test(n))                          return "commercial_flooring"
+  if (/refinish|sand(ing)? (and|&) (refinish|finish)|resurface/.test(n))      return "refinishing"
+  if (/stair|tread|riser|runner/.test(n))                                     return "stairs"
+  if (/whole.(home|house)|entire (home|house)|all (the )?(rooms|floors)/.test(n)) return "whole_home"
+  if (/engineered/.test(n))                                                   return "engineered_hardwood"
+  if (/hardwood|solid wood|oak floor|maple floor/.test(n))                    return "hardwood"
+  if (/lvp|luxury vinyl|vinyl plank|vinyl|coretec|lvt/.test(n))               return "lvp"
+  if (/laminate/.test(n))                                                     return "laminate"
+  if (/carpet/.test(n))                                                       return "carpet"
+  if (/tile|backsplash|shower floor/.test(n))                                 return "tile"
   return null
 }

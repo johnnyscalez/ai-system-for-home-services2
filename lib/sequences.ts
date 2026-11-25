@@ -2,19 +2,24 @@
  * Follow-up sequence definitions and schedule builders.
  *
  * NO-REPLY sequence (lead never responded):
- *   Step 1 — 30 min    — Voice call  (while warm)
- *   Step 2 — 24h       — SMS         (gentle next-day touch)
- *   Step 3 — Day 2, 9am — SMS        (fresh morning, different angle)
- *   Step 4 — Day 2, 12pm — Voice     (lunchtime call attempt)
- *   Step 5 — Day 4, 9am — SMS        (value / urgency angle)
- *   Step 6 — Day 7, 9am — SMS        (closing the loop)
- *   Step 7 — Day 14, 9am — SMS       (long game / seasonal)
+ *   Step 1 — 30 min     — Voice call, or a short SMS bump when voice is off
+ *   Step 2 — 24h        — SMS         (gentle next-day touch)
+ *   Step 3 — Day 2, 9am — SMS         (fresh morning, different angle)
+ *   Step 4 — Day 2, 12pm — Voice call (skipped when voice is off: step 3 already covers the day)
+ *   Step 5 — Day 4, 9am — SMS         (value / urgency angle)
+ *   Step 6 — Day 7, 9am — SMS         (closing the loop)
+ *   Step 7 — Day 14, 9am — SMS        (long game / seasonal)
  *
  * REPLIED-NOT-BOOKED sequence (lead replied but didn't book):
  *   Step 1 — 4h               — SMS
  *   Step 2 — Next day @ 9am   — SMS  (morning-after casual touch)
- *   Step 3 — 48h              — Voice call
+ *   Step 3 — 48h              — Voice call, or an SMS when voice is off
  *   Step 4 — 5d               — SMS  (final)
+ *
+ * Whether a "voice" step really is a call is decided when the step FIRES, not when
+ * it is inserted: the cron asks voiceEnabled(company) (lib/voice-enabled.ts). That
+ * keeps every insert site identical and makes the switch apply to rows that already
+ * exist. With voice off the cadence stays intact as text messages.
  *
  * All "dayOffset + localHour" steps are scheduled in the company's timezone
  * so they fire at the right wall-clock time regardless of UTC.
@@ -41,6 +46,20 @@ export function isTerminalLeadStatus(status: string | null | undefined): boolean
   return !!status && (TERMINAL_LEAD_STATUSES as readonly string[]).includes(status)
 }
 
+/**
+ * After the measure: the quote is owed (measure_done) or out (quote_sent). These
+ * are NOT terminal: the quote chase keeps texting until the lead signs or says no.
+ */
+export const POST_MEASURE_STATUSES = ["measure_done", "quote_sent"] as const
+
+export function isPostMeasureStatus(status: string | null | undefined): boolean {
+  return !!status && (POST_MEASURE_STATUSES as readonly string[]).includes(status)
+}
+
+// Any Supabase client flavour (service role or server) works with these helpers.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type SequencesDb = { from: (t: string) => any }
+
 export type StepType = "sms" | "voice"
 
 export type SequenceStep = {
@@ -58,7 +77,7 @@ export type SequenceStep = {
  * found via Brittany).
  */
 export async function reseedRepliedNotBooked(
-  supabase: { from: (t: string) => any },
+  supabase: SequencesDb,
   leadId: string,
   companyId: string,
   action: { type?: string; status?: string } | undefined
@@ -74,6 +93,16 @@ export async function reseedRepliedNotBooked(
   const { data: postTurn } = await supabase
     .from("leads").select("status, ai_paused").eq("id", leadId).single()
   const postStatus = (postTurn?.status as string | undefined) ?? ""
+
+  // Quote stage: the lead is past booking, so the "replied but did not book"
+  // nurture makes no sense, and the quote chase must survive a reply (it only
+  // stops on signed / lost / opt-out, which cancel every pending step elsewhere).
+  if (isPostMeasureStatus(postStatus) && !postTurn?.ai_paused) {
+    await supabase.from("sequences")
+      .update({ status: "cancelled" })
+      .eq("lead_id", leadId).eq("sequence_type", "replied_not_booked").eq("status", "pending")
+    return "reseeded"
+  }
   const skip = ["closed", "closed_won", "closed_lost", "appointment_booked", "lost", "unqualified", "needs_attention", "cold"]
   const shouldSchedule =
     action?.type !== "book_appointment" &&
@@ -82,6 +111,13 @@ export async function reseedRepliedNotBooked(
     !skip.includes(postStatus)
 
   if (!shouldSchedule) {
+    // A hand-off to a person pauses the follow-ups instead of ending them: the
+    // steps that were still to come are written down first, so lib/attention.ts
+    // can continue them if nobody books or takes the lead over.
+    if (postStatus === "needs_attention" && !postTurn?.ai_paused) {
+      await pauseForAttention(supabase, leadId).catch((err) =>
+        console.error(`[sequences] could not record the paused follow-ups for lead ${leadId}:`, err))
+    }
     await supabase.from("sequences")
       .update({ status: "cancelled" })
       .eq("lead_id", leadId).eq("status", "pending")
@@ -116,29 +152,50 @@ export function isVoiceStep(sequenceType: string, step: number): boolean {
   return false
 }
 
+/**
+ * What a voice step becomes for a company with the voice agent OFF.
+ * "sms"  = send a text in its place (uses FOLLOW_UP_ANGLE for the step).
+ * "skip" = cancel it: another text already lands the same morning.
+ */
+export function voiceStepWithoutVoice(sequenceType: string, step: number): "sms" | "skip" {
+  if (sequenceType === "no_reply" && step === 4) return "skip"
+  return "sms"
+}
+
 // Last step for each sequence — used to detect sequence exhaustion
 export const LAST_STEP: Record<string, number> = {
   no_reply: 7,
   replied_not_booked: 4,
+  quote_follow_up: 6,
 }
 
 // Per-step AI follow-up instructions (injected into the AI prompt)
 export const FOLLOW_UP_ANGLE: Record<string, string> = {
+  // Text versions of the voice steps, used only when the voice agent is off.
+  "no_reply:1":             "About half an hour since your first text and no reply yet. One very short, friendly bump that makes it easy to answer with a word or two. Do not repeat your opener and do not re-introduce yourself.",
+  "replied_not_booked:3":   "Two days since they last replied and nothing is booked. One short text that picks up exactly where the conversation stopped and offers to get the visit on the calendar.",
   "no_reply:2":             "It's been about 24 hours — one more gentle touch. Different angle from your opener. Short.",
   "no_reply:3":             "Day 2 morning. Fresh start — brief, different angle from anything you've already sent.",
-  "no_reply:5":             "Day 4. Offer value or light urgency. Not chasing — genuinely offering something useful.",
+  "no_reply:5":             "Day 4. Offer value or light urgency. If your PRICES block has a CURRENT ADVERTISED OFFER, that offer is the value: name it in a few words, exactly as written (with its end date if it has one), as the reason to grab a time. Not chasing.",
   "no_reply:6":             "Day 7. Last active attempt. Close the loop politely, make it easy for them to reply.",
   "no_reply:7":             "Day 14. Long game — seasonal or situational angle. Zero pressure, just staying relevant.",
   "replied_not_booked:1":   "They replied but haven't booked yet. Casual 4-hour check-in — keep it short and human.",
-  "replied_not_booked:2":   "Morning after they replied — fresh, brief, low-key. Just making sure they haven't moved on. No pressure at all.",
+  "replied_not_booked:2":   "Morning after they replied — fresh, brief, low-key. If there is a CURRENT ADVERTISED OFFER and you have not mentioned it in your last two messages, remind them of it in a few words as the reason to get the visit booked. No pressure at all.",
   "replied_not_booked:4":   "Final follow-up. They replied but never booked. Low-pressure, no guilt — just closing the loop.",
+  // Quote chase: the measure happened and the quote is with the homeowner.
+  "quote_follow_up:1":      "The quote went out yesterday. Check that it arrived and ask if anything in it needs explaining. One short text.",
+  "quote_follow_up:2":      "Three days since the quote. Ask where they landed on it and offer to answer questions. Short, no pressure.",
+  "quote_follow_up:3":      "A week since the quote. Ask what is holding the decision, in a way that makes it easy to say it plainly (timing, price, comparing quotes).",
+  "quote_follow_up:4":      "Two weeks since the quote. Friendly check in. If the company knowledge mentions a current offer or an install lead time, mention that one fact; otherwise just ask if they want to move forward.",
+  "quote_follow_up:5":      "Three weeks since the quote. Short and direct: are they still planning to do the floors, yes or no is fine.",
+  "quote_follow_up:6":      "Last check in on the quote. Ask whether to keep it open or close it out, and make a no easy to give.",
 }
 
 /**
  * Converts a local time (dayOffset days from baseDate, at localHour:00)
  * to the correct UTC Date using the company's timezone.
  */
-function localDayTime(
+export function localDayTime(
   baseDate: Date,
   daysOffset: number,
   localHour: number,
@@ -268,6 +325,87 @@ export function buildRepliedNotBookedSchedule(lastReplyAt: Date, timezone: strin
 }
 
 
+/**
+ * QUOTE CHASE: "every quote chased until it signs or says no". Six texts over a
+ * month from the day the quote went out, each at 10am local.
+ */
+export function buildQuoteFollowUpSchedule(quoteSentAt: Date, timezone: string): SequenceStep[] {
+  const days = [1, 3, 7, 14, 21, 30]
+  return days.map((d, i) => ({
+    step: i + 1,
+    type: "sms" as StepType,
+    scheduledAt: localDayTime(quoteSentAt, d, 10, timezone),
+  }))
+}
+
+/** Start (or restart) the quote chase for a lead. Idempotent: pending chase steps are replaced. */
+export async function startQuoteChase(
+  supabase: SequencesDb,
+  leadId: string,
+  companyId: string
+): Promise<void> {
+  // Booking-stage nurtures are over once a quote exists.
+  await supabase.from("sequences")
+    .update({ status: "cancelled" })
+    .eq("lead_id", leadId).eq("status", "pending")
+  const { data: agentCfg } = await supabase
+    .from("ai_agent_config").select("timezone").eq("company_id", companyId).maybeSingle()
+  const tz = (agentCfg?.timezone as string | null) ?? "America/New_York"
+  const steps = buildQuoteFollowUpSchedule(new Date(), tz)
+  await supabase.from("sequences").insert(
+    steps.map((s) => ({
+      lead_id: leadId,
+      company_id: companyId,
+      sequence_type: "quote_follow_up",
+      step: s.step,
+      scheduled_at: s.scheduledAt.toISOString(),
+      status: "pending",
+    }))
+  )
+}
+
+/** The follow-up steps a hand-off interrupted, kept on the lead so they can continue. */
+export type PausedStep = { sequence_type: string; step: number; scheduled_at: string }
+
+/**
+ * Record the start of a "needs attention" episode and the follow-ups it
+ * interrupts, BEFORE they are cancelled. A later turn inside the same episode
+ * finds nothing pending and leaves the recorded steps alone.
+ */
+export async function pauseForAttention(supabase: SequencesDb, leadId: string): Promise<void> {
+  const { data: pending } = await supabase
+    .from("sequences").select("sequence_type, step, scheduled_at")
+    .eq("lead_id", leadId).eq("status", "pending")
+  const { data: lead } = await supabase.from("leads").select("metadata").eq("id", leadId).maybeSingle()
+  const meta = { ...((lead?.metadata as Record<string, unknown> | null) ?? {}) }
+  const attention = { ...((meta.attention as Record<string, unknown> | undefined) ?? {}) }
+  if (!attention.since) attention.since = new Date().toISOString()
+  // sms_retry re-sends one failed text; replaying it days later would be stale.
+  const steps = ((pending ?? []) as PausedStep[]).filter((s) => s.sequence_type !== "sms_retry")
+  if (steps.length > 0) {
+    const latest = new Map<string, PausedStep>()
+    for (const s of steps) {
+      const key = `${s.sequence_type}:${s.step}`
+      const seen = latest.get(key)
+      if (!seen || s.scheduled_at > seen.scheduled_at) latest.set(key, s)
+    }
+    attention.paused_steps = [...latest.values()]
+  }
+  meta.attention = attention
+  await supabase.from("leads").update({ metadata: meta }).eq("id", leadId)
+}
+
+/** Stop every automated touch for a lead (signed, lost, or handed to a person). */
+export async function stopAllSequences(
+  supabase: SequencesDb,
+  leadId: string
+): Promise<void> {
+  await supabase.from("sequences")
+    .update({ status: "cancelled" })
+    .eq("lead_id", leadId).eq("status", "pending")
+}
+
+
 // ── Pipeline status ordering guard ────────────────────────────────────────────
 // A lead who has BOOKED must never slide back to a discovery-stage status
 // because the model calls update_lead_status("qualified") on a post-booking
@@ -283,6 +421,19 @@ export function isStatusDowngrade(current: string | null | undefined, next: stri
 }
 
 /**
+ * Statuses the AI may never overwrite on its own: a signed deal, a lead in the
+ * quote stage, a lead a person was asked to handle. Only a person (CRM) or a
+ * booking moves a lead out of these.
+ */
+const AI_PROTECTED_STATUSES = new Set(["closed", "closed_won", "measure_done", "quote_sent"])
+export function aiMayNotOverwriteStatus(current: string | null | undefined, next: string | null | undefined): boolean {
+  if (!current || !next || current === next) return false
+  if (!AI_PROTECTED_STATUSES.has(current)) return false
+  // The lead saying no, or needing a person, is always allowed through.
+  return !["lost", "closed_lost", "needs_attention"].includes(next)
+}
+
+/**
  * The complete guard: a downgrade is only blocked while the lead ACTUALLY
  * still has a scheduled appointment. Without this check, an appointment
  * cancelled by any path that doesn't touch lead.status (office cancels in
@@ -290,7 +441,7 @@ export function isStatusDowngrade(current: string | null | undefined, next: stri
  * forever, with every legitimate status move rejected.
  */
 export async function statusDowngradeBlocked(
-  db: { from: (t: string) => any },
+  db: SequencesDb,
   leadId: string,
   current: string | null | undefined,
   next: string | null | undefined

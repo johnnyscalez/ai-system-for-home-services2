@@ -1,4 +1,4 @@
-export type ServiceType = "roofing" | "solar" | "hvac" | "windows" | "bath_remodel"
+export type ServiceType = "flooring" | "roofing" | "solar" | "hvac" | "windows" | "bath_remodel"
 export type Plan = "trial" | "starter" | "growth" | "scale"
 export type LeadStatus =
   | "just_came_in"       // lead arrived, AI sent opener, no reply yet

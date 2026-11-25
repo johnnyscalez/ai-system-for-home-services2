@@ -1,95 +1,72 @@
 "use client"
 
-import { useMemo, useState } from "react"
+import { useCallback, useMemo, useState } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { MessageSquare, Clock, Search, X } from "lucide-react"
 import { Badge } from "@/components/ui/badge"
 import { formatDistanceToNow } from "@/lib/utils"
+import {
+  LEAD_STATUS, PIPELINE_COLUMNS, leadStatusLabel, leadStatusBadge, pipelineColumnOf, hasRealPhone,
+} from "@/lib/lead-status"
+import { createClient } from "@/lib/supabase"
+import { useVisiblePoll, useCompanyRealtime } from "@/components/leads/live"
+import {
+  CONVERSATION_LIST_SELECT, toConversationRows, type ConversationRow,
+} from "@/components/leads/conversation-rows"
 
-export type ConversationRow = {
-  id: string
-  first_name: string | null
-  last_name: string | null
-  phone: string
-  status: string
-  ai_paused: boolean | null
-  last_message_at: string | null
-  messageCount: number
-  channels: string[]
+export type { ConversationRow }
+
+const HUMAN_TAG = "You are handling"
+
+// Chip colours and order come from the shared status map, so a new status shows
+// up here with the right colour without touching this file.
+const TAG_STYLE = new Map<string, { chip: string; dot: string }>()
+const TAG_ORDER: string[] = []
+for (const column of PIPELINE_COLUMNS) {
+  for (const status of column.statuses) {
+    const label = LEAD_STATUS[status]?.label
+    if (!label || TAG_STYLE.has(label)) continue
+    TAG_STYLE.set(label, { chip: pipelineColumnOf(status).chip, dot: pipelineColumnOf(status).dot })
+    TAG_ORDER.push(label)
+  }
 }
+TAG_STYLE.set(HUMAN_TAG, { chip: "bg-amber-500 text-white border-amber-500", dot: "bg-amber-500" })
+TAG_ORDER.push(HUMAN_TAG)
 
-// Same tag vocabulary as the pipeline table, so a "Booked" here is a
-// "Booked" there — one mental model across the CRM.
-const STATUS_LABEL: Record<string, string> = {
-  just_came_in: "Just came in", new: "Just came in", contacted: "Just came in",
-  following_up: "No reply",
-  active_conversation: "Active", followed_up: "Active", nurturing: "Active",
-  qualified: "Qualified", unqualified: "Unqualified",
-  appointment_booked: "Booked",
-  closed: "Closed", closed_won: "Closed",
-  lost: "Lost", cold: "Lost", closed_lost: "Lost",
-  needs_attention: "Needs attention",
-}
-
-const STATUS_BADGE: Record<string, string> = {
-  just_came_in: "bg-sky-500/15 text-sky-400 border-sky-500/20",
-  new: "bg-sky-500/15 text-sky-400 border-sky-500/20",
-  contacted: "bg-sky-500/15 text-sky-400 border-sky-500/20",
-  following_up: "bg-orange-500/15 text-orange-400 border-orange-500/20",
-  active_conversation: "bg-[#FFF3EC] text-[#F97316] border-[#F97316]/20",
-  followed_up: "bg-[#FFF3EC] text-[#F97316] border-[#F97316]/20",
-  nurturing: "bg-[#FFF3EC] text-[#F97316] border-[#F97316]/20",
-  qualified: "bg-amber-500/15 text-amber-400 border-amber-500/20",
-  unqualified: "bg-red-500/15 text-red-400 border-red-500/20",
-  appointment_booked: "bg-emerald-500/15 text-emerald-400 border-emerald-500/20",
-  closed: "bg-green-500/15 text-green-400 border-green-500/20",
-  closed_won: "bg-green-500/15 text-green-400 border-green-500/20",
-  lost: "bg-slate-500/15 text-slate-400 border-slate-500/20",
-  cold: "bg-slate-500/15 text-slate-400 border-slate-500/20",
-  closed_lost: "bg-slate-500/15 text-slate-400 border-slate-500/20",
-  needs_attention: "bg-red-500/15 text-red-400 border-red-500/20",
-}
-
-// Selected-state palette per tag: solid, on-brand, readable — the chip
-// "lights up" in the tag's own colour instead of a generic highlight.
-const CHIP_ACTIVE: Record<string, string> = {
-  "Just came in": "bg-sky-500 text-white border-sky-500 shadow-[0_2px_10px_rgba(14,165,233,0.35)]",
-  "No reply": "bg-orange-500 text-white border-orange-500 shadow-[0_2px_10px_rgba(249,115,22,0.35)]",
-  "Active": "bg-[#F97316] text-white border-[#F97316] shadow-[0_2px_10px_rgba(249,115,22,0.35)]",
-  "Qualified": "bg-amber-500 text-white border-amber-500 shadow-[0_2px_10px_rgba(245,158,11,0.35)]",
-  "Unqualified": "bg-red-500 text-white border-red-500 shadow-[0_2px_10px_rgba(239,68,68,0.35)]",
-  "Booked": "bg-emerald-500 text-white border-emerald-500 shadow-[0_2px_10px_rgba(16,185,129,0.35)]",
-  "Closed": "bg-green-600 text-white border-green-600 shadow-[0_2px_10px_rgba(22,163,74,0.35)]",
-  "Lost": "bg-slate-500 text-white border-slate-500 shadow-[0_2px_10px_rgba(100,116,139,0.35)]",
-  "Needs attention": "bg-red-500 text-white border-red-500 shadow-[0_2px_10px_rgba(239,68,68,0.35)]",
-  "Human handling": "bg-amber-500 text-white border-amber-500 shadow-[0_2px_10px_rgba(245,158,11,0.35)]",
-}
-
-// Dot colour for the idle chip — a small swatch of the tag's colour so the
-// row of chips reads as a legend, not a row of grey pills.
-const CHIP_DOT: Record<string, string> = {
-  "Just came in": "bg-sky-400", "No reply": "bg-orange-400", "Active": "bg-[#F97316]",
-  "Qualified": "bg-amber-400", "Unqualified": "bg-red-400", "Booked": "bg-emerald-400",
-  "Closed": "bg-green-500", "Lost": "bg-slate-400", "Needs attention": "bg-red-400",
-  "Human handling": "bg-amber-500",
-}
-
-// Display order for the chip row — funnel order, attention items last
-const TAG_ORDER = ["Just came in", "Active", "No reply", "Qualified", "Booked", "Closed", "Needs attention", "Human handling", "Lost", "Unqualified"]
-
-const CHANNEL_LABEL: Record<string, string> = { sms: "SMS", messenger: "Messenger", whatsapp: "WhatsApp", voice: "Call" }
-
-const HUMAN_TAG = "Human handling"
+const CHANNEL_LABEL: Record<string, string> = { sms: "Text", messenger: "Messenger", voice: "Call" }
 
 function tagsOf(row: ConversationRow): string[] {
-  const t = [STATUS_LABEL[row.status] ?? row.status.replace(/_/g, " ")]
+  const t = [leadStatusLabel(row.status)]
   if (row.ai_paused) t.push(HUMAN_TAG)
   return t
 }
 
-export function ConversationsList({ rows }: { rows: ConversationRow[] }) {
+export function ConversationsList({
+  companyId,
+  initialRows,
+}: {
+  companyId: string
+  initialRows: ConversationRow[]
+}) {
+  const [rows, setRows] = useState<ConversationRow[]>(initialRows)
   const [query, setQuery] = useState("")
   const [activeTag, setActiveTag] = useState<string | null>(null)
+
+  // Live: a new message or a status change refetches the list (realtime where
+  // the table is published, the 20 second poll everywhere else).
+  const refresh = useCallback(async () => {
+    const supabase = createClient()
+    const { data, error } = await supabase
+      .from("leads")
+      .select(CONVERSATION_LIST_SELECT)
+      .eq("company_id", companyId)
+      .order("last_message_at", { ascending: false, nullsFirst: false })
+    if (error || !data) return
+    setRows(toConversationRows(data))
+  }, [companyId])
+
+  useVisiblePoll(refresh, 20_000)
+  useCompanyRealtime(companyId, ["conversations", "leads"], () => { void refresh() })
 
   // Tag counts over the FULL list — chips always show the real population,
   // so you can see "Booked 12" even while another filter is active.
@@ -130,7 +107,7 @@ export function ConversationsList({ rows }: { rows: ConversationRow[] }) {
             type="search"
             value={query}
             onChange={(e) => setQuery(e.target.value)}
-            placeholder="Search by name, phone, or channel…"
+            placeholder="Search by name, phone or channel"
             aria-label="Search conversations"
             className="w-full h-11 pl-10 pr-10 rounded-lg bg-background border border-border text-sm placeholder:text-muted-foreground/70 focus:outline-none focus:ring-2 focus:ring-[#F97316]/40 focus:border-[#F97316]/50 transition-shadow"
           />
@@ -169,11 +146,11 @@ export function ConversationsList({ rows }: { rows: ConversationRow[] }) {
                 aria-pressed={active}
                 className={`h-8 pl-2.5 pr-3 rounded-full border text-xs font-medium flex items-center gap-1.5 transition-all ${
                   active
-                    ? CHIP_ACTIVE[tag] ?? "bg-foreground text-background border-foreground"
+                    ? TAG_STYLE.get(tag)?.chip ?? "bg-foreground text-background border-foreground"
                     : "bg-background text-foreground/80 border-border hover:border-foreground/30 hover:bg-muted/40"
                 }`}
               >
-                <span className={`w-1.5 h-1.5 rounded-full ${active ? "bg-white/90" : CHIP_DOT[tag] ?? "bg-muted-foreground"}`} />
+                <span className={`w-1.5 h-1.5 rounded-full ${active ? "bg-white/90" : TAG_STYLE.get(tag)?.dot ?? "bg-muted-foreground"}`} />
                 {tag}
                 <span className={`tabular-nums ${active ? "opacity-80" : "opacity-50"}`}>{tagCounts.get(tag)}</span>
               </button>
@@ -216,7 +193,7 @@ export function ConversationsList({ rows }: { rows: ConversationRow[] }) {
             <div className="px-5 py-16 text-center">
               <MessageSquare className="w-10 h-10 text-muted-foreground/30 mx-auto mb-3" />
               <p className="text-sm text-muted-foreground">No conversations yet.</p>
-              <p className="text-xs text-muted-foreground mt-1">Conversations will appear here once your AI starts texting leads.</p>
+              <p className="text-xs text-muted-foreground mt-1">Threads show here as soon as the first text goes out to a lead.</p>
             </div>
           ) : filtered.length === 0 ? (
             <div className="px-5 py-14 text-center">
@@ -225,13 +202,13 @@ export function ConversationsList({ rows }: { rows: ConversationRow[] }) {
               <button type="button" onClick={clearAll} className="text-xs text-[#F97316] hover:underline mt-2">Clear filters</button>
             </div>
           ) : (
-            filtered.map((lead, i) => (
+            filtered.map((lead) => (
               <motion.a
                 key={lead.id}
                 layout="position"
                 initial={{ opacity: 0, y: 6 }}
                 animate={{ opacity: 1, y: 0 }}
-                transition={{ delay: Math.min(i, 12) * 0.02, duration: 0.18, ease: "easeOut" }}
+                transition={{ duration: 0.18, ease: "easeOut" }}
                 href={`/leads/${lead.id}?from=conversations`}
                 className="flex items-center justify-between px-5 py-4 hover:bg-muted/30 transition-colors"
               >
@@ -245,33 +222,33 @@ export function ConversationsList({ rows }: { rows: ConversationRow[] }) {
                         || (lead.channels.includes("messenger") ? "Messenger lead" : "Lead")}
                     </p>
                     <p className="text-xs text-muted-foreground">
-                      {lead.phone?.startsWith("msgr:")
-                        ? lead.channels.map((c) => CHANNEL_LABEL[c] ?? c).join(" · ")
-                        : lead.phone}
+                      {hasRealPhone(lead.phone)
+                        ? lead.phone
+                        : lead.channels.map((c) => CHANNEL_LABEL[c] ?? c).join(" · ") || "No phone on file"}
                     </p>
                   </div>
                 </div>
                 <div className="flex items-center gap-4 shrink-0">
-                  {!lead.phone?.startsWith("msgr:") && lead.channels.length > 0 && (
+                  {hasRealPhone(lead.phone) && lead.channels.length > 0 && (
                     <span className="text-xs text-muted-foreground hidden md:inline">
                       {lead.channels.map((c) => CHANNEL_LABEL[c] ?? c).join(" · ")}
                     </span>
                   )}
                   <span className="text-xs text-muted-foreground flex items-center gap-1">
                     <MessageSquare className="w-3 h-3" />
-                    {lead.messageCount} messages
+                    {lead.messageCount} message{lead.messageCount === 1 ? "" : "s"}
                   </span>
                   <span className="text-xs text-muted-foreground hidden md:flex items-center gap-1">
                     <Clock className="w-3 h-3" />
                     {lead.last_message_at ? formatDistanceToNow(lead.last_message_at) : "—"}
                   </span>
                   {lead.ai_paused && (
-                    <Badge variant="outline" className="text-xs bg-amber-500/15 text-amber-600 border-amber-500/30">
-                      human handling
+                    <Badge variant="outline" className="text-xs bg-amber-50 text-amber-700 border-amber-200">
+                      You are handling
                     </Badge>
                   )}
-                  <Badge variant="outline" className={`text-xs ${STATUS_BADGE[lead.status] ?? ""}`}>
-                    {STATUS_LABEL[lead.status] ?? lead.status.replace(/_/g, " ")}
+                  <Badge variant="outline" className={`text-xs ${leadStatusBadge(lead.status)}`}>
+                    {leadStatusLabel(lead.status)}
                   </Badge>
                 </div>
               </motion.a>

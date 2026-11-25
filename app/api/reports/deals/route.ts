@@ -16,8 +16,10 @@ export async function GET(req: NextRequest) {
 
   let query = supabase
     .from("leads")
-    .select("id, first_name, last_name, phone, deal_value, refund_amount, refund_note, closed_at, closed_job_type, closed_technician_id, closed_technician_name, status")
+    .select("id, first_name, last_name, phone, deal_value, refund_amount, refund_note, closed_at, closed_job_type, status")
     .eq("company_id", profile.company_id)
+    .eq("excluded_from_stats", false)
+    .is("deleted_at", null)
     .in("status", ["closed", "closed_won"])
     .not("deal_value", "is", null)
     .order("closed_at", { ascending: false })
@@ -41,24 +43,20 @@ export async function PATCH(req: NextRequest) {
   if (!profile?.company_id) return NextResponse.json({ error: "No company" }, { status: 400 })
 
   const body = await req.json()
-  const { id, dealValue, closedJobType, closedTechnicianId, closedTechnicianName } = body
+  const { id, dealValue, closedJobType } = body
 
   if (!id) return NextResponse.json({ error: "Missing id" }, { status: 400 })
 
   const update: Record<string, unknown> = {}
   if (dealValue !== undefined) update.deal_value = Number(dealValue)
   if (closedJobType !== undefined) update.closed_job_type = closedJobType || null
-  if (closedTechnicianId !== undefined) {
-    update.closed_technician_id = closedTechnicianId || null
-    update.closed_technician_name = closedTechnicianName || null
-  }
 
   const { data, error } = await supabase
     .from("leads")
     .update(update)
     .eq("id", id)
     .eq("company_id", profile.company_id)
-    .select("id, first_name, last_name, phone, deal_value, refund_amount, refund_note, closed_at, closed_job_type, closed_technician_id, closed_technician_name, status")
+    .select("id, first_name, last_name, phone, deal_value, refund_amount, refund_note, closed_at, closed_job_type, status")
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })

@@ -1,9 +1,11 @@
 import { NextRequest, NextResponse } from "next/server"
 import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase-server"
 import { parseLeadPhone, isPlaceholderPhone } from "@/lib/twilio"
+import { JOB_TYPES } from "@/lib/job-types"
 
 /**
- * PATCH /api/leads/<id>/details — edit a lead's identity fields from the CRM.
+ * PATCH /api/leads/<id>/details — edit a lead's identity fields, job type and
+ * notes from the CRM.
  *
  * Exists because the AI could not always capture a name (Messenger profile
  * lookups need Advanced Access, and a lead may simply never say it), which
@@ -46,6 +48,21 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     patch.zip = z || null
   }
 
+  // Job type: one of the flooring job types, or cleared.
+  if ("job_type" in body) {
+    const jt = str(body.job_type)
+    if (jt && !(JOB_TYPES as readonly string[]).includes(jt)) {
+      return NextResponse.json({ error: "That job type is not in the list." }, { status: 400 })
+    }
+    patch.job_type = jt || null
+  }
+
+  // Notes keep their line breaks; only the length is capped.
+  if ("notes" in body) {
+    const n = typeof body.notes === "string" ? body.notes.replace(/\r\n/g, "\n").trim() : ""
+    patch.notes = n.slice(0, 5000) || null
+  }
+
   if ("email" in body) {
     const e = str(body.email).toLowerCase()
     if (e && !/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test(e)) {
@@ -77,7 +94,7 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     return NextResponse.json({ error: "Nothing to update" }, { status: 400 })
   }
 
-  const { error } = await db.from("leads").update(patch).eq("id", id)
+  const { data: saved, error } = await db.from("leads").update(patch).eq("id", id).select().single()
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
 
   // Keep Housecall Pro in step — otherwise the office keeps seeing "Unknown"
@@ -102,5 +119,5 @@ export async function PATCH(req: NextRequest, ctx: { params: Promise<{ id: strin
     }
   }
 
-  return NextResponse.json({ ok: true, updated: Object.keys(patch), hcpUpdated })
+  return NextResponse.json({ ok: true, updated: Object.keys(patch), hcpUpdated, lead: saved })
 }

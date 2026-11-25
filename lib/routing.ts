@@ -130,6 +130,45 @@ export function zipsWithinRadius(centerZip: string | null | undefined, radiusMil
   return out.sort()
 }
 
+/**
+ * All US zips whose centroid lies inside a bounding box (a Google Places
+ * viewport for a city or county). West greater than east means the box crosses
+ * the antimeridian (Aleutians); handled so Alaska does not come back empty.
+ */
+export function zipsInBounds(b: { north: number; south: number; east: number; west: number }): string[] {
+  const out: string[] = []
+  const wraps = b.west > b.east
+  for (const [zip, [lat, lng]] of Object.entries(ZIPS)) {
+    if (lat < b.south || lat > b.north) continue
+    const inLng = wraps ? (lng >= b.west || lng <= b.east) : (lng >= b.west && lng <= b.east)
+    if (inLng) out.push(zip)
+  }
+  return out.sort()
+}
+
+/** All US zips whose centroid lies within `radiusMiles` of a point. */
+export function zipsNearPoint(point: GeoPoint, radiusMiles: number): string[] {
+  if (!(radiusMiles > 0)) return []
+  const out: string[] = []
+  for (const [zip, [lat, lng]] of Object.entries(ZIPS)) {
+    if (haversineMiles(point, { lat, lng }) <= radiusMiles) out.push(zip)
+  }
+  return out.sort()
+}
+
+/** The zip whose centroid is closest to a point, or null when none is within `maxMiles`. */
+export function nearestZip(point: GeoPoint, maxMiles = 15): string | null {
+  let best: string | null = null
+  let bestMiles = maxMiles
+  for (const [zip, [lat, lng]] of Object.entries(ZIPS)) {
+    // Cheap latitude reject before the trig: 1 degree of latitude is about 69 miles.
+    if (Math.abs(lat - point.lat) * 69 > bestMiles) continue
+    const miles = haversineMiles(point, { lat, lng })
+    if (miles <= bestMiles) { best = zip; bestMiles = miles }
+  }
+  return best
+}
+
 function haversineMiles(a: GeoPoint, b: GeoPoint): number {
   const R = 3958.8
   const dLat = ((b.lat - a.lat) * Math.PI) / 180

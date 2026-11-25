@@ -13,6 +13,14 @@ export async function sendSMS(to: string, body: string, from?: string, statusCal
   if (isPlaceholderPhone(to)) {
     throw new Error(`sendSMS: not a real phone number: "${to}"`)
   }
+  // Local simulation switch. With SMS_DRY_RUN=true nothing is sent: the message
+  // is logged and a fake id is returned, so a whole conversation can be run end
+  // to end on a developer machine without texting anyone. Never set in production.
+  if (process.env.SMS_DRY_RUN === "true") {
+    const sid = `SIM${Date.now().toString(36)}${Math.random().toString(36).slice(2, 8)}`
+    console.log(`[sms dry run] to ${to} from ${from ?? "(default)"}: ${body}`)
+    return { sid } as Awaited<ReturnType<ReturnType<typeof getTwilioClient>["messages"]["create"]>>
+  }
   const client = getTwilioClient()
   const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ""
   return client.messages.create({
@@ -23,36 +31,23 @@ export async function sendSMS(to: string, body: string, from?: string, statusCal
   })
 }
 
-// WhatsApp messages ride the same Twilio Messages API with a channel prefix.
-export async function sendWhatsApp(to: string, body: string, from: string) {
-  const client = getTwilioClient()
-  const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? ""
-  return client.messages.create({
-    to: to.startsWith("whatsapp:") ? to : `whatsapp:${to}`,
-    from: from.startsWith("whatsapp:") ? from : `whatsapp:${from}`,
-    body,
-    statusCallback: appUrl ? `${appUrl}/api/webhooks/sms-status` : undefined,
-  })
-}
-
 /**
- * Channel-aware outbound: WhatsApp leads get WhatsApp replies while Meta's
- * 24-hour session window is open; outside the window (or if WhatsApp fails)
- * we fall back to plain SMS — the WhatsApp number IS a phone number.
+ * The one outbound path for a text to a lead.
+ *
+ *   1. GoHighLevel, when the company has it connected: the message goes out from
+ *      their own A2P-registered number and lands on the thread their team watches.
+ *   2. Twilio, from the company's own number.
+ *
+ * A GHL failure falls through to Twilio rather than dropping the message.
  */
 export async function sendToLead(
   lead: { id?: string; phone: string; channel?: string | null; last_inbound_at?: string | null },
   body: string,
   from: string,
   companyId?: string
-): Promise<{ sid: string | null; channel: "whatsapp" | "sms" }> {
+): Promise<{ sid: string | null; channel: "sms" }> {
   const leadId = lead.id
-  const inWindow =
-    lead.last_inbound_at &&
-    Date.now() - new Date(lead.last_inbound_at).getTime() < 23 * 60 * 60 * 1000
 
-  // A company on GoHighLevel sends from their own A2P-verified number, and
-  // every message stays on the thread their team already watches in GHL.
   if (companyId) {
     try {
       const { ensureLeadGhlContact, sendGhlSms } = await import("@/lib/ghl")
@@ -60,33 +55,29 @@ export async function sendToLead(
       if (link) {
         const id = await sendGhlSms(link.conn, link.contactId, body)
         if (id) return { sid: id, channel: "sms" }
-        // GHL failed — fall through to Twilio rather than drop the message
       }
-    } catch { /* fall through */ }
+    } catch { /* fall through to Twilio */ }
   }
 
-  if (lead.channel === "whatsapp" && inWindow) {
-    // Level 3 first: the company's own WABA via Meta Cloud API
-    if (companyId) {
-      try {
-        const { getCloudConnection, sendCloudText } = await import("@/lib/whatsapp-cloud")
-        const conn = await getCloudConnection(companyId)
-        if (conn) {
-          const wamid = await sendCloudText(conn, lead.phone, body)
-          if (wamid) return { sid: wamid, channel: "whatsapp" }
-        }
-      } catch { /* fall through */ }
-    }
-    // Twilio-hosted WhatsApp sender
-    try {
-      const msg = await sendWhatsApp(lead.phone, body, from)
-      return { sid: msg.sid, channel: "whatsapp" }
-    } catch {
-      // fall through to SMS
-    }
-  }
   const msg = await sendSMS(lead.phone, body, from)
   return { sid: msg.sid, channel: "sms" }
+}
+
+/** Plain-words reason for the Twilio errors an owner can act on. */
+export function describeTwilioError(err: unknown): string {
+  const code = (err as { code?: number } | null)?.code
+  switch (code) {
+    case 21610: return "This person opted out of texts (replied STOP), so the message was not sent."
+    case 21211:
+    case 21614: return "That phone number is not a valid mobile number."
+    case 21408: return "Texting to that country is not enabled on the account."
+    case 21603:
+    case 21606:
+    case 21659: return "The company texting number is missing or no longer active. Reserve a number in Settings."
+    case 30034: return "The texting number is not registered with US carriers yet (A2P 10DLC), so carriers block it."
+    case 20003: return "The texting provider rejected our credentials. Check the Twilio keys."
+    default:    return (err as Error | null)?.message || "The text could not be sent."
+  }
 }
 
 export function validateTwilioSignature(

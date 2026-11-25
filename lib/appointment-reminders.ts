@@ -2,6 +2,8 @@ import { createServiceRoleClient } from "@/lib/supabase-server"
 import { serviceTimeZone } from "@/lib/timezones"
 import { sendAppointmentEmail, type EmailTemplateType, type GmailCredentials } from "@/lib/email"
 import { sendSMS, sendToLead, getTwilioClient } from "@/lib/twilio"
+import { serviceCopy } from "@/lib/service-copy"
+import { voiceEnabled } from "@/lib/voice-enabled"
 
 /** Automation gate for the appointment pipeline. An opted-out / paused /
  *  closed / deleted lead must receive NOTHING automated — the pipeline had
@@ -188,7 +190,7 @@ export async function sendConfirmations(appointmentId: string) {
     const meetLink = (apt as { google_meet_link?: string | null }).google_meet_link ?? null
     const smsBody = meetLink
       ? `${companyName}: You're confirmed for ${formattedDate} at ${formattedTime}. Join here: ${meetLink} — the link is also in your email. Reply RESCHEDULE or CANCEL if needed.`
-      : `${companyName}: Your appointment is confirmed for ${formattedDate} at ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. Reply RESCHEDULE or CANCEL if needed.`
+      : `${companyName}: Your ${serviceCopy(company.service_type).visit} is confirmed for ${formattedDate} at ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. Reply RESCHEDULE or CANCEL if needed.`
 
     try {
       const { sid: twilioSid } = await sendToLead(
@@ -223,7 +225,7 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
     .select(`
       id, lead_id, company_id, scheduled_at, confirmation_requested_at, address,
       leads(first_name, phone),
-      companies(name)
+      companies(name, service_type)
     `)
     .eq("id", appointmentId)
     .single()
@@ -236,7 +238,7 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
   if (apt.confirmation_requested_at) return  // already sent
 
   const lead    = apt.leads as unknown as { first_name: string | null; phone: string } | null
-  const company = apt.companies as unknown as { name: string } | null
+  const company = apt.companies as unknown as { name: string; service_type: string | null } | null
   if (!lead || !company) return
 
   const { data: agentCfg } = await supabase
@@ -266,7 +268,13 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
     hour: "numeric", minute: "2-digit", timeZone: timezone,
   })
 
-  const body = `Hi ${firstName}, this is ${agentName} confirming your upcoming appointment on ${dayLabel} at ${timeLabel}. Can you confirm you'll be available? Reply YES to confirm or NO to reschedule.`
+  const copy = serviceCopy(company.service_type)
+  // Flooring: a measure with one decision maker missing usually ends in "I need
+  // to talk to my husband", so the day-before text says it plainly.
+  const everyoneHome = copy.trade === "flooring"
+    ? " If more than one person decides on the floors, it helps to have everyone there."
+    : ""
+  const body = `Hi ${firstName}, this is ${agentName} with ${company.name}, confirming your ${copy.visit} on ${dayLabel} at ${timeLabel}.${everyoneHome} Reply YES to confirm or NO to reschedule.`
 
   // Quiet hours — defer (flag stays unset; retried next cron pass in-window)
   {
@@ -297,7 +305,8 @@ export async function sendConfirmationRequest(appointmentId: string): Promise<vo
       confirmation_requested_at: new Date().toISOString(),
     }).eq("id", appointmentId)
 
-    // Schedule the no-response voice call for 2 hours after this SMS
+    // Schedule the no-response follow-up (a call when the voice agent is on, a
+    // second text when it is off) for 2 hours after this SMS
     const callAt = new Date(Date.now() + 2 * 60 * 60 * 1000)
     // If callAt is after 7pm local time, reschedule to 9am day-of-appointment in company timezone
     const callHour = parseInt(callAt.toLocaleString("en-US", { hour: "2-digit", hour12: false, timeZone: timezone }))
@@ -333,7 +342,7 @@ export async function triggerNoResponseCall(appointmentId: string): Promise<void
       id, lead_id, company_id, scheduled_at, confirmation_status,
       no_response_call_scheduled,
       leads(phone),
-      companies(name)
+      companies(name, service_type)
     `)
     .eq("id", appointmentId)
     .single()
@@ -360,8 +369,41 @@ export async function triggerNoResponseCall(appointmentId: string): Promise<void
 
   if (!phoneNum?.phone_number) return
 
+  // Voice agent off (the default): no call. One more short text does the same
+  // job, and the flags are set either way so the cron does not pick this
+  // appointment up again every ten minutes.
+  if (!(await voiceEnabled(apt.company_id))) {
+    try {
+      const company = apt.companies as unknown as { name: string; service_type?: string | null } | null
+      const { data: cfg } = await supabase
+        .from("ai_agent_config").select("timezone").eq("company_id", apt.company_id).maybeSingle()
+      const { data: full } = await supabase
+        .from("appointments").select("address").eq("id", appointmentId).maybeSingle()
+      const tz = serviceTimeZone((full?.address as string | null) ?? null, cfg?.timezone ?? "America/New_York")
+      const localHour = parseInt(new Date().toLocaleString("en-US", { timeZone: tz, hour: "numeric", hour12: false }), 10) % 24
+      if (localHour < 8 || localHour >= 21) return // quiet hours: try again on a later pass
+      const when = new Date(apt.scheduled_at).toLocaleString("en-US", {
+        weekday: "long", hour: "numeric", minute: "2-digit", timeZone: tz,
+      })
+      const copy = serviceCopy(company?.service_type ?? null)
+      const nudge = `${company?.name ?? "Hi"}: just checking you're still good for your ${copy.visit} ${when}. Reply YES to confirm or NO if you need another time.`
+      const { sid } = await sendToLead(
+        { id: apt.lead_id, phone: lead.phone, channel: "sms" },
+        nudge, phoneNum.phone_number, apt.company_id
+      )
+      await supabase.from("conversations").insert({
+        lead_id: apt.lead_id, company_id: apt.company_id, direction: "outbound",
+        sent_by: "reminder", body: nudge, twilio_sid: sid, channel: "sms",
+      })
+    } catch (err) {
+      console.error(`[reminders] second confirmation text failed for ${appointmentId}:`, err)
+    }
+    await supabase.from("appointments").update({ no_response_call_scheduled: true }).eq("id", appointmentId)
+    return
+  }
+
   try {
-    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://app.leadreply.ai"
+    const appUrl = process.env.NEXT_PUBLIC_APP_URL ?? "https://fieldbuiltai.com"
     const twilio = getTwilioClient()
 
     await twilio.calls.create({
@@ -418,7 +460,7 @@ export async function notifyTechnicianConfirmed(appointmentId: string): Promise<
   })
   const leadName = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || lead.phone
 
-  const body = `Appointment confirmed — ${leadName} (${lead.phone}), ${apt.address ?? "address TBD"}, ${timeLabel}${apt.notes ? `, ${apt.notes}` : ""}`
+  const body = `Confirmed: ${leadName} (${lead.phone}), ${apt.address ?? "address TBD"}, ${timeLabel}${apt.notes ? `, ${apt.notes}` : ""}`
 
   const { data: phoneNum } = await supabase
     .from("phone_numbers")
@@ -437,6 +479,41 @@ export async function notifyTechnicianConfirmed(appointmentId: string): Promise<
   }
 }
 
+/**
+ * After a visit's time has passed: booked → measure_done, and the owner gets one
+ * text telling them the quote is theirs to send. The quote chase itself starts
+ * when someone marks the quote as sent in the CRM (lib/sequences startQuoteChase).
+ * Sales tenants (video calls) are left alone: there is no measure and no quote.
+ */
+async function advanceLeadAfterVisit(appointmentId: string, leadId: string, companyId: string): Promise<void> {
+  const supabase = createServiceRoleClient()
+  const { data: company } = await supabase
+    .from("companies").select("service_type").eq("id", companyId).maybeSingle()
+  if (company?.service_type === "fieldbuilt_sales") return
+
+  const { data: moved } = await supabase
+    .from("leads")
+    .update({ status: "measure_done" })
+    .eq("id", leadId)
+    .eq("status", "appointment_booked")
+    .select("id, first_name, last_name, phone, metadata")
+  const lead = moved?.[0]
+  if (!lead) return
+
+  const meta = ((lead.metadata ?? {}) as Record<string, unknown>)
+  await supabase.from("leads")
+    .update({ metadata: { ...meta, measure_done_at: new Date().toISOString(), measure_appointment_id: appointmentId } })
+    .eq("id", leadId)
+
+  const name = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || (lead.phone as string)
+  const copy = serviceCopy(company?.service_type ?? null)
+  const { notifyOwner } = await import("@/lib/notifications")
+  await notifyOwner(
+    companyId,
+    `${copy.label} done: ${name}. Send the quote, then mark "Quote sent" on the lead in your CRM and we'll follow up until they decide. If they did not show, mark that instead.`
+  )
+}
+
 export async function processAppointmentReminders() {
   const supabase = createServiceRoleClient()
   const now = new Date()
@@ -445,12 +522,30 @@ export async function processAppointmentReminders() {
   // Appointments that were scheduled in the past and still show as "scheduled" or
   // confirmation_status not "completed" — mark them complete so the calendar is clean.
   const oneHourAgo = new Date(now.getTime() - 60 * 60 * 1000)
-  await supabase
+  const { data: justPassed } = await supabase
     .from("appointments")
-    .update({ confirmation_status: "completed" })
+    .select("id, lead_id, company_id, scheduled_at")
     .eq("status", "scheduled")
     .in("confirmation_status", ["confirmed", "pending_confirmation", "no_response"])
     .lt("scheduled_at", oneHourAgo.toISOString())
+    .limit(200)
+  if (justPassed?.length) {
+    // status moves to "completed" too (the CRM uses the same value when a person
+    // marks a measure done). Leaving it "scheduled" kept the lead's one-active-
+    // appointment slot occupied forever, so a later booking for the same lead
+    // collided with the old visit.
+    await supabase
+      .from("appointments")
+      .update({ confirmation_status: "completed", status: "completed" })
+      .in("id", justPassed.map((a) => a.id))
+    // Pipeline: the visit happened, so a booked lead moves to "measure done,
+    // quote owed". Only from appointment_booked: a lead a person already moved
+    // (quote sent, signed, lost, needs attention) is left where it is.
+    for (const a of justPassed) {
+      await advanceLeadAfterVisit(a.id, a.lead_id, a.company_id).catch((err) =>
+        console.error(`[reminders] post-visit pipeline step failed for apt ${a.id}:`, err))
+    }
+  }
 
   // ── 1. Send 24h confirmation requests ────────────────────────────────────────
   // Find appointments 23–25 hours from now that haven't had a confirmation request yet.
@@ -560,6 +655,7 @@ export async function processAppointmentReminders() {
     const leadName  = `${lead.first_name ?? ""} ${lead.last_name ?? ""}`.trim() || "there"
     const firstName = lead.first_name ?? "there"
     const companyName = emailTpl?.from_name || company.name
+    const visit = serviceCopy(company.service_type).visit
 
     const emailData = {
       leadName,
@@ -630,7 +726,7 @@ export async function processAppointmentReminders() {
         processed++
       }
       if (!apt.reminder_2d_sms_sent && emailTpl?.sms_reminder_1d_enabled !== false) {
-        const body = `${companyName}: Just a reminder your appointment is in 2 days — ${formattedDate} at ${formattedTime}. Reply if you need to reschedule.`
+        const body = `${companyName}: Just a reminder your ${visit} is in 2 days, ${formattedDate} at ${formattedTime}. Reply if you need to reschedule.`
         await sendReminderSMS(body, "reminder_2d_sms_sent")
         processed++
       }
@@ -648,7 +744,7 @@ export async function processAppointmentReminders() {
       }
       // Only send 1d SMS if NO confirmation request was sent (avoid double-texting)
       if (!apt.reminder_1d_sms_sent && !confirmationAlreadySent && emailTpl?.sms_reminder_1d_enabled !== false) {
-        const body = `${companyName}: Reminder — your appointment is tomorrow at ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. Reply to reschedule or cancel.`
+        const body = `${companyName}: Reminder, your ${visit} is tomorrow at ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. Reply to reschedule or cancel.`
         await sendReminderSMS(body, "reminder_1d_sms_sent")
         processed++
       }
@@ -665,8 +761,8 @@ export async function processAppointmentReminders() {
         const isConfirmed   = (apt as { confirmation_status?: string | null }).confirmation_status === "confirmed"
         const alreadyAsked  = !!(apt as { confirmation_requested_at?: string | null }).confirmation_requested_at
         const body = isConfirmed
-          ? `${companyName}: Your appointment starts in 2 hours — ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. See you soon!`
-          : `Hi ${firstName}, this is ${agentName} — just checking in to confirm your appointment today at ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. Reply YES to confirm or NO to reschedule.`
+          ? `${companyName}: Your ${visit} is in 2 hours, ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. See you soon.`
+          : `Hi ${firstName}, this is ${agentName} with ${companyName}, checking you're still good for your ${visit} today at ${formattedTime}${apt.address ? ` at ${apt.address}` : ""}. Reply YES to confirm or NO to reschedule.`
         await sendReminderSMS(body, "reminder_2h_sms_sent")
         // If we just sent a confirmation request, ensure confirmation_requested_at is set
         // so handleConfirmationReply in the SMS webhook can intercept their YES/NO reply.

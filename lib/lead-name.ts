@@ -1,4 +1,5 @@
 import { createServiceRoleClient } from "@/lib/supabase-server"
+import { logUsage } from "@/lib/usage-log"
 import { anthropic } from "@/lib/claude"
 
 /**
@@ -63,6 +64,7 @@ export async function ensureLeadName(leadId: string): Promise<void> {
       }],
     })
 
+    logUsage({ site: "lead-name", leadId, model: "claude-haiku-4-5-20251001", usage: res.usage })
     const block = res.content.find((b) => b.type === "tool_use")
     if (!block || block.type !== "tool_use") return
     const out = block.input as { first_name?: string; last_name?: string }

@@ -3,10 +3,13 @@ import Link from "next/link"
 import { createServerSupabaseClient } from "@/lib/supabase-server"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
-import { Phone, Link2, CreditCard, Database, ArrowRight, Sparkles, FlaskConical } from "lucide-react"
+import { Phone, Link2, CreditCard, Database, ArrowRight, Sparkles, FlaskConical, ClipboardList } from "lucide-react"
 import { TestLeadButton } from "@/components/settings/TestLeadButton"
 import { CompanyInfoEditor } from "@/components/settings/CompanyInfoEditor"
 import { CallForwardingCard } from "@/components/settings/CallForwardingCard"
+import { TextingStatusCard } from "@/components/settings/TextingStatusCard"
+import { LeadWebhookCard } from "@/components/settings/LeadWebhookCard"
+import { voiceEnabled } from "@/lib/voice-enabled"
 import { PhoneForwarded } from "lucide-react"
 
 export default async function SettingsPage() {
@@ -27,12 +30,8 @@ export default async function SettingsPage() {
     integration_mode: string | null;
   } | null
 
-  const { data: phoneData } = await supabase
-    .from("phone_numbers")
-    .select("phone_number")
-    .eq("company_id", profile?.company_id ?? "")
-    .eq("is_active", true)
-    .single()
+  // Call forwarding only exists for accounts with the AI voice agent switched on.
+  const voiceOn = await voiceEnabled(profile?.company_id ?? null)
 
   return (
     <div className="p-6 max-w-2xl space-y-6">
@@ -58,36 +57,52 @@ export default async function SettingsPage() {
         </CardContent>
       </Card>
 
-      {/* AI phone number */}
-      <Card>
+      {/* Account setup: everything collected at onboarding, editable */}
+      <Link href="/settings/setup">
+        <Card className="hover:border-primary/40 transition-colors cursor-pointer">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ClipboardList className="w-4 h-4 text-muted-foreground" />
+                <CardTitle className="text-base">Account setup</CardTitle>
+              </div>
+              <ArrowRight className="w-4 h-4 text-muted-foreground" />
+            </div>
+          </CardHeader>
+          <CardContent>
+            <p className="text-sm text-muted-foreground">
+              Service areas, who counts as a qualified lead, your offer, photos, ad access and your measure calendar.
+            </p>
+          </CardContent>
+        </Card>
+      </Link>
+
+      {/* Texting number and carrier registration */}
+      <Card id="texting">
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Phone className="w-4 h-4 text-muted-foreground" />
-            <CardTitle className="text-base">AI Phone Number</CardTitle>
+            <CardTitle className="text-base">Texting number</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-lg font-mono font-semibold text-primary">
-            {phoneData?.phone_number ?? "Not provisioned yet"}
-          </p>
-          <p className="text-xs text-muted-foreground mt-1">
-            Your AI texts and calls every lead from this number. Replies go straight to your CRM.
-          </p>
+          <TextingStatusCard />
         </CardContent>
       </Card>
 
-      {/* Connect existing business number */}
-      <Card>
-        <CardHeader className="pb-3">
-          <div className="flex items-center gap-2">
-            <PhoneForwarded className="w-4 h-4 text-muted-foreground" />
-            <CardTitle className="text-base">Connect Your Existing Business Number</CardTitle>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <CallForwardingCard />
-        </CardContent>
-      </Card>
+      {voiceOn && (
+        <Card>
+          <CardHeader className="pb-3">
+            <div className="flex items-center gap-2">
+              <PhoneForwarded className="w-4 h-4 text-muted-foreground" />
+              <CardTitle className="text-base">Connect Your Existing Business Number</CardTitle>
+            </div>
+          </CardHeader>
+          <CardContent>
+            <CallForwardingCard />
+          </CardContent>
+        </Card>
+      )}
 
       {/* Test AI */}
       <Card>
@@ -99,29 +114,22 @@ export default async function SettingsPage() {
         </CardHeader>
         <CardContent className="space-y-3">
           <p className="text-sm text-muted-foreground">
-            Runs a test lead through your full AI setup and shows you the exact opening message your AI would send. No real SMS is sent.
+            Runs a test lead through your full setup and shows the exact opening message your assistant would send. No text is sent.
           </p>
           <TestLeadButton />
         </CardContent>
       </Card>
 
-      {/* Webhook */}
-      <Card>
+      {/* Lead webhook and field mapping */}
+      <Card id="lead-webhook">
         <CardHeader className="pb-3">
           <div className="flex items-center gap-2">
             <Link2 className="w-4 h-4 text-muted-foreground" />
-            <CardTitle className="text-base">Webhook URL</CardTitle>
+            <CardTitle className="text-base">Lead webhook</CardTitle>
           </div>
         </CardHeader>
         <CardContent>
-          <p className="text-xs text-muted-foreground mb-2">
-            Paste this URL into any lead source (Google Ads, Angi, your website form):
-          </p>
-          <div className="bg-muted rounded-lg p-3">
-            <code className="text-xs text-primary break-all">
-              {`https://app.leadreply.ai/api/webhooks/lead?secret=${company?.webhook_secret ?? "••••••••"}`}
-            </code>
-          </div>
+          <LeadWebhookCard />
         </CardContent>
       </Card>
 
@@ -139,7 +147,7 @@ export default async function SettingsPage() {
           </CardHeader>
           <CardContent>
             <p className="text-sm text-muted-foreground">
-              Everything your AI knows about your business — services, areas, USPs, certifications. Edit and re-scan your website anytime.
+              Everything your assistant knows about your business: services, areas, what sets you apart, credentials. Edit it or re-scan your website anytime.
             </p>
           </CardContent>
         </Card>
@@ -176,12 +184,12 @@ export default async function SettingsPage() {
         <CardContent className="space-y-3">
           <div className="flex items-center justify-between">
             <span className="text-sm text-muted-foreground">Current plan</span>
-            <Badge variant="outline" className="bg-sky-500/15 text-sky-400 border-sky-500/20 capitalize">
+            <Badge variant="outline" className="bg-muted text-foreground border-border capitalize">
               {company?.plan ?? "trial"}
             </Badge>
           </div>
           {company?.plan === "trial" && (
-            <p className="text-sm text-amber-400">
+            <p className="text-sm text-amber-700">
               Trial ends {new Date(company.trial_ends_at).toLocaleDateString("en-US", { month: "long", day: "numeric", year: "numeric" })}
             </p>
           )}

@@ -72,9 +72,10 @@ export default async function DashboardPage({
       .eq("excluded_from_stats", false)
       .is("deleted_at", null)
       .gte("created_at", sinceIso),
+    // Measures booked in the period that were not cancelled (a completed one still counts)
     supabase.from("appointments").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)
-      .eq("status", "scheduled")
+      .neq("status", "cancelled")
       .gte("created_at", sinceIso),
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)
@@ -86,7 +87,7 @@ export default async function DashboardPage({
       .eq("company_id", profile.company_id)
       .eq("excluded_from_stats", false)
       .is("deleted_at", null)
-      .not("status", "in", '("closed","closed_won","closed_lost","unqualified","appointment_booked","needs_attention")')
+      .not("status", "in", '("closed","closed_won","closed_lost","lost","unqualified","appointment_booked","measure_done","quote_sent","needs_attention")')
       .lt("last_inbound_at", new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString()),
     supabase.from("leads").select("*", { count: "exact", head: true })
       .eq("company_id", profile.company_id)

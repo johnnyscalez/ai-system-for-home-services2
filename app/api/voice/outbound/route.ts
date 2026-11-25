@@ -1,7 +1,7 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase"
-import { createServiceRoleClient } from "@/lib/supabase-server"
+import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase-server"
 import { getTwilioClient } from "@/lib/twilio"
+import { voiceEnabled } from "@/lib/voice-enabled"
 
 export const runtime = "nodejs"
 
@@ -9,7 +9,9 @@ export const runtime = "nodejs"
 // Body: { leadId: string }
 // Initiates an outbound call from the company's Twilio number to the lead.
 export async function POST(req: NextRequest) {
-  const supabase = createClient()
+  // Server-side session. (This used the browser client, which has no cookies on
+  // the server, so the route answered 401 to everyone.)
+  const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -30,6 +32,9 @@ export async function POST(req: NextRequest) {
   if (!lead) return NextResponse.json({ error: "Lead not found" }, { status: 404 })
   if (lead.company_id !== profileRes.data?.company_id) {
     return NextResponse.json({ error: "Forbidden" }, { status: 403 })
+  }
+  if (!(await voiceEnabled(lead.company_id))) {
+    return NextResponse.json({ error: "The voice agent is switched off for this account." }, { status: 403 })
   }
   if (lead.ai_voice_paused) return NextResponse.json({ error: "Voice AI is paused for this lead" }, { status: 400 })
   if (["closed_won", "closed_lost"].includes(lead.status)) {

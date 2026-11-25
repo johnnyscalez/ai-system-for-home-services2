@@ -1,4 +1,5 @@
 import { createServiceRoleClient } from "@/lib/supabase-server"
+import { logUsage } from "@/lib/usage-log"
 
 // ─────────────────────────────────────────────────────────────────────────────
 // Quoted-price capture: what the AI actually SOLD in the conversation.
@@ -214,6 +215,7 @@ async function extractQuotedFromTranscript(leadId: string): Promise<number | nul
         `omit the field. Any language.\n\n${transcript}`,
     }],
   })
+  logUsage({ site: "pricing-extract-quote", leadId, model: "claude-haiku-4-5-20251001", usage: res.usage })
   const block = res.content.find((b) => b.type === "tool_use")
   if (!block || block.type !== "tool_use") return null
   const out = block.input as { total_dollars?: number }

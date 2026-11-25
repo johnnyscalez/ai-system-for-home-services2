@@ -46,23 +46,23 @@ export function buildEmailHtml(
   const configs = {
     confirmation: {
       badge: "Confirmed", badgeColor: "#16A34A",
-      headline: "Your Appointment is Confirmed ✓",
-      intro: customMessage || `Hi ${data.leadName}, your appointment with ${data.companyName} has been confirmed. We look forward to seeing you!`,
+      headline: "Your Measure is Confirmed ✓",
+      intro: customMessage || `Hi ${data.leadName}, your measure with ${data.companyName} has been confirmed. We look forward to seeing you!`,
     },
     reminder_2d: {
       badge: "Reminder", badgeColor: "#7C3AED",
-      headline: "Your Appointment is in 2 Days",
-      intro: customMessage || `Hi ${data.leadName}, just a quick reminder that your appointment with ${data.companyName} is coming up in 2 days.`,
+      headline: "Your Measure is in 2 Days",
+      intro: customMessage || `Hi ${data.leadName}, just a quick reminder that your measure with ${data.companyName} is coming up in 2 days.`,
     },
     reminder_1d: {
       badge: "Tomorrow", badgeColor: "#D97706",
-      headline: "Your Appointment is Tomorrow",
-      intro: customMessage || `Hi ${data.leadName}, your appointment with ${data.companyName} is tomorrow! We wanted to make sure you're all set.`,
+      headline: "Your Measure is Tomorrow",
+      intro: customMessage || `Hi ${data.leadName}, your measure with ${data.companyName} is tomorrow! We wanted to make sure you're all set.`,
     },
     reminder_2h: {
       badge: "Starting Soon", badgeColor: "#DC2626",
-      headline: "Your Appointment Starts in 2 Hours",
-      intro: customMessage || `Hi ${data.leadName}, your appointment with ${data.companyName} starts in just 2 hours. See you soon!`,
+      headline: "Your Measure Starts in 2 Hours",
+      intro: customMessage || `Hi ${data.leadName}, your measure with ${data.companyName} starts in just 2 hours. See you soon!`,
     },
   }
 
@@ -96,7 +96,7 @@ ${data.logoUrl
 <!-- Details card -->
 <table width="100%" cellpadding="0" cellspacing="0" border="0" style="background:#FAFAF8;border:1px solid #E7E5E4;border-radius:12px;margin-bottom:28px;">
 <tr><td style="padding:16px 24px;border-bottom:1px solid #E7E5E4;">
-<span style="color:#78716C;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Appointment Details</span>
+<span style="color:#78716C;font-size:11px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Measure Details</span>
 </td></tr>
 <tr><td style="padding:20px 24px;">
 <table width="100%" cellpadding="0" cellspacing="0" border="0">

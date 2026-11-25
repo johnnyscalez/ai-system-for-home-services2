@@ -15,14 +15,14 @@ import { buildEmailHtml, type EmailTemplateType } from "@/lib/email-builder"
 type TemplateKey = "confirmation" | "reminder_2d" | "reminder_1d" | "reminder_2h"
 
 const TABS: { key: TemplateKey; label: string; sublabel: string; icon: typeof Mail; color: string }[] = [
-  { key: "confirmation", label: "Confirmation", sublabel: "Sent immediately", icon: CheckCircle2, color: "text-emerald-500" },
+  { key: "confirmation", label: "Measure confirmation", sublabel: "Sent immediately", icon: CheckCircle2, color: "text-emerald-500" },
   { key: "reminder_2d", label: "2-Day Reminder", sublabel: "2 days before", icon: Clock, color: "text-[#F97316]" },
   { key: "reminder_1d", label: "1-Day Reminder", sublabel: "Day before", icon: Clock, color: "text-amber-500" },
   { key: "reminder_2h", label: "2-Hour Reminder", sublabel: "2 hrs before", icon: Clock, color: "text-red-500" },
 ]
 
 const BANNER_PRESETS = [
-  { color: "#F97316", label: "Purple" },
+  { color: "#F97316", label: "Orange" },
   { color: "#2563EB", label: "Blue" },
   { color: "#059669", label: "Green" },
   { color: "#DC2626", label: "Red" },
@@ -94,7 +94,7 @@ export function EmailTemplatesClient({
     serviceType,
     scheduledAt: new Date(Date.now() + 2 * 24 * 60 * 60 * 1000).toISOString(),
     address: "1234 Oak Street, Miami, FL 33101",
-    notes: "AC unit making loud noise, 10 years old",
+    notes: "LVP for the main floor, about 1,200 sq ft",
     timezone: "America/New_York",
     logoUrl: templates.logo_url,
     replyToEmail: templates.reply_to_email,
@@ -413,9 +413,9 @@ export function EmailTemplatesClient({
 
                   <div className="p-6 space-y-4">
                     {[
-                      { key: "sms_confirmation_enabled" as keyof Templates, label: "Confirmation SMS", desc: "Sent immediately when appointment is booked" },
-                      { key: "sms_reminder_1d_enabled" as keyof Templates, label: "24-hour reminder SMS", desc: "Sent the day before the appointment" },
-                      { key: "sms_reminder_2h_enabled" as keyof Templates, label: "2-hour reminder SMS", desc: "Sent 2 hours before the appointment" },
+                      { key: "sms_confirmation_enabled" as keyof Templates, label: "Confirmation SMS", desc: "Sent immediately when a measure is booked" },
+                      { key: "sms_reminder_1d_enabled" as keyof Templates, label: "2-day and 1-day reminder SMS", desc: "Sent 2 days and 1 day before the measure" },
+                      { key: "sms_reminder_2h_enabled" as keyof Templates, label: "2-hour reminder SMS", desc: "Sent 2 hours before the measure" },
                     ].map(({ key, label, desc }) => (
                       <div key={key} className="flex items-start gap-3 p-4 rounded-xl bg-[#FAFAF8] border border-[#E7E5E4]">
                         <button onClick={() => update(key, !(templates[key] !== false))}>
@@ -438,7 +438,7 @@ export function EmailTemplatesClient({
                         <span className="text-xs font-semibold text-[#F97316]">AI-powered replies</span>
                       </div>
                       <p className="text-xs text-[#78716C] leading-relaxed">
-                        If a lead replies to any reminder SMS, your AI agent automatically picks up the conversation. It can reschedule or cancel appointments, answer questions, and keep the lead engaged — all without any manual work.
+                        If a lead replies to any reminder SMS, your AI agent automatically picks up the conversation. It can reschedule or cancel measures, answer questions, and keep the lead engaged — all without any manual work.
                       </p>
                     </div>
                   </div>

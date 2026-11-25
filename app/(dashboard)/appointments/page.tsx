@@ -46,9 +46,9 @@ export default async function AppointmentsPage() {
 
       <div className="relative z-10 p-6 max-w-6xl space-y-6">
         <div>
-          <h1 className="text-2xl font-bold">Appointments</h1>
+          <h1 className="text-2xl font-bold">Measures</h1>
           <p className="text-sm text-muted-foreground mt-0.5">
-            Booked by your AI agent · updates in real-time · click any slot to manage it
+            Booked by your assistant or by you. Updates on its own. Click a measure to manage it.
           </p>
         </div>
 

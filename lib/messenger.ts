@@ -15,6 +15,10 @@
 
 const GRAPH = "https://graph.facebook.com/v21.0"
 
+// Any Supabase client flavour (service role or server) works with these helpers.
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+type MessengerDb = { from: (t: string) => any }
+
 export async function sendMessengerMessage(
   pageAccessToken: string,
   psid: string,
@@ -141,7 +145,7 @@ export type HistoryImportResult = {
  * (the webhook inserts it through the normal flow).
  */
 export async function importMessengerHistory(
-  db: { from: (t: string) => any },
+  db: MessengerDb,
   leadId: string,
   companyId: string,
   pageAccessToken: string,
@@ -150,8 +154,16 @@ export async function importMessengerHistory(
   currentText: string,
   humanOwnedWindowDays = 14
 ): Promise<HistoryImportResult> {
-  const history = await fetchConversationHistory(pageAccessToken, pageId, psid)
+  const HISTORY_LIMIT = 25
+  const history = await fetchConversationHistory(pageAccessToken, pageId, psid, HISTORY_LIMIT)
   if (history.length === 0) return { imported: 0, humanOwned: false }
+
+  // Which page-side messages are the Page's own automation (instant replies, ad
+  // questionnaires, canned prompts) rather than a person. Judged on the FULL thread:
+  // timing needs the neighbouring messages.
+  const pageTexts = await getPageAutomationTexts(pageAccessToken, pageId)
+  const automated = automationFlags(history, { pageTexts, threadComplete: history.length < HISTORY_LIMIT })
+  const automatedMsgs = new Set(history.filter((_, i) => automated[i]))
 
   // Drop the triggering message (newest lead-side entry matching its text)
   let dropped = false
@@ -188,7 +200,7 @@ export async function importMessengerHistory(
   const humanOwned = toImport.some(
     (m) =>
       m.fromPage &&
-      !isAutomationMessage(m.text) &&
+      !automatedMsgs.has(m) &&
       !ourSent.has(m.text.trim()) &&
       new Date(m.createdTime).getTime() >= cutoff
   )
@@ -221,9 +233,19 @@ export async function importMessengerHistory(
 // new thread for a page that runs an automation — observed live: 3 of 4 new
 // leads auto-paused because the questionnaire spoke first.
 //
-// Live human takeover is detected reliably by ECHO events (message_echoes),
-// which is the signal that should pause the AI. This classifier exists only so
-// the HISTORY guard doesn't mistake a robot for a person.
+// Wording alone cannot settle this: every Page writes its own questions, so a
+// fixed list written for one trade (it started as an HVAC list) reads another
+// trade's questionnaire as a person. A page-side message counts as AUTOMATION
+// when ANY of these holds:
+//   1. it matches a built-in pattern (system lines, generic canned prompts);
+//   2. it is word for word one of the Page's own configured automations that
+//      Graph lets us read (ice breakers, greeting, lead form questions);
+//   3. it arrived within ~3 seconds of the message before it, when that message
+//      was the lead's or was itself automation. No person reads and answers in
+//      three seconds; a bot always does;
+//   4. it opens the thread: nothing from the lead came before it. A person
+//      cannot start a Messenger thread with someone, only an ad's welcome flow can.
+// Everything else from the Page is a person.
 const AUTOMATION_PATTERNS: RegExp[] = [
   /auto-?label added/i,
   /lead stage set to/i,
@@ -236,17 +258,30 @@ const AUTOMATION_PATTERNS: RegExp[] = [
   /respondi[oó] a? ?una publicaci[oó]n/i, // ES "replied to a post" system line
   /you are responding to a user comment/i,
   /thanks for contacting us/i,
+  /thank(s| you) for (reaching out|your (message|interest|inquiry))/i,
   /we'?ve received your message/i,
+  /we'?ll (get back to|be in touch with) you (shortly|soon|as soon as)/i,
   /we noticed you'?re interested/i,
   /welcome to /i,
   /are you interested in our services/i,
+  /^(hi|hello|hey)[^.!?]{0,40}[.!]? (how can we help( you)?( today)?|what can we help you with)\??$/i,
+  /^how can we help( you)?( today)?\??$/i,
   /^what is your (zip|postal) code\??$/i,
   /^what is your email( address)?\??$/i,
   /^what is your phone number\??$/i,
+  /^what is your (full )?name\??$/i,
   /^what type of residence/i,
+  // Trade questionnaires seen on client Pages. Whole-line matches only: a rep who
+  // types a longer, personal version of the same question still reads as a person.
   /^how many furnaces/i,
   /^when was the last time you had your air ducts cleaned\??$/i,
   /^is there a single furnace or multiple units\??$/i,
+  /^what (type|kind) of floor(ing|s)? (are you|do you)[^?]{0,60}\??$/i,
+  /^which rooms?[^?]{0,60}\??$/i,
+  /^(roughly |about )?how many (square feet|sq\.? ?ft|rooms)[^?]{0,40}\??$/i,
+  /^when (are you|do you|would you)[^?]{0,60}(start|install|done|project|floors?)[^?]{0,20}\??$/i,
+  /^do you own (the|your) (home|house|property)\??$/i,
+  /^are you the homeowner\??$/i,
 ]
 
 /** Does this page-side message look like a bot/canned message rather than a person? */
@@ -254,6 +289,111 @@ export function isAutomationMessage(text: string): boolean {
   const t = text.trim()
   if (!t) return true
   return AUTOMATION_PATTERNS.some((re) => re.test(t))
+}
+
+const normalizeAutomationText = (text: string) =>
+  text.toLowerCase().replace(/[^\p{L}\p{N}]+/gu, " ").trim()
+
+/** How fast is too fast to be a person. Graph timestamps have one-second resolution. */
+export const FAST_REPLY_MS = 3000
+
+/**
+ * A single page-side message seen live (an echo event), judged without the rest of
+ * the thread: wording, the Page's configured automations, or a reply that landed
+ * within three seconds of the lead's last message.
+ */
+export function isAutomationEcho(input: {
+  text: string
+  echoMs: number | null
+  lastInboundMs: number | null
+  pageTexts?: Set<string>
+}): boolean {
+  if (isAutomationMessage(input.text)) return true
+  if (input.pageTexts?.has(normalizeAutomationText(input.text))) return true
+  if (input.echoMs != null && input.lastInboundMs != null) {
+    const gap = input.echoMs - input.lastInboundMs
+    if (gap >= -1000 && gap <= FAST_REPLY_MS) return true
+  }
+  return false
+}
+
+/**
+ * For every message in a chronological thread: is it Page automation?
+ * Lead-side messages are always false. See the four rules above.
+ */
+export function automationFlags(
+  history: HistoryMessage[],
+  opts?: {
+    /** Normalized texts of the Page's configured automations (getPageAutomationTexts) */
+    pageTexts?: Set<string>
+    /** True when `history` is the whole thread, not a truncated window */
+    threadComplete?: boolean
+  }
+): boolean[] {
+  const flags: boolean[] = new Array(history.length).fill(false)
+  let leadHasSpoken = false
+  for (let i = 0; i < history.length; i++) {
+    const m = history[i]
+    if (!m.fromPage) { leadHasSpoken = true; continue }
+
+    if (isAutomationMessage(m.text)) { flags[i] = true; continue }
+    if (opts?.pageTexts?.has(normalizeAutomationText(m.text))) { flags[i] = true; continue }
+    if (!leadHasSpoken && opts?.threadComplete) { flags[i] = true; continue }
+
+    const prev = history[i - 1]
+    if (prev) {
+      const gap = new Date(m.createdTime).getTime() - new Date(prev.createdTime).getTime()
+      if (gap >= 0 && gap <= FAST_REPLY_MS && (!prev.fromPage || flags[i - 1])) flags[i] = true
+    }
+  }
+  return flags
+}
+
+// The Page's own configured automations, read once per Page and cached. Best
+// effort: Graph exposes ice breakers, the greeting and lead-form questions, but
+// not Inbox instant replies (the timing rule covers those).
+const pageAutomationCache = new Map<string, { at: number; texts: Set<string> }>()
+const PAGE_AUTOMATION_TTL_MS = 6 * 60 * 60 * 1000
+
+export async function getPageAutomationTexts(pageAccessToken: string, pageId: string): Promise<Set<string>> {
+  const hit = pageAutomationCache.get(pageId)
+  if (hit && Date.now() - hit.at < PAGE_AUTOMATION_TTL_MS) return hit.texts
+  const texts = new Set<string>()
+  const add = (v: unknown) => {
+    if (typeof v !== "string") return
+    const n = normalizeAutomationText(v)
+    if (n.length >= 3) texts.add(n)
+  }
+  const get = async (path: string) => {
+    try {
+      const res = await fetch(`${GRAPH}/${path}${path.includes("?") ? "&" : "?"}access_token=${pageAccessToken}`, {
+        signal: AbortSignal.timeout(8000),
+      })
+      return res.ok ? await res.json() : null
+    } catch { return null }
+  }
+  const [profile, forms] = await Promise.all([
+    get(`${pageId}/messenger_profile?fields=ice_breakers,greeting`),
+    get(`${pageId}/leadgen_forms?fields=questions,context_card,thank_you_page&limit=25`),
+  ])
+  for (const entry of (profile?.data ?? []) as Array<Record<string, unknown>>) {
+    for (const g of (entry.greeting as Array<{ text?: string }> | undefined) ?? []) add(g.text)
+    for (const group of (entry.ice_breakers as Array<{ call_to_actions?: Array<{ question?: string }>; question?: string }> | undefined) ?? []) {
+      add(group.question)
+      for (const cta of group.call_to_actions ?? []) add(cta.question)
+    }
+  }
+  for (const form of (forms?.data ?? []) as Array<Record<string, unknown>>) {
+    for (const q of (form.questions as Array<{ label?: string }> | undefined) ?? []) add(q.label)
+    const card = form.context_card as { title?: string; content?: string[] | string } | undefined
+    add(card?.title)
+    for (const line of Array.isArray(card?.content) ? card!.content as string[] : [card?.content]) add(line)
+    const ty = form.thank_you_page as { title?: string; body?: string } | undefined
+    add(ty?.title); add(ty?.body)
+  }
+  pageAutomationCache.set(pageId, { at: Date.now(), texts })
+  if (pageAutomationCache.size > 300) pageAutomationCache.delete(pageAutomationCache.keys().next().value as string)
+  return texts
 }
 
 // ── Contact facts sitting in the history ─────────────────────────────────────
@@ -316,11 +456,14 @@ export type SyncResult = { added: number; metaTotal: number; oursBefore: number;
 export function repTakeoverInImport(
   imported: HistoryMessage[],
   lastAiMs: number,
-  nowMs: number
+  nowMs: number,
+  /** The messages of `imported` that the full-thread classifier judged to be Page
+   *  automation (automationFlags). Omitted = wording patterns only. */
+  automated?: Set<HistoryMessage>
 ): boolean {
   const RECENT_MS = 7 * 24 * 60 * 60 * 1000
   return imported.some((m) => {
-    if (!m.fromPage || isAutomationMessage(m.text)) return false
+    if (!m.fromPage || isAutomationMessage(m.text) || automated?.has(m)) return false
     const ms = new Date(m.createdTime).getTime()
     if (lastAiMs > 0) return ms > lastAiMs
     return nowMs - ms < RECENT_MS
@@ -328,7 +471,7 @@ export function repTakeoverInImport(
 }
 
 export async function syncMessengerHistory(
-  db: { from: (t: string) => any },
+  db: MessengerDb,
   leadId: string,
   companyId: string,
   pageAccessToken: string,
@@ -345,7 +488,8 @@ export async function syncMessengerHistory(
     excludeTriggerText?: string
   }
 ): Promise<SyncResult> {
-  const history = await fetchConversationHistory(pageAccessToken, pageId, psid, 50)
+  const SYNC_LIMIT = 50
+  const history = await fetchConversationHistory(pageAccessToken, pageId, psid, SYNC_LIMIT)
   if (history.length === 0) return { added: 0, metaTotal: 0, oursBefore: 0, facts: null, humanTakeover: false }
 
   const { data: existing } = await db
@@ -411,7 +555,12 @@ export async function syncMessengerHistory(
   let humanTakeover = false
   if (opts?.autoPauseOnRep !== false) {
     const lastAiMs = Math.max(0, ...ours.filter((o) => o.direction === "outbound" && o.sentBy === "ai").map((o) => o.ms))
-    if (repTakeoverInImport(missing, lastAiMs, nowMs)) {
+    // Automation is judged on the whole thread (timing needs the neighbours),
+    // then applied to the messages this sync added.
+    const pageTexts = await getPageAutomationTexts(pageAccessToken, pageId)
+    const flags = automationFlags(history, { pageTexts, threadComplete: history.length < SYNC_LIMIT })
+    const automated = new Set(history.filter((_, i) => flags[i]))
+    if (repTakeoverInImport(missing, lastAiMs, nowMs, automated)) {
       const { data: cur } = await db.from("leads").select("ai_paused, first_name, phone").eq("id", leadId).maybeSingle()
       if (cur && !cur.ai_paused) {
         humanTakeover = true
@@ -428,7 +577,7 @@ export async function syncMessengerHistory(
           .eq("id", leadId)
         try {
           const { notifyNeedsAttention } = await import("@/lib/notifications")
-          notifyNeedsAttention(companyId, `${cur.first_name ?? "Messenger lead"} — a team member is in the thread, AI paused`, cur.phone ?? "").catch(() => {})
+          notifyNeedsAttention(companyId, `${cur.first_name ?? "Messenger lead"} — a team member is in the thread, AI paused`, cur.phone ?? "", leadId).catch(() => {})
         } catch { /* notification is best-effort */ }
         console.log(`[messenger] sync found a rep in lead ${leadId}'s thread after the AI's last message — AI paused${hasUpcoming ? ", booked status KEPT (upcoming visit)" : ", status → needs_attention"}`)
       }
@@ -439,7 +588,7 @@ export async function syncMessengerHistory(
 
 /** Fill ONLY blank identity fields from the thread — never overwrite real data. */
 export async function backfillLeadFromThread(
-  db: { from: (t: string) => any },
+  db: MessengerDb,
   leadId: string,
   facts: MinedFacts | null
 ): Promise<string[]> {
@@ -473,7 +622,7 @@ export async function backfillLeadFromThread(
  * newly-recovered page messages come in as "human" and render blue.
  */
 export async function syncAllMessengerThreads(
-  db: { from: (t: string) => any },
+  db: MessengerDb,
   companyId: string,
   pageAccessToken: string,
   pageId: string,

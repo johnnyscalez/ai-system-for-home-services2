@@ -43,7 +43,7 @@ follow as proof.
   HVAC campaigns) and the 62% vs 28% / $381K gap (HVAC lead math). Do not reuse them for
   flooring without a flooring or general home-services source.
 - There are no flooring client results yet. The only live numbers we can show are from
-  "a live home-services account" (27 leads / 14 conversations / 3 booked in 24h; 130 leads /
+  "a home services account" (27 leads / 14 conversations / 3 booked in 24h; 130 leads /
   77 worked / 13 booked in 9 days), labelled exactly like that and never implied as flooring.
 
 ## Headlines (Ogilvy school, ranked by flooring owner attention)

@@ -14,6 +14,10 @@ interface Props {
   dealValue?: number | null
   refundAmount?: number | null
   redirectAfter?: boolean
+  /** Called after the server confirmed the delete, so lists can drop the row at once */
+  onDeleted?: (leadId: string) => void
+  /** Called with the saved lead after a refund is recorded */
+  onChanged?: (lead: Record<string, unknown>) => void
 }
 
 export function DeleteLeadButton({
@@ -23,6 +27,8 @@ export function DeleteLeadButton({
   dealValue,
   refundAmount,
   redirectAfter = false,
+  onDeleted,
+  onChanged,
 }: Props) {
   const router = useRouter()
   const isClosed = ["closed", "closed_won"].includes(leadStatus)
@@ -30,6 +36,7 @@ export function DeleteLeadButton({
   // ── Delete state ──
   const [confirmingDelete, setConfirmingDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
+  const [deleteError, setDeleteError] = useState("")
 
   // ── Refund state ──
   const [showRefundModal, setShowRefundModal] = useState(false)
@@ -42,16 +49,25 @@ export function DeleteLeadButton({
 
   async function handleDelete() {
     setDeleting(true)
+    setDeleteError("")
     try {
-      await fetch(`/api/leads/${leadId}/delete`, { method: "DELETE" })
+      const res = await fetch(`/api/leads/${leadId}/delete`, { method: "DELETE" })
+      if (!res.ok) {
+        const data = (await res.json().catch(() => null)) as { error?: string } | null
+        setDeleteError(data?.error ?? `The lead was not deleted (server answered ${res.status}).`)
+        return
+      }
+      setConfirmingDelete(false)
+      onDeleted?.(leadId)
       if (redirectAfter) {
         router.push("/leads")
-      } else {
+      } else if (!onDeleted) {
         router.refresh()
       }
+    } catch {
+      setDeleteError("Could not reach the server. The lead was not deleted.")
     } finally {
       setDeleting(false)
-      setConfirmingDelete(false)
     }
   }
 
@@ -74,10 +90,13 @@ export function DeleteLeadButton({
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({ refund_amount: amount, refund_note: refundNote || null }),
       })
-      const data = await res.json()
-      if (!res.ok) { setRefundError(data.error ?? "Failed to save refund."); return }
+      const data = (await res.json().catch(() => null)) as { error?: string; lead?: Record<string, unknown> } | null
+      if (!res.ok) { setRefundError(data?.error ?? "The refund was not saved."); return }
       setShowRefundModal(false)
-      router.refresh()
+      if (onChanged && data?.lead) onChanged(data.lead)
+      else router.refresh()
+    } catch {
+      setRefundError("Could not reach the server. The refund was not saved.")
     } finally {
       setSaving(false)
     }
@@ -225,10 +244,12 @@ export function DeleteLeadButton({
   // ── Non-closed lead: show Delete ──
   if (confirmingDelete) {
     return (
-      <div className="flex items-center gap-2">
-        <div className="flex items-center gap-1.5 text-xs text-red-500 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
+      <div className="flex items-center gap-2 flex-wrap justify-end">
+        <div className="flex items-center gap-1.5 text-xs text-red-600 bg-red-50 border border-red-100 rounded-lg px-3 py-1.5">
           <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
-          <span>Delete <span className="font-semibold">{leadName}</span>? This can&apos;t be undone.</span>
+          {deleteError
+            ? <span role="alert">{deleteError}</span>
+            : <span>Delete <span className="font-semibold">{leadName || "this lead"}</span>? All follow-ups to them stop.</span>}
         </div>
         <button
           onClick={handleDelete}
@@ -236,10 +257,10 @@ export function DeleteLeadButton({
           className="flex items-center gap-1 text-xs font-semibold text-white bg-red-500 hover:bg-red-600 px-3 py-1.5 rounded-lg transition-colors disabled:opacity-60"
         >
           {deleting ? <Loader2 className="w-3 h-3 animate-spin" /> : null}
-          Yes, delete
+          {deleteError ? "Try again" : "Yes, delete"}
         </button>
         <button
-          onClick={() => setConfirmingDelete(false)}
+          onClick={() => { setConfirmingDelete(false); setDeleteError("") }}
           className="text-xs text-muted-foreground hover:text-foreground transition-colors px-2 py-1.5"
         >
           Cancel

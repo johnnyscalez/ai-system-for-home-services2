@@ -1,4 +1,5 @@
 import { anthropic } from "@/lib/claude"
+import { logUsage } from "@/lib/usage-log"
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { updateSession } from "@/lib/voice-session"
 import { JOB_TYPES, JOB_TYPE_TOOL_DESCRIPTION } from "@/lib/job-types"
@@ -127,6 +128,7 @@ export async function summarizeCompletedCall(session: VoiceSession): Promise<voi
     ],
   })
 
+  logUsage({ site: "call-notes", companyId: session.company_id, leadId: session.lead_id, model: "claude-haiku-4-5-20251001", usage: response.usage })
   const toolBlock = response.content.find((b) => b.type === "tool_use")
   if (!toolBlock || toolBlock.type !== "tool_use") return
   const intel = toolBlock.input as ExtractedIntel

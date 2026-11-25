@@ -30,6 +30,13 @@ export function CompanyInfoEditor({ companyId, initialName, initialServiceType, 
 
   async function handleSave() {
     setError("")
+    // New leads, booked estimates and leads that need a person are texted here.
+    // A blank or broken number would stop every one of those texts without a sound.
+    const digits = notifPhone.replace(/\D/g, "").replace(/^1(?=\d{10}$)/, "")
+    if (!/^[2-9]\d{9}$/.test(digits)) {
+      setError("Enter the owner's 10 digit mobile. New lead, booked estimate and needs-attention texts go there.")
+      return
+    }
     setSaving(true)
     const { error: err } = await supabase
       .from("companies")
@@ -37,7 +44,7 @@ export function CompanyInfoEditor({ companyId, initialName, initialServiceType, 
         name:               name.trim() || initialName,
         service_type:       serviceType.trim() || initialServiceType,
         service_area:       serviceArea.trim() || initialServiceArea,
-        notification_phone: notifPhone.trim() || null,
+        notification_phone: notifPhone.trim(),
         avg_job_value:      parseFloat(jobValue) || 0,
       })
       .eq("id", companyId)
@@ -68,7 +75,7 @@ export function CompanyInfoEditor({ companyId, initialName, initialServiceType, 
         <Row label="Company name"      value={name || "—"} />
         <Row label="Service type"      value={serviceType || "—"} />
         <Row label="Service area"      value={serviceArea || "—"} />
-        <Row label="Notification phone" value={notifPhone || "—"} />
+        <Row label="Owner's mobile (alerts)" value={notifPhone || "Missing: you get no lead texts"} />
         <Row label="Average job value" value={jobValue ? `$${Number(jobValue).toLocaleString()}` : "—"} />
         <div className="flex items-center justify-between pt-1">
           {saved && (
@@ -92,15 +99,15 @@ export function CompanyInfoEditor({ companyId, initialName, initialServiceType, 
   return (
     <div className="space-y-3">
       <Field label="Company name">
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme HVAC" />
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Acme Flooring" />
       </Field>
       <Field label="Service type">
-        <Input value={serviceType} onChange={(e) => setServiceType(e.target.value)} placeholder="HVAC, Roofing, Solar…" />
+        <Input value={serviceType} onChange={(e) => setServiceType(e.target.value)} placeholder="Flooring" />
       </Field>
       <Field label="Service area">
         <Input value={serviceArea} onChange={(e) => setServiceArea(e.target.value)} placeholder="Dallas-Fort Worth, TX" />
       </Field>
-      <Field label="Notification phone">
+      <Field label="Owner's mobile (new lead, booked estimate and needs-attention texts)">
         <Input value={notifPhone} onChange={(e) => setNotifPhone(e.target.value)} placeholder="+1 (555) 000-0000" type="tel" />
       </Field>
       <Field label="Average job value ($)">

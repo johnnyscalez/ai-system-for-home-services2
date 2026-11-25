@@ -1,6 +1,5 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase"
-import { createServiceRoleClient } from "@/lib/supabase-server"
+import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase-server"
 import { sendMessengerMessage } from "@/lib/messenger"
 
 export const runtime = "nodejs"
@@ -9,7 +8,9 @@ export const runtime = "nodejs"
 // Mirrors /api/sms/send: sends, saves the conversation row, pauses the AI
 // (a human took over the thread).
 export async function POST(req: NextRequest) {
-  const supabase = createClient()
+  // The SERVER client reads the session cookie. The browser client used here before
+  // has no cookies on the server, so every manual Messenger reply returned 401.
+  const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -39,7 +40,7 @@ export async function POST(req: NextRequest) {
     .eq("company_id", lead.company_id)
     .eq("type", "facebook")
     .eq("is_active", true)
-    .single()
+    .maybeSingle()
 
   if (!integration?.fb_access_token) {
     return NextResponse.json({ error: "Facebook is not connected" }, { status: 400 })
@@ -47,7 +48,13 @@ export async function POST(req: NextRequest) {
 
   const sent = await sendMessengerMessage(integration.fb_access_token, lead.messenger_psid, body.trim())
   if (!sent.ok) {
-    return NextResponse.json({ error: sent.error ?? "Messenger send failed" }, { status: 502 })
+    // Meta only lets a Page reply within 24 hours of the person's last message.
+    const outsideWindow = /outside (of )?(the )?allowed window|24.?hour|#10\b|2018278/i.test(sent.error ?? "")
+    return NextResponse.json({
+      error: outsideWindow
+        ? "Facebook only allows a reply within 24 hours of their last message. Text or call this lead instead."
+        : (sent.error ?? "Messenger send failed"),
+    }, { status: 502 })
   }
 
   await db.from("conversations").insert({
@@ -57,6 +64,8 @@ export async function POST(req: NextRequest) {
     sent_by: "human",
     body: body.trim(),
     channel: "messenger",
+    // The message id lets the echo of this very send be recognised as ours.
+    twilio_sid: sent.messageId ?? null,
   })
 
   // Human took over — pause the AI, same as SMS manual sends

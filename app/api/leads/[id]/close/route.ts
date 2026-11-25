@@ -1,5 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createServerSupabaseClient } from "@/lib/supabase-server"
+import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase-server"
+import { stopAllSequences } from "@/lib/sequences"
 
 export async function PATCH(
   req: NextRequest,
@@ -35,8 +36,10 @@ export async function PATCH(
       status: "closed_won",
       deal_value: Number(deal_value),
       closed_job_type: closed_job_type ?? null,
-      closed_technician_id: closed_technician_id ?? null,
-      closed_technician_name: closed_technician_name ?? null,
+      // Optional legacy fields: the UI no longer sends them, but never wipe a
+      // value an older client or integration already wrote.
+      ...(closed_technician_id !== undefined ? { closed_technician_id: closed_technician_id ?? null } : {}),
+      ...(closed_technician_name !== undefined ? { closed_technician_name: closed_technician_name ?? null } : {}),
       closed_at: new Date().toISOString(),
     })
     .eq("id", id)
@@ -44,5 +47,13 @@ export async function PATCH(
     .single()
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 })
+
+  // Signed: every automated touch stops (booking nurture and the quote chase).
+  try {
+    await stopAllSequences(createServiceRoleClient(), id)
+  } catch (err) {
+    console.error(`[leads/${id}/close] could not stop pending sequences:`, err)
+  }
+
   return NextResponse.json({ lead: updated })
 }

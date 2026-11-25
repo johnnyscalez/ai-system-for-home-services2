@@ -16,7 +16,6 @@ const CRM_ONLY_PREFIXES = [
   "/leads",
   "/appointments",
   "/calendar",
-  "/property-image",
   "/reports",
   "/invoices",
 ]

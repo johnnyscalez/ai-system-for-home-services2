@@ -1,6 +1,6 @@
 import { NextRequest, NextResponse } from "next/server"
-import { createClient } from "@/lib/supabase"
-import { createServiceRoleClient } from "@/lib/supabase-server"
+import { createServerSupabaseClient, createServiceRoleClient } from "@/lib/supabase-server"
+import { voiceEnabled } from "@/lib/voice-enabled"
 import { getTwilioClient, formatPhone } from "@/lib/twilio"
 
 export const runtime = "nodejs"
@@ -17,7 +17,7 @@ export const runtime = "nodejs"
  * GET /api/voice/verify-forwarding — poll verification status from the UI.
  */
 export async function POST(req: NextRequest) {
-  const supabase = createClient()
+  const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 
@@ -27,6 +27,10 @@ export async function POST(req: NextRequest) {
   const db = createServiceRoleClient()
   const { data: profile } = await db.from("users").select("company_id").eq("id", user.id).single()
   if (!profile?.company_id) return NextResponse.json({ error: "No company" }, { status: 400 })
+  // Call forwarding only matters when the AI answers the line.
+  if (!(await voiceEnabled(profile.company_id))) {
+    return NextResponse.json({ error: "The voice agent is switched off for this account, so there is nothing to forward calls to." }, { status: 403 })
+  }
 
   const normalized = formatPhone(officeNumber)
 
@@ -74,7 +78,7 @@ export async function POST(req: NextRequest) {
 }
 
 export async function GET() {
-  const supabase = createClient()
+  const supabase = await createServerSupabaseClient()
   const { data: { user } } = await supabase.auth.getUser()
   if (!user) return NextResponse.json({ error: "Unauthorized" }, { status: 401 })
 

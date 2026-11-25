@@ -41,7 +41,7 @@ export function TechSidebar({ techName, companyName }: Props) {
           </div>
           <div className="min-w-0">
             <p className="text-sm font-bold text-[#1C1917] truncate">{companyName}</p>
-            <p className="text-[10px] text-[#A8A29E]">Tech Portal</p>
+            <p className="text-[10px] text-[#A8A29E]">Crew Portal</p>
           </div>
         </div>
       </div>
@@ -79,7 +79,7 @@ export function TechSidebar({ techName, companyName }: Props) {
           </div>
           <div className="min-w-0 flex-1">
             <p className="text-xs font-semibold text-[#1C1917] truncate">{techName}</p>
-            <p className="text-[10px] text-[#A8A29E]">Technician</p>
+            <p className="text-[10px] text-[#A8A29E]">Crew member</p>
           </div>
         </div>
         <button

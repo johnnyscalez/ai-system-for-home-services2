@@ -10,6 +10,7 @@ import {
   CheckCircle2, CalendarDays, Clock, Lock, Info,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { MeasureCapacityCard } from "@/components/settings/MeasureCapacityCard"
 import { DEFAULT_WINDOWS, DEFAULT_DAYS } from "@/lib/availability"
 import type { AppointmentWindow } from "@/lib/availability"
 
@@ -174,6 +175,8 @@ export default function AIAgentPage() {
         </div>
       </div>
 
+      <MeasureCapacityCard />
+
       {/* ── Booking windows ───────────────────────────────────────────── */}
       <div className="space-y-4">
         <div>
@@ -182,7 +185,7 @@ export default function AIAgentPage() {
             Booking Windows
           </h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Your AI offers <strong>only</strong> these slots when booking appointments — never random times.
+            Your AI offers <strong>only</strong> these slots when booking measures — never random times. Each window is a measure arrival window.
           </p>
         </div>
 
@@ -347,7 +350,7 @@ export default function AIAgentPage() {
               <Input
                 value={q.question}
                 onChange={(e) => { setQualifyingQuestions(qualifyingQuestions.map((x) => x.id === q.id ? { ...x, question: e.target.value } : x)); setSaved(false) }}
-                placeholder="e.g. Is this storm damage or age-related wear?"
+                placeholder="e.g. What type of flooring are you thinking about?"
                 className="flex-1"
               />
               <Button
@@ -376,7 +379,7 @@ export default function AIAgentPage() {
           </p>
         </div>
         <Textarea
-          placeholder="e.g. We&apos;re running a $99 tune-up special through August. We do NOT service mobile homes. Mention our 10-year labor warranty when asked about price."
+          placeholder="e.g. We&apos;re running 15% off LVP installs through November. We do NOT install in mobile homes. Mention our lifetime labor warranty when asked about price."
           value={customInstructions}
           onChange={(e) => { setCustomInstructions(e.target.value); setSaved(false) }}
           rows={4}

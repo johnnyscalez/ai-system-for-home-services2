@@ -1,6 +1,6 @@
 "use client"
 
-import { useState, useEffect, useCallback, useRef, useMemo } from "react"
+import { useState, useEffect, useCallback, useRef } from "react"
 import { motion, AnimatePresence } from "framer-motion"
 import { createClient } from "@/lib/supabase"
 import { Badge } from "@/components/ui/badge"
@@ -9,17 +9,19 @@ import { Input } from "@/components/ui/input"
 import {
   ChevronLeft, ChevronRight, Calendar, MapPin, Phone,
   CheckCircle2, XCircle, AlertTriangle, Clock, X, User,
-  Wrench, RotateCcw, MessageSquare, AlertCircle, Plus,
+  RotateCcw, MessageSquare, AlertCircle, Plus,
   List, Search, Edit2, Send, Check,
 } from "lucide-react"
 import { cn } from "@/lib/utils"
+import { holidayOn } from "@/lib/holidays"
 import type { AppointmentWindow } from "@/lib/availability"
 import type { ConfirmationStatus } from "@/types/database"
+import { FLOORING_JOB_TYPE_LABELS } from "@/lib/job-types"
+import { useVisiblePoll } from "@/components/leads/live"
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 
 type Lead = { first_name: string | null; last_name: string | null; phone: string }
-type Technician = { name: string; phone: string | null } | null
 
 type Appointment = {
   id: string
@@ -29,10 +31,7 @@ type Appointment = {
   notes: string | null
   status: string
   confirmation_status: ConfirmationStatus
-  technician_name: string | null
-  technician_id: string | null
   leads: Lead | null
-  technicians: Technician
 }
 
 type LeadResult = {
@@ -43,8 +42,6 @@ type LeadResult = {
   email: string | null
   status: string
 }
-
-type TechOption = { id: string; name: string; phone: string | null }
 
 type Props = {
   companyId: string
@@ -62,19 +59,29 @@ const CAL_END     = 20
 const CAL_HOURS   = CAL_END - CAL_START
 const CAL_HOUR_PX = 88
 
-const TECH_PALETTE = [
-  { bg: "#1D4ED8", light: "rgba(29,78,216,0.09)",   border: "#3B82F6" },
-  { bg: "#7C3AED", light: "rgba(124,58,237,0.09)",  border: "#8B5CF6" },
-  { bg: "#059669", light: "rgba(5,150,105,0.09)",   border: "#10B981" },
-  { bg: "#B45309", light: "rgba(180,83,9,0.09)",    border: "#F59E0B" },
-  { bg: "#DC2626", light: "rgba(220,38,38,0.09)",   border: "#EF4444" },
-  { bg: "#0891B2", light: "rgba(8,145,178,0.09)",   border: "#06B6D4" },
-  { bg: "#EA580C", light: "rgba(234,88,12,0.09)",   border: "#F97316" },
-  { bg: "#9333EA", light: "rgba(147,51,234,0.09)",  border: "#A855F7" },
-]
-
+// One neutral color for every measure block.
 type TechColor = { bg: string; light: string; border: string }
-const UNASSIGNED_COLOR: TechColor = { bg: "#64748B", light: "rgba(100,116,139,0.09)", border: "#94A3B8" }
+const APT_COLOR: TechColor = { bg: "#57534E", light: "rgba(87,83,78,0.09)", border: "#A8A29E" }
+
+// Job type is stored as the first line of notes: "Job type: X". Everything after is free notes.
+const JOB_TYPE_PREFIX = "Job type: "
+function splitNotes(raw: string | null): { jobType: string; notes: string } {
+  const text = raw ?? ""
+  if (text.startsWith(JOB_TYPE_PREFIX)) {
+    const nl = text.indexOf("\n")
+    const first = nl === -1 ? text : text.slice(0, nl)
+    const jobType = first.slice(JOB_TYPE_PREFIX.length).trim()
+    if (FLOORING_JOB_TYPE_LABELS.includes(jobType)) {
+      return { jobType, notes: nl === -1 ? "" : text.slice(nl + 1).trim() }
+    }
+  }
+  return { jobType: "", notes: text }
+}
+function joinNotes(jobType: string, notes: string): string | null {
+  const n = notes.trim()
+  if (!jobType) return n || null
+  return n ? `${JOB_TYPE_PREFIX}${jobType}\n${n}` : `${JOB_TYPE_PREFIX}${jobType}`
+}
 
 function aptTimeToY(isoStr: string, tz: string): number {
   const timeStr = new Date(isoStr).toLocaleTimeString("en-US", {
@@ -272,6 +279,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
   const [appointments, setAppointments]   = useState<Appointment[]>([])
   const [selected, setSelected]           = useState<Appointment | null>(null)
   const [updating, setUpdating]           = useState<string | null>(null)
+  const [actionError, setActionError]     = useState<{ id: string; message: string } | null>(null)
 
   // ── List view ──
   const [listSearch, setListSearch]       = useState("")
@@ -279,9 +287,6 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
   const [listAppointments, setListApts]   = useState<Appointment[]>([])
   const [listLoading, setListLoading]     = useState(false)
   const listDebounce                      = useRef<ReturnType<typeof setTimeout> | null>(null)
-
-  // ── Technicians ──
-  const [technicians, setTechnicians]     = useState<TechOption[]>([])
 
   // ── New appointment modal ──
   const [showNewModal, setShowNewModal]   = useState(false)
@@ -293,9 +298,8 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
   const [newForm, setNewForm]             = useState({
     date: new Date().toLocaleDateString("en-CA", { timeZone: timezone }),
     time: "09:00",
-    technician_id: "",
-    technician_name: "",
     address: "",
+    job_type: "",
     notes: "",
     send_confirmation: true,
   })
@@ -308,9 +312,8 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
   const [editForm, setEditForm]           = useState({
     date: "",
     time: "",
-    technician_id: "",
-    technician_name: "",
     address: "",
+    job_type: "",
     notes: "",
   })
   const [saving, setSaving]               = useState(false)
@@ -328,18 +331,6 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
   // Legacy: only available days (kept for week label calculation)
   const weekDays: Date[] = allDays.filter((d) => availableDays.includes(DAY_NAMES[d.getDay()]))
 
-  // Build technician → color map (index by position in the technicians list)
-  const techColorMap = useMemo(() => {
-    const map = new Map<string, TechColor>()
-    technicians.forEach((t, i) => map.set(t.id, TECH_PALETTE[i % TECH_PALETTE.length]))
-    return map
-  }, [technicians])
-
-  function getTechColor(techId: string | null | undefined): TechColor {
-    if (!techId) return UNASSIGNED_COLOR
-    return techColorMap.get(techId) ?? UNASSIGNED_COLOR
-  }
-
   const weekEnd = new Date(weekStart)
   weekEnd.setDate(weekStart.getDate() + 6)
   weekEnd.setHours(23, 59, 59, 999)
@@ -351,7 +342,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
 
     const { data } = await supabase
       .from("appointments")
-      .select("*, leads(first_name, last_name, phone), technicians(name, phone)")
+      .select("*, leads(first_name, last_name, phone)")
       .eq("company_id", companyId)
       .gte("scheduled_at", from.toISOString())
       .lte("scheduled_at", to.toISOString())
@@ -375,17 +366,6 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
     }
   }, [])
 
-  // ── Load technicians ──
-  useEffect(() => {
-    supabase
-      .from("technicians")
-      .select("id, name, phone")
-      .eq("company_id", companyId)
-      .eq("status", "active")
-      .order("name")
-      .then(({ data }) => setTechnicians((data ?? []) as TechOption[]))
-  }, [companyId]) // eslint-disable-line react-hooks/exhaustive-deps
-
   useEffect(() => { loadAppointments() }, [loadAppointments])
 
   useEffect(() => {
@@ -402,6 +382,14 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
       .subscribe()
     return () => { supabase.removeChannel(channel) }
   }, [companyId, loadAppointments, viewMode, listSearch, listStatus, loadListAppointments]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  // Appointments are not in the realtime publication yet, so the subscription
+  // above stays silent until that SQL is run. This poll keeps the calendar
+  // current either way (measures the assistant books show within 20 seconds).
+  useVisiblePoll(() => {
+    void loadAppointments()
+    if (viewMode === "list") void loadListAppointments(listSearch, listStatus)
+  }, 20_000)
 
   useEffect(() => {
     if (viewMode !== "list") return
@@ -427,28 +415,43 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
 
   // ── Status / confirmation update helpers ──
 
-  async function updateConfirmationStatus(id: string, confirmationStatus: ConfirmationStatus) {
+  // One PATCH per action. The server answers with the saved row, and anything
+  // other than a 2xx is shown instead of being silently dropped.
+  async function patchAppointment(id: string, body: { status?: string; confirmation_status?: ConfirmationStatus }) {
     setUpdating(id)
-    await fetch(`/api/appointments/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ confirmation_status: confirmationStatus }),
-    })
-    await loadAppointments()
-    setSelected(prev => prev?.id === id ? { ...prev, confirmation_status: confirmationStatus } : prev)
-    setUpdating(null)
+    setActionError(null)
+    try {
+      const res = await fetch(`/api/appointments/${id}`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      })
+      const data = (await res.json().catch(() => null)) as
+        | { appointment?: { status: string; confirmation_status: ConfirmationStatus }; error?: string }
+        | null
+      if (!res.ok || !data?.appointment) {
+        setActionError({ id, message: data?.error ?? `The change was not saved (server answered ${res.status}).` })
+        return
+      }
+      const saved = data.appointment
+      await loadAppointments()
+      if (viewMode === "list") loadListAppointments(listSearch, listStatus)
+      setSelected(prev => prev?.id === id
+        ? { ...prev, status: saved.status, confirmation_status: saved.confirmation_status }
+        : prev)
+    } catch {
+      setActionError({ id, message: "Could not reach the server. The change was not saved." })
+    } finally {
+      setUpdating(null)
+    }
   }
 
-  async function updateStatus(id: string, status: string) {
-    setUpdating(id)
-    await fetch(`/api/appointments/${id}`, {
-      method: "PATCH",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ status }),
-    })
-    await loadAppointments()
-    setSelected(prev => prev?.id === id ? { ...prev, status } : prev)
-    setUpdating(null)
+  function updateConfirmationStatus(id: string, confirmationStatus: ConfirmationStatus) {
+    return patchAppointment(id, { confirmation_status: confirmationStatus })
+  }
+
+  function updateStatus(id: string, status: string) {
+    return patchAppointment(id, { status })
   }
 
   // ── Open edit mode ──
@@ -456,10 +459,9 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
     setEditForm({
       date: toLocalDateInput(apt.scheduled_at, timezone),
       time: toLocalTimeInput(apt.scheduled_at, timezone),
-      technician_id: apt.technician_id ?? "",
-      technician_name: apt.technician_name ?? "",
       address: apt.address ?? "",
-      notes: apt.notes ?? "",
+      job_type: splitNotes(apt.notes).jobType,
+      notes: splitNotes(apt.notes).notes,
     })
     setSaveError("")
     setEditMode(true)
@@ -471,20 +473,13 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
     setSaveError("")
     try {
       const scheduled_at = localDateTimeToISO(editForm.date, editForm.time, timezone)
-      const techId   = editForm.technician_id || null
-      const techName = techId
-        ? (technicians.find(t => t.id === techId)?.name ?? (editForm.technician_name || null))
-        : (editForm.technician_name || null)
-
       const res = await fetch(`/api/appointments/${selected.id}`, {
         method: "PATCH",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           scheduled_at,
-          technician_id: techId,
-          technician_name: techName,
           address: editForm.address || null,
-          notes: editForm.notes || null,
+          notes: joinNotes(editForm.job_type, editForm.notes),
         }),
       })
       const data = await res.json()
@@ -496,7 +491,6 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
           ...selected,
           ...data.appointment,
           leads: data.appointment.leads ?? selected.leads,
-          technicians: data.appointment.technicians ?? selected.technicians,
         } as Appointment
         setSelected(updated)
         setAppointments(prev => prev.map(a => a.id === updated.id ? updated : a))
@@ -518,9 +512,8 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
     setNewForm({
       date: new Date().toLocaleDateString("en-CA", { timeZone: timezone }),
       time: "09:00",
-      technician_id: "",
-      technician_name: "",
       address: "",
+      job_type: "",
       notes: "",
       send_confirmation: true,
     })
@@ -533,26 +526,19 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
     setCreateError("")
     try {
       const scheduled_at = localDateTimeToISO(newForm.date, newForm.time, timezone)
-      const techId   = newForm.technician_id || null
-      const techName = techId
-        ? (technicians.find(t => t.id === techId)?.name ?? null)
-        : (newForm.technician_name || null)
-
       const res = await fetch("/api/appointments", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           lead_id: selectedLead.id,
           scheduled_at,
-          technician_id: techId,
-          technician_name: techName,
           address: newForm.address || null,
-          notes: newForm.notes || null,
+          notes: joinNotes(newForm.job_type, newForm.notes),
           send_confirmation: newForm.send_confirmation,
         }),
       })
       const data = await res.json()
-      if (!res.ok) { setCreateError(data.error ?? "Failed to create appointment"); return }
+      if (!res.ok) { setCreateError(data.error ?? "Failed to create measure"); return }
 
       setShowNewModal(false)
       await loadAppointments()
@@ -623,7 +609,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
             </>
           )}
           {viewMode === "list" && (
-            <span className="text-sm font-medium text-[#1C1917]">All Appointments</span>
+            <span className="text-sm font-medium text-[#1C1917]">All Measures</span>
           )}
         </div>
 
@@ -650,7 +636,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
             className="h-8 gap-1.5 bg-[#F97316] hover:bg-[#ea6c0e] text-white text-xs"
             onClick={openNewModal}
           >
-            <Plus className="w-3.5 h-3.5" /> New Appointment
+            <Plus className="w-3.5 h-3.5" /> New Measure
           </Button>
         </div>
       </div>
@@ -688,28 +674,6 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
       {/* ── Calendar view (HouseCall Pro-style time grid) ── */}
       {viewMode === "calendar" && (
         <>
-          {/* Technician color legend */}
-          {technicians.length > 0 && (
-            <div className="flex flex-wrap items-center gap-x-4 gap-y-2 -mt-2">
-              <span className="text-xs font-semibold text-[#78716C] uppercase tracking-wide">Technicians:</span>
-              {technicians.map(t => {
-                const c = techColorMap.get(t.id)
-                return c ? (
-                  <div key={t.id} className="flex items-center gap-1.5 text-xs text-[#78716C]">
-                    <div className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ background: c.bg }} />
-                    {t.name}
-                  </div>
-                ) : null
-              })}
-              {appointments.some(a => a.status !== "cancelled" && !a.technician_id) && (
-                <div className="flex items-center gap-1.5 text-xs text-[#78716C]">
-                  <div className="w-2.5 h-2.5 rounded-sm bg-slate-400 shrink-0" />
-                  Unassigned
-                </div>
-              )}
-            </div>
-          )}
-
           {/* Time-based week grid */}
           <div className="bg-white border border-[#E7E5E4] rounded-2xl overflow-hidden shadow-[0_2px_8px_rgba(0,0,0,0.04)]">
             {/* Day header row */}
@@ -717,7 +681,8 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
               <div className="border-r border-[#E7E5E4] bg-[#FAFAF8]" />
               {allDays.map((d, i) => {
                 const today_ = isToday(d)
-                const available = availableDays.includes(DAY_NAMES[d.getDay()])
+                const holiday = holidayOn(d.toLocaleDateString("en-CA", { timeZone: timezone }))
+                const available = availableDays.includes(DAY_NAMES[d.getDay()]) && !holiday
                 const dayApts = appointments.filter(a =>
                   a.status !== "cancelled" &&
                   new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: timezone }) ===
@@ -740,13 +705,18 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                     )}>
                       {d.getDate()}
                     </p>
+                    {holiday && (
+                      <p className="mt-1 text-[10px] font-semibold leading-tight text-[#EA580C]" title={`${holiday.name}: closed, no measures are booked`}>
+                        {holiday.name} · Closed
+                      </p>
+                    )}
                     {dayApts.length > 0 && (
                       <div className="flex justify-center gap-0.5 mt-1.5">
                         {dayApts.slice(0, 4).map(a => (
                           <div
                             key={a.id}
                             className="w-1.5 h-1.5 rounded-full"
-                            style={{ background: getTechColor(a.technician_id).bg }}
+                            style={{ background: APT_COLOR.bg }}
                           />
                         ))}
                       </div>
@@ -778,8 +748,9 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
 
                 {/* Day columns */}
                 {allDays.map((day, di) => {
-                  const available = availableDays.includes(DAY_NAMES[day.getDay()])
                   const dayDateStr = day.toLocaleDateString("en-CA", { timeZone: timezone })
+                  const holiday = holidayOn(dayDateStr)
+                  const available = availableDays.includes(DAY_NAMES[day.getDay()]) && !holiday
                   const dayApts = appointments.filter(a =>
                     a.status !== "cancelled" &&
                     new Date(a.scheduled_at).toLocaleDateString("en-CA", { timeZone: timezone }) === dayDateStr
@@ -792,6 +763,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                         "border-r border-[#E7E5E4] last:border-r-0 relative",
                         !available && "bg-[#FAFAF8]/50"
                       )}
+                      style={holiday ? { backgroundImage: "repeating-linear-gradient(135deg, rgba(120,113,108,0.07) 0 6px, transparent 6px 12px)" } : undefined}
                     >
                       {/* Hour lines */}
                       {Array.from({ length: CAL_HOURS }, (_, i) => (
@@ -819,8 +791,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                         return dayApts.map(apt => {
                           const top = aptTimeToY(apt.scheduled_at, timezone)
                           const height = APT_MIN_H
-                          const c = getTechColor(apt.technician_id)
-                          const techName = apt.technician_name ?? (apt.technicians as { name: string } | null)?.name
+                          const c = APT_COLOR
                           const layout = layouts[apt.id] ?? { col: 0, numCols: 1 }
                           const leftPct = (layout.col / layout.numCols) * 100
                           const widthPct = (1 / layout.numCols) * 100
@@ -869,11 +840,6 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                                 {apt.notes && (
                                   <p className="text-[9px] text-[#78716C] truncate">{apt.notes}</p>
                                 )}
-                                {techName && (
-                                  <p className="text-[9px] font-semibold mt-auto flex items-center gap-0.5" style={{ color: c.bg }}>
-                                    <Wrench className="w-2 h-2 shrink-0" />{techName}
-                                  </p>
-                                )}
                               </div>
                             </button>
                           )
@@ -895,11 +861,11 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
             if (outside.length === 0) return null
             return (
               <div>
-                <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mb-2">Other appointments</p>
+                <p className="text-xs font-semibold text-[#78716C] uppercase tracking-wide mb-2">Other measures</p>
                 <div className="bg-white border border-[#E7E5E4] rounded-2xl divide-y divide-[#E7E5E4] overflow-hidden">
                   {outside.map(apt => {
                     const cfg = getStatusCfg(apt)
-                    const c = getTechColor(apt.technician_id)
+                    const c = APT_COLOR
                     return (
                       <div
                         key={apt.id}
@@ -914,9 +880,6 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                               {new Date(apt.scheduled_at).toLocaleDateString("en-US", { weekday: "short", month: "short", day: "numeric", timeZone: timezone })}
                               {" · "}
                               {new Date(apt.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone })}
-                              {(apt.technician_name ?? (apt.technicians as { name: string } | null)?.name) && (
-                                <> · {apt.technician_name ?? (apt.technicians as { name: string })?.name}</>
-                              )}
                             </p>
                           </div>
                         </div>
@@ -965,7 +928,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
             ) : listAppointments.length === 0 ? (
               <div className="py-16 text-center">
                 <Calendar className="w-10 h-10 text-[#78716C]/30 mx-auto mb-3" />
-                <p className="text-sm text-[#78716C]">No appointments found.</p>
+                <p className="text-sm text-[#78716C]">No measures found.</p>
               </div>
             ) : (
               <div className="overflow-x-auto">
@@ -974,7 +937,6 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                     <tr className="border-b border-[#E7E5E4] bg-[#FAFAF8]">
                       <th className="px-4 py-3 text-left text-xs font-semibold text-[#78716C] uppercase tracking-wide">Lead</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-[#78716C] uppercase tracking-wide">Date & Time</th>
-                      <th className="px-4 py-3 text-left text-xs font-semibold text-[#78716C] uppercase tracking-wide hidden md:table-cell">Technician</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-[#78716C] uppercase tracking-wide hidden lg:table-cell">Address / Notes</th>
                       <th className="px-4 py-3 text-left text-xs font-semibold text-[#78716C] uppercase tracking-wide">Status</th>
                       <th className="px-4 py-3 w-16" />
@@ -1000,11 +962,6 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                               {new Date(apt.scheduled_at).toLocaleTimeString("en-US", { hour: "numeric", minute: "2-digit", timeZone: timezone })}
                             </p>
                           </td>
-                          <td className="px-4 py-3 hidden md:table-cell">
-                            <span className="text-[#78716C]">
-                              {apt.technician_name ?? (apt.technicians as { name: string } | null)?.name ?? "—"}
-                            </span>
-                          </td>
                           <td className="px-4 py-3 hidden lg:table-cell max-w-[200px]">
                             <p className="text-[#78716C] truncate">{apt.address ?? apt.notes ?? "—"}</p>
                           </td>
@@ -1026,7 +983,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                   </tbody>
                 </table>
                 <div className="px-4 py-2.5 border-t border-[#E7E5E4] bg-[#FAFAF8]">
-                  <p className="text-xs text-[#78716C]">{listAppointments.length} appointment{listAppointments.length !== 1 ? "s" : ""}</p>
+                  <p className="text-xs text-[#78716C]">{listAppointments.length} measure{listAppointments.length !== 1 ? "s" : ""}</p>
                 </div>
               </div>
             )}
@@ -1056,7 +1013,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
               {/* Header */}
               <div className="flex items-center justify-between px-6 py-5 border-b border-[#E7E5E4]">
                 <h2 className="font-semibold text-lg text-[#1C1917]">
-                  {editMode ? "Edit Appointment" : "Appointment"}
+                  {editMode ? "Edit Measure" : "Measure"}
                 </h2>
                 <div className="flex items-center gap-2">
                   {!editMode && (
@@ -1118,24 +1075,6 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                     </div>
 
                     <div>
-                      <label className="text-xs font-medium text-[#78716C] mb-1 block">Technician</label>
-                      <select
-                        value={editForm.technician_id}
-                        onChange={e => {
-                          const id = e.target.value
-                          const name = technicians.find(t => t.id === id)?.name ?? ""
-                          setEditForm(f => ({ ...f, technician_id: id, technician_name: name }))
-                        }}
-                        className="w-full h-9 px-3 text-sm border border-[#E7E5E4] rounded-md bg-white text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30"
-                      >
-                        <option value="">No technician</option>
-                        {technicians.map(t => (
-                          <option key={t.id} value={t.id}>{t.name}</option>
-                        ))}
-                      </select>
-                    </div>
-
-                    <div>
                       <label className="text-xs font-medium text-[#78716C] mb-1 block">Address</label>
                       <Input
                         value={editForm.address}
@@ -1146,11 +1085,25 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                     </div>
 
                     <div>
-                      <label className="text-xs font-medium text-[#78716C] mb-1 block">Notes / Job type</label>
+                      <label className="text-xs font-medium text-[#78716C] mb-1 block">Job type</label>
+                      <select
+                        value={editForm.job_type}
+                        onChange={e => setEditForm(f => ({ ...f, job_type: e.target.value }))}
+                        className="w-full h-9 px-3 text-sm border border-[#E7E5E4] rounded-md bg-white text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30"
+                      >
+                        <option value="">Select job type</option>
+                        {FLOORING_JOB_TYPE_LABELS.map(l => (
+                          <option key={l} value={l}>{l}</option>
+                        ))}
+                      </select>
+                    </div>
+
+                    <div>
+                      <label className="text-xs font-medium text-[#78716C] mb-1 block">Notes</label>
                       <textarea
                         value={editForm.notes}
                         onChange={e => setEditForm(f => ({ ...f, notes: e.target.value }))}
-                        placeholder="e.g. Roof replacement, full house"
+                        placeholder="e.g. LVP for main floor, about 1,200 sq ft, 3 rooms"
                         rows={3}
                         className="w-full px-3 py-2 text-sm border border-[#E7E5E4] rounded-md bg-white text-[#1C1917] resize-none focus:outline-none focus:ring-2 focus:ring-[#F97316]/30"
                       />
@@ -1182,24 +1135,6 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                 ) : (
                   /* ── View mode ── */
                   <>
-                    {/* Technician */}
-                    {(selected.technician_name || (selected.technicians as { name: string } | null)?.name) && (
-                      <div className="flex items-center gap-3 bg-[#4D7C0F]/8 border border-[#4D7C0F]/20 rounded-xl px-4 py-3">
-                        <Wrench className="w-4 h-4 text-[#4D7C0F] shrink-0" />
-                        <div>
-                          <p className="text-xs font-semibold text-[#4D7C0F] uppercase tracking-wide">Assigned Technician</p>
-                          <p className="text-sm font-medium text-[#1C1917]">
-                            {selected.technician_name ?? (selected.technicians as { name: string })?.name}
-                          </p>
-                          {(selected.technicians as { phone: string | null } | null)?.phone && (
-                            <p className="text-xs text-[#78716C]">
-                              {(selected.technicians as { phone: string })?.phone}
-                            </p>
-                          )}
-                        </div>
-                      </div>
-                    )}
-
                     {/* Date/time/address */}
                     <div className="bg-[#FAFAF8] rounded-xl px-4 py-3 space-y-2">
                       <div className="flex items-center gap-2 text-sm">
@@ -1248,6 +1183,12 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                       })()}
                     </div>
 
+                    {actionError && actionError.id === selected.id && (
+                      <p role="alert" className="text-xs text-red-700 bg-red-50 border border-red-200 rounded-lg px-3 py-2">
+                        {actionError.message}
+                      </p>
+                    )}
+
                     {/* Status actions */}
                     {selected.status !== "cancelled" && selected.status !== "no_show" && (
                       <div>
@@ -1263,13 +1204,18 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                             </Button>
                           )}
                           {selected.confirmation_status !== "completed" && (
-                            <Button
-                              className="w-full justify-start gap-2 bg-sky-600 hover:bg-sky-700 text-white"
-                              disabled={updating === selected.id}
-                              onClick={() => updateConfirmationStatus(selected.id, "completed")}
-                            >
-                              <CheckCircle2 className="w-4 h-4" /> Mark as completed
-                            </Button>
+                            <div>
+                              <Button
+                                className="w-full justify-start gap-2 bg-[#1A1614] hover:bg-[#1A1614]/90 text-white"
+                                disabled={updating === selected.id}
+                                onClick={() => updateConfirmationStatus(selected.id, "completed")}
+                              >
+                                <CheckCircle2 className="w-4 h-4" /> Measure done
+                              </Button>
+                              <p className="text-[11px] text-[#78716C] mt-1">
+                                Moves the lead to Quote out, so the quote does not get forgotten.
+                              </p>
+                            </div>
                           )}
                           {selected.confirmation_status !== "reschedule_requested" && (
                             <Button
@@ -1303,12 +1249,9 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                             variant="outline"
                             className="w-full justify-start gap-2 text-red-600 border-red-300 hover:bg-red-50"
                             disabled={updating === selected.id}
-                            onClick={() => {
-                              updateStatus(selected.id, "cancelled")
-                              updateConfirmationStatus(selected.id, "cancelled_by_lead")
-                            }}
+                            onClick={() => patchAppointment(selected.id, { status: "cancelled", confirmation_status: "cancelled_by_lead" })}
                           >
-                            <XCircle className="w-4 h-4" /> Cancel appointment
+                            <XCircle className="w-4 h-4" /> Cancel measure
                           </Button>
                         </div>
                       </div>
@@ -1320,10 +1263,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                         variant="outline"
                         className="w-full gap-2 border-[#E7E5E4]"
                         disabled={updating === selected.id}
-                        onClick={() => {
-                          updateStatus(selected.id, "scheduled")
-                          updateConfirmationStatus(selected.id, "pending_confirmation")
-                        }}
+                        onClick={() => patchAppointment(selected.id, { status: "scheduled", confirmation_status: "pending_confirmation" })}
                       >
                         <Clock className="w-4 h-4" /> Restore to scheduled
                       </Button>
@@ -1358,9 +1298,9 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
               {/* Modal header */}
               <div className="flex items-center justify-between px-6 py-5 border-b border-[#E7E5E4]">
                 <div>
-                  <h2 className="font-semibold text-lg text-[#1C1917]">New Appointment</h2>
+                  <h2 className="font-semibold text-lg text-[#1C1917]">New Measure</h2>
                   <p className="text-xs text-[#78716C] mt-0.5">
-                    {newStep === 1 ? "Step 1 of 2 — Select a lead" : "Step 2 of 2 — Appointment details"}
+                    {newStep === 1 ? "Step 1 of 2: Select a lead" : "Step 2 of 2: Measure details"}
                   </p>
                 </div>
                 <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => setShowNewModal(false)}>
@@ -1477,23 +1417,6 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                   </div>
 
                   <div>
-                    <label className="text-xs font-medium text-[#78716C] mb-1 block">Technician</label>
-                    <select
-                      value={newForm.technician_id}
-                      onChange={e => {
-                        const id = e.target.value
-                        setNewForm(f => ({ ...f, technician_id: id, technician_name: technicians.find(t => t.id === id)?.name ?? "" }))
-                      }}
-                      className="w-full h-9 px-3 text-sm border border-[#E7E5E4] rounded-md bg-white text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30"
-                    >
-                      <option value="">No technician</option>
-                      {technicians.map(t => (
-                        <option key={t.id} value={t.id}>{t.name}</option>
-                      ))}
-                    </select>
-                  </div>
-
-                  <div>
                     <label className="text-xs font-medium text-[#78716C] mb-1 block">Address</label>
                     <Input
                       value={newForm.address}
@@ -1504,11 +1427,25 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                   </div>
 
                   <div>
-                    <label className="text-xs font-medium text-[#78716C] mb-1 block">Notes / Job type</label>
+                    <label className="text-xs font-medium text-[#78716C] mb-1 block">Job type</label>
+                    <select
+                      value={newForm.job_type}
+                      onChange={e => setNewForm(f => ({ ...f, job_type: e.target.value }))}
+                      className="w-full h-9 px-3 text-sm border border-[#E7E5E4] rounded-md bg-white text-[#1C1917] focus:outline-none focus:ring-2 focus:ring-[#F97316]/30"
+                    >
+                      <option value="">Select job type</option>
+                      {FLOORING_JOB_TYPE_LABELS.map(l => (
+                        <option key={l} value={l}>{l}</option>
+                      ))}
+                    </select>
+                  </div>
+
+                  <div>
+                    <label className="text-xs font-medium text-[#78716C] mb-1 block">Notes</label>
                     <textarea
                       value={newForm.notes}
                       onChange={e => setNewForm(f => ({ ...f, notes: e.target.value }))}
-                      placeholder="e.g. Full roof replacement, 2,000 sq ft"
+                      placeholder="e.g. LVP for main floor, about 1,200 sq ft, 3 rooms"
                       rows={3}
                       className="w-full px-3 py-2 text-sm border border-[#E7E5E4] rounded-md bg-white text-[#1C1917] resize-none focus:outline-none focus:ring-2 focus:ring-[#F97316]/30"
                     />
@@ -1556,7 +1493,7 @@ export function AppointmentsCalendar({ companyId, timezone, availableDays, appoi
                       disabled={creating || !newForm.date || !newForm.time}
                     >
                       <Calendar className="w-3.5 h-3.5" />
-                      {creating ? "Booking…" : "Book Appointment"}
+                      {creating ? "Booking…" : "Book Measure"}
                     </Button>
                   </div>
                 </div>
