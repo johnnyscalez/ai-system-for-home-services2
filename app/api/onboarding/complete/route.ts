@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server"
+import { NextResponse, after } from "next/server"
+import { autoSubmitA2p } from "@/lib/a2p"
 import { loadIntake, saveIntake } from "@/lib/intake"
 import { applyIntakeToRuntime } from "@/lib/intake-apply"
 import { missingForLaunch } from "@/components/onboarding/logic"
@@ -14,7 +15,8 @@ export const runtime = "nodejs"
  * setup retrains the assistant.
  *
  * Facebook, photos and the carrier registration are NOT required here:
- * FieldBuilt installs the account and chases those.
+ * FieldBuilt installs the account and chases those. The carrier registration
+ * is filed on its own once setup is finished (lib/a2p.ts autoSubmitA2p).
  */
 export async function POST() {
   const session = await getSession()
@@ -54,6 +56,15 @@ export async function POST() {
         },
       })
     }
+
+    after(async () => {
+      try {
+        const filed = await autoSubmitA2p(companyId)
+        if (filed) console.log(`[onboarding/complete] carrier registration for ${companyId}: ${filed.status}${filed.lastError ? ` (${filed.lastError})` : ""}`)
+      } catch (err) {
+        console.error(`[onboarding/complete] carrier registration for ${companyId} failed:`, err)
+      }
+    })
 
     return NextResponse.json({ success: true, companyId, ...result })
   } catch (err) {

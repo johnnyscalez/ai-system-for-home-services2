@@ -178,6 +178,45 @@ export function a2pMissing(b: Partial<A2pBusiness> | null | undefined): string[]
   return missing
 }
 
+/**
+ * The carrier-registration details already known from the business step, so
+ * the owner only adds the legal name, business type and EIN. Used by the
+ * onboarding screen to prefill and by lib/a2p.ts before filing.
+ */
+export function a2pDefaults(input: {
+  companyName: string | null | undefined
+  officeAddress: string | null | undefined
+  ownerMobile: string | null | undefined
+  business: CompanyIntake["business"] | undefined
+}): Partial<A2pBusiness> {
+  const b = input.business ?? {}
+  const [first, ...rest] = (b.ownerName ?? "").trim().split(/\s+/)
+  const office = (input.officeAddress ?? "").trim()
+  const addr = office.match(/^(.*?),\s*([^,]+),\s*([A-Za-z]{2})\.?\s*(\d{5})?/)
+  return {
+    legalName: (input.companyName ?? "").trim(),
+    website: normalizeWebsite(b.website ?? ""),
+    street: addr?.[1]?.trim() ?? office,
+    city: addr?.[2]?.trim() ?? "",
+    state: (addr?.[3] ?? b.state ?? "").toUpperCase(),
+    zip: addr?.[4] ?? "",
+    repFirstName: first ?? "",
+    repLastName: rest.join(" "),
+    repTitle: "Owner",
+    repEmail: (b.ownerEmail ?? "").trim(),
+    repPhone: (input.ownerMobile ?? "").trim(),
+  }
+}
+
+/** The owner's own entries win; an empty field takes the default. */
+export function withA2pDefaults(business: Partial<A2pBusiness> | undefined, defaults: Partial<A2pBusiness>): Partial<A2pBusiness> {
+  const out: Partial<A2pBusiness> = { ...defaults }
+  for (const [k, v] of Object.entries(business ?? {}) as Array<[keyof A2pBusiness, string | undefined]>) {
+    if (String(v ?? "").trim()) out[k] = v
+  }
+  return out
+}
+
 function offerProblems(offer: OfferConfig | null | undefined, which: string): string[] {
   if (!offer) return []
   const out: string[] = []

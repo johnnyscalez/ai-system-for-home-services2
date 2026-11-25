@@ -149,8 +149,8 @@ export const KNOWLEDGE_CHIPS: Array<{ label: string; text: string }> = [
 ]
 
 export const A2P_STATUS_TEXT: Record<string, { label: string; detail: string; tone: "idle" | "progress" | "good" | "bad" }> = {
-  not_started:      { label: "Not started",        detail: "Fill in the business details below so we can register your number.", tone: "idle" },
-  info_collected:   { label: "Details saved",      detail: "We have what we need. FieldBuilt files the registration for you.", tone: "progress" },
+  not_started:      { label: "Not started",        detail: "Most of it is filled in from your business details. Check the legal name, then add your business type and EIN.", tone: "idle" },
+  info_collected:   { label: "Details saved",      detail: "We have what we need. FieldBuilt files the registration for you when you finish setup.", tone: "progress" },
   submitted:        { label: "Filed",              detail: "The registration is with the carriers. This usually takes a few business days.", tone: "progress" },
   brand_pending:    { label: "Business in review", detail: "The carriers are verifying your business details.", tone: "progress" },
   campaign_pending: { label: "Messages in review", detail: "Your business is verified. The carriers are reviewing the message samples.", tone: "progress" },

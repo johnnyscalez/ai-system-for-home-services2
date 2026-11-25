@@ -14,9 +14,16 @@
 //                         └─ the client's phone number in the service's sender pool
 //
 // It is a resumable state machine. Every Twilio resource SID is written to
-// intake.a2p as soon as it exists, so a failure half way, or a second click, picks
+// intake.a2p as soon as it exists, so a failure half way, or a second run, picks
 // up where it stopped instead of creating duplicates. Brand and campaign review
 // take days; refreshA2p() is polled by the cron and by the Settings screen.
+//
+// Hands-off, like an agency running its own Twilio: the client never presses a
+// button. autoSubmitA2p() files the registration when onboarding finishes, when
+// a number is bought, when Settings saves complete details, and on every cron
+// pass, as soon as A2P_SUBMIT_ENABLED is on, the company has a number on
+// FieldBuilt's Twilio and the details are complete. Every number the company
+// has, including ones bought after approval, is put in its sender pool.
 //
 // Reference: twilio.com/docs/messaging/compliance/a2p-10dlc/onboarding-isv-api
 //
@@ -26,6 +33,7 @@
 
 import { createServiceRoleClient } from "@/lib/supabase-server"
 import { loadIntake, saveIntake, type A2pBusiness, type A2pState, type A2pStatus } from "@/lib/intake"
+import { a2pDefaults, normalizeWebsite, withA2pDefaults } from "@/components/onboarding/logic"
 
 const TRUSTHUB = "https://trusthub.twilio.com/v1"
 const MESSAGING = "https://messaging.twilio.com/v1"
@@ -92,7 +100,7 @@ export function a2pMissingFields(b: Partial<A2pBusiness> | undefined): string[] 
   need(v.city?.trim(), "City")
   need(/^[A-Za-z]{2}$/.test((v.state ?? "").trim()), "State")
   need(/^\d{5}$/.test((v.zip ?? "").trim()), "ZIP code")
-  need(/^https?:\/\/\S+\.\S+/.test((v.website ?? "").trim()), "Website (starting with https://)")
+  need(/^https?:\/\/\S+\.\S+/.test(normalizeWebsite(v.website ?? "")), "Website")
   need(v.repFirstName?.trim(), "Contact first name")
   need(v.repLastName?.trim(), "Contact last name")
   need(/^[^\s@]+@[^\s@]+\.[^\s@]{2,}$/.test((v.repEmail ?? "").trim()), "Contact email")
@@ -164,14 +172,14 @@ export function publicA2pState(state: A2pState | undefined): {
   const s: A2pState = state ?? { status: "not_started" }
   const missing = a2pMissingFields(s.business)
   const labels: Record<A2pStatus, [string, string]> = {
-    not_started:      ["Not registered", "US carriers block texts from an unregistered number. Add the business details to start."],
-    info_collected:   ["Details saved, not submitted yet", "The business details are on file. The registration has not been sent to the carriers yet."],
+    not_started:      ["Not registered", "US carriers block texts from an unregistered number. Add the legal business name, business type and EIN to start."],
+    info_collected:   ["Details saved", "FieldBuilt files the registration for you once your number is reserved and setup is finished."],
     submitted:        ["Submitted", "The business profile is with Twilio for review."],
     brand_pending:    ["Business under review", "Carriers are verifying the business. This usually takes a few business days."],
     campaign_pending: ["Texting use under review", "The business is verified. Carriers are reviewing how the number will be used, usually a few more days."],
     approved:         ["Registered", "The number is registered with US carriers. Texts deliver normally."],
-    rejected:         ["Rejected", "The carriers did not accept the registration. See the reason below, fix it and resubmit."],
-    error:            ["Needs attention", "The registration stopped on an error. See the reason below."],
+    rejected:         ["Rejected", "The carriers did not accept the registration. FieldBuilt will sort it out with you."],
+    error:            ["Needs attention", "The registration stopped. FieldBuilt retries it on its own and will contact you if a detail needs fixing."],
   }
   const [label, detail] = labels[s.status] ?? labels.not_started
   return {
@@ -223,11 +231,26 @@ async function primaryProfileSid(): Promise<{ sid: string } | { error: string }>
 }
 
 /**
+ * One filing per company at a time in this process. The cron, the end of
+ * onboarding and a Settings save can all start one; two at once would each
+ * create a business profile before either saved its SID.
+ */
+const filing = new Map<string, Promise<A2pState>>()
+
+/**
  * Run the registration as far as it can go right now: profile, trust product,
  * brand. The rest (messaging service, campaign, number) happens in refreshA2p
  * once the carriers approve the brand.
  */
-export async function submitA2p(companyId: string): Promise<A2pState> {
+export function submitA2p(companyId: string): Promise<A2pState> {
+  const running = filing.get(companyId)
+  if (running) return running
+  const run = submitNow(companyId).finally(() => filing.delete(companyId))
+  filing.set(companyId, run)
+  return run
+}
+
+async function submitNow(companyId: string): Promise<A2pState> {
   const ctx = await context(companyId)
   const b = ctx.state.business ?? {}
   const fail = async (message: string, status: A2pStatus = "error") => {
@@ -279,7 +302,7 @@ export async function submitA2p(companyId: string): Promise<A2pState> {
         business_registration_identifier: "EIN",
         business_registration_number: `${ein.slice(0, 2)}-${ein.slice(2)}`,
         business_regions_of_operation: "USA_AND_CANADA",
-        website_url: b.website!.trim(),
+        website_url: normalizeWebsite(b.website!),
       }),
     })).sid)
     await assignToProfile("business", businessInfo)
@@ -370,6 +393,92 @@ export async function submitA2p(companyId: string): Promise<A2pState> {
   }
 }
 
+// ── Hands-off: the client never files anything ───────────────────────────────
+
+/** The company's active numbers on FieldBuilt's Twilio account. */
+async function twilioNumbers(companyId: string): Promise<Array<{ sid: string; phone: string }>> {
+  const db = createServiceRoleClient()
+  const { data } = await db
+    .from("phone_numbers").select("twilio_sid, phone_number").eq("company_id", companyId).eq("is_active", true)
+  return ((data ?? []) as Array<{ twilio_sid: string | null; phone_number: string }>)
+    .filter((n) => !!n.twilio_sid)
+    .map((n) => ({ sid: n.twilio_sid as string, phone: n.phone_number }))
+}
+
+/**
+ * Puts every active number of the company in its registered sender pool, so a
+ * number bought or replaced after approval texts under the same registration.
+ * Numbers already in the pool are skipped; a failure is retried by the cron.
+ */
+async function attachNumbers(ctx: Ctx, serviceSid: string): Promise<number> {
+  let added = 0
+  for (const n of await twilioNumbers(ctx.companyId)) {
+    const key = `number:${n.sid}`
+    if (ctx.state.resources?.[key]) continue
+    try {
+      await once(ctx, key, async () =>
+        (await tw<{ sid: string }>("POST", `${MESSAGING}/Services/${serviceSid}/PhoneNumbers`, { PhoneNumberSid: n.sid })).sid)
+      added++
+      console.log(`[a2p] ${n.phone} added to the registered sender pool of company ${ctx.companyId}`)
+    } catch (err) {
+      // Already in this pool (added by hand, or a save that failed after the add): record it.
+      const inPool = await tw("GET", `${MESSAGING}/Services/${serviceSid}/PhoneNumbers/${n.sid}`).then(() => true, () => false)
+      if (inPool) {
+        await ctx.save({ resources: { ...(ctx.state.resources ?? {}), [key]: n.sid } })
+        continue
+      }
+      console.error(`[a2p] could not add ${n.phone} to the sender pool of company ${ctx.companyId}:`, err)
+    }
+  }
+  return added
+}
+
+/** After a number is bought: if the company is already registered, the number joins the registration. */
+export async function attachNewNumbers(companyId: string): Promise<number> {
+  const ctx = await context(companyId)
+  if (!ctx.state.messagingServiceSid) return 0
+  return attachNumbers(ctx, ctx.state.messagingServiceSid)
+}
+
+/** Statuses a filing starts (or, for an error, resumes) from without anyone pressing a button. */
+const AUTO_FILE_FROM: A2pStatus[] = ["not_started", "info_collected", "error"]
+
+/**
+ * Files the registration when everything is in place, with no button for the
+ * client: the switch is on, onboarding is finished, the company has a number
+ * on FieldBuilt's Twilio, and the details are complete once the business-step
+ * defaults are filled in. Returns null when it is not time yet.
+ *
+ * The number check also keeps test and demo companies (no real number) from
+ * ever being filed.
+ */
+export async function autoSubmitA2p(companyId: string): Promise<A2pState | null> {
+  if (!a2pSubmitEnabled()) return null
+  const db = createServiceRoleClient()
+  const [{ data: company }, intake] = await Promise.all([
+    db.from("companies")
+      .select("name, office_address, notification_phone, onboarding_completed, service_type")
+      .eq("id", companyId).maybeSingle(),
+    loadIntake(db, companyId),
+  ])
+  if (!company?.onboarding_completed || company.service_type === "fieldbuilt_sales") return null
+  if (!AUTO_FILE_FROM.includes(intake.a2p?.status ?? "not_started")) return null
+  if ((await twilioNumbers(companyId)).length === 0) return null
+
+  const business = withA2pDefaults(intake.a2p?.business, a2pDefaults({
+    companyName: company.name as string | null,
+    officeAddress: company.office_address as string | null,
+    ownerMobile: company.notification_phone as string | null,
+    business: intake.business,
+  }))
+  // Sole proprietors need a code from the owner's phone: FieldBuilt files those by hand.
+  if (business.businessType === "sole_proprietor" || a2pMissingFields(business).length > 0) return null
+
+  await saveA2pBusiness(companyId, business)
+  console.log(`[a2p] filing the carrier registration for company ${companyId}`)
+  return submitA2p(companyId)
+}
+
 function summarizeEvaluation(results: unknown): string {
   try {
     const failures: string[] = []
@@ -424,6 +533,10 @@ export function legalUrls(companyId: string, business: Partial<A2pBusiness> | un
 export async function refreshA2p(companyId: string): Promise<A2pState> {
   const ctx = await context(companyId)
   const s = ctx.state
+  // A number bought or replaced after the business was approved joins the registration too.
+  if (s.messagingServiceSid && ["campaign_pending", "approved"].includes(s.status)) {
+    await attachNumbers(ctx, s.messagingServiceSid).catch((err) => console.error(`[a2p] number check failed for company ${companyId}:`, err))
+  }
   if (!s.brandSid || !["brand_pending", "campaign_pending", "submitted"].includes(s.status)) return s
 
   try {
@@ -438,7 +551,6 @@ export async function refreshA2p(companyId: string): Promise<A2pState> {
       if (brand.status !== "APPROVED") return s
 
       // Brand approved: messaging service, the number, then the campaign.
-      const db = createServiceRoleClient()
       const app = (process.env.NEXT_PUBLIC_APP_URL ?? "https://fieldbuiltai.com").replace(/\/$/, "")
       const serviceSid = s.messagingServiceSid ?? await (async () => {
         const r = await tw<{ sid: string }>("POST", `${MESSAGING}/Services`, {
@@ -452,19 +564,11 @@ export async function refreshA2p(companyId: string): Promise<A2pState> {
         return r.sid
       })()
 
-      const { data: numbers } = await db
-        .from("phone_numbers").select("twilio_sid, phone_number").eq("company_id", companyId).eq("is_active", true)
-      for (const n of numbers ?? []) {
-        if (!n.twilio_sid) continue
-        await once(ctx, `number:${n.twilio_sid}`, async () => {
-          const r = await tw<{ sid: string }>("POST", `${MESSAGING}/Services/${serviceSid}/PhoneNumbers`, { PhoneNumberSid: n.twilio_sid as string })
-          return r.sid
-        }).catch((err) => console.error(`[a2p] could not add ${n.phone_number} to the messaging service:`, err))
-      }
+      await attachNumbers(ctx, serviceSid)
 
       if (!s.campaignSid) {
         const urls = legalUrls(companyId, s.business)
-        const copy = campaignCopy(ctx.companyName, s.business?.website?.trim() || app, urls.privacy, urls.terms)
+        const copy = campaignCopy(ctx.companyName, normalizeWebsite(s.business?.website ?? "") || app, urls.privacy, urls.terms)
         const campaign = await tw<{ sid: string; campaign_status: string }>("POST", `${MESSAGING}/Services/${serviceSid}/Compliance/Usa2p`, {
           BrandRegistrationSid: s.brandSid,
           UsAppToPersonUsecase: "LOW_VOLUME",
@@ -502,18 +606,38 @@ export async function refreshA2p(companyId: string): Promise<A2pState> {
   }
 }
 
-/** Companies with a registration in flight, for the cron. */
-export async function refreshAllPendingA2p(): Promise<{ checked: number; approved: number }> {
+/**
+ * The cron's pass over every client company:
+ *   - not filed yet (or stopped on an error): file it, once everything is in place
+ *   - under review: check with Twilio and take the next step
+ *   - approved: add any number bought since
+ */
+export async function refreshAllPendingA2p(): Promise<{ filed: number; checked: number; approved: number }> {
   const db = createServiceRoleClient()
-  const { data: companies } = await db.from("companies").select("id").eq("onboarding_completed", true).limit(500)
-  let checked = 0, approved = 0
-  for (const c of companies ?? []) {
-    const intake = await loadIntake(db, c.id as string).catch(() => null)
-    const status = intake?.a2p?.status
-    if (!status || !["submitted", "brand_pending", "campaign_pending"].includes(status)) continue
-    checked++
-    const next = await refreshA2p(c.id as string)
-    if (next.status === "approved") approved++
+  const { data: companies } = await db
+    .from("companies").select("id, service_type").eq("onboarding_completed", true).limit(500)
+  let filed = 0, checked = 0, approved = 0
+  for (const c of (companies ?? []) as Array<{ id: string; service_type: string | null }>) {
+    if (c.service_type === "fieldbuilt_sales") continue
+    try {
+      const intake = await loadIntake(db, c.id).catch(() => null)
+      const status = intake?.a2p?.status ?? "not_started"
+      if (AUTO_FILE_FROM.includes(status)) {
+        const next = await autoSubmitA2p(c.id)
+        if (next && next.status === "brand_pending") filed++
+        continue
+      }
+      if (status === "approved") {
+        await refreshA2p(c.id)
+        continue
+      }
+      if (!["submitted", "brand_pending", "campaign_pending"].includes(status)) continue
+      checked++
+      const next = await refreshA2p(c.id)
+      if (next.status === "approved") approved++
+    } catch (err) {
+      console.error(`[a2p] cron pass failed for company ${c.id}:`, err)
+    }
   }
-  return { checked, approved }
+  return { filed, checked, approved }
 }

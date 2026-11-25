@@ -13,7 +13,7 @@ import {
   A2P_BUSINESS_TYPES, A2P_STATUS_TEXT, DOMAIN_ACCESS, LEAD_TIMES, MEASURE_LENGTHS, PHOTO_KINDS, TIMEZONES, TONES, US_STATES, WEEK_DAYS,
 } from "./constants"
 import type { StepId } from "./constants"
-import { a2pMissing, assetsOf, calendarOf, launchChecklist, missingForLaunch, prettyPhone } from "./logic"
+import { a2pDefaults, a2pMissing, assetsOf, calendarOf, launchChecklist, missingForLaunch, prettyPhone, withA2pDefaults } from "./logic"
 import type { StepProps } from "./types"
 import { AreaField, Field, NativeSelect, Notice, Section, Segmented, StepIntro, Switch, TextField } from "./ui"
 
@@ -367,36 +367,23 @@ export function StepAds({ data, ctx, mode, setIntake, save }: StepProps) {
 
 export function StepNumber({ data, ctx, setIntake, setCtx, enqueue, save }: StepProps) {
   const a2p = data.intake.a2p ?? { status: "not_started" as const }
-  const business = a2p.business ?? {}
   const status = A2P_STATUS_TEXT[a2p.status] ?? A2P_STATUS_TEXT.not_started
   const locked = !["not_started", "info_collected"].includes(a2p.status)
+  // Shown prefilled from the business step; the first edit saves the whole set,
+  // and the server fills the same defaults before filing (lib/a2p.ts).
+  const business = locked ? a2p.business ?? {} : withA2pDefaults(a2p.business, a2pDefaults({
+    companyName: data.company.name,
+    officeAddress: data.company.office_address,
+    ownerMobile: data.company.notification_phone,
+    business: data.intake.business,
+  }))
   const missing = a2pMissing(business)
-  const started = Object.values(business).some((v) => String(v ?? "").trim())
   const [reserving, setReserving] = useState(false)
   const [reserveError, setReserveError] = useState<string | null>(null)
 
   const setBusiness = (patch: Partial<A2pBusiness>) => {
     const next = { ...business, ...patch }
     setIntake({ a2p: { ...a2p, business: next, status: locked ? a2p.status : a2pMissing(next).length === 0 ? "info_collected" : "not_started" } })
-  }
-
-  function copyFromBusiness() {
-    const b = data.intake.business ?? {}
-    const [first, ...rest] = (b.ownerName ?? "").trim().split(/\s+/)
-    const addr = data.company.office_address.match(/^(.*?),\s*([^,]+),\s*([A-Za-z]{2})\.?\s*(\d{5})?/)
-    setBusiness({
-      legalName: business.legalName || data.company.name,
-      website: business.website || b.website || "",
-      state: business.state || b.state || (addr?.[3] ?? "").toUpperCase(),
-      street: business.street || (addr?.[1] ?? data.company.office_address),
-      city: business.city || (addr?.[2] ?? ""),
-      zip: business.zip || (addr?.[4] ?? ""),
-      repFirstName: business.repFirstName || first || "",
-      repLastName: business.repLastName || rest.join(" "),
-      repTitle: business.repTitle || "Owner",
-      repEmail: business.repEmail || b.ownerEmail || "",
-      repPhone: business.repPhone || data.company.notification_phone,
-    })
   }
 
   async function reserve() {
@@ -423,7 +410,7 @@ export function StepNumber({ data, ctx, setIntake, setCtx, enqueue, save }: Step
     <div>
       <StepIntro
         title="Your texting number"
-        lead="US mobile carriers only deliver business texts from a number registered to a real business. We file that registration for you with the details below, and approval usually takes a few business days."
+        lead="US mobile carriers only deliver business texts from a number registered to a real business. FieldBuilt files that registration for you when you finish setup. You only need to add your business type and EIN."
       />
 
       <div className="space-y-5">
@@ -452,10 +439,6 @@ export function StepNumber({ data, ctx, setIntake, setCtx, enqueue, save }: Step
           <Notice tone={tones[status.tone]}>
             <span className="font-semibold">{status.label}.</span> {status.detail}
           </Notice>
-
-          {!locked && !started && (
-            <Button type="button" variant="outline" className="h-10 px-3" onClick={copyFromBusiness}>Fill in from my business details</Button>
-          )}
 
           <fieldset disabled={locked} className="space-y-4 disabled:opacity-70">
             <legend className="sr-only">Business details for the carrier registration</legend>
@@ -496,7 +479,7 @@ export function StepNumber({ data, ctx, setIntake, setCtx, enqueue, save }: Step
             </div>
           </fieldset>
 
-          {!locked && started && missing.length > 0 && (
+          {!locked && missing.length > 0 && (
             <p className="text-sm text-muted-foreground">Still needed before we can file: {missing.join(", ")}.</p>
           )}
           {locked && <p className="text-sm text-muted-foreground">These details are on file with the carriers. Contact FieldBuilt to change them.</p>}

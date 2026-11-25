@@ -1,4 +1,5 @@
-import { NextResponse } from "next/server"
+import { NextResponse, after } from "next/server"
+import { attachNewNumbers, autoSubmitA2p } from "@/lib/a2p"
 import { getTwilioClient } from "@/lib/twilio"
 import { zipFromAddress, zipToPoint } from "@/lib/routing"
 import { loadIntake } from "@/lib/intake"
@@ -60,6 +61,16 @@ export async function POST() {
       company_id: companyId, phone_number: phoneNumber, twilio_sid: twilioSid, is_active: true,
     })
     if (error) throw new Error(`The number ${phoneNumber} was reserved but could not be saved: ${error.message}`)
+    // A new number joins the company's carrier registration, or completes what
+    // a finished account was waiting on to file it. Nothing for the client to do.
+    after(async () => {
+      try {
+        await attachNewNumbers(companyId)
+        await autoSubmitA2p(companyId)
+      } catch (err) {
+        console.error(`[onboarding/provision-phone] carrier registration step for ${companyId} failed:`, err)
+      }
+    })
   }
 
   try {

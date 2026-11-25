@@ -19,13 +19,11 @@ type Status = {
   label: string
   detail: string
   missing: string[]
-  canSubmit: boolean
   brandStatus: string | null
   campaignStatus: string | null
   lastError: string | null
   business: Business
   phoneNumber: string | null
-  submitEnabled: boolean
   legal: { privacy: string; terms: string }
 }
 
@@ -63,11 +61,11 @@ export function TextingStatusCard() {
   const [data, setData] = useState<Status | null>(null)
   const [form, setForm] = useState<Business>({})
   const [open, setOpen] = useState(false)
-  const [busy, setBusy] = useState<"save" | "submit" | null>(null)
+  const [busy, setBusy] = useState(false)
   const [error, setError] = useState<string | null>(null)
   const [saved, setSaved] = useState(false)
 
-  // Bumped after a save or submit to re-read the status from the server.
+  // Bumped after a save to re-read the status from the server.
   const [reloadKey, setReloadKey] = useState(0)
 
   useEffect(() => {
@@ -84,15 +82,15 @@ export function TextingStatusCard() {
     return () => { alive = false }
   }, [reloadKey])
 
-  async function send(submit: boolean) {
-    setBusy(submit ? "submit" : "save")
+  async function save() {
+    setBusy(true)
     setError(null)
     setSaved(false)
     try {
       const res = await fetch("/api/a2p/register", {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ business: form, submit }),
+        body: JSON.stringify({ business: form }),
       })
       const d = await res.json().catch(() => ({}))
       if (!res.ok) { setError(d.error ?? "Could not save."); return }
@@ -101,7 +99,7 @@ export function TextingStatusCard() {
     } catch {
       setError("Network error. Please try again.")
     } finally {
-      setBusy(null)
+      setBusy(false)
     }
   }
 
@@ -202,21 +200,14 @@ export function TextingStatusCard() {
                 <p className="text-xs text-muted-foreground">Still needed: {data.missing.join(", ")}.</p>
               )}
               <div className="flex flex-wrap items-center gap-2">
-                <Button type="button" variant="outline" disabled={!!busy} onClick={() => send(false)}>
-                  {busy === "save" && <Loader2 className="animate-spin" />} Save details
+                <Button type="button" variant="outline" disabled={busy} onClick={() => void save()}>
+                  {busy && <Loader2 className="animate-spin" />} Save details
                 </Button>
-                {data.submitEnabled && (
-                  <Button type="button" disabled={!!busy || !data.canSubmit} onClick={() => send(true)}>
-                    {busy === "submit" && <Loader2 className="animate-spin" />} Submit registration
-                  </Button>
-                )}
                 {saved && <span className="text-xs text-green-700">Saved</span>}
               </div>
-              {!data.submitEnabled && (
-                <p className="text-xs text-muted-foreground">
-                  FieldBuilt submits the registration for you once these details are complete.
-                </p>
-              )}
+              <p className="text-xs text-muted-foreground">
+                FieldBuilt files the registration for you as soon as these details are complete. There is nothing else to do.
+              </p>
             </div>
           )}
         </div>
