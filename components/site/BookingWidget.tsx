@@ -360,9 +360,8 @@ export function BookingWidget() {
       if (res.ok && json.ok) {
         setBookedIso(json.startIso ?? slot)
         track("quiz_submit", { step: 4, step_key: "cal_booked", value: revenue, meta: { website: !noWebsite, tz } })
-        try {
-          ;(window as unknown as { fbq?: (...a: unknown[]) => void }).fbq?.("track", "Schedule")
-        } catch { /* pixel is best effort */ }
+        // No browser Schedule event: GHL's booking workflow sends it through the
+        // Conversions API, and a pixel copy without a shared event_id would count twice.
         go("done")
         return
       }
